@@ -2,6 +2,8 @@ module EfficientModelMatrices
 
 using StatsModels
 using Tables
+using DataFrames: nrow
+using CategoricalArrays
 
 include("modelmatrix!.jl")
 include("helpers.jl")
