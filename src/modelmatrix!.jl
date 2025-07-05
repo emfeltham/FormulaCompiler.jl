@@ -1,64 +1,54 @@
-# modelmatrix!.jl
+# ============================================================================
+# modelmatrix!.jl - Basic efficient model matrix construction
+# ============================================================================
 
 """
-    modelmatrix!(X, rhs_with_schema, data)
+    modelmatrix!(X, rhs, data) -> X
 
-Overwrite `X` with the design matrix that `StatsModels.modelmatrix` would
-return *without allocating a new matrix*.
+Update matrix `X` in-place with the design matrix for `rhs` applied to `data`.
+This is the core efficient operation that avoids allocating new matrices.
+
+# Example
+```julia
+X = Matrix{Float64}(undef, nrow(df), ncols)
+modelmatrix!(X, formula.rhs, df)  # X now contains the design matrix
+```
 """
 function modelmatrix!(
     X::AbstractMatrix,
     rhs,
-    data; # data should be a Tables.jl-compatible source, like a DataFrame
+    data;
 )
-    # StatsModels.has_schema(rhs) || error("`rhs` has no schema")
-    Tables.istable(data) || error("`data` is not Tables-compatible")
-
-    # The schema is already applied to `rhs`, so we pass the new data `tbl`
-    # to the workhorse function.
+    Tables.istable(data) || throw(ArgumentError("`data` is not Tables-compatible"))
     modelcols!(X, rhs, data)
-
     return X
 end
 
 """
-    modelcols!(dest::AbstractMatrix, rhs_with_schema, tbl)
+    modelcols!(dest, rhs, data) -> dest
 
-Fill `dest` with the numeric columns for `rhs_with_schema` in place.
-This version robustly handles the complex return types from `StatsModels.modelcols`,
-which can be a Vector, a Matrix, or a Tuple of arrays.
+Internal workhorse function that handles the actual copying from StatsModels.modelcols.
 """
-function modelcols!(
-    dest::AbstractMatrix,
-    rhs,
-    tbl
-)
-    # Let StatsModels build the columns.
-    matrix_parts = StatsModels.modelcols(rhs, tbl)
+function modelcols!(dest::AbstractMatrix, rhs, data)
+    # Let StatsModels build the columns
+    matrix_parts = StatsModels.modelcols(rhs, data)
 
-    # Normalize the result to always be a single matrix.
+    # Normalize the result to always be a single matrix
     final_matrix = if matrix_parts isa Tuple
-        # If it's a tuple of vectors/matrices, horizontally concatenate them.
         hcat(matrix_parts...)
     elseif matrix_parts isa AbstractVector
-        # If it's a single vector, reshape it into a one-column matrix.
         reshape(matrix_parts, :, 1)
     else
-        # Otherwise, it's already a matrix.
         matrix_parts
     end
 
-    # Sanity check the dimensions before copying.
+    # Validate and copy
     if size(dest) != size(final_matrix)
-        throw(
-            DimensionMismatch(
-                "Destination matrix is size $(size(dest)), but StatsModels created a matrix of size $(size(final_matrix))"
-            )
-        )
+        throw(DimensionMismatch(
+            "Destination matrix is size $(size(dest)), but StatsModels created a matrix of size $(size(final_matrix))"
+        ))
     end
 
-    # Copy the generated matrix into the destination buffer.
     dest .= final_matrix
-
     return dest
 end
