@@ -1,33 +1,18 @@
 module EfficientModelMatrices
 
-using StatsModels, Tables, DataFrames
-using LinearAlgebra, SparseArrays
-using StatsModels: schema, apply_schema, modelcols
-using StatsModels: AbstractTerm, MatrixTerm
-using CategoricalArrays
+using StatsModels
+using Tables
 
-# Import MixedModels types if available
-try
-    using MixedModels
-    using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel, RandomEffectsTerm
-    const MIXEDMODELS_AVAILABLE = true
-catch
-    const MIXEDMODELS_AVAILABLE = false
-    # Define dummy types to avoid errors
-    abstract type LinearMixedModel end
-    abstract type GeneralizedLinearMixedModel end
-    abstract type RandomEffectsTerm end
-end
+include("modelmatrix!.jl")
+include("helpers.jl")
 
-include("structs.jl")
-include("constructors.jl")
-include("dependency_analysis.jl")
-include("updaters.jl")
-include("demo_usage.jl")
+# From modelmatrix!.jl
+export modelmatrix!
 
-export
-    CachedModelMatrix, cached_modelmatrix, update!, 
-    TermDependencyCache, build_dependency_cache,
-    selective_update!, batch_update!
+# From matrix_reuse_helpers.jl  
+export extract_model_matrix
+export analyze_variable_dependencies_fast
+export estimate_term_width_fast
+export find_variables_in_term_fast
 
 end # module EfficientModelMatrices
