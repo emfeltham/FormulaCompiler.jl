@@ -11,7 +11,7 @@ using CategoricalArrays
 # ============================================================================
 
 include("modelmatrix!.jl")
-export modelmatrix!
+export modelmatrix!, extract_model_matrix
 
 # ============================================================================
 # Advanced API: Selective updates and dependency analysis

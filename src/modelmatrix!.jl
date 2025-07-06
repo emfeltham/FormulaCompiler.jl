@@ -1,6 +1,4 @@
-# ============================================================================
-# modelmatrix!.jl - Basic efficient model matrix construction
-# ============================================================================
+using Tables, StatsModels
 
 """
 Extract design matrix from fitted model using standard interface
@@ -10,13 +8,11 @@ OPTIMIZED: Better error messages and type stability.
 function extract_model_matrix(model, df)
     existing_X = modelmatrix(model)
     n_model, n_df = size(existing_X, 1), nrow(df)
-    
     if n_model != n_df
         throw(DimensionMismatch(
             "Model matrix has $n_model rows but data has $n_df rows"
         ))
     end
-    
     return existing_X
 end
 
@@ -24,52 +20,57 @@ end
     modelmatrix!(X, rhs, data) -> X
 
 Update matrix `X` in-place with the design matrix for `rhs` applied to `data`.
-This is the core efficient operation that avoids allocating new matrices.
-
-# Example
-```julia
-X = Matrix{Float64}(undef, nrow(df), ncols)
-modelmatrix!(X, formula.rhs, df)  # X now contains the design matrix
-```
+This avoids allocating new matrices.
 """
-function modelmatrix!(
-    X::AbstractMatrix,
-    rhs,
-    data;
-)
+function modelmatrix!(X::AbstractMatrix{T}, rhs, data) where T
     Tables.istable(data) || throw(ArgumentError("`data` is not Tables-compatible"))
-    modelcols!(X, rhs, data)
-    return X
+    return modelcols!(X, rhs, data)
 end
 
 """
     modelcols!(dest, rhs, data) -> dest
 
-Internal workhorse function that handles the actual copying from StatsModels.modelcols.
+Internal workhorse: copies StatsModels.modelcols blocks directly into `dest` without temporaries.
 """
-function modelcols!(dest::AbstractMatrix, rhs, data)
-    # Let StatsModels build the columns
-    matrix_parts = StatsModels.modelcols(rhs, data)
+function modelcols!(dest::AbstractMatrix{T}, rhs, data) where T
+    Tables.istable(data) || throw(ArgumentError("`data` is not Tables-compatible"))
 
-    # More efficient normalization
-    final_matrix = if matrix_parts isa Tuple
-        reduce(hcat, matrix_parts)  # More efficient than hcat(matrix_parts...)
-    elseif matrix_parts isa AbstractVector
-        reshape(matrix_parts, :, 1)
+    # Let StatsModels produce its parts
+    parts_raw = StatsModels.modelcols(rhs, data)
+
+    # Normalize into a tuple of blocks
+    blocks = if parts_raw isa Tuple
+        parts_raw
+    elseif parts_raw isa AbstractMatrix || parts_raw isa AbstractVector
+        (parts_raw,)
     else
-        matrix_parts
+        throw(ArgumentError("Unsupported return type from StatsModels.modelcols: $(typeof(parts_raw))"))
     end
 
-    # Validate dimensions first
-    dest_size = size(dest)
-    final_size = size(final_matrix)
-    if dest_size != final_size
-        throw(DimensionMismatch(
-            "Destination matrix is size $dest_size, but StatsModels created a matrix of size $final_size"
-        ))
+    # Compute total number of columns
+    total_cols = 0
+    for block in blocks
+        total_cols += block isa AbstractVector ? 1 : size(block, 2)
     end
 
-    # Use copyto! for better performance than broadcasting
-    copyto!(dest, final_matrix)
+    # Validate dimensions
+    n_rows, n_cols = size(dest)
+    if n_rows != nrow(data) || n_cols != total_cols
+        throw(DimensionMismatch("dest is $(size(dest)), but modelcols would yield $(nrow(data))×$total_cols"))
+    end
+
+    # Copy each block straight into dest
+    col_start = 1
+    for block in blocks
+        if block isa AbstractVector
+            @inbounds copyto!(view(dest, :, col_start), block)
+            col_start += 1
+        else
+            nblock_cols = size(block, 2)
+            @inbounds copyto!(view(dest, :, col_start:col_start+nblock_cols-1), block)
+            col_start += nblock_cols
+        end
+    end
+
     return dest
 end
