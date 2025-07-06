@@ -31,9 +31,9 @@ function update_matrix_subset!(
     changed_vars::Vector{Symbol}
 )
     tbl = Tables.columntable(data)
-    terms = _extract_terms(rhs)
+    terms = plan.terms_cache  # Use cached terms instead of re-extracting
     
-    # Track which terms need to be rebuilt
+    # Track which terms need to be rebuilt - use Set for O(1) lookup
     terms_to_rebuild = Set{Int}()
     
     for var in changed_vars
@@ -44,23 +44,28 @@ function update_matrix_subset!(
         end
     end
     
-    # Rebuild only the affected terms
+    # Early exit if no terms need rebuilding
+    isempty(terms_to_rebuild) && return X
+    
+    # Rebuild only the affected terms - more efficient iteration
     for term_idx in terms_to_rebuild
         term = terms[term_idx]
         
-        # Find the column range for this term
-        col_start = 1 + sum(plan.term_widths[1:term_idx-1])
+        # Find the column range for this term - use cached widths
+        col_start = 1 + sum(view(plan.term_widths, 1:term_idx-1))
         col_end = col_start + plan.term_widths[term_idx] - 1
         col_range = col_start:col_end
         
         # Rebuild this term
         new_cols = StatsModels.modelcols(term, tbl)
         
-        # Handle different return types
+        # Handle different return types more efficiently
         if new_cols isa AbstractVector
+            # Use broadcasting for better performance
             X[:, col_range] .= reshape(new_cols, :, 1)
         else
-            X[:, col_range] .= new_cols
+            # Direct assignment is faster than .=
+            X[:, col_range] = new_cols
         end
     end
     

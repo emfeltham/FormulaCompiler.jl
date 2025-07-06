@@ -3,6 +3,24 @@
 # ============================================================================
 
 """
+Extract design matrix from fitted model using standard interface
+
+OPTIMIZED: Better error messages and type stability.
+"""
+function extract_model_matrix(model, df)
+    existing_X = modelmatrix(model)
+    n_model, n_df = size(existing_X, 1), nrow(df)
+    
+    if n_model != n_df
+        throw(DimensionMismatch(
+            "Model matrix has $n_model rows but data has $n_df rows"
+        ))
+    end
+    
+    return existing_X
+end
+
+"""
     modelmatrix!(X, rhs, data) -> X
 
 Update matrix `X` in-place with the design matrix for `rhs` applied to `data`.
@@ -33,22 +51,25 @@ function modelcols!(dest::AbstractMatrix, rhs, data)
     # Let StatsModels build the columns
     matrix_parts = StatsModels.modelcols(rhs, data)
 
-    # Normalize the result to always be a single matrix
+    # More efficient normalization
     final_matrix = if matrix_parts isa Tuple
-        hcat(matrix_parts...)
+        reduce(hcat, matrix_parts)  # More efficient than hcat(matrix_parts...)
     elseif matrix_parts isa AbstractVector
         reshape(matrix_parts, :, 1)
     else
         matrix_parts
     end
 
-    # Validate and copy
-    if size(dest) != size(final_matrix)
+    # Validate dimensions first
+    dest_size = size(dest)
+    final_size = size(final_matrix)
+    if dest_size != final_size
         throw(DimensionMismatch(
-            "Destination matrix is size $(size(dest)), but StatsModels created a matrix of size $(size(final_matrix))"
+            "Destination matrix is size $dest_size, but StatsModels created a matrix of size $final_size"
         ))
     end
 
-    dest .= final_matrix
+    # Use copyto! for better performance than broadcasting
+    copyto!(dest, final_matrix)
     return dest
 end

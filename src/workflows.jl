@@ -26,7 +26,7 @@ function create_update_plan(formula, data)
     # Create the plan
     plan = analyze_dependencies(rhs, data)
     
-    # Create initial matrix
+    # More efficient matrix creation
     n_rows = length(first(values(tbl)))
     X = Matrix{Float64}(undef, n_rows, plan.total_width)
     modelmatrix!(X, rhs, data)
@@ -61,18 +61,21 @@ function incremental_update!(
     original_data,
     modifications::Dict{Symbol, Any}
 )
-    # Create modified data
+    # Create modified data more efficiently
     modified_data = copy(original_data)
+    
+    # Process modifications more efficiently
     for (var, val) in modifications
         if val isa AbstractVector
             modified_data[!, var] = val
         else
-            fill!(modified_data[!, var], val)
+            # Use fill! for scalar values - more efficient
+            modified_data[!, var] .= val
         end
     end
     
     # Update only the affected columns
-    changed_vars = collect(keys(modifications))
+    changed_vars = collect(Symbol, keys(modifications))  # Type-stable collection
     update_matrix_subset!(X, rhs, modified_data, plan, changed_vars)
     
     return X
