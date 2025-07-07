@@ -28,8 +28,6 @@ pkg> add https://github.com/your-org/EfficientModelMatrices.jl
 The only required dependencies are `StatsModels`, `Tables`, and (optionally)
 `GLM` / `MixedModels` for fitting models.
 
-
-
 ### Quick start
 
 ```julia
@@ -61,8 +59,6 @@ touching the garbage collector.
 | `InplaceModeler(model, nrows)` | Scan the model’s RHS, allocate per-term scratch buffers, return a reusable state object.                |                                                              |
 | `modelmatrix!(ipm, data, X)`   | Fill the pre-allocated `X` with the model matrix for `data`; **zero allocations** after `ipm` is built. |                                                              |
 | `fixed_effects_form(model)`    | Utility that strips \`( …                                                                               | … )`terms from a`MixedModel\` formula; identity for GLM/OLS. |
-
-
 
 ### Testing
 
