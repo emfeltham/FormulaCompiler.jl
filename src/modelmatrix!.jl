@@ -68,10 +68,23 @@ X   = similar(modelmatrix(m))               # pre-allocate output
 @time modelmatrix!(ipm, Tables.columntable(df), X)  # 0 allocations, in-place
 """
 function modelmatrix!(ipm::InplaceModeler, data::NamedTuple, X::AbstractMatrix)
-    rhs  = formula(ipm.model).rhs
+    rhs = fixed_effects_form(ipm.model).rhs
     @assert width(rhs) == size(X,2) "pre-allocated X has wrong #cols"
     fn_i  = Ref(1)            # walk fn_terms in encounter order
     int_i = Ref(1)            # walk int_terms in encounter order
     _cols!(rhs, data, X, 1, ipm, fn_i, int_i)
     return X
 end
+
+function modelmatrix!(ipm::InplaceModeler{M}, data::NamedTuple, 
+                     X::AbstractMatrix{T}) where {M, T<:AbstractFloat}
+    # Restricted to floating-point types for statistical computations
+    rhs = fixed_effects_form(ipm.model).rhs
+    @assert width(rhs) == size(X, 2) "Pre-allocated X has wrong number of columns ($(size(X,2))), expected $(width(rhs))"
+    
+    fn_i = Ref(1) # walk fn_terms in encounter order
+    int_i = Ref(1) # walk int_terms in encounter order
+    _cols!(rhs, data, X, 1, ipm, fn_i, int_i)
+    return X
+end
+
