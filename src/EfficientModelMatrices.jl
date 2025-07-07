@@ -16,6 +16,9 @@ using GLM: LinearModel, GeneralizedLinearModel
 import MixedModels
 using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
 
+# Support for StandardizedPredictors.jl
+using StandardizedPredictors: ZScoredTerm
+
 # ============================================================================
 # Helpers
 # ============================================================================
@@ -29,6 +32,7 @@ export fixed_effects_form
 
 include("InplaceModeler.jl")
 include("_cols!.jl")
+include("standardized.jl")
 export InplaceModeler
 
 # ============================================================================
