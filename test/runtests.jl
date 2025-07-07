@@ -1,91 +1,114 @@
 # runtests.jl
 
+using Test
 using Revise
 using EfficientModelMatrices
+using StatsModels, DataFrames, CategoricalArrays, Tables
+using GLM, MixedModels, Random
 
-using Test, StatsModels, DataFrames, CategoricalArrays, GLM
+Random.seed!(1234)
 
-# Include our zero-allocation implementation
+@testset "InplaceModeler zero-allocation correctness" begin
 
-# Create test dataset
-n = 600_000
-df = DataFrame(
-    y   = randn(n),
-    x1  = randn(n),
-    x2  = randn(n),
-    g   = categorical(rand(["A","B","C"], n)),
-    h   = categorical(rand(Bool, n)),
-)
+    #─ scenario 1: simple linear + categorical + interactions ────────────────
+    @testset "Linear + categorical interactions" begin
+        n = 600_000
+        df = DataFrame(
+            y   = randn(n),
+            x1  = randn(n),
+            x2  = randn(n),
+            g   = categorical(rand(["A","B","C"], n)),
+            h   = categorical(rand(Bool, n)),
+        )
+        f  = @formula(y ~ x1 + x2 + g + h + x1 & g + x1 & x2 + g & h)
+        m1 = lm(f, df)
 
-# Create formula and model
-f = @formula(y ~ x1 + x2 + g + h + x1 & g + x1 & x2 + g & h)
-m1 = lm(f, df)
+        Xref = modelmatrix(m1)
+        @test size(Xref) == (n, width(formula(m1).rhs))
+        @test eltype(Xref) == Float64
 
-# Get reference matrix using standard StatsModels
-Xref = modelmatrix(m1);
-size(Xref)
+        ipm = InplaceModeler(m1, n)
+        X   = similar(Xref)
+        fill!(X, 0.0)
 
-println("Reference matrix size: ", size(Xref))
-println("Reference matrix type: ", typeof(Xref))
+        @time modelmatrix!(ipm, Tables.columntable(df), X)
+        @test X ≈ Xref
+    end
 
-# Test our zero-allocation version
-X = Matrix{Float64}(undef, size(Xref));
-X .= 0.0;
+    #─ scenario 1a: simple linear + categorical + interactions + function ──────
+    @testset "Linear + categorical interactions" begin
+        n = 600_000
+        df = DataFrame(
+            y   = randn(n),
+            x1  = randn(n),
+            x2  = randn(n),
+            g   = categorical(rand(["A","B","C"], n)),
+            h   = categorical(rand(Bool, n)),
+        )
+        f  = @formula(y ~ x1 + x2 + g + h + x1 & g + x1 & x2 + g & h + x1^2)
+        m1 = lm(f, df)
 
-Revise.retry()
+        Xref = modelmatrix(m1)
+        @test size(Xref) == (n, width(formula(m1).rhs))
+        @test eltype(Xref) == Float64
 
-# Time the operation
-println("\nTiming zero-allocation version:")
-# @time modelcols!(X, m1, df);
+        ipm = InplaceModeler(m1, n)
+        X   = similar(Xref)
+        fill!(X, 0.0)
 
-@time ipm = InplaceModeler(m1, nrow(df));
-@time modelmatrix2!(ipm, Tables.columntable(df), X);
+        @time modelmatrix!(ipm, Tables.columntable(df), X)
+        @test X ≈ Xref
+    end
 
-using Profile
-@profile modelmatrix2!(ipm, Tables.columntable(df), X);
+    #─ scenario 2: nested function terms ──────────────────────────────────────
+    @testset "Nested function and arithmetic terms" begin
+        n = 1_000
+        df = DataFrame(
+            y  = randn(n),
+            a  = randn(n),
+            b  = randn(n),
+        )
+        # formula with nested functions and arithmetic: a * inv(b) + log(abs.(a - b))
+        f2 = @formula(y ~ 0 + a * inv(b) + (abs(a))^2 + (a)^4 & b)
+        m2 = lm(f2, df)
 
-open("profile_output_emm.txt", "w") do io
-    Profile.print(io)
+        Xref2 = modelmatrix(m2)
+        @test size(Xref2) == (n, width(formula(m2).rhs))
+
+        ipm2 = InplaceModeler(m2, n)
+        X2   = similar(Xref2)
+        fill!(X2, 0.0)
+
+        @time modelmatrix!(ipm2, Tables.columntable(df), X2)
+        @test X2 ≈ Xref2
+    end
+
+    #─ scenario 3: mixed‐effects model ────────────────────────────────────────
+    @testset "MixedModels fixed-effects design" begin
+        # smaller dataset for mixed model
+        n_small = 5_000
+        g_small = repeat(1:50, inner = n_small ÷ 50)
+        dfm = DataFrame(
+            y  = randn(n_small),
+            x  = randn(n_small),
+            g  = categorical(g_small),
+        )
+        # random intercept and slope
+        mm = fit(MixedModel, @formula(y ~ 1 + x + (1 + x | g)), dfm)
+
+        # extract the fixed‐effects design matrix only:
+        Xref3 = modelmatrix(mm) # MixedModels exports modelmatrix
+
+        fx_fe = fixed_effects_form(mm).rhs;
+
+        @test size(Xref3) == (n_small, width(fx_fe))
+
+        ipm3 = InplaceModeler(mm, n_small)
+        X3   = similar(Xref3)
+        fill!(X3, 0.0)
+
+        @time modelmatrix!(ipm3, Tables.columntable(dfm), X3)
+        @test X3 ≈ Xref3
+    end
+
 end
-
-let h = 8
-    @test X[:, h] ≈ Xref[:, h]
-end
-
-# Verify correctness
-@test X ≈ Xref
-
-println("✓ Matrix values match reference implementation")
-
-# Test with different data to ensure no state leakage
-df2 = deepcopy(df)
-df2.x1 .+= 1
-
-X2 = Matrix{Float64}(undef, size(Xref))
-modelcols!(X2, f.rhs, df2, m1)
-
-# Get reference for modified data
-Xref2 = modelmatrix(f.rhs, df2)
-@test X2 ≈ Xref2
-
-println("✓ Works correctly with different data")
-
-# Test allocation behavior
-println("\nAllocation test:")
-println("Baseline (should be minimal):")
-@time modelcols!(X, f.rhs, df, m1)
-
-println("\nReference StatsModels (for comparison):")
-@time Xref_new = modelmatrix(f.rhs, df)
-
-println("\n✓ All tests passed!")
-
-# Simple benchmark
-using BenchmarkTools
-
-println("\nBenchmark comparison:")
-println("Zero-allocation version:")
-@btime modelcols!($X, $(f.rhs), $df, $m1)
-
-println("Standard StatsModels:")
-@btime modelmatrix($(f.rhs), $df)
