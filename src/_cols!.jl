@@ -57,6 +57,12 @@ using CategoricalArrays: refs   # gives the cached Vector{UInt32} of level codes
 # (replaces the previous _cols!(::CategoricalTerm, …) definition)
 # ────────────────────────────────────────────────────────────────────────────
 
+function _cols!(t::Term, d, X, j, _ipm, _fn_i, _int_i)
+    # treat an un‐typed Term as a simple continuous variable
+    copy!(view(X, :, j), d[t.sym])
+    return j + 1
+end
+
 """
     _cols!(t::CategoricalTerm{C,T,N}, d, X, j, _ipm, _fn_i, _int_i) where {C,T,N} -> Int
 

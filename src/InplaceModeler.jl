@@ -8,7 +8,7 @@
     InplaceModeler{M}
 
 A helper object that encapsulates a fitted `StatisticalModel` and
-all pre‐allocated scratch buffers needed to build its model matrix
+all pre-allocated scratch buffers needed to build its model matrix
 in-place without any heap allocations.
 
 # Type Parameters
@@ -96,14 +96,14 @@ end
 
 # ── constructor ──
 """
-    InplaceModeler(model::StatisticalModel, nrows::Int) -> InplaceModeler{<:StatisticalModel}
+    InplaceModeler(model, nrows::Int) -> InplaceModeler{<:StatisticalModel}
 
 Create an `InplaceModeler` tailored to a fitted `model` and a fixed number of rows `nrows`,
 pre-allocating all necessary scratch buffers for zero-allocation model matrix construction.
 
 # Arguments
 
-- `model::StatisticalModel`  
+- `model`  
   A fitted statistical model (e.g., a `TableRegressionModel`) whose formula’s RHS
   defines the terms to materialize.
 
@@ -124,8 +124,13 @@ pre-allocating all necessary scratch buffers for zero-allocation model matrix co
 Once constructed, the `InplaceModeler` can be reused to fill different datasets into
 a pre-allocated output `X` matrix without any further heap allocations.
 """
-function InplaceModeler(model::StatsModels.StatisticalModel, nrows::Int)
-    rhs = formula(model).rhs
+# -----------------------------------------------------------------------------
+# Public convenience constructor
+# Works for GLM/OLS (TableRegressionModel) and MixedModels, because it
+# lets `fixed_effects_form(model)` decide how to strip random effects.
+# -----------------------------------------------------------------------------
+function InplaceModeler(model, nrows::Int)
+    rhs = fixed_effects_form(model).rhs
 
     fn_terms   = FunctionTerm[]
     _collect!(rhs, FunctionTerm, fn_terms)
@@ -135,14 +140,38 @@ function InplaceModeler(model::StatsModels.StatisticalModel, nrows::Int)
     _collect!(rhs, InteractionTerm, int_terms)
     int_subw   = [[width(p) for p in it.terms] for it in int_terms]
     int_prefix = [cumsum([0; sw[1:end-1]]) for sw in int_subw]
-    int_stride = [begin
-                      s = Vector{Int}(undef, length(sw))
+    int_stride = [let s = Vector{Int}(undef, length(sw))
                       s[1] = 1
-                      for k in 2:length(sw) s[k] = s[k-1]*sw[k-1] end
+                      for k in 2:length(sw)
+                          s[k] = s[k-1] * sw[k-1]
+                      end
                       s
                   end for sw in int_subw]
     int_scratch = [Matrix{Float64}(undef, nrows, sum(sw)) for sw in int_subw]
 
-    InplaceModeler(model, fn_terms, fn_scratch,
-                   int_terms, int_subw, int_stride, int_prefix, int_scratch)
+    return InplaceModeler{typeof(model)}(    # ←  type-qualified call
+        model,
+        fn_terms, fn_scratch,
+        int_terms, int_subw, int_stride, int_prefix, int_scratch
+    )
+end
+
+
+"""
+    InplaceModeler(model::StatisticalModel, nrows::Int) -> InplaceModeler{<:StatisticalModel}
+
+Create an `InplaceModeler` tailored to a fitted `model` and a fixed number of rows `nrows`,
+pre-allocating all necessary scratch buffers for zero-allocation model matrix construction.
+
+# Arguments
+
+- `model::StatisticalModel`  
+  A fitted statistical model (e.g., a `TableRegressionModel`) whose formula’s RHS
+  defines the terms to materialize.
+- `data`
+  The relevant dataset.
+"""
+function InplaceModeler(model::StatisticalModel, data::Tables.ColumnTable)
+    nrows = Tables.istable(data) ? length(Tables.rows(data)) : length(first(data))
+    InplaceModeler(model, nrows)
 end

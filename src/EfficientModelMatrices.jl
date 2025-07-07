@@ -4,10 +4,24 @@ using Tables
 using CategoricalArrays
 
 import StatsModels
-import StatsModels: 
-    width, FormulaTerm, FunctionTerm, InteractionTerm,
+import StatsModels:
+    formula,
+    width,
+    Term, FormulaTerm, FunctionTerm, InteractionTerm,
     MatrixTerm, ConstantTerm, ContinuousTerm,
-    CategoricalTerm, InterceptTerm
+    CategoricalTerm, InterceptTerm,
+    StatisticalModel
+
+using GLM: LinearModel, GeneralizedLinearModel
+import MixedModels
+using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
+
+# ============================================================================
+# Helpers
+# ============================================================================
+
+include("fixed_helpers.jl")
+export fixed_effects_form
 
 # ============================================================================
 # Core Mechanics: Replace `modelcols`
@@ -24,5 +38,6 @@ export InplaceModeler
 include("modelmatrix!.jl")
 export modelmatrix!, extract_model_matrix
 
+include("data_validation.jl")
 
 end # module
