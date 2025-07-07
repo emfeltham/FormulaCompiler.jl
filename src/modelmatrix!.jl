@@ -1,76 +1,77 @@
-using Tables, StatsModels
+# modelmatrix!.jl
+
+#───────────────────────────────────────────────────────────────────────────────
+# 2.  Public driver
+#───────────────────────────────────────────────────────────────────────────────
 
 """
-Extract design matrix from fitted model using standard interface
+    modelmatrix!(ipm::InplaceModeler, data::NamedTuple, X::AbstractMatrix) -> AbstractMatrix
 
-OPTIMIZED: Better error messages and type stability.
+Fill the pre-allocated matrix `X` with the model matrix corresponding to
+`ipm.model` evaluated on the new dataset `data`, reusing internal scratch
+buffers to avoid heap allocations.
+
+# Arguments
+
+- `ipm::InplaceModeler`  
+  An `InplaceModeler` instance constructed for a specific fitted model and
+  a fixed number of rows.  It carries pre-allocated buffers for every
+  `FunctionTerm` and `InteractionTerm` in the model’s formula.
+
+- `data::NamedTuple`  
+  A table in “column-table” form (e.g. a `Tables.columntable(df)`),
+  mapping each predictor name to a vector of length `n`.  These vectors
+  are read directly to build each column of the output.
+
+- `X::AbstractMatrix`  
+  A pre-allocated `n × p` matrix of the correct size:
+  - `n` must equal `nrow(data)`  
+  - `p` must equal `width(formula(ipm.model).rhs)`  
+  The contents of `X` will be overwritten in place.
+
+# Returns
+
+- `X`  
+  The same matrix passed in, now containing the model matrix.  Useful for
+  chaining or inlining within performance-sensitive loops.
+
+# Behavior & Performance
+
+- **Zero allocations** after the one-time construction of `InplaceModeler`.  
+- Recursively walks the model’s RHS term tree, filling each column (and
+  combinations of columns) directly into `X`.  
+- Maintains two small counters (`fn_i`, `int_i`) to reuse the correct
+  scratch buffer for each `FunctionTerm` and `InteractionTerm`.  
+- Performs no temporary allocations: continuous predictors are
+  `copy!`’d, categorical predictors are read via integer codes,
+  functions are applied in tight loops, and interactions are built with
+  nested loops over pre-computed strides.
+
+# Throws
+
+- `ArgumentError` if the pre-allocated `X` has the wrong number of columns.
+
+# Example
+
+```julia
+using EfficientModeler, StatsModels, DataFrames, Tables
+
+df       = DataFrame(x = 1:5, z = repeat(["a","b"], 5), y = rand(5))
+f        = @formula(y ~ 1 + x + C(z) + x & C(z))
+schema   = schema(f, df)
+f_typed  = apply_schema(f, schema)
+m        = lm(f_typed, df)
+
+ipm = InplaceModeler(m, nrow(df))           # one-time, small allocation
+X   = similar(modelmatrix(m))               # pre-allocate output
+
+@time modelmatrix!(ipm, Tables.columntable(df), X)  # 0 allocations, in-place
 """
-function extract_model_matrix(model, df)
-    existing_X = modelmatrix(model)
-    n_model, n_df = size(existing_X, 1), nrow(df)
-    if n_model != n_df
-        throw(DimensionMismatch(
-            "Model matrix has $n_model rows but data has $n_df rows"
-        ))
-    end
-    return existing_X
-end
-
-"""
-    modelmatrix!(X, rhs, data) -> X
-
-Update matrix `X` in-place with the design matrix for `rhs` applied to `data`.
-This avoids allocating new matrices.
-"""
-function modelmatrix!(X::AbstractMatrix{T}, rhs, data) where T
-    Tables.istable(data) || throw(ArgumentError("`data` is not Tables-compatible"))
-    return modelcols!(X, rhs, data)
-end
-
-"""
-    modelcols!(dest, rhs, data) -> dest
-
-Internal workhorse: copies StatsModels.modelcols blocks directly into `dest` without temporaries.
-"""
-function modelcols!(dest::AbstractMatrix{T}, rhs, data) where T
-    Tables.istable(data) || throw(ArgumentError("`data` is not Tables-compatible"))
-
-    # Let StatsModels produce its parts
-    parts_raw = StatsModels.modelcols(rhs, data)
-
-    # Normalize into a tuple of blocks
-    blocks = if parts_raw isa Tuple
-        parts_raw
-    elseif parts_raw isa AbstractMatrix || parts_raw isa AbstractVector
-        (parts_raw,)
-    else
-        throw(ArgumentError("Unsupported return type from StatsModels.modelcols: $(typeof(parts_raw))"))
-    end
-
-    # Compute total number of columns
-    total_cols = 0
-    for block in blocks
-        total_cols += block isa AbstractVector ? 1 : size(block, 2)
-    end
-
-    # Validate dimensions
-    n_rows, n_cols = size(dest)
-    if n_rows != nrow(data) || n_cols != total_cols
-        throw(DimensionMismatch("dest is $(size(dest)), but modelcols would yield $(nrow(data))×$total_cols"))
-    end
-
-    # Copy each block straight into dest
-    col_start = 1
-    for block in blocks
-        if block isa AbstractVector
-            @inbounds copyto!(view(dest, :, col_start), block)
-            col_start += 1
-        else
-            nblock_cols = size(block, 2)
-            @inbounds copyto!(view(dest, :, col_start:col_start+nblock_cols-1), block)
-            col_start += nblock_cols
-        end
-    end
-
-    return dest
+function modelmatrix!(ipm::InplaceModeler, data::NamedTuple, X::AbstractMatrix)
+    rhs  = formula(ipm.model).rhs
+    @assert width(rhs) == size(X,2) "pre-allocated X has wrong #cols"
+    fn_i  = Ref(1)            # walk fn_terms in encounter order
+    int_i = Ref(1)            # walk int_terms in encounter order
+    _cols!(rhs, data, X, 1, ipm, fn_i, int_i)
+    return X
 end
