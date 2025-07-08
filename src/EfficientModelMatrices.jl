@@ -43,6 +43,6 @@ export modelmatrix!, extract_model_matrix
 
 include("data_validation.jl")
 
-include("termwalk.jl")
+include("termmapping.jl")
 
 end # module
