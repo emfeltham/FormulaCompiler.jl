@@ -7,11 +7,10 @@ import StatsModels
 import StatsModels:
     formula,
     width,
-    Term, FormulaTerm, FunctionTerm, InteractionTerm,
+    Term, AbstractTerm, FormulaTerm, FunctionTerm, InteractionTerm,
     MatrixTerm, ConstantTerm, ContinuousTerm,
     CategoricalTerm, InterceptTerm,
     StatisticalModel
-
 using GLM: LinearModel, GeneralizedLinearModel
 import MixedModels
 using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
@@ -43,5 +42,7 @@ include("modelmatrix!.jl")
 export modelmatrix!, extract_model_matrix
 
 include("data_validation.jl")
+
+include("termwalk.jl")
 
 end # module
