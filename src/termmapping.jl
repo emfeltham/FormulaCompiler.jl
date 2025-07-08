@@ -1,12 +1,5 @@
 # termmapping.jl - Complete Column Mapping with Phase 1 Evaluation
 
-using StatsModels
-using StatsModels: AbstractTerm, Term, ContinuousTerm, CategoricalTerm, ConstantTerm, 
-                   InterceptTerm, FunctionTerm, InteractionTerm, MatrixTerm, width, termvars
-using CategoricalArrays: refs
-using Tables
-using EfficientModelMatrices: fixed_effects_form
-
 ###############################################################################
 # ColumnMapping Infrastructure
 ###############################################################################
