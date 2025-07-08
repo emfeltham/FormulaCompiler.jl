@@ -11,4 +11,6 @@ using Statistics
 @testset "EfficientModelMatrices.jl" begin
     include("main_tests.jl")
     include("standardized_tests.jl")
+    include("term_tests.jl")
+    include("term_workflow_tests.jl")
 end
