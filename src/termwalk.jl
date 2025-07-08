@@ -167,6 +167,36 @@ function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_info,
     return col_ref[]
 end
 
+# Handle ZScoredTerm from StandardizedPredictors.jl
+function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_info,
+                                term::ZScoredTerm, col_ref::Ref{Int})
+    # ZScoredTerm creates its own columns but wraps another term
+    w = width(term)
+    if w > 0
+        range = col_ref[]:col_ref[]+w-1
+        col_ref[] += w
+        
+        push!(term_info, (term, range))
+        
+        # Get variables from the wrapped term
+        vars = collect_termvars_recursive(term)
+        
+        for var in vars
+            if !haskey(sym_to_ranges, var)
+                sym_to_ranges[var] = UnitRange{Int}[]
+            end
+            push!(sym_to_ranges[var], range)
+        end
+        
+        if !haskey(range_to_terms, range)
+            range_to_terms[range] = AbstractTerm[]
+        end
+        push!(range_to_terms[range], term)
+    end
+    
+    return col_ref[]
+end
+
 # Handle terms that don't contribute variables (intercept, constants)
 function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_info,
                                 term::Union{InterceptTerm, ConstantTerm}, col_ref::Ref{Int})
@@ -231,6 +261,12 @@ function _collect_vars_recursive!(vars::Set{Symbol}, terms::Tuple)
     for term in terms
         _collect_vars_recursive!(vars, term)
     end
+end
+
+# Handle ZScoredTerm from StandardizedPredictors.jl
+function _collect_vars_recursive!(vars::Set{Symbol}, term::ZScoredTerm)
+    # Delegate to the wrapped term
+    _collect_vars_recursive!(vars, term.term)
 end
 
 # Base cases that don't contribute variables
