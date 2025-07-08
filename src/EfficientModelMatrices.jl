@@ -44,5 +44,9 @@ export modelmatrix!, extract_model_matrix
 include("data_validation.jl")
 
 include("termmapping.jl")
+export ColumnMapping, build_column_mapping, build_enhanced_mapping, enhanced_column_mapping
+export get_variable_ranges, get_all_variable_columns, get_term_for_column, get_terms_for_columns
+export collect_termvars_recursive, evaluate_single_column!
+
 
 end # module
