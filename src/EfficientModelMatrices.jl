@@ -10,6 +10,7 @@ import StatsModels:
     Term, AbstractTerm, FormulaTerm, FunctionTerm, InteractionTerm,
     MatrixTerm, ConstantTerm, ContinuousTerm,
     CategoricalTerm, InterceptTerm,
+    width, termvars,
     StatisticalModel
 using GLM: LinearModel, GeneralizedLinearModel
 import MixedModels
