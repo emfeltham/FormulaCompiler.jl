@@ -48,6 +48,19 @@ include("termmapping.jl")
 export ColumnMapping, build_column_mapping, build_enhanced_mapping, enhanced_column_mapping
 export get_variable_ranges, get_all_variable_columns, get_term_for_column, get_terms_for_columns
 export collect_termvars_recursive, evaluate_single_column!
+include("termmapping_add.jl")
+export 
+    get_variable_columns_flat, get_unchanged_columns,
+    build_perturbation_plan,
+    validate_column_mapping, get_variable_term_ranges,
+    build_variable_term_map
 
+include("_cols!_add.jl")
+export 
+    _cols_selective!, eval_columns_for_variable!, eval_columns_for_variables!,
+    update_matrix_columns!
+
+include("modelmatrix!_add.jl")
+export modelmatrix_selective!, modelmatrix_with_base!
 
 end # module
