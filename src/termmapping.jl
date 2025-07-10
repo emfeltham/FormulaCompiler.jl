@@ -340,7 +340,7 @@ end
 ###############################################################################
 
 """
-    evaluate_single_column!(term::AbstractTerm, data::NamedTuple, global_col::Int, local_col::Int, output::AbstractVector, imp::Union{InplaceModeler,Nothing})
+    evaluate_single_column!(term::AbstractTerm, data::NamedTuple, global_col::Int, local_col::Int, output::AbstractVector, ipm::Union{InplaceModeler,Nothing})
 
 Evaluate a single column of a term with given data.
 """
