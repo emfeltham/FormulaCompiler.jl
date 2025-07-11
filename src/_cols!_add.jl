@@ -34,16 +34,37 @@ function _cols_selective!(term::AbstractTerm, d, X, j, affected_cols::Vector{Int
         return j + w
     end
     
-    # Create a temporary matrix to hold the full term evaluation
-    temp_matrix = Matrix{Float64}(undef, size(X, 1), w)
-    
-    # Evaluate the full term into temporary matrix
-    _cols!(term, d, temp_matrix, 1, ipm, fn_i, int_i)
-    
-    # Copy only the affected columns to the target matrix
-    for col in cols_to_update
-        local_col = col - j + 1  # Column index within this term
-        X[:, col] = temp_matrix[:, local_col]
+    # SIMPLE FIX: For InteractionTerm, don't use temp_matrix approach
+    # because InteractionTerm needs to work with the full target matrix
+    # for its internal scratch space logic
+    if term isa InteractionTerm
+        # Store original values in non-affected columns
+        original_values = Dict{Int, Vector{Float64}}()
+        for col in term_cols
+            if col ∉ affected_cols && 1 <= col <= size(X, 2)
+                original_values[col] = copy(X[:, col])
+            end
+        end
+        
+        # Let InteractionTerm evaluate directly into X
+        _cols!(term, d, X, j, ipm, fn_i, int_i)
+        
+        # Restore non-affected columns
+        for (col, values) in original_values
+            X[:, col] = values
+        end
+    else
+        # For simple terms, use temp_matrix approach
+        temp_matrix = Matrix{Float64}(undef, size(X, 1), w)
+        
+        # Evaluate the full term into temporary matrix
+        _cols!(term, d, temp_matrix, 1, ipm, fn_i, int_i)
+        
+        # Copy only the affected columns to the target matrix
+        for col in cols_to_update
+            local_col = col - j + 1  # Column index within this term
+            X[:, col] = temp_matrix[:, local_col]
+        end
     end
     
     return j + w

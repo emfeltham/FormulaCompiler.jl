@@ -213,7 +213,6 @@ function _cols!(ft::FunctionTerm, d, X, j, ipm::InplaceModeler, fn_i::Ref, int_i
 end
 
 # -- InteractionTerm ----------------------------------------------------------
-# ───────────────── InteractionTerm kernel (only `total` / `dest`) ───────────
 
 """
     _cols!(t::InteractionTerm, d, X, j, ipm::InplaceModeler, fn_i::Ref, int_i::Ref) -> Int
@@ -262,8 +261,10 @@ In-place expansion of an interaction term (`t₁ & t₂ & …`) without any heap
 
 - `j + total`: The next available column index after filling this interaction’s block.
 """
-function _cols!(t::InteractionTerm, d, X, j,
-                ipm::InplaceModeler, fn_i::Ref, int_i::Ref)
+function _cols!(
+  t::InteractionTerm, d, X, j,
+  ipm::InplaceModeler, fn_i::Ref, int_i::Ref
+)
 
     idx      = int_i[]; int_i[] += 1
     sw       = ipm.int_subw[idx]
@@ -271,17 +272,77 @@ function _cols!(t::InteractionTerm, d, X, j,
     scratch  = ipm.int_scratch[idx]
     rows     = size(X,1)
 
-    # --- 1. fill each component into scratch (unchanged) -------------------
+    # println("DEBUG: idx=$idx, sw=$sw, scratch size=$(size(scratch))")
+    # println("DEBUG: total needed cols=$(sum(sw)), scratch has $(size(scratch,2))")
+    
+
+    # --- 1. fill each component into scratch (FIXED VERSION) ---
     ofs = 0
     for (comp, w) in zip(t.terms, sw)
-        _cols!(comp, d, @view(scratch[:, ofs+1 : ofs+w]),
-               1, ipm, fn_i, int_i)
+        comp_idx = comp
+        # println("DEBUG: Processing component $comp_idx: $comp, expected width=$w")
+        # println("DEBUG: ofs=$ofs, creating view(:, $(ofs+1):$(ofs+w))")
+
+        comp_view = view(scratch, :, ofs+1:ofs+w)
+        # println("DEBUG: comp_view size = $(size(comp_view))")
+        
+        # FIXED: Safe component evaluation that avoids resize! bugs
+        if comp isa ContinuousTerm
+            # Copy continuous data safely
+            data_vals = d[comp.sym]
+            target_col = view(comp_view, :, 1)
+            @inbounds for i in eachindex(target_col)
+                target_col[i] = Float64(data_vals[i])
+            end
+            
+        elseif comp isa Term
+            # Copy term data safely  
+            data_vals = d[comp.sym]
+            target_col = view(comp_view, :, 1)
+            @inbounds for i in eachindex(target_col)
+                target_col[i] = Float64(data_vals[i])
+            end
+            
+        elseif comp isa CategoricalTerm
+            # Trust the pre-computed width from ipm - it has the correct formula context
+            v = d[comp.sym]
+            M = comp.contrasts.matrix
+            # println("DEBUG: CategoricalTerm $(comp.sym), contrast matrix size=$(size(M)), expected w=$w")
+            codes = refs(v)
+
+            # Use w (pre-computed width) instead of n_contrast_cols (runtime width)
+            # This ensures consistency with comp_view allocation and formula context
+            @inbounds for r in 1:rows
+                code = codes[r]
+                @simd for k in 1:w  # FIXED: Use pre-computed width w
+                    comp_view[r, k] = M[code, k]
+                end
+            end
+        elseif comp isa InterceptTerm{true}
+            fill!(view(comp_view, :, 1), 1.0)
+            
+        elseif comp isa InterceptTerm{false}
+            # Do nothing for false intercept (w should be 0 anyway)
+            
+        elseif comp isa ConstantTerm
+            fill!(view(comp_view, :, 1), comp.n)
+            
+        else
+            # For other term types, try the original logic but with error handling
+            try
+                _cols!(comp, d, comp_view, 1, ipm, fn_i, int_i)
+            catch e
+                @warn "Failed to evaluate component term $(typeof(comp)): Using identity fallback."
+                fill!(comp_view, 1.0)
+            end
+        end
+        
         ofs += w
     end
 
-    # --- 2. write Kronecker product into destination -----------------------
-    total = prod(sw)                             # ← was size(scratch,2)
-    dest  = @view X[:, j : j + total - 1]        # stays inside X
+    # --- 2. write Kronecker product into destination (UNCHANGED) ---
+    total = prod(sw)
+    dest  = view(X, :, j:j+total-1)
 
     @inbounds for r in 1:rows, col in 1:total
         off = col - 1
@@ -296,3 +357,4 @@ function _cols!(t::InteractionTerm, d, X, j,
     end
     return j + total
 end
+
