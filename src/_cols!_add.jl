@@ -1,69 +1,83 @@
-# ADD TO EXISTING _cols!.jl - Extensions for selective column evaluation
+# _cols!_add.jl - COMPLETE REPLACEMENT
 
 ###############################################################################
-# Selective Column Evaluation Functions
+# Selective Column Evaluation Functions - FIXED VERSION
 ###############################################################################
 
 """
     _cols_selective!(term::AbstractTerm, d, X, j, affected_cols::Vector{Int}, 
                      ipm, fn_i, int_i) -> Int
 
-Selective version of _cols! that only updates columns in `affected_cols`.
-Columns not in `affected_cols` are left unchanged.
-
-This is used when we know that only certain columns need updating due to
-a variable change, allowing memory sharing for unchanged columns.
+FIXED: Selective version of _cols! that only updates columns in `affected_cols`.
+Handles InteractionTerm and FunctionTerm correctly without BoundsError.
 """
 function _cols_selective!(term::AbstractTerm, d, X, j, affected_cols::Vector{Int}, 
                          ipm, fn_i, int_i)
-    # Get the width of this term
     w = width(term)
     
     if w == 0
         return j
     end
     
-    # Determine which columns this term would write to
     term_cols = j:(j + w - 1)
-    
-    # Find intersection with affected columns
-    cols_to_update = intersect(collect(term_cols), affected_cols)
+    cols_to_update = intersect(term_cols, affected_cols)
     
     if isempty(cols_to_update)
-        # No columns need updating for this term, skip
         return j + w
     end
     
-    # SIMPLE FIX: For InteractionTerm, don't use temp_matrix approach
-    # because InteractionTerm needs to work with the full target matrix
-    # for its internal scratch space logic
-    if term isa InteractionTerm
-        # Store original values in non-affected columns
-        original_values = Dict{Int, Vector{Float64}}()
-        for col in term_cols
-            if col ∉ affected_cols && 1 <= col <= size(X, 2)
-                original_values[col] = copy(X[:, col])
+    # FIXED: Special handling for InteractionTerm and FunctionTerm
+    if term isa InteractionTerm || term isa FunctionTerm
+        # These terms need to work with full target matrix
+        # Backup non-affected columns
+        backup_cols = setdiff(collect(term_cols), cols_to_update)
+        backup_data = Dict{Int, Vector{Float64}}()
+        
+        for col in backup_cols
+            if 1 <= col <= size(X, 2)
+                backup_data[col] = copy(X[:, col])
             end
         end
         
-        # Let InteractionTerm evaluate directly into X
+        # Evaluate directly into target matrix
         _cols!(term, d, X, j, ipm, fn_i, int_i)
         
-        # Restore non-affected columns
-        for (col, values) in original_values
+        # Restore backed up columns
+        for (col, values) in backup_data
             X[:, col] = values
         end
     else
-        # For simple terms, use temp_matrix approach
-        temp_matrix = Matrix{Float64}(undef, size(X, 1), w)
-        
-        # Evaluate the full term into temporary matrix
-        _cols!(term, d, temp_matrix, 1, ipm, fn_i, int_i)
-        
-        # Copy only the affected columns to the target matrix
-        for col in cols_to_update
-            local_col = col - j + 1  # Column index within this term
-            X[:, col] = temp_matrix[:, local_col]
+        # Simple terms - optimized path
+        if w == 1 && length(cols_to_update) == 1
+            # Single column optimization
+            col = cols_to_update[1]
+            if term isa ContinuousTerm || term isa Term
+                copy!(view(X, :, col), d[term.sym])
+            elseif term isa ConstantTerm
+                fill!(view(X, :, col), term.n)
+            elseif term isa InterceptTerm{true}
+                fill!(view(X, :, col), 1.0)
+            elseif term isa InterceptTerm{false}
+                # Should not happen in practice
+                fill!(view(X, :, col), 0.0)
+            else
+                # Fallback to temp_matrix
+                temp_col = Vector{Float64}(undef, size(X, 1))
+                temp_matrix = reshape(temp_col, :, 1)
+                _cols!(term, d, temp_matrix, 1, ipm, fn_i, int_i)
+                X[:, col] = temp_col
+            end
+        else
+            # Multi-column case
+            temp_matrix = Matrix{Float64}(undef, size(X, 1), w)
+            _cols!(term, d, temp_matrix, 1, ipm, fn_i, int_i)
+            
+            for col in cols_to_update
+                local_col = col - j + 1
+                if 1 <= local_col <= w
+                    X[:, col] = temp_matrix[:, local_col]
+                end
+            end
         end
     end
     
@@ -74,32 +88,24 @@ end
     eval_columns_for_variable!(variable::Symbol, data::NamedTuple, X::AbstractMatrix, 
                               mapping::ColumnMapping, ipm::InplaceModeler)
 
-High-level interface to update all columns affected by a single variable.
-Uses the column mapping to determine which terms need re-evaluation.
+FIXED: High-level interface to update all columns affected by a single variable.
 """
 function eval_columns_for_variable!(variable::Symbol, data::NamedTuple, X::AbstractMatrix, 
                                    mapping::ColumnMapping, ipm::InplaceModeler)
-    # Get all terms and ranges that involve this variable
     var_term_ranges = get_variable_term_ranges(mapping, variable)
     
     if isempty(var_term_ranges)
-        return  # Variable doesn't affect any terms
+        return
     end
     
-    # Get all affected columns
     affected_cols = get_variable_columns_flat(mapping, variable)
-    
-    # Validate dimensions
     validate_column_mapping(mapping, X)
     
-    # Initialize counters for _cols! dispatch
     fn_i = Ref(1)
     int_i = Ref(1)
     
-    # Process each term that involves this variable
     for (term, range) in var_term_ranges
         if !isempty(range)
-            # Update only the affected columns for this term
             _cols_selective!(term, data, X, first(range), affected_cols, ipm, fn_i, int_i)
         end
     end
@@ -110,9 +116,7 @@ end
                                X::AbstractMatrix, mapping::ColumnMapping, 
                                ipm::InplaceModeler)
 
-Update all columns affected by any of the specified variables.
-More efficient than calling eval_columns_for_variable! multiple times
-when multiple variables change simultaneously.
+FIXED: Update all columns affected by multiple variables efficiently.
 """
 function eval_columns_for_variables!(variables::Vector{Symbol}, data::NamedTuple, 
                                     X::AbstractMatrix, mapping::ColumnMapping, 
@@ -121,7 +125,6 @@ function eval_columns_for_variables!(variables::Vector{Symbol}, data::NamedTuple
         return
     end
     
-    # Get all affected columns across all variables
     all_affected_cols = Set{Int}()
     var_term_map = Dict{Symbol, Vector{Tuple{AbstractTerm, UnitRange{Int}}}}()
     
@@ -134,11 +137,8 @@ function eval_columns_for_variables!(variables::Vector{Symbol}, data::NamedTuple
     end
     
     affected_cols = sort(collect(all_affected_cols))
-    
-    # Validate dimensions
     validate_column_mapping(mapping, X)
     
-    # Initialize counters
     fn_i = Ref(1)
     int_i = Ref(1)
     
@@ -159,27 +159,18 @@ end
     update_matrix_columns!(X_target::AbstractMatrix, X_base::AbstractMatrix,
                           changed_cols::Vector{Int}, unchanged_cols::Vector{Int})
 
-Update target matrix by copying changed columns with new values and 
-sharing memory for unchanged columns.
-
-# Arguments
-- `X_target`: Matrix to update (must be pre-allocated)
-- `X_base`: Base matrix with unchanged column data
-- `changed_cols`: Column indices that have been updated in X_target
-- `unchanged_cols`: Column indices to copy from X_base (memory sharing)
+FIXED: Update target matrix with memory sharing for unchanged columns.
 """
 function update_matrix_columns!(X_target::AbstractMatrix, X_base::AbstractMatrix,
                                changed_cols::Vector{Int}, unchanged_cols::Vector{Int})
-    # Validate dimensions
     size(X_target) == size(X_base) || throw(DimensionMismatch(
         "Target and base matrices must have same dimensions"
     ))
     
     # Share memory for unchanged columns
     for col in unchanged_cols
-        X_target[:, col] = view(X_base, :, col)
+        if 1 <= col <= size(X_target, 2)
+            X_target[:, col] = view(X_base, :, col)
+        end
     end
-    
-    # Note: changed columns should already be updated in X_target
-    # This function just handles the memory sharing for unchanged columns
 end

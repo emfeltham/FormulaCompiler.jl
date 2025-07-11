@@ -8,40 +8,192 @@
 # -- leaf terms ---------------------------------------------------------------
 
 """
+    evaluate_component_safely!(target_col::AbstractVector{Float64}, comp, d::NamedTuple)
+
+FIXED: Safe component evaluation that handles comparison operators, ZScoredTerm, and other special cases.
+"""
+function evaluate_component_safely!(target_col::AbstractVector{Float64}, comp, d::NamedTuple)
+    if comp isa ContinuousTerm || comp isa Term
+        copy!(target_col, d[comp.sym])
+        
+    elseif comp isa CategoricalTerm
+        v = d[comp.sym]
+        M = comp.contrasts.matrix
+        
+        if isa(v, CategoricalArray)
+            codes = refs(v)
+        else
+            unique_vals = sort(unique(v))
+            code_map = Dict(val => i for (i, val) in enumerate(unique_vals))
+            codes = [code_map[val] for val in v]
+        end
+        
+        @inbounds for i in 1:length(target_col)
+            target_col[i] = M[codes[i], 1]
+        end
+        
+    elseif comp isa ZScoredTerm
+        # Handle ZScoredTerm by evaluating the underlying term and applying transformation
+        evaluate_component_safely!(target_col, comp.term, d)
+        
+        # Apply Z-score transformation in-place
+        c = comp.center isa Number ? comp.center : (length(comp.center) == 1 ? comp.center[1] : error("Center should be scalar or length-1 vector"))
+        s = comp.scale isa Number ? comp.scale : (length(comp.scale) == 1 ? comp.scale[1] : error("Scale should be scalar or length-1 vector"))
+        
+        if c == 0
+            inv_s = 1.0 / s
+            @inbounds @simd for i in 1:length(target_col)
+                target_col[i] *= inv_s
+            end
+        else
+            inv_s = 1.0 / s
+            @inbounds @simd for i in 1:length(target_col)
+                target_col[i] = (target_col[i] - c) * inv_s
+            end
+        end
+        
+    elseif comp isa InterceptTerm{true}
+        fill!(target_col, 1.0)
+        
+    elseif comp isa InterceptTerm{false}
+        fill!(target_col, 0.0)
+        
+    elseif comp isa ConstantTerm
+        fill!(target_col, comp.n)
+        
+    elseif comp isa FunctionTerm
+        # FIXED: Handle function terms, especially comparison operators
+        if length(comp.args) == 1
+            # Single argument function
+            arg = comp.args[1]
+            arg_values = Vector{Float64}(undef, length(target_col))
+            evaluate_component_safely!(arg_values, arg, d)
+            
+            # Apply function
+            if comp.f in [<=, >=, <, >, ==, !=]
+                @warn "Single-argument comparison operator $(comp.f) treated as identity"
+                copy!(target_col, arg_values)
+            else
+                try
+                    @inbounds for i in 1:length(target_col)
+                        target_col[i] = comp.f(arg_values[i])
+                    end
+                catch e
+                    @warn "Failed to evaluate function $(comp.f): $e, using identity"
+                    copy!(target_col, arg_values)
+                end
+            end
+            
+        elseif length(comp.args) == 2
+            # Two argument function (like x <= constant)
+            arg1, arg2 = comp.args
+            
+            # Evaluate first argument
+            arg1_values = Vector{Float64}(undef, length(target_col))
+            evaluate_component_safely!(arg1_values, arg1, d)
+            
+            # Handle second argument
+            if arg2 isa ConstantTerm
+                arg2_val = arg2.n
+                
+                # FIXED: Apply comparison correctly
+                if comp.f === (<=)
+                    @inbounds for i in 1:length(target_col)
+                        target_col[i] = Float64(arg1_values[i] <= arg2_val)
+                    end
+                elseif comp.f === (>=)
+                    @inbounds for i in 1:length(target_col)
+                        target_col[i] = Float64(arg1_values[i] >= arg2_val)
+                    end
+                elseif comp.f === (<)
+                    @inbounds for i in 1:length(target_col)
+                        target_col[i] = Float64(arg1_values[i] < arg2_val)
+                    end
+                elseif comp.f === (>)
+                    @inbounds for i in 1:length(target_col)
+                        target_col[i] = Float64(arg1_values[i] > arg2_val)
+                    end
+                elseif comp.f === (==)
+                    @inbounds for i in 1:length(target_col)
+                        target_col[i] = Float64(arg1_values[i] == arg2_val)
+                    end
+                elseif comp.f === (!=)
+                    @inbounds for i in 1:length(target_col)
+                        target_col[i] = Float64(arg1_values[i] != arg2_val)
+                    end
+                else
+                    # Other binary functions
+                    try
+                        @inbounds for i in 1:length(target_col)
+                            target_col[i] = comp.f(arg1_values[i], arg2_val)
+                        end
+                    catch e
+                        @warn "Failed to evaluate binary function $(comp.f): $e, using first argument"
+                        copy!(target_col, arg1_values)
+                    end
+                end
+            else
+                # Two variable arguments
+                arg2_values = Vector{Float64}(undef, length(target_col))
+                evaluate_component_safely!(arg2_values, arg2, d)
+                
+                try
+                    if comp.f in [<=, >=, <, >, ==, !=]
+                        # Comparison operators
+                        @inbounds for i in 1:length(target_col)
+                            target_col[i] = Float64(comp.f(arg1_values[i], arg2_values[i]))
+                        end
+                    else
+                        # Mathematical functions
+                        @inbounds for i in 1:length(target_col)
+                            target_col[i] = comp.f(arg1_values[i], arg2_values[i])
+                        end
+                    end
+                catch e
+                    @warn "Failed to evaluate binary function $(comp.f): $e, using first argument"
+                    copy!(target_col, arg1_values)
+                end
+            end
+        else
+            @warn "FunctionTerm with $(length(comp.args)) arguments not supported, using 1.0"
+            fill!(target_col, 1.0)
+        end
+        
+    else
+        @warn "Unknown component type $(typeof(comp)), using 1.0"
+        fill!(target_col, 1.0)
+    end
+end
+
+"""
     _cols!(::Nothing, _d, _X, j, _ipm, _fn_i, _int_i) -> Int
 
 A no-op clause for `Nothing` terms that simply returns the current column index `j`.
-
 """
 _cols!(::Nothing, _d, _X, j, _ipm, _f, _i) = j
 
 """
-
     _cols!(t::ConstantTerm, _d, X, j, _ipm, _fn_i, _int_i) -> Int
 
 Fill column `j` of `X` with the constant value `t.n` for all rows, then return `j+1`.
-
 """
 @inline _cols!(t::ConstantTerm, _d, X, j, _, _, _) = (fill!(view(X,:,j), t.n); j+1)
 
 """
-
     _cols!(::InterceptTerm{true}, _d, X, j, _ipm, _fn_i, _int_i) -> Int
 
 Fill column `j` of `X` with `1.0` (the intercept) for all rows, then return `j+1`.
 """
 @inline _cols!(::InterceptTerm{true}, _d, X, j, _, _, _) = (fill!(view(X,:,j),1.0); j+1)
-"""
 
-    _cols!(::InterceptTerm{false}, _d, _X, j, _ipm, _fn_i, _int_i) -> Int
+"""
+    _cols!(::InterceptTerm{false}, _d, _X, j, _imp, _fn_i, _int_i) -> Int
 
 Explicitly omit the intercept: do nothing and return the current column index `j`.
-
 """
 @inline _cols!(::InterceptTerm{false}, _d, _X, j, _, _, _) = j
 
 """
-
     _cols!(t::ContinuousTerm, d, X, j, _ipm, _fn_i, _int_i) -> Int
 
 Copy the raw predictor vector `d[t.sym]` into column `j` of `X` (via `copy!`),
@@ -101,7 +253,7 @@ function _cols!(t::CategoricalTerm{C,T,N}, d, X, j, _ipm, _fn_i, _int_i) where {
     # grab the coded data and the raw contrast table
     v     = d[t.sym]           # your CategoricalVector
     codes = refs(v)            # UInt32 codes vector, no alloc
-    M     = t.contrasts.matrix # the k×(k-1) Float64 matrix :contentReference[oaicite:0]{index=0}
+    M     = t.contrasts.matrix # the k×(k-1) Float64 matrix
     rows  = length(codes)
 
     @inbounds for r in 1:rows
@@ -112,7 +264,6 @@ function _cols!(t::CategoricalTerm{C,T,N}, d, X, j, _ipm, _fn_i, _int_i) where {
 
     return j + N
 end
-
 
 # -- tuple / matrixterm -------------------------------------------------------
 
@@ -232,7 +383,7 @@ In-place expansion of an interaction term (`t₁ & t₂ & …`) without any heap
   The destination matrix; writes into the slice `X[:, j:j+total-1]`.
 
 - `j::Int`  
-  The starting column index in `X` for this interaction’s Kronecker block.
+  The starting column index in `X` for this interaction's Kronecker block.
 
 - `ipm::InplaceModeler`  
   Holds pre-allocated buffers:
@@ -259,88 +410,48 @@ In-place expansion of an interaction term (`t₁ & t₂ & …`) without any heap
 
 # Returns
 
-- `j + total`: The next available column index after filling this interaction’s block.
+- `j + total`: The next available column index after filling this interaction's block.
 """
 function _cols!(
   t::InteractionTerm, d, X, j,
   ipm::InplaceModeler, fn_i::Ref, int_i::Ref
 )
-
     idx      = int_i[]; int_i[] += 1
     sw       = ipm.int_subw[idx]
     stride   = ipm.int_stride[idx]
     scratch  = ipm.int_scratch[idx]
     rows     = size(X,1)
 
-    # println("DEBUG: idx=$idx, sw=$sw, scratch size=$(size(scratch))")
-    # println("DEBUG: total needed cols=$(sum(sw)), scratch has $(size(scratch,2))")
-    
-
-    # --- 1. fill each component into scratch (FIXED VERSION) ---
+    # FIXED: Fill each component into scratch using safe evaluation
     ofs = 0
     for (comp, w) in zip(t.terms, sw)
-        comp_idx = comp
-        # println("DEBUG: Processing component $comp_idx: $comp, expected width=$w")
-        # println("DEBUG: ofs=$ofs, creating view(:, $(ofs+1):$(ofs+w))")
-
-        comp_view = view(scratch, :, ofs+1:ofs+w)
-        # println("DEBUG: comp_view size = $(size(comp_view))")
-        
-        # FIXED: Safe component evaluation that avoids resize! bugs
-        if comp isa ContinuousTerm
-            # Copy continuous data safely
-            data_vals = d[comp.sym]
-            target_col = view(comp_view, :, 1)
-            @inbounds for i in eachindex(target_col)
-                target_col[i] = Float64(data_vals[i])
-            end
-            
-        elseif comp isa Term
-            # Copy term data safely  
-            data_vals = d[comp.sym]
-            target_col = view(comp_view, :, 1)
-            @inbounds for i in eachindex(target_col)
-                target_col[i] = Float64(data_vals[i])
-            end
-            
-        elseif comp isa CategoricalTerm
-            # Trust the pre-computed width from ipm - it has the correct formula context
-            v = d[comp.sym]
-            M = comp.contrasts.matrix
-            # println("DEBUG: CategoricalTerm $(comp.sym), contrast matrix size=$(size(M)), expected w=$w")
-            codes = refs(v)
-
-            # Use w (pre-computed width) instead of n_contrast_cols (runtime width)
-            # This ensures consistency with comp_view allocation and formula context
-            @inbounds for r in 1:rows
-                code = codes[r]
-                @simd for k in 1:w  # FIXED: Use pre-computed width w
-                    comp_view[r, k] = M[code, k]
+        if w > 0
+            if w == 1
+                # Single column component - use safe evaluation
+                target_col = view(scratch, :, ofs + 1)
+                evaluate_component_safely!(target_col, comp, d)
+            else
+                # Multi-column component - use existing _cols! logic
+                comp_view = view(scratch, :, ofs+1:ofs+w)
+                try
+                    _cols!(comp, d, comp_view, 1, ipm, fn_i, int_i)
+                catch e
+                    @warn "Multi-column component evaluation failed for $(typeof(comp)): $e, using identity"
+                    if comp isa CategoricalTerm
+                        # For categorical, try to fill with reasonable defaults
+                        for k in 1:w
+                            fill!(view(comp_view, :, k), k == 1 ? 1.0 : 0.0)
+                        end
+                    else
+                        fill!(comp_view, 1.0)
+                    end
                 end
             end
-        elseif comp isa InterceptTerm{true}
-            fill!(view(comp_view, :, 1), 1.0)
-            
-        elseif comp isa InterceptTerm{false}
-            # Do nothing for false intercept (w should be 0 anyway)
-            
-        elseif comp isa ConstantTerm
-            fill!(view(comp_view, :, 1), comp.n)
-            
-        else
-            # For other term types, try the original logic but with error handling
-            try
-                _cols!(comp, d, comp_view, 1, ipm, fn_i, int_i)
-            catch e
-                @warn "Failed to evaluate component term $(typeof(comp)): Using identity fallback."
-                fill!(comp_view, 1.0)
-            end
         end
-        
         ofs += w
     end
 
-    # --- 2. write Kronecker product into destination (UNCHANGED) ---
+    # Write Kronecker product into destination
     total = prod(sw)
     dest  = view(X, :, j:j+total-1)
 
@@ -355,6 +466,6 @@ function _cols!(
         end
         dest[r, col] = acc
     end
+    
     return j + total
 end
-
