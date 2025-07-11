@@ -150,36 +150,6 @@ function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, t
     return col_ref[]
 end
 
-# Handle ZScoredTerm from StandardizedPredictors.jl (if available)
-
-function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, term_info,
-                                term::ZScoredTerm, col_ref::Ref{Int})
-    w = width(term)
-    if w > 0
-        range = col_ref[]:col_ref[]+w-1
-        col_ref[] += w
-        
-        push!(term_info, (term, range))
-        term_to_range[term] = range
-        
-        # Collect variables from the wrapped term
-        vars = collect_termvars_recursive(term.term)
-        
-        for var in vars
-            if !haskey(sym_to_ranges, var)
-                sym_to_ranges[var] = UnitRange{Int}[]
-            end
-            push!(sym_to_ranges[var], range)
-        end
-        
-        if !haskey(range_to_terms, range)
-            range_to_terms[range] = AbstractTerm[]
-        end
-        push!(range_to_terms[range], term)
-    end
-    
-    return col_ref[]
-end
 
 # Base cases that don't contribute variables
 function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, term_info,
@@ -248,13 +218,6 @@ function _collect_vars_recursive!(vars::Set{Symbol}, terms::Tuple)
     for term in terms
         _collect_vars_recursive!(vars, term)
     end
-end
-
-# Handle ZScoredTerm from StandardizedPredictors.jl (if available)
-
-function _collect_vars_recursive!(vars::Set{Symbol}, term::ZScoredTerm)
-    # Delegate to the wrapped term
-    _collect_vars_recursive!(vars, term.term)
 end
 
 # Base cases
@@ -461,19 +424,6 @@ function _evaluate_single_column_direct!(term::AbstractTerm, data::NamedTuple, o
     end
 end
 
-
-function _evaluate_single_column_direct!(term::ZScoredTerm, data::NamedTuple, output::AbstractVector)
-    @assert width(term) == 1 "ZScoredTerm direct evaluation only for width=1"
-    
-    # Evaluate underlying term first
-    _evaluate_single_column_direct!(term.term, data, output)
-    
-    # Apply Z-score transformation in-place
-    _apply_zscore_single_column!(output, term.center, term.scale)
-    
-    return output
-end
-
 ###############################################################################
 # Full Term Evaluation (multi-column terms)
 ###############################################################################
@@ -558,17 +508,6 @@ function _evaluate_term_full!(term::MatrixTerm, data::NamedTuple, output::Abstra
     end
 end
 
-
-function _evaluate_term_full!(term::ZScoredTerm, data::NamedTuple, output::AbstractMatrix)
-    # Evaluate underlying term first
-    _evaluate_term_full!(term.term, data, output)
-    
-    # Apply Z-score transformation to all columns
-    _apply_zscore_transform!(output, term.center, term.scale)
-    
-    return output
-end
-
 # Single-column terms that need matrix interface
 function _evaluate_term_full!(term::ContinuousTerm, data::NamedTuple, output::AbstractMatrix)
     @assert size(output, 2) == 1
@@ -616,157 +555,6 @@ function _compute_kronecker_product!(components::Vector{Matrix{Float64}}, widths
         end
         col_idx += 1
     end
-end
-
-"""
-    _apply_zscore_single_column!(output::AbstractVector, center, scale)
-
-Apply Z-score transformation to a single column vector in-place.
-"""
-function _apply_zscore_single_column!(output::AbstractVector, center, scale)
-    if center isa Number && scale isa Number
-        if center == 0
-            inv_scale = 1.0 / scale
-            @inbounds @simd for i in 1:length(output)
-                output[i] *= inv_scale
-            end
-        else
-            inv_scale = 1.0 / scale
-            @inbounds @simd for i in 1:length(output)
-                output[i] = (output[i] - center) * inv_scale
-            end
-        end
-    elseif center isa AbstractVector && scale isa AbstractVector
-        # This shouldn't happen for single column, but handle gracefully
-        @assert length(center) == 1 && length(scale) == 1 "Vector center/scale for single column must have length 1"
-        c, s = center[1], scale[1]
-        if c == 0
-            inv_s = 1.0 / s
-            @inbounds @simd for i in 1:length(output)
-                output[i] *= inv_s
-            end
-        else
-            inv_s = 1.0 / s
-            @inbounds @simd for i in 1:length(output)
-                output[i] = (output[i] - c) * inv_s
-            end
-        end
-    elseif center isa Number && scale isa AbstractVector
-        @assert length(scale) == 1 "Vector scale for single column must have length 1"
-        s = scale[1]
-        if center == 0
-            inv_s = 1.0 / s
-            @inbounds @simd for i in 1:length(output)
-                output[i] *= inv_s
-            end
-        else
-            inv_s = 1.0 / s
-            @inbounds @simd for i in 1:length(output)
-                output[i] = (output[i] - center) * inv_s
-            end
-        end
-    elseif center isa AbstractVector && scale isa Number
-        @assert length(center) == 1 "Vector center for single column must have length 1"
-        c = center[1]
-        if c == 0
-            inv_scale = 1.0 / scale
-            @inbounds @simd for i in 1:length(output)
-                output[i] *= inv_scale
-            end
-        else
-            inv_scale = 1.0 / scale
-            @inbounds @simd for i in 1:length(output)
-                output[i] = (output[i] - c) * inv_scale
-            end
-        end
-    else
-        error("Unsupported center/scale types for Z-score: $(typeof(center)), $(typeof(scale))")
-    end
-    
-    return output
-end
-
-"""
-    _apply_zscore_transform!(output::AbstractMatrix, center, scale)
-
-Apply Z-score transformation to a matrix in-place, handling various center/scale combinations.
-"""
-function _apply_zscore_transform!(output::AbstractMatrix, center, scale)
-    n_rows, n_cols = size(output)
-    
-    if center isa Number && scale isa Number
-        # Scalar center and scale - apply to all columns
-        if center == 0
-            inv_scale = 1.0 / scale
-            @inbounds for i in eachindex(output)
-                output[i] *= inv_scale
-            end
-        else
-            inv_scale = 1.0 / scale
-            @inbounds for i in eachindex(output)
-                output[i] = (output[i] - center) * inv_scale
-            end
-        end
-    elseif center isa AbstractVector && scale isa AbstractVector
-        # Vector center and scale - apply column-wise
-        @assert length(center) == n_cols "Center vector length must match number of columns"
-        @assert length(scale) == n_cols "Scale vector length must match number of columns"
-        
-        @inbounds for col in 1:n_cols
-            c = center[col]
-            s = scale[col]
-            if c == 0
-                inv_s = 1.0 / s
-                for row in 1:n_rows
-                    output[row, col] *= inv_s
-                end
-            else
-                inv_s = 1.0 / s
-                for row in 1:n_rows
-                    output[row, col] = (output[row, col] - c) * inv_s
-                end
-            end
-        end
-    elseif center isa Number && scale isa AbstractVector
-        # Scalar center, vector scale
-        @assert length(scale) == n_cols "Scale vector length must match number of columns"
-        
-        @inbounds for col in 1:n_cols
-            s = scale[col]
-            if center == 0
-                inv_s = 1.0 / s
-                for row in 1:n_rows
-                    output[row, col] *= inv_s
-                end
-            else
-                inv_s = 1.0 / s
-                for row in 1:n_rows
-                    output[row, col] = (output[row, col] - center) * inv_s
-                end
-            end
-        end
-    elseif center isa AbstractVector && scale isa Number
-        # Vector center, scalar scale
-        @assert length(center) == n_cols "Center vector length must match number of columns"
-        
-        inv_scale = 1.0 / scale
-        @inbounds for col in 1:n_cols
-            c = center[col]
-            if c == 0
-                for row in 1:n_rows
-                    output[row, col] *= inv_scale
-                end
-            else
-                for row in 1:n_rows
-                    output[row, col] = (output[row, col] - c) * inv_scale
-                end
-            end
-        end
-    else
-        error("Unsupported center/scale types for Z-score: $(typeof(center)), $(typeof(scale))")
-    end
-    
-    return output
 end
 
 ###############################################################################
