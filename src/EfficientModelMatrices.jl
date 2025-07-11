@@ -63,4 +63,6 @@ export
 include("modelmatrix!_add.jl")
 export modelmatrix_selective!, modelmatrix_with_base!
 
+export _cols!
+
 end # module
