@@ -36,9 +36,14 @@ export fixed_effects_form
 include("ColumnMapping.jl")
 
 # misc background methods
-include("data_validation.jl")
-include("termmapping.jl")
-include("termmapping_add.jl")
+# include("data_validation.jl")
+# include("termmapping.jl")
+# include("termmapping_add.jl")
+
+# struct
+include("structure_structures.jl")
+include("compiled_formula.jl")
+export CompiledFormula, compile_formula
 
 # ============================================================================
 # Core API: Basic efficient model matrix construction
@@ -56,7 +61,7 @@ export generate_instructions, generate_term_instructions, test_instruction_gener
 export test_interaction_fix
 
 include("generated_integration.jl")
-export compile_formula_complete, modelrow!, get_compiled_function
+export modelrow!, get_compiled_function
 export test_compilation_performance, test_complete_pipeline
 
 include("testing_suite.jl")

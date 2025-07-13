@@ -1,58 +1,12 @@
 # phase3_generated_integration.jl
 # Phase 3: Complete @generated function integration
 
-using Tables
-using CategoricalArrays: CategoricalValue, levelcode
-using StatsModels
-using StandardizedPredictors: ZScoredTerm
-
 ###############################################################################
 # Phase 3: @generated Function Integration
 ###############################################################################
 
 # Global cache for formula instructions and metadata
 const FORMULA_CACHE = Dict{UInt64, Tuple{Vector{String}, Vector{Symbol}, Int}}()
-
-"""
-    compile_formula_complete(model) -> (formula_val, output_width, column_names)
-
-Complete three-phase compilation pipeline:
-1. Phase 1: Analyze formula structure
-2. Phase 2: Generate instructions  
-3. Phase 3: Register for @generated dispatch
-
-Returns values needed for zero-allocation `modelrow!` calls.
-"""
-function compile_formula_complete(model)
-    println("=== Complete Three-Phase Compilation ===")
-    
-    # Phase 1: Structure Analysis
-    println("Phase 1: Analyzing formula structure...")
-    analysis = analyze_formula_structure(model)
-    
-    if !validate_analysis(analysis, model)
-        error("Phase 1 validation failed!")
-    end
-    
-    # Phase 2: Instruction Generation
-    println("Phase 2: Generating instructions...")
-    instructions = generate_instructions(analysis)
-    
-    # Phase 3: Registration for @generated dispatch
-    println("Phase 3: Registering for @generated dispatch...")
-    formula_hash = hash(string(fixed_effects_form(model).rhs))
-    
-    # Store in global cache for @generated function
-    FORMULA_CACHE[formula_hash] = (instructions, analysis.all_columns, analysis.total_width)
-    
-    println("✅ Complete compilation successful!")
-    println("   Formula hash: $formula_hash")
-    println("   Output width: $(analysis.total_width)")
-    println("   Instructions: $(length(instructions))")
-    println("   Columns used: $(analysis.all_columns)")
-    
-    return (Val(formula_hash), analysis.total_width, analysis.all_columns)
-end
 
 """
     modelrow!(row_vec, ::Val{formula_hash}, data, row_idx) where formula_hash
@@ -68,8 +22,9 @@ This is the runtime function that achieves ~50-100ns, 0 allocation performance.
     
     instructions, column_names, output_width = FORMULA_CACHE[formula_hash]
     
-    println("@generated: Compiling for formula hash $formula_hash")
-    println("@generated: $(length(instructions)) instructions, width $output_width")
+    # Only show debug info during development
+    # println("@generated: Compiling for formula hash $formula_hash")
+    # println("@generated: $(length(instructions)) instructions, width $output_width")
     
     # Convert instruction strings to expressions
     try
