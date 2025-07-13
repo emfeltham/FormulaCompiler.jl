@@ -56,6 +56,27 @@ struct CategoricalColumn <: Instruction
 end
 
 """
+Instruction for ZScored (standardized) terms: (value - center) / scale
+"""
+struct ZScoredColumn <: Instruction
+    position::Int
+    underlying_term::AbstractTerm
+    center::Float64
+    scale::Float64
+end
+
+"""
+Instruction for ZScored function terms: (f(column) - center) / scale
+"""
+struct ZScoredFunctionColumn <: Instruction
+    position::Int
+    func::Function
+    column::Symbol
+    center::Float64
+    scale::Float64
+end
+
+"""
 Compiled formula representation - no function storage
 """
 struct CompiledFormula
@@ -130,7 +151,36 @@ function parse_term!(instructions, column_names, term, position)
     elseif term isa CategoricalTerm
         return parse_categorical_term!(instructions, column_names, term, position)
         
-    else
+    elseif term isa ZScoredTerm
+        # Extract standardization parameters
+        center = term.center isa Number ? Float64(term.center) : Float64(term.center[1])
+        scale = term.scale isa Number ? Float64(term.scale) : Float64(term.scale[1])
+        
+        # Handle the underlying term
+        underlying = term.term
+        
+        if underlying isa Union{ContinuousTerm, Term}
+            # Simple case: standardized column
+            push!(column_names, underlying.sym)
+            push!(instructions, ZScoredColumn(position, underlying, center, scale))
+            return position + 1
+            
+        elseif underlying isa FunctionTerm
+            # Complex case: standardized function term
+            if length(underlying.args) == 1 && underlying.args[1] isa Union{ContinuousTerm, Term}
+                # ZScore(f(column)) case
+                col = underlying.args[1].sym
+                push!(column_names, col)
+                push!(instructions, ZScoredFunctionColumn(position, underlying.f, col, center, scale))
+                return position + 1
+            else
+                error("Complex ZScoredTerm function arguments not yet supported: $underlying")
+            end
+            
+        else
+            error("ZScoredTerm with underlying term type $(typeof(underlying)) not yet supported")
+        end
+    else # unsupported
         error("Unsupported term type: $(typeof(term))")
     end
 end
@@ -483,8 +533,42 @@ end
 #     return lines
 # end
 
+"""
+Code generation for ZScoredColumn instruction
+"""
+function generate_instruction_code(instr::ZScoredColumn)
+    underlying = instr.underlying_term
+    pos = instr.position
+    center = instr.center
+    scale = instr.scale
+    
+    if underlying isa Union{ContinuousTerm, Term}
+        col = underlying.sym
+        return [
+            "@inbounds val_$(col) = Float64(data.$(col)[row_idx])",
+            "@inbounds row_vec[$pos] = (val_$(col) - $center) / $scale"
+        ]
+    else
+        error("ZScoredColumn with underlying term type $(typeof(underlying)) not supported in code generation")
+    end
+end
 
-# compiled_formula.jl - Direct code generation for zero-allocation formula evaluation
+"""
+Code generation for ZScoredFunctionColumn instruction
+"""
+function generate_instruction_code(instr::ZScoredFunctionColumn)
+    col = instr.column
+    func_name = instr.func
+    pos = instr.position
+    center = instr.center
+    scale = instr.scale
+    
+    return [
+        "@inbounds val_$(col) = Float64(data.$(col)[row_idx])",
+        "@inbounds func_result = $func_name(val_$(col))",
+        "@inbounds row_vec[$pos] = (func_result - $center) / $scale"
+    ]
+end
 
 ###############################################################################
 # Zero-Allocation Evaluation Interface

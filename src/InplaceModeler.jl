@@ -1,144 +1,123 @@
-# InplaceModeler.jl
+# InplaceModeler.jl - RIGHT-SIZED VERSION: Only allocate scratch for terms that generate columns
 
 #───────────────────────────────────────────────────────────────────────────────
-# 1.  State object with every scratch buffer pre-allocated once
+# Simple filtering using existing mapping infrastructure
+#───────────────────────────────────────────────────────────────────────────────
+
+"""
+    extract_active_function_terms(mapping::ColumnMapping) -> Vector{FunctionTerm}
+
+Extract FunctionTerms that actually generate columns from the existing mapping.
+The mapping already knows which terms generate columns!
+"""
+function extract_active_function_terms(mapping::ColumnMapping)
+    active_fn_terms = FunctionTerm[]
+    
+    # The mapping already has all terms that generate columns
+    for (term, range) in mapping.term_info
+        if !isempty(range)
+            if term isa FunctionTerm
+                push!(active_fn_terms, term)
+            elseif term isa InteractionTerm
+                # Check components for FunctionTerms
+                for component in term.terms
+                    if component isa FunctionTerm && component ∉ active_fn_terms
+                        push!(active_fn_terms, component)
+                    end
+                end
+            end
+        end
+    end
+    
+    return active_fn_terms
+end
+
+"""
+    extract_active_interaction_terms(mapping::ColumnMapping) -> Vector{InteractionTerm}
+
+Extract InteractionTerms that actually generate columns from the existing mapping.
+"""
+function extract_active_interaction_terms(mapping::ColumnMapping)
+    active_int_terms = InteractionTerm[]
+    
+    for (term, range) in mapping.term_info
+        if !isempty(range) && term isa InteractionTerm
+            push!(active_int_terms, term)
+        end
+    end
+    
+    return active_int_terms
+end
+
+#───────────────────────────────────────────────────────────────────────────────
+# 1.  State object with right-sized scratch buffer allocation
 #───────────────────────────────────────────────────────────────────────────────
 
 """
     InplaceModeler{M}
 
 A helper object that encapsulates a fitted `StatisticalModel` and
-all pre-allocated scratch buffers needed to build its model matrix
-in-place without any heap allocations.
+pre-allocated scratch buffers, but only for terms that actually generate columns.
 
-# Type Parameters
-
-- `M`: a subtype of `StatisticalModel` (e.g., a regression model type).
-
-# Fields
-
-- `model::M`  
-  The fitted model whose formula drives the column‐generation logic.
-
-- `fn_terms::Vector{FunctionTerm}`  
-  All `FunctionTerm` nodes in the model’s RHS term tree, in encounter order.
-
-- `fn_scratch::Vector{Matrix{Float64}}`  
-  One scratch matrix per `FunctionTerm`, each of size `nrow × nargs`,
-  used to hold the broadcast arguments before applying the function in-place.
-
-- `int_terms::Vector{InteractionTerm}`  
-  All `InteractionTerm` nodes in the model’s RHS term tree, in encounter order.
-
-- `int_subw::Vector{Vector{Int}}`  
-  For each `InteractionTerm`, a vector of component widths (`width(term_i)`).
-
-- `int_stride::Vector{Vector{Int}}`  
-  For each interaction, the cumulative-product “stride” array used
-  to compute Kronecker‐style indices without allocations.
-
-- `int_prefix::Vector{Vector{Int}}`  
-  For each interaction, the rolling‐sum “prefix” offsets of component
-  blocks within the per-interaction scratch matrix.
-
-- `int_scratch::Vector{Matrix{Float64}}`  
-  One scratch matrix per `InteractionTerm`, each of size
-  `nrow × sum(int_subw[i])`, used to hold component columns
-  before forming the row‐wise tensor product.
+# Key Change: Only allocates scratch for function/interaction terms that appear in the model matrix.
 """
 mutable struct InplaceModeler{M}
     model       :: M
-    fn_terms    :: Vector{FunctionTerm}
-    fn_scratch  :: Vector{Matrix{Float64}}          # nrow × nargs for *each* fn
-    int_terms   :: Vector{InteractionTerm}
-    int_subw    :: Vector{Vector{Int}}              # widths of components
-    int_stride  :: Vector{Vector{Int}}              # cumulative products
-    int_prefix  :: Vector{Vector{Int}}              # column offsets
-    int_scratch :: Vector{Matrix{Float64}}          # nrow × total columns
+    
+    # RIGHT-SIZED: Only store terms that actually generate columns
+    active_fn_terms    :: Vector{FunctionTerm}           # Only FunctionTerms that generate columns
+    fn_scratch         :: Vector{Matrix{Float64}}        # Scratch only for active terms
+    fn_term_to_index   :: Dict{FunctionTerm, Int}        # Map term to scratch index
+    
+    active_int_terms   :: Vector{InteractionTerm}        # Only InteractionTerms that generate columns  
+    int_subw           :: Vector{Vector{Int}}             # Component widths for active terms only
+    int_stride         :: Vector{Vector{Int}}             # Strides for active terms only
+    int_prefix         :: Vector{Vector{Int}}             # Prefixes for active terms only
+    int_scratch        :: Vector{Matrix{Float64}}         # Scratch only for active terms
+    int_term_to_index  :: Dict{InteractionTerm, Int}     # Map term to scratch index
 end
 
-# ── recursive collector ──
 """
-    _collect!(t, ::Type{T}, buf::Vector{T}) where T
+    filter_active_function_terms(mapping::ColumnMapping) -> Vector{FunctionTerm}
 
-Recursively traverse the term‐tree rooted at `t`, collecting all nodes of type `T`
-into the provided buffer `buf`.
-
-# Arguments
-
-- `t`: An `AbstractTerm` (or tuple/formula/matrix‐term) to traverse.
-- `::Type{T}`: The term type to collect (e.g., `FunctionTerm` or `InteractionTerm`).
-- `buf::Vector{T}`: A vector into which matching terms are `push!`ed.
-
-# Returns
-
-- `buf`: The same vector passed in, now containing all encountered terms of type `T`
-  in *preorder* (parent before children), in the order they were discovered.
-
-# Behavior
-
-- If `t isa T`, `t` is appended to `buf`.
-- For composite terms (`FunctionTerm`, `InteractionTerm`, `Tuple`, `MatrixTerm`,
-  `FormulaTerm`), it descends into each sub‐term to continue the search.
-- Does **not** allocate new buffers; reuses `buf` in-place.
+Extract FunctionTerms that actually generate columns from the existing mapping.
 """
-function _collect!(t, ::Type{T}, buf::Vector{T}) where T
-    t isa T && push!(buf, t)
-    if     t isa FunctionTerm      ; foreach(a -> _collect!(a,T,buf), t.args)
-    elseif t isa InteractionTerm   ; foreach(a -> _collect!(a,T,buf), t.terms)
-    elseif t isa Tuple             ; foreach(a -> _collect!(a,T,buf), t)
-    elseif t isa MatrixTerm        ; _collect!(t.terms, T, buf)
-    elseif t isa FormulaTerm
-        _collect!(t.lhs, T, buf);  _collect!(t.rhs, T, buf)
-    end
-    buf
+function filter_active_function_terms(mapping::ColumnMapping)
+    return extract_active_function_terms(mapping)
 end
 
-# ── constructor ──
+"""
+    filter_active_interaction_terms(mapping::ColumnMapping) -> Vector{InteractionTerm}
+
+Extract InteractionTerms that actually generate columns from the existing mapping.
+"""
+function filter_active_interaction_terms(mapping::ColumnMapping)
+    return extract_active_interaction_terms(mapping)
+end
+
+
+
 """
     InplaceModeler(model, nrows::Int) -> InplaceModeler{<:StatisticalModel}
 
-Create an `InplaceModeler` tailored to a fitted `model` and a fixed number of rows `nrows`,
-pre-allocating all necessary scratch buffers for zero-allocation model matrix construction.
-
-# Arguments
-
-- `model`  
-  A fitted statistical model (e.g., a `TableRegressionModel`) whose formula’s RHS
-  defines the terms to materialize.
-
-- `nrows::Int`  
-  The number of observations (rows) in any new dataset you will later pass to
-  `modelmatrix!(ipm, data, X)`.  All internal scratch matrices are sized to this.
-
-# Returns
-
-- `InplaceModeler{M}`  
-  An object containing:
-  1. `fn_terms` and `fn_scratch` — a list of each `FunctionTerm` node in the model’s
-     formula and a corresponding `nrows × nargs` buffer.
-  2. `int_terms`, `int_subw`, `int_stride`, `int_prefix`, and `int_scratch` — for each
-     `InteractionTerm`, the component widths, precomputed strides and offsets, and
-     an `nrows × sum(widths)` buffer.
-
-Once constructed, the `InplaceModeler` can be reused to fill different datasets into
-a pre-allocated output `X` matrix without any further heap allocations.
+RIGHT-SIZED: Create an InplaceModeler that only allocates scratch for terms that generate columns.
 """
-# -----------------------------------------------------------------------------
-# Public convenience constructor
-# Works for GLM/OLS (TableRegressionModel) and MixedModels, because it
-# lets `fixed_effects_form(model)` decide how to strip random effects.
-# -----------------------------------------------------------------------------
 function InplaceModeler(model, nrows::Int)
     rhs = fixed_effects_form(model).rhs
-
-    fn_terms   = FunctionTerm[]
-    _collect!(rhs, FunctionTerm, fn_terms)
-    fn_scratch = [Matrix{Float64}(undef, nrows, length(ft.args)) for ft in fn_terms]
-
-    int_terms  = InteractionTerm[]
-    _collect!(rhs, InteractionTerm, int_terms)
-    int_subw   = [[width(p) for p in it.terms] for it in int_terms]
+    
+    # Build mapping to understand which terms generate columns
+    mapping = build_column_mapping(rhs, model)
+    
+    # RIGHT-SIZED: Only find active terms that actually generate columns
+    active_fn_terms = filter_active_function_terms(mapping)
+    active_int_terms = filter_active_interaction_terms(mapping)
+    
+    # RIGHT-SIZED: Only allocate scratch for active function terms
+    fn_scratch = [Matrix{Float64}(undef, nrows, length(ft.args)) for ft in active_fn_terms]
+    fn_term_to_index = Dict(term => i for (i, term) in enumerate(active_fn_terms))
+    
+    # RIGHT-SIZED: Only allocate scratch for active interaction terms
+    int_subw = [[width(p) for p in it.terms] for it in active_int_terms]
     int_prefix = [cumsum([0; sw[1:end-1]]) for sw in int_subw]
     int_stride = [let s = Vector{Int}(undef, length(sw))
                       s[1] = 1
@@ -148,30 +127,49 @@ function InplaceModeler(model, nrows::Int)
                       s
                   end for sw in int_subw]
     int_scratch = [Matrix{Float64}(undef, nrows, sum(sw)) for sw in int_subw]
+    int_term_to_index = Dict(term => i for (i, term) in enumerate(active_int_terms))
 
-    return InplaceModeler{typeof(model)}(    # ←  type-qualified call
+    return InplaceModeler{typeof(model)}(
         model,
-        fn_terms, fn_scratch,
-        int_terms, int_subw, int_stride, int_prefix, int_scratch
+        active_fn_terms, fn_scratch, fn_term_to_index,
+        active_int_terms, int_subw, int_stride, int_prefix, int_scratch, int_term_to_index
     )
 end
 
-
 """
-    InplaceModeler(model::StatisticalModel, nrows::Int) -> InplaceModeler{<:StatisticalModel}
+    InplaceModeler(model::StatisticalModel, data::Tables.ColumnTable) -> InplaceModeler{<:StatisticalModel}
 
-Create an `InplaceModeler` tailored to a fitted `model` and a fixed number of rows `nrows`,
-pre-allocating all necessary scratch buffers for zero-allocation model matrix construction.
-
-# Arguments
-
-- `model::StatisticalModel`  
-  A fitted statistical model (e.g., a `TableRegressionModel`) whose formula’s RHS
-  defines the terms to materialize.
-- `data`
-  The relevant dataset.
+RIGHT-SIZED: Create an InplaceModeler with right-sized scratch allocation.
 """
 function InplaceModeler(model::StatisticalModel, data::Tables.ColumnTable)
     nrows = Tables.istable(data) ? length(Tables.rows(data)) : length(first(data))
     InplaceModeler(model, nrows)
+end
+
+"""
+    get_fn_scratch_index(ipm::InplaceModeler, term::FunctionTerm) -> Int
+
+Get the scratch matrix index for a specific FunctionTerm.
+Throws an error if the term is not active (doesn't generate columns).
+"""
+function get_fn_scratch_index(ipm::InplaceModeler, term::FunctionTerm)
+    if haskey(imp.fn_term_to_index, term)
+        return ipm.fn_term_to_index[term]
+    else
+        error("FunctionTerm $term is not active (doesn't generate columns). This suggests a bug in term filtering.")
+    end
+end
+
+"""
+    get_int_scratch_index(ipm::InplaceModeler, term::InteractionTerm) -> Int
+
+Get the scratch matrix index for a specific InteractionTerm.
+Throws an error if the term is not active (doesn't generate columns).
+"""
+function get_int_scratch_index(ipm::InplaceModeler, term::InteractionTerm)
+    if haskey(ipm.int_term_to_index, term)
+        return ipm.int_term_to_index[term]
+    else
+        error("InteractionTerm $term is not active (doesn't generate columns). This suggests a bug in term filtering.")
+    end
 end
