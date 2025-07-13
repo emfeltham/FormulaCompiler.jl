@@ -21,20 +21,14 @@ begin
 end
 
 using EfficientModelMatrices:
-    BinaryOp, UnaryOp,
-    SetConstant, CopyColumn,
-    PowerColumn,
-    FunctionColumn, ProductColumns,
-    CategoricalColumn,
-    CompiledFormula,
     compile_formula,
     get_direct_function,
-    generate_loop_function
+    generate_loop_function,
     # generated
     compile_formula_generated,
     FORMULA_CACHE,
     register_formula!,
-    modelrow!,
+    modelrow!
 
 # Simulate data
 n = 50_000;
@@ -47,9 +41,10 @@ large_df = DataFrame(
 data = Tables.columntable(large_df);
 
 model = lm(@formula(y ~ x + x^2 + log(z) + group), large_df);
+mm = modelmatrix(model);
+
 compiled = compile_formula(model);
 direct_func = get_direct_function(compiled);
-mm = modelmatrix(model);
 
 # compiled.output_width
 # this is probably the number of levels too!
@@ -127,3 +122,30 @@ row_vecs = [fill(0.0, length(row_vec_gen)) for _ in 1:1000];
 
 # loop_func_gen = generate_loop_function_generated(formula_val, n)
 # @btime loop_func_gen(row_vec_gen, formula_val, data, n)
+
+## standardization
+
+contrasts = Dict(:x => ZScore());
+model = lm(@formula(y ~ x + x^2 + log(z) + group), large_df; contrasts);
+
+formula_val, output_width, column_names = compile_formula_generated(model)
+row_vec_gen = Vector{Float64}(undef, output_width);
+
+# Single call test
+@btime modelrow!(row_vec_gen, formula_val, data, 1)
+
+@assert row_vec_gen == modelmatrix(model)[1, :];
+
+#####
+
+contrasts = Dict(:x => ZScore());
+model = lm(@formula(y ~ x + x^2 * log(z) + group), large_df; contrasts);
+
+formula_val, output_width, column_names = compile_formula_generated(model)
+row_vec_gen = Vector{Float64}(undef, output_width);
+
+# Single call test
+@btime modelrow!(row_vec_gen, formula_val, data, 1)
+
+@assert row_vec_gen == modelmatrix(model)[1, :];
+

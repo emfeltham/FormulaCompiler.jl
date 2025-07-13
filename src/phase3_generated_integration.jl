@@ -262,6 +262,8 @@ function test_complete_pipeline()
     results = []
     successful = 0
     
+    i = 8
+    (i, (formula, description)) = collect(enumerate(test_formulas))[i]
     for (i, (formula, description)) in enumerate(test_formulas)
         println("\n" * "="^60)
         println("Test $i: $description")

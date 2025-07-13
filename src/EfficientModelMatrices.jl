@@ -7,7 +7,7 @@ using CategoricalArrays
 
 import StatsModels
 import StatsModels:
-    formula,
+    formula, @formula,
     width, hasintercept,
     Term, AbstractTerm, FormulaTerm, FunctionTerm, InteractionTerm,
     MatrixTerm, ConstantTerm, ContinuousTerm,
