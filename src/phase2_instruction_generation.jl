@@ -261,11 +261,34 @@ function generate_interaction_instructions(term_analysis::TermAnalysis)
             push!(component_vars, var_name)
             
             # Generate evaluation code based on component type
-            if comp_type == ContinuousTerm || comp_type == Term
+            if comp_type <: ContinuousTerm || comp_type <: Term
                 col = comp_term.sym
                 push!(instructions, "@inbounds $var_name = Float64(data.$col[row_idx])")
                 
-            elseif comp_type == FunctionTerm
+            elseif comp_type <: CategoricalTerm
+                # Categorical variable: take first contrast column only (since width=1 here)
+                col = comp_term.sym
+                contrast_matrix = comp_term.contrasts.matrix
+                n_levels = size(contrast_matrix, 1)
+                values = [contrast_matrix[i, 1] for i in 1:n_levels]  # First column only
+                
+                push!(instructions, "@inbounds cat_val_$i = data.$col[row_idx]")
+                push!(instructions, "@inbounds level_code_$i = cat_val_$i isa CategoricalValue ? levelcode(cat_val_$i) : 1")
+                push!(instructions, "@inbounds level_code_$i = clamp(level_code_$i, 1, $n_levels)")
+                
+                if n_levels == 2
+                    push!(instructions, "@inbounds $var_name = level_code_$i == 1 ? $(values[1]) : $(values[2])")
+                else
+                    # Generate ternary chain for more levels
+                    ternary_chain = "level_code_$i == 1 ? $(values[1])"
+                    for j in 2:(n_levels-1)
+                        ternary_chain *= " : level_code_$i == $j ? $(values[j])"
+                    end
+                    ternary_chain *= " : $(values[n_levels])"
+                    push!(instructions, "@inbounds $var_name = $ternary_chain")
+                end
+                
+            elseif comp_type <: FunctionTerm
                 # Handle function components
                 if comp_term.f === (^) && length(comp_term.args) == 2 && comp_term.args[2] isa ConstantTerm
                     # Power function
@@ -511,3 +534,111 @@ end
 
 # Export main functions
 export generate_instructions, generate_term_instructions, test_instruction_generation
+"""
+Test the fixed interaction generation on a simple case
+"""
+function test_interaction_fix()
+    println("=== Testing Fixed Interaction Generation ===")
+    
+    # Create test data with known values
+    df = DataFrame(
+        x = [2.0, 3.0],
+        y = [1.0, 2.0], 
+        z = [MathConstants.e, 2.0],
+        group = categorical(["B", "A"])
+    )
+    
+    # Test simple interaction: x * group
+    formula = @formula(y ~ x + group + x & group)
+    model = lm(formula, df)
+    
+    println("Test data:")
+    println("  x = $(df.x[1])")
+    println("  group = $(df.group[1]) (should be level 2)")
+    
+    # Expected model matrix row:
+    # [intercept, x, group_contrast1, group_contrast2, x*group_contrast1, x*group_contrast2]
+    # [1.0, 2.0, 1.0, 0.0, 2.0*1.0, 2.0*0.0] = [1.0, 2.0, 1.0, 0.0, 2.0, 0.0]
+    mm = modelmatrix(model)
+    expected = mm[1, :]
+    println("Expected model matrix row: $expected")
+    
+    # Test Phase 1
+    analysis = analyze_formula_structure(model)
+    println("\nPhase 1 analysis:")
+    for (i, term_analysis) in enumerate(analysis.terms)
+        println("  Term $i: $(term_analysis.term_type), width $(term_analysis.width), pos $(term_analysis.start_position)")
+    end
+    
+    # Test Phase 2 with fixed interaction generation
+    println("\nPhase 2 instruction generation:")
+    instructions = String[]
+    
+    for (i, term_analysis) in enumerate(analysis.terms)
+        if term_analysis.term_type == :interaction
+            println("  Generating FIXED interaction for term $i...")
+            term_instructions = generate_interaction_instructions(term_analysis)
+            append!(instructions, term_instructions)
+            println("    Generated $(length(term_instructions)) instructions")
+        else
+            # Use original generation for non-interaction terms
+            term_instructions = generate_term_instructions(term_analysis)
+            append!(instructions, term_instructions)
+        end
+    end
+    
+    println("\nGenerated instructions:")
+    for (i, instr) in enumerate(instructions)
+        println("  $i: $instr")
+    end
+    
+    return instructions, expected, analysis
+end
+
+# Export main functions
+export generate_instructions, generate_term_instructions, test_instruction_generation
+export test_interaction_fix
+
+
+# function generate_component_evaluation(comp_term, comp_type, var_name, comp_idx)
+#     instructions = String[]
+    
+#     if comp_type <: ContinuousTerm || comp_type <: Term
+#         # Continuous variable: comp_val = Float64(data.x[row_idx])
+#         col = comp_term.sym
+#         push!(instructions, "@inbounds $var_name = Float64(data.$col[row_idx])")
+        
+#     elseif comp_type <: CategoricalTerm
+#         # Categorical variable: take first contrast column only (since width=1 here)
+#         col = comp_term.sym
+#         contrast_matrix = comp_term.contrasts.matrix
+#         n_levels = size(contrast_matrix, 1)
+#         values = [contrast_matrix[i, 1] for i in 1:n_levels]  # First column only
+        
+#         push!(instructions, "@inbounds cat_val_$comp_idx = data.$col[row_idx]")
+#         push!(instructions, "@inbounds level_code_$comp_idx = cat_val_$comp_idx isa CategoricalValue ? levelcode(cat_val_$comp_idx) : 1")
+#         push!(instructions, "@inbounds level_code_$comp_idx = clamp(level_code_$comp_idx, 1, $n_levels)")
+        
+#         if n_levels == 2
+#             push!(instructions, "@inbounds $var_name = level_code_$comp_idx == 1 ? $(values[1]) : $(values[2])")
+#         else
+#             # Generate ternary chain or lookup for more levels
+#             ternary_chain = "level_code_$comp_idx == 1 ? $(values[1])"
+#             for i in 2:(n_levels-1)
+#                 ternary_chain *= " : level_code_$comp_idx == $i ? $(values[i])"
+#             end
+#             ternary_chain *= " : $(values[n_levels])"
+#             push!(instructions, "@inbounds $var_name = $ternary_chain")
+#         end
+        
+#     elseif comp_type <: FunctionTerm
+#         # Function term: evaluate based on function type
+#         append!(instructions, generate_function_component_evaluation(comp_term, var_name, comp_idx))
+        
+#     else
+#         @warn "Unsupported component type in interaction: $comp_type, using fallback"
+#         push!(instructions, "@inbounds $var_name = 1.0  # Fallback")
+#     end
+    
+#     return instructions
+# end
