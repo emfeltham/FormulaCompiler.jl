@@ -789,9 +789,6 @@ function test_instruction_generation()
     return instructions, analysis
 end
 
-# Export main functions
-export generate_instructions, generate_term_instructions, test_instruction_generation
-
 """
 Test the fixed interaction generation on a simple case
 """
@@ -852,11 +849,6 @@ function test_interaction_fix()
     
     return instructions, expected, analysis
 end
-
-# Export main functions
-export generate_instructions, generate_term_instructions, test_instruction_generation
-export test_interaction_fix
-
 
 # function generate_component_evaluation(comp_term, comp_type, var_name, comp_idx)
 #     instructions = String[]

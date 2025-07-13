@@ -34,35 +34,31 @@ export fixed_effects_form
 # ============================================================================
 
 include("ColumnMapping.jl")
-include("InplaceModeler.jl")
-export InplaceModeler
 
-# include("_cols2.jl")
-# include("standardized.jl")
+# misc background methods
+include("data_validation.jl")
+include("termmapping.jl")
+include("termmapping_add.jl")
 
 # ============================================================================
 # Core API: Basic efficient model matrix construction
 # ============================================================================
 
-# include("modelmatrix!.jl")
-# export modelmatrix!, extract_model_matrix
 
-include("data_validation.jl")
+# main workflow
+include("structure_analysis.jl")
 
-include("termmapping.jl")
+export analyze_formula_structure, FormulaAnalysis, TermAnalysis
+export validate_analysis, print_analysis_summary, test_structure_analysis
 
-export ColumnMapping, build_column_mapping, build_enhanced_mapping, enhanced_column_mapping
-export get_variable_ranges, get_all_variable_columns, get_term_for_column, get_terms_for_columns
-export collect_termvars_recursive, evaluate_single_column!
+include("instruction_generation.jl")
+export generate_instructions, generate_term_instructions, test_instruction_generation
+export test_interaction_fix
 
-include("termmapping_add.jl")
-export 
-    get_variable_columns_flat, get_unchanged_columns,
-    build_perturbation_plan,
-    validate_column_mapping, get_variable_term_ranges,
-    build_variable_term_map
+include("generated_integration.jl")
+export compile_formula_complete, modelrow!, get_compiled_function
+export test_compilation_performance, test_complete_pipeline
 
-include("compiled_formula.jl")
-include("compiled_formula_generated.jl")
+include("testing_suite.jl")
 
 end # module

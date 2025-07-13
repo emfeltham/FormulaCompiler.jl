@@ -527,8 +527,3 @@ function test_structure_analysis_standard()
     
     return successful == length(test_cases)
 end
-
-
-# Export main functions
-export analyze_formula_structure, FormulaAnalysis, TermAnalysis
-export validate_analysis, print_analysis_summary, test_structure_analysis
