@@ -218,9 +218,170 @@ function generate_power_instructions(pos::Int, col::Symbol, exponent::Float64)
     return instructions
 end
 
+function generate_simple_product_interaction(component_info, start_pos, instructions)
+    # All components are single-column, so just multiply them
+    component_exprs = String[]
+    
+    for (i, comp_info) in enumerate(component_info)
+        comp_term = comp_info[:term]
+        comp_type = comp_info[:type]
+        
+        if comp_type <: ContinuousTerm || comp_type <: Term
+            col = comp_term.sym
+            push!(component_exprs, "Float64(data.$col[row_idx])")
+            
+        elseif comp_type <: CategoricalTerm
+            # FIXED: Handle single-column categorical terms
+            col = comp_term.sym
+            contrast_matrix = comp_term.contrasts.matrix
+            n_levels = size(contrast_matrix, 1)
+            
+            # Since this is width=1, we only have one contrast column (index 1)
+            values = [contrast_matrix[level, 1] for level in 1:n_levels]
+            
+            # Generate inline categorical evaluation
+            if n_levels == 2
+                cat_expr = "(let cat_val = data.$col[row_idx], level_code = (cat_val isa CategoricalValue ? levelcode(cat_val) : 1); level_code == 1 ? $(values[1]) : $(values[2]) end)"
+            elseif n_levels == 3
+                cat_expr = "(let cat_val = data.$col[row_idx], level_code = (cat_val isa CategoricalValue ? levelcode(cat_val) : 1); level_code == 1 ? $(values[1]) : level_code == 2 ? $(values[2]) : $(values[3]) end)"
+            else
+                # For more levels, create ternary chain
+                ternary_chain = "level_code == 1 ? $(values[1])"
+                for level in 2:(n_levels-1)
+                    ternary_chain *= " : level_code == $level ? $(values[level])"
+                end
+                ternary_chain *= " : $(values[n_levels])"
+                cat_expr = "(let cat_val = data.$col[row_idx], level_code = clamp((cat_val isa CategoricalValue ? levelcode(cat_val) : 1), 1, $n_levels); $ternary_chain end)"
+            end
+            
+            push!(component_exprs, cat_expr)
+            
+        elseif comp_type <: FunctionTerm
+            # Handle function components inline (unchanged)
+            if comp_term.f === (^) && length(comp_term.args) == 2 && comp_term.args[2] isa ConstantTerm
+                # Power function: x^2
+                col = comp_term.args[1].sym
+                exp = Float64(comp_term.args[2].n)
+                if exp == 2.0
+                    push!(component_exprs, "(Float64(data.$col[row_idx]) * Float64(data.$col[row_idx]))")
+                else
+                    push!(component_exprs, "Float64(data.$col[row_idx])^$exp")
+                end
+            elseif length(comp_term.args) == 1 && comp_term.args[1] isa Union{ContinuousTerm, Term}
+                # Simple unary function: log(z)
+                col = comp_term.args[1].sym
+                func = comp_term.f
+                if func === log
+                    val_expr = "Float64(data.$col[row_idx])"
+                    push!(component_exprs, "($val_expr > 0.0 ? log($val_expr) : log(abs($val_expr) + 1e-16))")
+                else
+                    push!(component_exprs, "$func(Float64(data.$col[row_idx]))")
+                end
+            else
+                @warn "Complex function component: $comp_term"
+                push!(component_exprs, "1.0")
+            end
+            
+        else
+            @warn "Unsupported simple component type: $comp_type"
+            push!(component_exprs, "1.0")
+        end
+    end
+    
+    # Generate the multiplication
+    product_expr = join(component_exprs, " * ")
+    push!(instructions, "@inbounds row_vec[$start_pos] = $product_expr")
+    
+    return instructions
+end
+
 function generate_binary_function_instructions(term_analysis::TermAnalysis)
-    # For now, implement a safe fallback for binary functions
-    # This could be expanded to handle specific patterns like x + y, x * y, etc.
+    pos = term_analysis.start_position
+    func = term_analysis.metadata[:function]
+    args = term_analysis.metadata[:args]
+    
+    instructions = String[]
+    
+    # Handle binary comparison operators - FIXED FOR BOOLEAN CONVERSION
+    if func in [>, <, >=, <=, ==, !=] && length(args) == 2
+        arg1, arg2 = args
+        
+        if arg1 isa Union{ContinuousTerm, Term} && arg2 isa ConstantTerm
+            # Simple case: column > constant - FIXED BOOLEAN CONVERSION
+            col = arg1.sym
+            const_val = Float64(arg2.n)
+            
+            push!(instructions, "@inbounds val = Float64(data.$col[row_idx])")
+            
+            # CRITICAL FIX: Proper boolean to float conversion
+            if func === (>)
+                push!(instructions, "@inbounds row_vec[$pos] = val > $const_val ? 1.0 : 0.0")
+            elseif func === (<)
+                push!(instructions, "@inbounds row_vec[$pos] = val < $const_val ? 1.0 : 0.0")
+            elseif func === (>=)
+                push!(instructions, "@inbounds row_vec[$pos] = val >= $const_val ? 1.0 : 0.0")
+            elseif func === (<=)
+                push!(instructions, "@inbounds row_vec[$pos] = val <= $const_val ? 1.0 : 0.0")
+            elseif func === (==)
+                push!(instructions, "@inbounds row_vec[$pos] = val == $const_val ? 1.0 : 0.0")
+            elseif func === (!=)
+                push!(instructions, "@inbounds row_vec[$pos] = val != $const_val ? 1.0 : 0.0")
+            end
+            
+            return instructions
+            
+        elseif arg1 isa Union{ContinuousTerm, Term} && arg2 isa Union{ContinuousTerm, Term}
+            # Both arguments are variables
+            col1, col2 = arg1.sym, arg2.sym
+            
+            push!(instructions, "@inbounds val1 = Float64(data.$col1[row_idx])")
+            push!(instructions, "@inbounds val2 = Float64(data.$col2[row_idx])")
+            
+            if func === (>)
+                push!(instructions, "@inbounds row_vec[$pos] = val1 > val2 ? 1.0 : 0.0")
+            elseif func === (<)
+                push!(instructions, "@inbounds row_vec[$pos] = val1 < val2 ? 1.0 : 0.0")
+            elseif func === (>=)
+                push!(instructions, "@inbounds row_vec[$pos] = val1 >= val2 ? 1.0 : 0.0")
+            elseif func === (<=)
+                push!(instructions, "@inbounds row_vec[$pos] = val1 <= val2 ? 1.0 : 0.0")
+            elseif func === (==)
+                push!(instructions, "@inbounds row_vec[$pos] = val1 == val2 ? 1.0 : 0.0")
+            elseif func === (!=)
+                push!(instructions, "@inbounds row_vec[$pos] = val1 != val2 ? 1.0 : 0.0")
+            end
+            
+            return instructions
+        end
+    end
+    
+    # Handle other binary arithmetic operators (unchanged)
+    if func in [+, -, *, /, ^] && length(args) == 2
+        arg1, arg2 = args
+        
+        if arg1 isa Union{ContinuousTerm, Term} && arg2 isa ConstantTerm
+            col = arg1.sym
+            const_val = Float64(arg2.n)
+            
+            push!(instructions, "@inbounds val = Float64(data.$col[row_idx])")
+            
+            if func === (+)
+                push!(instructions, "@inbounds row_vec[$pos] = val + $const_val")
+            elseif func === (-)
+                push!(instructions, "@inbounds row_vec[$pos] = val - $const_val")
+            elseif func === (*)
+                push!(instructions, "@inbounds row_vec[$pos] = val * $const_val")
+            elseif func === (/)
+                push!(instructions, "@inbounds row_vec[$pos] = abs($const_val) > 1e-16 ? val / $const_val : val")
+            elseif func === (^)
+                push!(instructions, "@inbounds row_vec[$pos] = val^$const_val")
+            end
+            
+            return instructions
+        end
+    end
+    
+    # For other binary functions, fall back to complex function handling
     return generate_complex_function_instructions(term_analysis)
 end
 
@@ -247,119 +408,13 @@ function generate_interaction_instructions(term_analysis::TermAnalysis)
     
     println("    Generating interaction: $n_components components, width $total_width")
     
-    # Generate code to evaluate each component into temporary variables
-    component_vars = String[]
-    
-    for (i, comp_info) in enumerate(component_info)
-        comp_term = comp_info[:term]
-        comp_width = comp_info[:width]
-        comp_type = comp_info[:type]
-        
-        if comp_width == 1
-            # Single-column component
-            var_name = "comp_$(i)"
-            push!(component_vars, var_name)
-            
-            # Generate evaluation code based on component type
-            if comp_type <: ContinuousTerm || comp_type <: Term
-                col = comp_term.sym
-                push!(instructions, "@inbounds $var_name = Float64(data.$col[row_idx])")
-                
-            elseif comp_type <: CategoricalTerm
-                # Categorical variable: take first contrast column only (since width=1 here)
-                col = comp_term.sym
-                contrast_matrix = comp_term.contrasts.matrix
-                n_levels = size(contrast_matrix, 1)
-                values = [contrast_matrix[i, 1] for i in 1:n_levels]  # First column only
-                
-                push!(instructions, "@inbounds cat_val_$i = data.$col[row_idx]")
-                push!(instructions, "@inbounds level_code_$i = cat_val_$i isa CategoricalValue ? levelcode(cat_val_$i) : 1")
-                push!(instructions, "@inbounds level_code_$i = clamp(level_code_$i, 1, $n_levels)")
-                
-                if n_levels == 2
-                    push!(instructions, "@inbounds $var_name = level_code_$i == 1 ? $(values[1]) : $(values[2])")
-                else
-                    # Generate ternary chain for more levels
-                    ternary_chain = "level_code_$i == 1 ? $(values[1])"
-                    for j in 2:(n_levels-1)
-                        ternary_chain *= " : level_code_$i == $j ? $(values[j])"
-                    end
-                    ternary_chain *= " : $(values[n_levels])"
-                    push!(instructions, "@inbounds $var_name = $ternary_chain")
-                end
-                
-            elseif comp_type <: FunctionTerm
-                # Handle function components
-                if comp_term.f === (^) && length(comp_term.args) == 2 && comp_term.args[2] isa ConstantTerm
-                    # Power function
-                    col = comp_term.args[1].sym
-                    exp = Float64(comp_term.args[2].n)
-                    push!(instructions, "@inbounds val_$i = Float64(data.$col[row_idx])")
-                    if exp == 2.0
-                        push!(instructions, "@inbounds $var_name = val_$i * val_$i")
-                    else
-                        push!(instructions, "@inbounds $var_name = val_$i^$exp")
-                    end
-                elseif length(comp_term.args) == 1 && comp_term.args[1] isa Union{ContinuousTerm, Term}
-                    # Simple unary function
-                    col = comp_term.args[1].sym
-                    func = comp_term.f
-                    push!(instructions, "@inbounds val_$i = Float64(data.$col[row_idx])")
-                    if func === log
-                        push!(instructions, "@inbounds $var_name = val_$i > 0.0 ? log(val_$i) : log(abs(val_$i) + 1e-16)")
-                    else
-                        push!(instructions, "@inbounds $var_name = $func(val_$i)")
-                    end
-                else
-                    @warn "Complex function component in interaction: $comp_term"
-                    push!(instructions, "@inbounds $var_name = 1.0  # Complex function fallback")
-                end
-                
-            else
-                @warn "Unsupported component type in interaction: $comp_type"
-                push!(instructions, "@inbounds $var_name = 1.0  # Unsupported component fallback")
-            end
-        else
-            @warn "Multi-column component in interaction not yet fully supported: $comp_term (width: $comp_width)"
-            # For now, use first column only
-            var_name = "comp_$(i)"
-            push!(component_vars, var_name)
-            push!(instructions, "@inbounds $var_name = 1.0  # Multi-column component fallback")
-        end
+    # Special case: All single-column components (simple product)
+    if all(w == 1 for w in component_widths)
+        return generate_simple_product_interaction(component_info, start_pos, instructions)
     end
     
-    # Generate the interaction computation
-    if total_width == 1
-        # Simple product interaction
-        if length(component_vars) == 1
-            push!(instructions, "@inbounds row_vec[$start_pos] = $(component_vars[1])")
-        elseif length(component_vars) == 2
-            push!(instructions, "@inbounds row_vec[$start_pos] = $(component_vars[1]) * $(component_vars[2])")
-        else
-            # General product
-            product_expr = join(component_vars, " * ")
-            push!(instructions, "@inbounds row_vec[$start_pos] = $product_expr")
-        end
-    else
-        # Multi-column interaction (Kronecker product)
-        # This is the complex case - for now, implement a simplified version
-        @warn "Multi-column interaction (Kronecker product) not fully implemented, using simplified version"
-        
-        # Simplified: fill all positions with the product (not mathematically correct, but safe)
-        if length(component_vars) >= 1
-            product_expr = join(component_vars, " * ")
-            for pos in start_pos:(start_pos + total_width - 1)
-                push!(instructions, "@inbounds row_vec[$pos] = $product_expr")
-            end
-        else
-            # Ultimate fallback
-            for pos in start_pos:(start_pos + total_width - 1)
-                push!(instructions, "@inbounds row_vec[$pos] = 1.0")
-            end
-        end
-    end
-    
-    return instructions
+    # Mixed case: Some multi-column components (proper Kronecker product)
+    return generate_kronecker_interaction(component_info, component_widths, start_pos, total_width, instructions)
 end
 
 ###############################################################################
@@ -406,6 +461,208 @@ function generate_zscore_instructions(term_analysis::TermAnalysis)
     else
         @warn "Unsupported ZScored term type: $underlying_type"
         push!(instructions, "@inbounds row_vec[$pos] = 0.0  # ZScore fallback")
+    end
+    
+    return instructions
+end
+
+###############################################################################
+# Kronecker Instructions
+###############################################################################
+
+function generate_kronecker_interaction(component_info, component_widths, start_pos, total_width, instructions)
+    # Handle different cases based on number of components
+    n_components = length(component_info)
+    
+    if n_components == 2
+        comp1_info, comp2_info = component_info
+        w1, w2 = component_widths
+        
+        if w1 == 1 && w2 > 1
+            # First component is scalar, second is vector
+            return generate_scalar_vector_kronecker(comp1_info, comp2_info, w2, start_pos, instructions)
+            
+        elseif w1 > 1 && w2 == 1
+            # First component is vector, second is scalar
+            return generate_vector_scalar_kronecker(comp1_info, comp2_info, w1, start_pos, instructions)
+            
+        elseif w1 > 1 && w2 > 1
+            # Both multi-column - full Kronecker product
+            return generate_full_kronecker_product(comp1_info, comp2_info, w1, w2, start_pos, instructions)
+        end
+        
+    elseif n_components == 3
+        # Three-way interaction - IMPLEMENT FOR TEST 11
+        return generate_three_way_interaction(component_info, component_widths, start_pos, total_width, instructions)
+        
+    else
+        # More than 3 components - general fallback
+        @warn "$(n_components)-way interaction not fully implemented, using fallback"
+        for i in 0:(total_width-1)
+            push!(instructions, "@inbounds row_vec[$(start_pos + i)] = 1.0  # General fallback")
+        end
+        return instructions
+    end
+    
+    # Fallback for unhandled 2-component cases
+    @warn "Unhandled 2-component Kronecker case, using fallback"
+    for i in 0:(total_width-1)
+        push!(instructions, "@inbounds row_vec[$(start_pos + i)] = 1.0  # 2-component fallback")
+    end
+    
+    return instructions
+end
+
+function generate_scalar_vector_kronecker(comp1_info, comp2_info, w2, start_pos, instructions)
+    # comp1 is scalar, comp2 is vector (e.g., x * group)
+    comp1_term = comp1_info[:term]
+    comp2_term = comp2_info[:term]
+    
+    # Generate scalar value
+    if comp1_term isa Union{ContinuousTerm, Term}
+        col1 = comp1_term.sym
+        push!(instructions, "@inbounds scalar_val = Float64(data.$col1[row_idx])")
+    else
+        @warn "Complex scalar component in Kronecker: $comp1_term"
+        push!(instructions, "@inbounds scalar_val = 1.0")
+    end
+    
+    # Generate vector values and multiply - FIXED VARIABLE NAMES
+    if comp2_term isa CategoricalTerm
+        col2 = comp2_term.sym
+        contrast_matrix = comp2_term.contrasts.matrix
+        n_levels = size(contrast_matrix, 1)
+        
+        # Get categorical level (once)
+        push!(instructions, "@inbounds cat_val = data.$col2[row_idx]")
+        push!(instructions, "@inbounds level_code = cat_val isa CategoricalValue ? levelcode(cat_val) : 1")
+        push!(instructions, "@inbounds level_code = clamp(level_code, 1, $n_levels)")
+        
+        # CRITICAL FIX: Use unique variable names for each contrast column
+        for j in 1:w2
+            pos = start_pos + j - 1
+            values = [contrast_matrix[i, j] for i in 1:n_levels]
+            
+            # Use unique variable name for each column
+            if n_levels == 2
+                push!(instructions, "@inbounds contrast_val_$j = level_code == 1 ? $(values[1]) : $(values[2])")
+            elseif n_levels == 3
+                push!(instructions, "@inbounds contrast_val_$j = level_code == 1 ? $(values[1]) : level_code == 2 ? $(values[2]) : $(values[3])")
+            else
+                ternary_chain = "level_code == 1 ? $(values[1])"
+                for i in 2:(n_levels-1)
+                    ternary_chain *= " : level_code == $i ? $(values[i])"
+                end
+                ternary_chain *= " : $(values[n_levels])"
+                push!(instructions, "@inbounds contrast_val_$j = $ternary_chain")
+            end
+            
+            # Multiply by scalar using the unique variable
+            push!(instructions, "@inbounds row_vec[$pos] = scalar_val * contrast_val_$j")
+        end
+    else
+        @warn "Complex vector component in Kronecker: $comp2_term"
+        for j in 1:w2
+            pos = start_pos + j - 1
+            push!(instructions, "@inbounds row_vec[$pos] = scalar_val")
+        end
+    end
+    
+    return instructions
+end
+
+function generate_full_kronecker_product(comp1_info, comp2_info, w1, w2, start_pos, instructions)
+    # Both components are multi-column (e.g., group1 * group2)
+    # This is the most complex case
+    
+    @warn "Full multi-column Kronecker product not yet implemented"
+    
+    # For now, use a simplified approach
+    total_width = w1 * w2
+    for idx in 0:(total_width-1)
+        pos = start_pos + idx
+        push!(instructions, "@inbounds row_vec[$pos] = 1.0  # Full Kronecker fallback")
+    end
+    
+    return instructions
+end
+
+function generate_three_way_interaction(component_info, component_widths, start_pos, total_width, instructions)
+    # Handle three-way interactions like x * z * group
+    comp1_info, comp2_info, comp3_info = component_info
+    w1, w2, w3 = component_widths
+    
+    # For now, handle the most common case: scalar * scalar * vector
+    if w1 == 1 && w2 == 1 && w3 > 1
+        # Two scalars and one vector: x * z * group
+        comp1_term = comp1_info[:term]
+        comp2_term = comp2_info[:term]
+        comp3_term = comp3_info[:term]
+        
+        # Generate first scalar
+        if comp1_term isa Union{ContinuousTerm, Term}
+            col1 = comp1_term.sym
+            push!(instructions, "@inbounds scalar1 = Float64(data.$col1[row_idx])")
+        else
+            push!(instructions, "@inbounds scalar1 = 1.0")
+        end
+        
+        # Generate second scalar
+        if comp2_term isa Union{ContinuousTerm, Term}
+            col2 = comp2_term.sym
+            push!(instructions, "@inbounds scalar2 = Float64(data.$col2[row_idx])")
+        else
+            push!(instructions, "@inbounds scalar2 = 1.0")
+        end
+        
+        # Combine scalars
+        push!(instructions, "@inbounds scalar_product = scalar1 * scalar2")
+        
+        # Handle categorical vector component
+        if comp3_term isa CategoricalTerm
+            col3 = comp3_term.sym
+            contrast_matrix = comp3_term.contrasts.matrix
+            n_levels = size(contrast_matrix, 1)
+            
+            # Get categorical level
+            push!(instructions, "@inbounds cat_val = data.$col3[row_idx]")
+            push!(instructions, "@inbounds level_code = cat_val isa CategoricalValue ? levelcode(cat_val) : 1")
+            push!(instructions, "@inbounds level_code = clamp(level_code, 1, $n_levels)")
+            
+            # Generate each contrast column multiplied by scalar product
+            for k in 1:w3
+                pos = start_pos + k - 1
+                values = [contrast_matrix[i, k] for i in 1:n_levels]
+                
+                if n_levels == 2
+                    push!(instructions, "@inbounds contrast_val = level_code == 1 ? $(values[1]) : $(values[2])")
+                elseif n_levels == 3
+                    push!(instructions, "@inbounds contrast_val = level_code == 1 ? $(values[1]) : level_code == 2 ? $(values[2]) : $(values[3])")
+                else
+                    ternary_chain = "level_code == 1 ? $(values[1])"
+                    for i in 2:(n_levels-1)
+                        ternary_chain *= " : level_code == $i ? $(values[i])"
+                    end
+                    ternary_chain *= " : $(values[n_levels])"
+                    push!(instructions, "@inbounds contrast_val = $ternary_chain")
+                end
+                
+                push!(instructions, "@inbounds row_vec[$pos] = scalar_product * contrast_val")
+            end
+        else
+            @warn "Complex three-way interaction component: $comp3_term"
+            for k in 1:w3
+                pos = start_pos + k - 1
+                push!(instructions, "@inbounds row_vec[$pos] = scalar_product")
+            end
+        end
+        
+    else
+        # Other three-way combinations not implemented
+        @warn "Complex three-way interaction: widths $component_widths not implemented"
+        for i in 0:(total_width-1)
+            push!(instructions, "@inbounds row_vec[$(start_pos + i)] = 1.0  # Three-way fallback")
+        end
     end
     
     return instructions
@@ -534,6 +791,7 @@ end
 
 # Export main functions
 export generate_instructions, generate_term_instructions, test_instruction_generation
+
 """
 Test the fixed interaction generation on a simple case
 """
