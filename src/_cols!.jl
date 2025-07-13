@@ -215,6 +215,14 @@ function _cols!(t::Term, d, X, j, _ipm, _fn_i, _int_i)
     return j + 1
 end
 
+# testing
+
+function _cols!(t::Term, d, X, j)
+    # treat an un‐typed Term as a simple continuous variable
+    copy!(view(X, :, j), d[t.sym])
+    return j + 1
+end
+
 """
     _cols!(t::CategoricalTerm{C,T,N}, d, X, j, _ipm, _fn_i, _int_i) where {C,T,N} -> Int
 
@@ -289,6 +297,9 @@ tuple method, preserving in-place, zero-allocation semantics. Returns the
 updated column index after writing all subterms.
 """
 _cols!(t::MatrixTerm, d, X, j, ipm, fn_i, int_i) = _cols!(t.terms, d, X, j, ipm, fn_i, int_i)
+
+## testing
+_cols!(t::MatrixTerm, d, X, j) = _cols!(t.terms, d, X, j)
 
 # -- FunctionTerm (one pre-alloc matrix per node) -----------------------------
 
