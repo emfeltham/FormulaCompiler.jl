@@ -1,17 +1,20 @@
 module EfficientModelMatrices
 
+using LinearAlgebra
+
 using Tables
 using CategoricalArrays
 
 import StatsModels
 import StatsModels:
     formula,
-    width,
+    width, hasintercept,
     Term, AbstractTerm, FormulaTerm, FunctionTerm, InteractionTerm,
     MatrixTerm, ConstantTerm, ContinuousTerm,
     CategoricalTerm, InterceptTerm,
     width, termvars,
-    StatisticalModel
+    StatisticalModel,
+    modelmatrix
 using GLM: LinearModel, GeneralizedLinearModel
 import MixedModels
 using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
@@ -30,24 +33,28 @@ export fixed_effects_form
 # Core Mechanics: Replace `modelcols`
 # ============================================================================
 
+include("ColumnMapping.jl")
 include("InplaceModeler.jl")
-include("_cols!.jl")
-include("standardized.jl")
 export InplaceModeler
+
+# include("_cols2.jl")
+# include("standardized.jl")
 
 # ============================================================================
 # Core API: Basic efficient model matrix construction
 # ============================================================================
 
-include("modelmatrix!.jl")
-export modelmatrix!, extract_model_matrix
+# include("modelmatrix!.jl")
+# export modelmatrix!, extract_model_matrix
 
 include("data_validation.jl")
 
 include("termmapping.jl")
+
 export ColumnMapping, build_column_mapping, build_enhanced_mapping, enhanced_column_mapping
 export get_variable_ranges, get_all_variable_columns, get_term_for_column, get_terms_for_columns
 export collect_termvars_recursive, evaluate_single_column!
+
 include("termmapping_add.jl")
 export 
     get_variable_columns_flat, get_unchanged_columns,
@@ -55,14 +62,7 @@ export
     validate_column_mapping, get_variable_term_ranges,
     build_variable_term_map
 
-include("_cols!_add.jl")
-export 
-    _cols_selective!, eval_columns_for_variable!, eval_columns_for_variables!,
-    update_matrix_columns!
-
-include("modelmatrix!_add.jl")
-export modelmatrix_selective!, modelmatrix_with_base!
-
-export _cols!
+include("compiled_formula.jl")
+include("compiled_formula_generated.jl")
 
 end # module
