@@ -29,6 +29,10 @@ using StandardizedPredictors: ZScoredTerm
 include("fixed_helpers.jl")
 export fixed_effects_form
 
+not(x::Bool) = !x
+not(x::T) where {T<:Real} = one(x) - x
+export not
+
 # ============================================================================
 # Core Mechanics: Replace `modelcols`
 # ============================================================================
