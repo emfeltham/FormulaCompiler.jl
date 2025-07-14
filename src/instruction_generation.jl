@@ -484,7 +484,7 @@ function generate_kronecker_interaction(component_info, component_widths, start_
             
         elseif w1 > 1 && w2 == 1
             # First component is vector, second is scalar
-            return generate_vector_scalar_kronecker(comp1_info, comp2_info, w1, start_pos, instructions)
+            return generate_scalar_vector_kronecker(comp1_info, comp2_info, w1, start_pos, instructions)
             
         elseif w1 > 1 && w2 > 1
             # Both multi-column - full Kronecker product
@@ -573,17 +573,90 @@ end
 
 function generate_full_kronecker_product(comp1_info, comp2_info, w1, w2, start_pos, instructions)
     # Both components are multi-column (e.g., group1 * group2)
-    # This is the most complex case
+    # Implement proper categorical × categorical Kronecker product
+    println("DEBUG: Entering generate_full_kronecker_product with w1=$w1, w2=$w2")
+
+    comp1_term = comp1_info[:term]
+    comp2_term = comp2_info[:term]
     
-    @warn "Full multi-column Kronecker product not yet implemented"
-    
-    # For now, use a simplified approach
-    total_width = w1 * w2
-    for idx in 0:(total_width-1)
-        pos = start_pos + idx
-        push!(instructions, "@inbounds row_vec[$pos] = 1.0  # Full Kronecker fallback")
+    # Both should be categorical terms
+    println("DEBUG: comp1_term type: $(typeof(comp1_term))")
+    println("DEBUG: comp2_term type: $(typeof(comp2_term))")
+    if comp1_term isa CategoricalTerm && comp2_term isa CategoricalTerm
+        col1 = comp1_term.sym
+        col2 = comp2_term.sym
+        contrast_matrix1 = comp1_term.contrasts.matrix
+        contrast_matrix2 = comp2_term.contrasts.matrix
+        n_levels1 = size(contrast_matrix1, 1)
+        n_levels2 = size(contrast_matrix2, 1)
+        
+        # Get categorical levels (once)
+        push!(instructions, "@inbounds cat_val1 = data.$col1[row_idx]")
+        push!(instructions, "@inbounds level_code1 = cat_val1 isa CategoricalValue ? levelcode(cat_val1) : 1")
+        push!(instructions, "@inbounds level_code1 = clamp(level_code1, 1, $n_levels1)")
+        
+        push!(instructions, "@inbounds cat_val2 = data.$col2[row_idx]")
+        push!(instructions, "@inbounds level_code2 = cat_val2 isa CategoricalValue ? levelcode(cat_val2) : 1")
+        push!(instructions, "@inbounds level_code2 = clamp(level_code2, 1, $n_levels2)")
+        
+        # Generate Kronecker product in StatsModels order: [c1*d1, c2*d1, c1*d2, c2*d2]
+        col_idx = 0
+        for j in 1:w2  # Second component columns  
+            for i in 1:w1  # First component columns
+                pos = start_pos + col_idx
+                
+                # Get contrast values for current levels
+                values1 = [contrast_matrix1[level, i] for level in 1:n_levels1]
+                values2 = [contrast_matrix2[level, j] for level in 1:n_levels2]
+                
+                # Generate efficient lookup for both contrasts
+                if n_levels1 == 2
+                    contrast1_expr = "level_code1 == 1 ? $(values1[1]) : $(values1[2])"
+                elseif n_levels1 == 3
+                    contrast1_expr = "level_code1 == 1 ? $(values1[1]) : level_code1 == 2 ? $(values1[2]) : $(values1[3])"
+                else
+                    ternary_chain = "level_code1 == 1 ? $(values1[1])"
+                    for level in 2:(n_levels1-1)
+                        ternary_chain *= " : level_code1 == $level ? $(values1[level])"
+                    end
+                    ternary_chain *= " : $(values1[n_levels1])"
+                    contrast1_expr = ternary_chain
+                end
+                
+                if n_levels2 == 2
+                    contrast2_expr = "level_code2 == 1 ? $(values2[1]) : $(values2[2])"
+                elseif n_levels2 == 3
+                    contrast2_expr = "level_code2 == 1 ? $(values2[1]) : level_code2 == 2 ? $(values2[2]) : $(values2[3])"
+                else
+                    ternary_chain = "level_code2 == 1 ? $(values2[1])"
+                    for level in 2:(n_levels2-1)
+                        ternary_chain *= " : level_code2 == $level ? $(values2[level])"
+                    end
+                    ternary_chain *= " : $(values2[n_levels2])"
+                    contrast2_expr = ternary_chain
+                end
+                
+                # Compute Kronecker product element
+                push!(instructions, "@inbounds row_vec[$pos] = ($contrast1_expr) * ($contrast2_expr)")
+                
+                col_idx += 1
+            end
+        end
+        
+    else
+        # Fallback for non-categorical cases
+        @warn "Complex full Kronecker product: $comp1_term × $comp2_term"
+        total_width = w1 * w2
+        for idx in 0:(total_width-1)
+            pos = start_pos + idx
+            push!(instructions, "@inbounds row_vec[$pos] = 1.0  # Non-categorical fallback")
+        end
     end
     
+    println("DEBUG: Generated instructions:")
+    for (i, instr) in enumerate(instructions[(end-9):end])  # Show last 10 instructions
+        println("  $i: $instr")
+    end
     return instructions
 end
 
