@@ -1,11 +1,12 @@
-# termmapping.jl - Complete Column Mapping with Phase 1 Evaluation
+# termmapping.jl
+# Complete Column Mapping with Phase 1 Evaluation
 
 """
     build_column_mapping(rhs::AbstractTerm, model::Union{StatisticalModel,Nothing}=nothing) -> ColumnMapping
 
 Build complete column mapping from formula RHS with term evaluation capability.
 """
-function build_column_mapping(rhs::AbstractTerm, model::Union{StatisticalModel,Nothing}=nothing)
+function build_column_mapping(rhs::AbstractTerm, model::Union{StatisticalModel,Nothing} = nothing)
     symbol_to_ranges = Dict{Symbol, Vector{UnitRange{Int}}}()
     range_to_terms = Dict{UnitRange{Int}, Vector{AbstractTerm}}()
     term_to_range = Dict{AbstractTerm, UnitRange{Int}}()
@@ -23,8 +24,10 @@ end
 
 Recursively map all terms to their column ranges.
 """
-function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, term_info, 
-                                term::AbstractTerm, col_ref::Ref{Int})
+function _map_columns_recursive!(
+    sym_to_ranges, range_to_terms, term_to_range, term_info, 
+    term::AbstractTerm, col_ref::Ref{Int}
+)
     w = width(term)
     if w > 0
         range = col_ref[]:col_ref[]+w-1
@@ -56,8 +59,10 @@ function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, t
 end
 
 # Specialized recursive methods
-function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, term_info,
-                                term::MatrixTerm, col_ref::Ref{Int})
+function _map_columns_recursive!(
+    sym_to_ranges, range_to_terms, term_to_range, term_info,
+    term::MatrixTerm, col_ref::Ref{Int}
+)
     for t in term.terms
         _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, term_info, t, col_ref)
     end
@@ -72,8 +77,10 @@ function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, t
     return col_ref[]
 end
 
-function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, term_info,
-                                term::InteractionTerm, col_ref::Ref{Int})
+function _map_columns_recursive!(
+    sym_to_ranges, range_to_terms, term_to_range, term_info,
+    term::InteractionTerm, col_ref::Ref{Int}
+)
     w = width(term)
     if w > 0
         range = col_ref[]:col_ref[]+w-1
@@ -104,8 +111,10 @@ function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, t
     return col_ref[]
 end
 
-function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, term_info,
-                                term::FunctionTerm, col_ref::Ref{Int})
+function _map_columns_recursive!(
+    sym_to_ranges, range_to_terms, term_to_range, term_info,
+    term::FunctionTerm, col_ref::Ref{Int}
+)
     w = width(term)
     if w > 0
         range = col_ref[]:col_ref[]+w-1
@@ -134,8 +143,10 @@ end
 
 
 # Base cases that don't contribute variables
-function _map_columns_recursive!(sym_to_ranges, range_to_terms, term_to_range, term_info,
-                                term::Union{InterceptTerm, ConstantTerm}, col_ref::Ref{Int})
+function _map_columns_recursive!(
+    sym_to_ranges, range_to_terms, term_to_range, term_info,
+    term::Union{InterceptTerm, ConstantTerm}, col_ref::Ref{Int}
+)
     w = width(term)
     if w > 0
         range = col_ref[]:col_ref[]+w-1
