@@ -1,5 +1,5 @@
 # zero_alloc_modelrow.jl
-# Zero-allocation modelrow! interface
+# Zero-allocation modelrow! interface with fixed method signatures
 
 ###############################################################################
 # ZERO-ALLOCATION APPROACH: Pre-compile Everything
@@ -35,23 +35,25 @@ for i in 1:1_000_000
 end
 ```
 """
-function modelrow!(row_vec::AbstractVector{Float64}, 
-                  compiled::CompiledFormula, 
-                  data, 
-                  row_idx::Int)
+function modelrow!(
+    row_vec::AbstractVector{Float64}, 
+    compiled::CompiledFormula, 
+    data, 
+    row_idx::Int
+)
     # Direct delegation - zero allocations
     compiled(row_vec, data, row_idx)
     return row_vec
 end
 
 ###############################################################################
-# CONVENIENCE VS PERFORMANCE TRADE-OFF
+# CONVENIENCE VS PERFORMANCE TRADE-OFF (Fixed Signatures)
 ###############################################################################
 
 """
-    modelrow!(row_vec, model, data, row_idx; cache=true)
+    modelrow!(row_vec, model::Union{LinearModel,GeneralizedLinearModel,LinearMixedModel,GeneralizedLinearMixedModel}, data, row_idx; cache=true)
 
-Convenient modelrow! with optional caching control.
+Convenient modelrow! with specific model type dispatch to avoid ambiguity.
 
 # Arguments  
 - `cache=true`: Use automatic caching (may allocate on lookup)
@@ -69,17 +71,37 @@ compiled = compile_formula(model)  # Once
 modelrow!(row_vec, compiled, data, row_idx)  # Many times, zero-alloc
 ```
 """
-function modelrow!(row_vec::AbstractVector{Float64}, 
-                  model, 
-                  data, 
-                  row_idx::Int; 
-                  cache::Bool=true)
+function modelrow!(
+    row_vec::AbstractVector{Float64}, 
+    model::Union{LinearModel,GeneralizedLinearModel,LinearMixedModel,GeneralizedLinearMixedModel}, 
+    data, 
+    row_idx::Int; 
+    cache::Bool=true
+)
     if cache
         # Convenient but may allocate ~32-64 bytes for hash/lookup
         compiled = get_or_compile_formula_identity(model)
         compiled(row_vec, data, row_idx)
     else
         # Always recompile (slow, definitely allocates)
+        compiled = compile_formula(model)
+        compiled(row_vec, data, row_idx)
+    end
+    return row_vec
+end
+
+# Fallback for other model types (TableRegressionModel, etc.)
+function modelrow!(
+    row_vec::AbstractVector{Float64}, 
+    model::StatsModels.TableRegressionModel, 
+    data, 
+    row_idx::Int; 
+    cache::Bool=true
+)
+    if cache
+        compiled = get_or_compile_formula_identity(model)
+        compiled(row_vec, data, row_idx)
+    else
         compiled = compile_formula(model)
         compiled(row_vec, data, row_idx)
     end
@@ -171,3 +193,16 @@ function modelrow_cached!(row_vec::AbstractVector{Float64}, model, data, row_idx
     return row_vec
 end
 
+###############################################################################
+# CLEAR CACHE FUNCTIONALITY
+###############################################################################
+
+"""
+    clear_model_cache!()
+
+Clear the model identity cache to free memory.
+"""
+function clear_model_cache!()
+    empty!(MODEL_IDENTITY_CACHE)
+    return nothing
+end
