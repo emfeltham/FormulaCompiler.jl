@@ -28,6 +28,10 @@ export not
 
 export fixed_effects_form
 export compile_formula, CompiledFormula, test_complete
+
+include("modelrow!.jl")
+include("modelrow.jl")
 export modelrow!, modelrow, clear_model_cache!, test_modelrow_interface
+export ModelRowEvaluator
 
 end # module
