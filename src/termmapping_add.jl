@@ -1,3 +1,7 @@
+# termmapping_add.jl
+# extra functions for termmapping.jl
+
+
 """
     get_variable_columns_flat(mapping::ColumnMapping, var::Symbol) -> Vector{Int}
 
@@ -28,22 +32,6 @@ function get_unchanged_columns(mapping::ColumnMapping, changed_vars::Vector{Symb
     end
     
     return [col for col in 1:total_cols if col ∉ changed_cols]
-end
-
-"""
-    build_perturbation_plan(mapping::ColumnMapping, variables::Vector{Symbol}) -> Dict{Symbol, Vector{Int}}
-
-Pre-compute which columns each variable affects for efficient batch operations.
-Returns a dictionary mapping each variable to its affected column indices.
-"""
-function build_perturbation_plan(mapping::ColumnMapping, variables::Vector{Symbol})
-    plan = Dict{Symbol, Vector{Int}}()
-    
-    for var in variables
-        plan[var] = get_variable_columns_flat(mapping, var)
-    end
-    
-    return plan
 end
 
 """
