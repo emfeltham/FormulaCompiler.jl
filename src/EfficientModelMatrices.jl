@@ -18,7 +18,6 @@ using StandardizedPredictors: ZScoredTerm
 include("fixed_helpers.jl")     # No dependencies
 include("evaluators.jl")        # Uses fixed_helpers
 include("generators.jl")        # Uses evaluators + fixed_helpers
-include("testing.jl")
 
 # using LinearAlgebra
 
