@@ -1,80 +1,31 @@
 module EfficientModelMatrices
 
+# ============================================================================
+# Deps.
+# ============================================================================
+
 using Random # testing?
 
-using LinearAlgebra
-
-using Tables, DataFrames
-using CategoricalArrays
-using CategoricalArrays: CategoricalValue, levelcode
-
-import StatsModels
-import StatsModels:
-    formula, @formula,
-    width, hasintercept,
-    Term, AbstractTerm, FormulaTerm, FunctionTerm, InteractionTerm,
-    MatrixTerm, ConstantTerm, ContinuousTerm,
-    CategoricalTerm, InterceptTerm,
-    width, termvars,
-    StatisticalModel,
-    modelmatrix
-using GLM: LinearModel, GeneralizedLinearModel
-using GLM
+using StatsModels, GLM, CategoricalArrays, Tables, DataFrames, Random
 import MixedModels
-using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
+
+# Include files in dependency order
+include("fixed_helpers.jl")     # No dependencies
+include("evaluators.jl")        # Uses fixed_helpers
+include("generators.jl")        # Uses evaluators + fixed_helpers
+include("testing.jl")
 
 # Support for StandardizedPredictors.jl
 using StandardizedPredictors: ZScoredTerm
 
-# ============================================================================
-# Helpers
-# ============================================================================
+# using LinearAlgebra
 
-include("fixed_helpers.jl")
-export fixed_effects_form
-
+# useful for booleans in formulas
 not(x::Bool) = !x
 not(x::T) where {T<:Real} = one(x) - x
 export not
 
-# ============================================================================
-# Core Mechanics: Replace `modelcols`
-# ============================================================================
-
-include("ColumnMapping.jl")
-
-# misc background methods
-# include("data_validation.jl")
-# include("termmapping.jl")
-# include("termmapping_add.jl")
-
-# struct
-# include("structure_structures.jl")
-# include("compiled_formula.jl")
-# export CompiledFormula, compile_formula
-
-# ============================================================================
-# Core API: Basic efficient model matrix construction
-# ============================================================================
-
-
-# main workflow
-# include("structure_analysis.jl")
-
-# export analyze_formula_structure, FormulaAnalysis, TermAnalysis
-# export validate_analysis, print_analysis_summary, test_structure_analysis
-
-# include("instruction_generation.jl")
-# export generate_instructions, generate_term_instructions, test_instruction_generation
-# export test_interaction_fix
-
-# include("generated_integration.jl")
-# export modelrow!, get_compiled_function
-# export test_compilation_performance, test_complete_pipeline
-
-include("testing_suite.jl")
-include("compositional_compiler.jl")
-include("evaluator_to_generated.jl")
-export compile_formula, CompiledFormula, test_zero_allocation_compiler
+export fixed_effects_form
+export compile_formula, CompiledFormula, test_complete
 
 end # module
