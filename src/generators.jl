@@ -490,7 +490,7 @@ variables(cf::CompiledFormula) = cf.column_names
 
 # Call interface - delegate to @generated function
 function (cf::CompiledFormula)(row_vec::AbstractVector{Float64}, data, row_idx::Int)
-    modelrow!(row_vec, cf.formula_val, data, row_idx)
+    _modelrow_generated!(row_vec, cf.formula_val, data, row_idx)
     return row_vec
 end
 
@@ -532,8 +532,15 @@ end
 
 """
 @generated function for zero-allocation model row evaluation.
+FIXED: More specific signature to avoid ambiguity.
 """
-@generated function modelrow!(row_vec, ::Val{formula_hash}, data, row_idx) where formula_hash
+@generated function _modelrow_generated!(
+    row_vec::AbstractVector{Float64}, 
+    ::Val{formula_hash}, 
+    data, 
+    row_idx::Int
+) where formula_hash
+    
     # Retrieve instructions from cache
     if !haskey(FORMULA_CACHE, formula_hash)
         error("Formula hash $formula_hash not found in cache")

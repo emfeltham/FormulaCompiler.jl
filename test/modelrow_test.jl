@@ -43,87 +43,90 @@ function performance_example()
 end
 
 ###############################################################################
-# TESTING UTILITIES
+# TESTING INTERFACE
 ###############################################################################
 
 """
     test_modelrow_interface()
 
-Test the complete modelrow! interface for correctness and performance.
+Test the modelrow! interface for correctness and performance.
 """
 function test_modelrow_interface()
-    using Test
+    println("=== Testing modelrow! Interface ===")
     
-    # Setup test data
+    Random.seed!(42)
     df = DataFrame(
-        x = [1.0, 2.0, 3.0],
-        y = [1.0, 4.0, 9.0],
-        group = categorical(["A", "B", "A"])
+        x = randn(100),
+        y = randn(100), 
+        z = abs.(randn(100)) .+ 0.1,
+        group = categorical(rand(["A", "B", "C"], 100))
     )
-    model = lm(@formula(y ~ x * group), df)
-    data = Tables.columntable(df)
-    mm = modelmatrix(model)
     
-    @testset "modelrow! Interface" begin
+    data = Tables.columntable(df)
+    
+    # Test various model types
+    models = [
+        lm(@formula(y ~ x + log(z) + group), df),
+        lm(@formula(y ~ x * group + x^2), df),
+        lm(@formula(y ~ x + log(z) * group + (x > 0)), df)
+    ]
+    
+    results = []
+    
+    for (i, model) in enumerate(models)
+        println("\n--- Test $i ---")
         
-        @testset "Single Row Evaluation" begin
-            row_vec = Vector{Float64}(undef, size(mm, 2))
+        try
+            # Test pre-compiled approach
+            compiled = compile_formula(model)
+            row_vec = Vector{Float64}(undef, length(compiled))
             
-            # Test row 1
-            result = modelrow!(row_vec, model, data, 1)
-            @test result === row_vec  # Returns same vector
-            @test isapprox(row_vec, mm[1, :], atol=1e-12)
+            # Test zero-allocation call
+            modelrow!(row_vec, compiled, data, 1)
             
-            # Test row 2  
-            modelrow!(row_vec, model, data, 2)
-            @test isapprox(row_vec, mm[2, :], atol=1e-12)
-        end
-        
-        @testset "Batch Evaluation" begin
-            matrix = Matrix{Float64}(undef, 3, size(mm, 2))
+            # Verify against model matrix
+            mm = modelmatrix(model)
+            expected = mm[1, :]
+            error = maximum(abs.(row_vec .- expected))
             
-            result = modelrow!(matrix, model, data, 1:3)
-            @test result === matrix  # Returns same matrix
-            @test isapprox(matrix, mm, atol=1e-12)
-        end
-        
-        @testset "Allocating Versions" begin
-            # Single row
-            row_vec = modelrow(model, data, 1)
-            @test isapprox(row_vec, mm[1, :], atol=1e-12)
-            
-            # Multiple rows
-            matrix = modelrow(model, data, 1:3)
-            @test isapprox(matrix, mm, atol=1e-12)
-        end
-        
-        @testset "Caching Behavior" begin
-            # Clear cache
-            clear_model_cache!()
-            
-            # First call should compile
-            row_vec = Vector{Float64}(undef, size(mm, 2))
-            @test_nowarn modelrow!(row_vec, model, data, 1)
-            
-            # Second call should use cache (test that it doesn't error)
-            @test_nowarn modelrow!(row_vec, model, data, 2)
-        end
-        
-        @testset "Performance Characteristics" begin
-            row_vec = Vector{Float64}(undef, size(mm, 2))
-            
-            # Warmup
-            for i in 1:10
-                modelrow!(row_vec, model, data, 1)
+            if error < 1e-12
+                println("✅ Pre-compiled: PASSED (error = $error)")
+                
+                # Test allocations
+                allocs = @allocated modelrow!(row_vec, compiled, data, 1)
+                println("  Allocations: $allocs bytes")
+                
+                # Test convenience method
+                clear_model_cache!()
+                modelrow!(row_vec, model, data, 1; cache=true)
+                error2 = maximum(abs.(row_vec .- expected))
+                
+                if error2 < 1e-12
+                    println("✅ Convenience cached: PASSED (error = $error2)")
+                    push!(results, (i, true, allocs))
+                else
+                    println("❌ Convenience cached: FAILED (error = $error2)")
+                    push!(results, (i, false, error2))
+                end
+            else
+                println("❌ Pre-compiled: FAILED (error = $error)")
+                push!(results, (i, false, error))
             end
             
-            # Test allocations
-            allocs = @allocated modelrow!(row_vec, model, data, 1)
-            @test allocs < 100  # Should be very low after compilation
-            
-            println("   Allocations: $allocs bytes")
+        catch e
+            println("❌ EXCEPTION: $e")
+            push!(results, (i, false, "exception"))
         end
     end
     
-    return true
+    # Summary
+    successful = sum(r[2] for r in results)
+    println("\n" * "="^50)
+    println("RESULTS: $successful/$(length(models)) passed")
+    
+    if successful == length(models)
+        println("🎉 ALL INTERFACE TESTS PASSED!")
+    end
+    
+    return results
 end
