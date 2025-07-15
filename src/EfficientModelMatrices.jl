@@ -15,19 +15,23 @@ using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
 # Support for StandardizedPredictors.jl
 using StandardizedPredictors: ZScoredTerm
 
-# Include files in dependency order
-include("fixed_helpers.jl")     # No dependencies
-include("evaluators.jl")        # Uses fixed_helpers
-include("generators.jl")        # Uses evaluators + fixed_helpers
-
 # useful for booleans in formulas
 not(x::Bool) = !x
 # N.B., this is dangerous -- does not clearly fail when x outside [0,1]
 not(x::T) where {T<:Real} = one(x) - x
 export not
 
+# Include files in dependency order
+include("fixed_helpers.jl")     # No dependencies
 export fixed_effects_form
+include("CompiledFormula.jl")   # Defines key structs and methods
+include("evaluators.jl")        # Uses fixed_helpers
 export compile_formula, CompiledFormula, test_complete
+include("evaluator_trees.jl")
+export extract_root_evaluator, get_evaluator_tree, has_evaluator_access
+export count_evaluator_nodes, get_variable_dependencies, get_evaluator_summary
+export print_evaluator_tree, test_evaluator_storage
+include("generators.jl")        # Uses evaluators + fixed_helpers
 
 include("modelrow!.jl")
 include("modelrow.jl")
