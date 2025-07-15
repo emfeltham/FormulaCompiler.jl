@@ -1,48 +1,5 @@
-# compositional_evaluators_fixed.jl
+# evaluators.jl
 # Complete recursive implementation that handles all cases
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 1) GLM/OLS methods: identity
-# ─────────────────────────────────────────────────────────────────────────────
-
-fixed_effects_form(model::StatsModels.TableRegressionModel) = formula(model)
-
-"""
-    fixed_effects_form(model::LinearModel)
-    fixed_effects_form(model::GeneralizedLinearModel)
-
-For plain OLS (`lm`) or GLM (`glm`) fits, there are no random‐effects terms, 
-so we just return the original formula unchanged.
-"""
-fixed_effects_form(model::Union{LinearModel, GeneralizedLinearModel}) = formula(model)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 2) MixedModels methods: strip out `(…|…)`
-# ─────────────────────────────────────────────────────────────────────────────
-
-"""
-    fixed_effects_form(model::LinearMixedModel)
-    fixed_effects_form(model::GeneralizedLinearMixedModel)
-
-Remove any random‐effects terms `( … | … )` from the RHS and return the
-pure fixed‐effects formula.
-"""
-function fixed_effects_form(model::Union{LinearMixedModel,
-                                          GeneralizedLinearMixedModel})
-    full = formula(model)      # e.g. y ~ x + z + x&z + (1|g)
-    rhs  = full.rhs            # vector of top‐level terms
-
-    # drop any RandomEffectsTerm or the FunctionTerm for `|`
-    fe = filter(t -> !(t isa RET) && !(t isa FT), rhs)
-
-    # if nothing was removed, just hand back the original
-    fe === rhs && return full
-
-    # otherwise rebuild: if you stripped *all* terms, leave only the intercept
-    new_rhs = isempty(fe) ? CT() : reduce(+, fe)
-    return full.lhs ~ new_rhs
-end
 
 ###############################################################################
 # 1. CORE EVALUATOR TYPES (Fixed)
@@ -478,39 +435,6 @@ function compile_term(term::AbstractTerm)
 end
 
 ###############################################################################
-# 7. MAIN COMPILATION INTERFACE
-###############################################################################
-
-struct CompiledFormula
-    evaluator::AbstractEvaluator
-    output_width::Int
-    column_names::Vector{Symbol}
-end
-
-Base.length(cf::CompiledFormula) = cf.output_width
-variables(cf::CompiledFormula) = cf.column_names
-
-function (cf::CompiledFormula)(row_vec::AbstractVector{Float64}, data, row_idx::Int)
-    evaluate!(cf.evaluator, row_vec, data, row_idx, 1)
-    return row_vec
-end
-
-function compile_formula(model)
-    rhs = fixed_effects_form(model).rhs
-    
-    # Build evaluator tree
-    root_evaluator = compile_term(rhs)
-    
-    # Calculate properties
-    total_width = output_width(root_evaluator)
-    column_names = extract_all_columns(rhs)
-    
-    println("Compiled formula: width=$total_width, columns=$column_names")
-    
-    return CompiledFormula(root_evaluator, total_width, column_names)
-end
-
-###############################################################################
 # 8. UTILITY FUNCTIONS
 ###############################################################################
 
@@ -643,6 +567,3 @@ function test_comprehensive_compilation()
     
     return results
 end
-
-# Export main interface
-export compile_formula, CompiledFormula, test_comprehensive_compilation
