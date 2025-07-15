@@ -28,5 +28,6 @@ export not
 
 export fixed_effects_form
 export compile_formula, CompiledFormula, test_complete
+export modelrow!, modelrow, clear_model_cache!, test_modelrow_interface
 
 end # module

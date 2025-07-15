@@ -330,6 +330,7 @@ end
     
     results = []
     
+    # (formula, description) = collect(test_cases)[1]
     for (formula, description) in test_cases
         correctness, alloc_status = test_single_formula(formula, df, data)
         push!(results, (description, correctness, alloc_status))
