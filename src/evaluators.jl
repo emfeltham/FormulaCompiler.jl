@@ -72,8 +72,10 @@ output_width(eval::CombinedEvaluator) = eval.total_width
 Recursively evaluate any evaluator into a pre-allocated output vector.
 This is the core that makes the compositional approach work.
 """
-function evaluate!(evaluator::AbstractEvaluator, output::AbstractVector{Float64}, 
-                  data, row_idx::Int, start_idx::Int=1)
+function evaluate!(
+    evaluator::AbstractEvaluator, output::AbstractVector{Float64}, 
+    data, row_idx::Int, start_idx::Int=1
+)
     
     if evaluator isa ConstantEvaluator
         @inbounds output[start_idx] = evaluator.value
@@ -103,8 +105,10 @@ function evaluate!(evaluator::AbstractEvaluator, output::AbstractVector{Float64}
     end
 end
 
-function evaluate_categorical!(eval::CategoricalEvaluator, output::AbstractVector{Float64}, 
-                              data, row_idx::Int, start_idx::Int)
+function evaluate_categorical!(
+    eval::CategoricalEvaluator, output::AbstractVector{Float64}, 
+    data, row_idx::Int, start_idx::Int
+)
     @inbounds cat_val = data[eval.column][row_idx]
     @inbounds level_code = cat_val isa CategoricalValue ? levelcode(cat_val) : 1
     @inbounds level_code = clamp(level_code, 1, eval.n_levels)
@@ -117,8 +121,10 @@ function evaluate_categorical!(eval::CategoricalEvaluator, output::AbstractVecto
     return start_idx + width
 end
 
-function evaluate_function!(eval::FunctionEvaluator, output::AbstractVector{Float64}, 
-                           data, row_idx::Int, start_idx::Int)
+function evaluate_function!(
+    eval::FunctionEvaluator, output::AbstractVector{Float64}, 
+    data, row_idx::Int, start_idx::Int
+)
     n_args = length(eval.arg_evaluators)
     
     if n_args == 1
@@ -228,8 +234,10 @@ function evaluate_zscore!(eval::ZScoreEvaluator, output::AbstractVector{Float64}
     return start_idx + underlying_width
 end
 
-function evaluate_combined!(eval::CombinedEvaluator, output::AbstractVector{Float64}, 
-                           data, row_idx::Int, start_idx::Int)
+function evaluate_combined!(
+    eval::CombinedEvaluator, output::AbstractVector{Float64}, 
+    data, row_idx::Int, start_idx::Int
+)
     current_idx = start_idx
     
     for sub_eval in eval.sub_evaluators
@@ -309,9 +317,11 @@ end
 # 5. KRONECKER PRODUCT COMPUTATION
 ###############################################################################
 
-function compute_kronecker_product!(component_buffers::Vector{Vector{Float64}}, 
-                                   component_widths::Vector{Int}, 
-                                   output::AbstractVector{Float64})
+function compute_kronecker_product!(
+    component_buffers::Vector{Vector{Float64}}, 
+    component_widths::Vector{Int}, 
+    output::AbstractVector{Float64}
+)
     n_components = length(component_buffers)
     
     if n_components == 1
@@ -352,9 +362,11 @@ function compute_kronecker_product!(component_buffers::Vector{Vector{Float64}},
     end
 end
 
-function compute_general_kronecker!(component_buffers::Vector{Vector{Float64}}, 
-                                   component_widths::Vector{Int}, 
-                                   output::AbstractVector{Float64})
+function compute_general_kronecker!(
+    component_buffers::Vector{Vector{Float64}}, 
+    component_widths::Vector{Int}, 
+    output::AbstractVector{Float64}
+)
     n_components = length(component_buffers)
     total_size = length(output)
     
