@@ -4,7 +4,7 @@
 using Revise
 using Test
 using BenchmarkTools
-using EfficientModelMatrices
+using FormulaCompiler
 
 using DataFrames, GLM, Tables, CategoricalArrays
 using CategoricalArrays: CategoricalValue, levelcode

@@ -1,5 +1,5 @@
 # test_efficient_model_matrices.jl
-# Formal test suite for EfficientModelMatrices.jl
+# Formal test suite for FormulaCompiler.jl
 
 using DataFrames
 using GLM

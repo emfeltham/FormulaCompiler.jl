@@ -1,7 +1,7 @@
 # test/quick_test.jl
 # Quick smoke test for development
 
-using EfficientModelMatrices
+using FormulaCompiler
 using DataFrames, GLM, Tables, CategoricalArrays, Random
 
 println("🚀 Quick Smoke Test")
