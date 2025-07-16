@@ -204,11 +204,11 @@
         # Test that fixed effects match equivalent GLM model
         
         # Fit mixed model
-        mixed_model = fit(MixedModel, @formula(y ~ x + z + group), df)
+        mixed_model = fit(MixedModel, @formula(y ~ x + z + (1|group)), df)
         compiled_mixed = compile_formula(mixed_model)
         
         # Fit equivalent GLM model
-        glm_model = lm(@formula(y ~ x + z + group), df)
+        glm_model = lm(@formula(y ~ x + z), df)
         compiled_glm = compile_formula(glm_model)
         
         # Should have same structure

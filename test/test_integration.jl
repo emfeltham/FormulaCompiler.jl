@@ -3,7 +3,6 @@
 
 @testset "Integration Tests" begin
     
-    Random.seed!(42)
     n = 100
     df = DataFrame(
         x = randn(n),

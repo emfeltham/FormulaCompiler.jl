@@ -407,21 +407,21 @@ function generate_kronecker_code!(instructions::Vector{String}, component_vars::
 end
 
 function generate_general_kronecker_code!(instructions::Vector{String}, component_vars::Vector{Vector{String}}, component_widths::Vector{Int}, pos::Int)
-    # For general N-way interactions, generate nested loops
     n_components = length(component_vars)
-    total_width = prod(component_widths)
+    total_size = prod(component_widths)
     
-    # Generate code that computes the Kronecker product element by element
-    for linear_idx in 0:(total_width-1)
-        indices = linear_to_multi_index(linear_idx, component_widths) .+ 1
-        
+    @inbounds for i in 1:total_size
+        # Convert linear index to multi-dimensional indices
+        indices = linear_to_multi_index(i - 1, component_widths) .+ 1
+                
+        # Compute product across all components
         product_terms = String[]
-        for (comp_idx, var_idx) in enumerate(indices)
-            push!(product_terms, component_vars[comp_idx][var_idx])
+        for j in 1:n_components
+            push!(product_terms, component_vars[j][indices[j]])
         end
         
         product_expr = join(product_terms, " * ")
-        output_pos = pos + linear_idx
+        output_pos = pos + i - 1
         push!(instructions, "@inbounds row_vec[$output_pos] = $product_expr")
     end
 end
