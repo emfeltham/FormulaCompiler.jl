@@ -422,9 +422,8 @@ function linear_to_multi_index(linear_idx::Int, dimensions::Vector{Int})
     
     remaining = linear_idx
     for i in 1:n_dims
-        stride = prod(dimensions[1:(i-1)]; init=1)
-        indices[i] = remaining ÷ stride
-        remaining = remaining % stride
+        indices[i] = remaining % dimensions[i]
+        remaining = remaining ÷ dimensions[i]
     end
     
     return indices
