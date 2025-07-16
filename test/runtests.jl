@@ -1,22 +1,22 @@
 # test/runtests.jl
-# Main test runner for EfficientModelMatrices.jl
+# Main test runner for FormulaCompiler.jl
 
 using Revise
 using Test
-using EfficientModelMatrices
+using FormulaCompiler
 using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels, StandardizedPredictors
 using MixedModels
 using BenchmarkTools
 
-using EfficientModelMatrices:
+using FormulaCompiler:
     AbstractEvaluator,
     ConstantEvaluator, ContinuousEvaluator,
     CombinedEvaluator, InteractionEvaluator, FunctionEvaluator, CategoricalEvaluator,
     ZScoreEvaluator,
     output_width, evaluate!
 
-using EfficientModelMatrices:
+using FormulaCompiler:
     test_evaluator_storage,
     test_comprehensive_compilation, test_complete, 
     validate_derivative_evaluator, test_scenario_foundation,
@@ -24,14 +24,14 @@ using EfficientModelMatrices:
     set_override!, remove_override!,
     update_scenario!
 
-using EfficientModelMatrices:
+using FormulaCompiler:
     compile_term
     
 
 # Set consistent random seed for reproducible tests
 Random.seed!(06515)
 
-@testset "EfficientModelMatrices.jl Tests" begin
+@testset "FormulaCompiler.jl Tests" begin
     
     # Core functionality tests
     include("test_evaluators.jl")
@@ -56,9 +56,9 @@ end
 using Test
 using Revise
 using Random
-using EfficientModelMatrices
+using FormulaCompiler
 
-@testset "EfficientModelMatrices.jl" begin
+@testset "FormulaCompiler.jl" begin
     include("initial_tests.jl")
     
 end
