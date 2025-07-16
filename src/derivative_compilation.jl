@@ -162,16 +162,11 @@ function compute_binary_function_derivative(func::Function, left_arg::AbstractEv
         
     elseif func === (*)
         # Multiplication: ∂(f*g)/∂x = f*∂g/∂x + g*∂f/∂x
+        # Always use ProductRuleEvaluator for consistency
         if left_is_zero && right_is_zero
             return ConstantEvaluator(0.0)
-        elseif left_is_zero
-            # Only right term: g * ∂f/∂x = g * 0 = 0, left term: f * ∂g/∂x
-            return ProductEvaluator([left_arg, right_derivative])
-        elseif right_is_zero
-            # Only left term: f * ∂g/∂x = f * 0 = 0, right term: g * ∂f/∂x  
-            return ProductEvaluator([right_arg, left_derivative])
         else
-            # Full product rule: f*g' + g*f'
+            # Use ProductRuleEvaluator in all cases - it will handle zeros internally
             return ProductRuleEvaluator(left_arg, left_derivative, right_arg, right_derivative)
         end
         
@@ -250,8 +245,59 @@ function compute_interaction_derivative_recursive(evaluator::InteractionEvaluato
         # Single component - just return its derivative
         return compute_derivative_evaluator(components[1], focal_variable)
     else
-        # N-way product rule: Σᵢ (∂fᵢ/∂x * ∏ⱼ≠ᵢ fⱼ)
-        return compute_nary_product_derivative(components, focal_variable)
+        # N-way product rule for interactions: ∂(f₁*f₂*...*fₙ)/∂x = Σᵢ (∂fᵢ/∂x * ∏ⱼ≠ᵢ fⱼ)
+        # But stay in the interaction domain - don't mix with ProductEvaluator
+        
+        sum_terms = AbstractEvaluator[]
+        
+        for i in 1:n_components
+            component_derivative = compute_derivative_evaluator(components[i], focal_variable)
+            
+            # Skip terms where derivative is zero (optimization)
+            if is_zero_derivative(component_derivative, focal_variable)
+                continue
+            end
+            
+            # Get all other components: ∏ⱼ≠ᵢ fⱼ
+            other_components = [components[j] for j in 1:n_components if j != i]
+            
+            if isempty(other_components)
+                # Single component case: just the derivative
+                push!(sum_terms, component_derivative)
+            elseif length(other_components) == 1
+                # Two components total: ∂fᵢ/∂x * fⱼ
+                if component_derivative isa ConstantEvaluator && component_derivative.value == 1.0
+                    # Optimization: 1 * fⱼ = fⱼ
+                    push!(sum_terms, other_components[1])
+                else
+                    # Need to multiply derivative by the other component
+                    # This creates a mathematical product, not a statistical interaction
+                    push!(sum_terms, ProductEvaluator([component_derivative, other_components[1]]))
+                end
+            else
+                # Multiple other components: ∂fᵢ/∂x * (∏ⱼ≠ᵢ fⱼ)
+                # The product of other components stays as an interaction
+                other_interaction = InteractionEvaluator(other_components)
+                
+                if component_derivative isa ConstantEvaluator && component_derivative.value == 1.0
+                    # Optimization: 1 * (interaction) = interaction
+                    push!(sum_terms, other_interaction)
+                else
+                    # Need to multiply derivative by the interaction
+                    # This creates a mathematical product of (derivative * interaction)
+                    push!(sum_terms, ProductEvaluator([component_derivative, other_interaction]))
+                end
+            end
+        end
+        
+        # Return sum of all terms
+        if isempty(sum_terms)
+            return ConstantEvaluator(0.0)
+        elseif length(sum_terms) == 1
+            return sum_terms[1]
+        else
+            return CombinedEvaluator(sum_terms)
+        end
     end
 end
 
@@ -494,9 +540,38 @@ function is_zero_derivative(evaluator::AbstractEvaluator, focal_variable::Symbol
         return evaluator.scale_factor == 0.0 || is_zero_derivative(evaluator.evaluator, focal_variable)
     elseif evaluator isa ProductEvaluator
         return any(comp -> is_zero_derivative(comp, focal_variable), evaluator.components)
+    
+    # NEW: Safe improvements for better optimization
+    elseif evaluator isa InteractionEvaluator
+        # If ANY component has zero derivative, whole interaction is zero w.r.t. focal_variable
+        # This catches cases like: x * y * z has zero derivative w.r.t. w
+        return any(comp -> is_zero_derivative(comp, focal_variable), evaluator.components)
+    
+    elseif evaluator isa FunctionEvaluator
+        # If ALL arguments have zero derivative, function derivative is zero
+        # This catches cases like: log(y) has zero derivative w.r.t. x
+        return all(arg -> is_zero_derivative(arg, focal_variable), evaluator.arg_evaluators)
+    
+    elseif evaluator isa ChainRuleEvaluator
+        # Chain rule: f'(g(x)) * g'(x) is zero if either f'(g(x)) or g'(x) is zero
+        # Since we don't easily know if f'(g(x)) is zero, we check if g'(x) is zero
+        return is_zero_derivative(evaluator.inner_derivative, focal_variable)
+    
+    elseif evaluator isa ProductRuleEvaluator
+        # Product rule: f*g' + g*f' is zero if both terms are zero
+        # This happens when: f=0 AND g=0, or f'=0 AND g'=0
+        # Conservative check: both derivatives are zero
+        return is_zero_derivative(evaluator.left_derivative, focal_variable) && 
+               is_zero_derivative(evaluator.right_derivative, focal_variable)
+    
+    elseif evaluator isa ForwardDiffEvaluator
+        # Delegate to the underlying evaluator for ForwardDiff cases
+        return is_zero_derivative(evaluator.original_evaluator, focal_variable)
+    
     else
-        @warn "case not handled"
-        return false  # Conservative: assume non-zero for complex cases
+        # Conservative: assume non-zero for any remaining unknown cases
+        # TODO: Could add more specific cases for additional evaluator types
+        return false
     end
 end
 
