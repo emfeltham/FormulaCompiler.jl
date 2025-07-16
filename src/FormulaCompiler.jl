@@ -25,8 +25,13 @@ export not
 include("fixed_helpers.jl")     # No dependencies
 export fixed_effects_form
 include("evaluators.jl")        # Uses fixed_helpers
-include("CompiledFormula.jl")   # Defines key structs and methods
+include("CompiledFormula.jl")   # Defines key structs and methods - NOW INCLUDES DERIVATIVES
+include("CompiledDerivativeFormula.jl")   # Defines key structs and methods - NOW INCLUDES DERIVATIVES
 export compile_formula, CompiledFormula, test_complete
+# Derivatives
+export compile_derivative_formula, CompiledDerivativeFormula
+export clear_derivative_cache!, list_compiled_derivatives
+
 include("evaluator_trees.jl")
 export extract_root_evaluator, get_evaluator_tree, has_evaluator_access
 export count_evaluator_nodes, get_variable_dependencies, get_evaluator_summary

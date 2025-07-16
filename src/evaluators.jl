@@ -74,6 +74,7 @@ output_width(eval::ZScoreEvaluator) = output_width(eval.underlying)
 output_width(eval::CombinedEvaluator) = eval.total_width
 output_width(eval::ScaledEvaluator) = output_width(eval.evaluator)
 output_width(eval::ProductEvaluator) = 1  # Products always yield single values
+output_width(eval::PositionalDerivativeEvaluator) = eval.target_width
 
 ###############################################################################
 # 3. RECURSIVE EVALUATION (The Key Fix)
