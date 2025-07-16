@@ -73,6 +73,14 @@ function generate_evaluator_code!(instructions::Vector{String}, evaluator::Abstr
         return generate_chain_rule_code!(instructions, evaluator, pos)
     elseif evaluator isa ProductRuleEvaluator
         return generate_product_rule_code!(instructions, evaluator, pos)
+    elseif evaluator isa ChainRuleEvaluator
+        return generate_chain_rule_code!(instructions, evaluator, pos)
+    elseif evaluator isa ProductRuleEvaluator
+        return generate_product_rule_code!(instructions, evaluator, pos)
+    elseif evaluator isa ForwardDiffEvaluator
+        # For now, generate a placeholder - ForwardDiff would need special handling
+        push!(instructions, "@inbounds row_vec[$pos] = 0.0  # ForwardDiff placeholder")
+        return pos + 1
     else
         error("Unknown evaluator type: $(typeof(evaluator))")
     end

@@ -185,3 +185,10 @@ function evaluate!(evaluator::ForwardDiffEvaluator, output::AbstractVector{Float
     
     return start_idx + 1
 end
+
+function generate_forwarddiff_code!(instructions::Vector{String}, eval::ForwardDiffEvaluator, pos::Int)
+    # ForwardDiff evaluation requires special handling
+    # For now, we'll generate a fallback that uses the evaluation function
+    push!(instructions, "@inbounds row_vec[$pos] = 0.0  # ForwardDiff fallback - requires runtime evaluation")
+    return pos + 1
+end

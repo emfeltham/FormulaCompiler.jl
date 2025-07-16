@@ -50,6 +50,7 @@ export test_scenario_foundation, example_scenario_usage
 
 include("derivative_evaluators.jl")
 include("derivative_compilation.jl")
+include("derivative_generators.jl")
 export compute_derivative_evaluator, compute_interaction_derivative_recursive
 export compute_nary_product_derivative, compute_division_derivative, compute_power_derivative
 export is_zero_evaluator
