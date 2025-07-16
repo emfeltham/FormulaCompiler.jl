@@ -65,7 +65,14 @@ function generate_evaluator_code!(instructions::Vector{String}, evaluator::Abstr
         
     elseif evaluator isa CombinedEvaluator
         return generate_combined_code!(instructions, evaluator, pos)
-        
+    elseif evaluator isa ScaledEvaluator
+    return generate_scaled_code!(instructions, evaluator, pos)    
+    elseif evaluator isa ProductEvaluator  
+        return generate_product_code!(instructions, evaluator, pos)
+    elseif evaluator isa ChainRuleEvaluator
+        return generate_chain_rule_code!(instructions, evaluator, pos)
+    elseif evaluator isa ProductRuleEvaluator
+        return generate_product_rule_code!(instructions, evaluator, pos)
     else
         error("Unknown evaluator type: $(typeof(evaluator))")
     end
@@ -470,4 +477,26 @@ function generate_combined_code!(instructions::Vector{String}, eval::CombinedEva
     end
     
     return current_pos
+end
+
+###############################################################################
+# SCALED AND PRODUCT CODE GENERATION
+###############################################################################
+
+function generate_scaled_code!(instructions::Vector{String}, eval::ScaledEvaluator, pos::Int)
+    next_pos = generate_evaluator_code!(instructions, eval.evaluator, pos)
+    push!(instructions, "@inbounds row_vec[$pos] *= $(eval.scale_factor)")
+    return next_pos
+end
+
+function generate_product_code!(instructions::Vector{String}, eval::ProductEvaluator, pos::Int)
+    component_vars = [next_var("prod_comp") for _ in eval.components]
+    
+    for (i, component) in enumerate(eval.components)
+        generate_argument_code!(instructions, component, component_vars[i])
+    end
+    
+    product_expr = join(component_vars, " * ")
+    push!(instructions, "@inbounds row_vec[$pos] = $product_expr")
+    return pos + 1
 end

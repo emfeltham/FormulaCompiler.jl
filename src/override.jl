@@ -641,7 +641,7 @@ function test_scenario_foundation()
         @testset "Scenario Grid" begin
             # Create grid of scenarios
             x_values = [0.0, 1.0, 2.0]
-            collection = create_scenario_grid("x_test", data, :x, x_values)
+            collection = create_scenario_grid("x_test", data, Dict(:x => x_values))
             
             @test length(collection) == 3
             @test collection[1].name == "x_test_1"
