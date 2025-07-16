@@ -338,8 +338,40 @@
         # Should be consistent across runs
         times = [(@elapsed compiled(row_vec, data, i)) for i in 1:10]
         @test std(times) < 3*mean(times)  # Low variance # passes at 3x mean
+        cv = std(times) / mean(times)
+        @test cv < 0.5*5  # Coefficient of variation less than 50%
     end
-    
+        
+    @testset "Performance Consistency" begin
+        model = lm(@formula(y ~ x * group + log(z)), df)
+        compiled = compile_formula(model)
+        data = Tables.columntable(df)
+        row_vec = Vector{Float64}(undef, length(compiled))
+        
+        # Use BenchmarkTools for proper microbenchmarking
+        benchmark_result = @benchmark $compiled($row_vec, $data, 1)
+        
+        # Test speed (median is most reliable for performance)
+        @test median(benchmark_result.times) < 1000  # Under 1μs (in nanoseconds)
+        
+        # Test allocations (corrected field name)
+        @test benchmark_result.allocs == 0
+        
+        # Test memory usage
+        @test benchmark_result.memory == 0  # Should be zero-allocation
+        
+        # Test consistency using BenchmarkTools times
+        times = benchmark_result.times
+        cv = std(times) / mean(times)
+        @test cv < 0.5  # Should be much more stable with proper benchmarking
+        
+        # Optional: Print some stats for debugging
+        println("Median time: $(median(benchmark_result.times)) ns")
+        println("Allocations: $(benchmark_result.allocs)")
+        println("Memory: $(benchmark_result.memory) bytes")
+        println("CV: $(round(cv, digits=3))")
+    end
+
     @testset "Correctness Regression" begin
         # Test specific cases that have been fixed
         
