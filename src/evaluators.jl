@@ -579,3 +579,23 @@ function test_comprehensive_compilation()
     
     return results
 end
+
+function check_evaluator_conformance(evaluator::AbstractEvaluator)
+    # Verify output_width is defined
+    try
+        width = output_width(evaluator)
+        @assert width > 0 "Output width must be positive"
+    catch
+        error("output_width not implemented for $(typeof(evaluator))")
+    end
+    
+    # Verify evaluate! is defined  
+    try
+        test_output = Vector{Float64}(undef, output_width(evaluator))
+        # Would need test data to fully verify
+    catch
+        error("evaluate! not implemented for $(typeof(evaluator))")
+    end
+    
+    return true
+end

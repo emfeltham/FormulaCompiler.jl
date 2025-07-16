@@ -6,7 +6,7 @@ module EfficientModelMatrices
 
 using Random # testing
 using Test
-
+using ForwardDiff
 using StatsModels, GLM, CategoricalArrays, Tables, DataFrames, Random
 
 import MixedModels
@@ -24,8 +24,8 @@ export not
 # Include files in dependency order
 include("fixed_helpers.jl")     # No dependencies
 export fixed_effects_form
-include("CompiledFormula.jl")   # Defines key structs and methods
 include("evaluators.jl")        # Uses fixed_helpers
+include("CompiledFormula.jl")   # Defines key structs and methods
 export compile_formula, CompiledFormula, test_complete
 include("evaluator_trees.jl")
 export extract_root_evaluator, get_evaluator_tree, has_evaluator_access
@@ -47,5 +47,15 @@ export ScenarioCollection, create_scenario_grid, create_scenario_combinations
 export get_scenario_by_name, list_scenarios
 export modelrow!, modelrow_scenarios!
 export test_scenario_foundation, example_scenario_usage
+
+include("derivative_evaluators.jl")
+include("derivative_compilation.jl")
+export compute_derivative_evaluator, compute_interaction_derivative_recursive
+export compute_nary_product_derivative, compute_division_derivative, compute_power_derivative
+export is_zero_evaluator
+
+export ScaledEvaluator, ProductEvaluator
+export ChainRuleEvaluator, ProductRuleEvaluator, ForwardDiffEvaluator
+export get_standard_derivative_function, is_zero_derivative, validate_derivative_evaluator
 
 end # module
