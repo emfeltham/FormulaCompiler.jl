@@ -63,8 +63,11 @@ end
     Key change: Instead of discarding the root_evaluator after code generation,
     we store it in the CompiledFormula for future use.
 """
-function compile_formula(model)
-    println("=== Compiling Formula with Root Evaluator Storage ===")
+function compile_formula(model; verbose = false)
+    
+    if verbose
+        println("=== Compiling Formula with Root Evaluator Storage ===")
+    end
     
     rhs = fixed_effects_form(model).rhs
     
@@ -73,25 +76,31 @@ function compile_formula(model)
     total_width = output_width(root_evaluator)
     column_names = extract_all_columns(rhs)
     
-    println("Built evaluator tree: width=$total_width, columns=$column_names")
-    println("Root evaluator type: $(typeof(root_evaluator))")
+    if verbose
+        println("Built evaluator tree: width=$total_width, columns=$column_names")
+        println("Root evaluator type: $(typeof(root_evaluator))")
+    end
     
     # Step 2: Generate code strings from evaluator tree (unchanged)
     instructions = generate_code_from_evaluator(root_evaluator)
     
-    println("Generated $(length(instructions)) instructions:")
-    for (i, instr) in enumerate(instructions[1:min(5, length(instructions))])
-        println("  $i: $instr")
-    end
-    if length(instructions) > 5
-        println("  ... ($(length(instructions) - 5) more)")
+    if verbose
+        println("Generated $(length(instructions)) instructions:")
+        for (i, instr) in enumerate(instructions[1:min(5, length(instructions))])
+            println("  $i: $instr")
+        end
+        if length(instructions) > 5
+            println("  ... ($(length(instructions) - 5) more)")
+        end
     end
     
     # Step 3: Cache for @generated function (unchanged)
     formula_hash = hash(string(rhs))
     FORMULA_CACHE[formula_hash] = (instructions, column_names, total_width)
     
-    println("Cached with hash: $formula_hash")
+    if verbose
+        println("Cached with hash: $formula_hash")
+    end
     
     # Step 4: Return CompiledFormula WITH root evaluator
     return CompiledFormula(Val(formula_hash), total_width, column_names, root_evaluator)
@@ -105,7 +114,8 @@ FIXED: More specific signature to avoid ambiguity.
     row_vec::AbstractVector{Float64}, 
     ::Val{formula_hash}, 
     data, 
-    row_idx::Int
+    row_idx::Int;
+    verbose = false
 ) where formula_hash
     
     # Retrieve instructions from cache
@@ -115,7 +125,9 @@ FIXED: More specific signature to avoid ambiguity.
     
     instructions, column_names, output_width = FORMULA_CACHE[formula_hash]
     
-    println("@generated: Compiling for hash $formula_hash with $(length(instructions)) instructions")
+    if verbose == true
+        println("@generated: Compiling for hash $formula_hash with $(length(instructions)) instructions")
+    end
     
     # Convert instruction strings to expressions
     try

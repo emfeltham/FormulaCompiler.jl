@@ -12,7 +12,7 @@
 """
 function compute_derivative_evaluator(evaluator::AbstractEvaluator, focal_variable::Symbol)
     
-    # Base cases - leaf evaluators (unchanged)
+    # Base cases - leaf evaluators
     if evaluator isa ConstantEvaluator
         return ConstantEvaluator(0.0)  # ∂c/∂x = 0
         
@@ -402,7 +402,7 @@ function compute_sum_derivative_recursive(evaluator::CombinedEvaluator, focal_va
         sub_derivative = compute_derivative_evaluator(sub_evaluator, focal_variable)
         
         # Optimization: skip zero derivatives
-        if !component_derivative(sub_derivative, focal_variable)
+        if !is_zero_derivative(sub_derivative, focal_variable)
             push!(derivative_terms, sub_derivative)
         end
     end
@@ -481,7 +481,7 @@ Used for optimization - if derivative is zero, we can use ConstantEvaluator(0.0)
 """
 function is_zero_derivative(evaluator::AbstractEvaluator, focal_variable::Symbol)
     if evaluator isa ConstantEvaluator
-        return true
+        return evaluator.value == 0.0
     elseif evaluator isa ContinuousEvaluator
         return evaluator.column != focal_variable
     elseif evaluator isa CategoricalEvaluator
@@ -490,7 +490,12 @@ function is_zero_derivative(evaluator::AbstractEvaluator, focal_variable::Symbol
         return is_zero_derivative(evaluator.underlying, focal_variable)
     elseif evaluator isa CombinedEvaluator
         return all(sub_eval -> is_zero_derivative(sub_eval, focal_variable), evaluator.sub_evaluators)
+    elseif evaluator isa ScaledEvaluator
+        return evaluator.scale_factor == 0.0 || is_zero_derivative(evaluator.evaluator, focal_variable)
+    elseif evaluator isa ProductEvaluator
+        return any(comp -> is_zero_derivative(comp, focal_variable), evaluator.components)
     else
+        @warn "case not handled"
         return false  # Conservative: assume non-zero for complex cases
     end
 end
