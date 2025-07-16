@@ -52,6 +52,15 @@ struct CombinedEvaluator <: AbstractEvaluator
     end
 end
 
+struct ScaledEvaluator <: AbstractEvaluator
+    evaluator::AbstractEvaluator
+    scale_factor::Float64
+end
+
+struct ProductEvaluator <: AbstractEvaluator
+    components::Vector{AbstractEvaluator}
+end
+
 ###############################################################################
 # 2. OUTPUT WIDTH CALCULATIONS
 ###############################################################################
@@ -63,6 +72,8 @@ output_width(eval::FunctionEvaluator) = 1  # Functions always produce 1 column
 output_width(eval::InteractionEvaluator) = eval.total_width
 output_width(eval::ZScoreEvaluator) = output_width(eval.underlying)
 output_width(eval::CombinedEvaluator) = eval.total_width
+output_width(eval::ScaledEvaluator) = output_width(eval.evaluator)
+output_width(eval::ProductEvaluator) = 1  # Products always yield single values
 
 ###############################################################################
 # 3. RECURSIVE EVALUATION (The Key Fix)
@@ -245,6 +256,27 @@ function evaluate_combined!(
     end
     
     return current_idx
+end
+
+function evaluate!(evaluator::ScaledEvaluator, output::AbstractVector{Float64}, 
+                  data, row_idx::Int, start_idx::Int=1)
+    next_idx = evaluate!(evaluator.evaluator, output, data, row_idx, start_idx)
+    @inbounds output[start_idx] *= evaluator.scale_factor
+    return next_idx
+end
+
+function evaluate!(evaluator::ProductEvaluator, output::AbstractVector{Float64}, 
+                  data, row_idx::Int, start_idx::Int=1)
+    product = 1.0
+    temp_buffer = Vector{Float64}(undef, 1)
+    
+    for component in evaluator.components
+        evaluate!(component, temp_buffer, data, row_idx, 1)
+        product *= temp_buffer[1]
+    end
+    
+    @inbounds output[start_idx] = product
+    return start_idx + 1
 end
 
 ###############################################################################
@@ -488,114 +520,4 @@ end
 
 function extract_columns_recursive!(columns::Vector{Symbol}, term::Union{InterceptTerm, ConstantTerm})
     # No columns
-end
-
-###############################################################################
-# 9. COMPREHENSIVE TEST FUNCTION
-###############################################################################
-
-function test_comprehensive_compilation()
-    println("=== Testing Comprehensive Recursive Compilation ===")
-    
-    Random.seed!(42)
-    df = DataFrame(
-        x = randn(100),
-        y = randn(100),
-        z = abs.(randn(100)) .+ 0.1,
-        cat2a = categorical(rand(["X", "Y"], 100)),
-        cat2b = categorical(rand(["P", "Q"], 100)),
-        bool = rand([false, true], 100),
-        group = categorical(rand(["A", "B", "C"], 100)),
-        group2 = categorical(rand(["C", "D", "X"], 100)),
-        group3 = categorical(rand(["E", "F", "G"], 100))
-    )
-    
-    data = Tables.columntable(df)
-    
-    test_cases = [
-        (@formula(y ~ cat2a * cat2b), "cat 2 x cat 2"),
-        (@formula(y ~ cat2a * bool), "cat 2 x bool"),
-        (@formula(y ~ cat2a * (x^2)), "cat 2 x cts"),
-        (@formula(y ~ bool * (x^2)), "binary x cts"),
-        (@formula(y ~ cat2b * (x^2)), "cat 2 x cts (variant)"),
-        (@formula(y ~ group2 * (x^2)), "cat >2 x cts"),
-        (@formula(y ~ group2 * bool), "cat >2 x bool"),
-        (@formula(y ~ group2 * cat2a), "cat >2 x cat 2"),
-        (@formula(y ~ group2 * group3), "cat >2 x cat >2"),
-        (@formula(y ~ x * z * group), "three-way continuous x categorical"),
-        (@formula(y ~ (x>0) * group), "boolean function x categorical"),
-        (@formula(y ~ log(z) * group2 * cat2a), "function x cat >2 x cat 2"),
-    ]
-    
-    results = []
-    
-    for (i, (formula, description)) in enumerate(test_cases)
-        println("\n--- Test $i: $description ---")
-        
-        try
-            model = lm(formula, df)
-            mm = modelmatrix(model)
-            
-            # Compile with recursive approach
-            compiled = compile_formula(model)
-            
-            # Test correctness
-            row_vec = Vector{Float64}(undef, length(compiled))
-            test_row = 1
-            
-            compiled(row_vec, data, test_row)
-            expected = mm[test_row, :]
-            
-            error = maximum(abs.(row_vec .- expected))
-            
-            if error < 1e-12
-                println("✅ PASSED: Error = $(error)")
-                
-                # Test allocations
-                allocs = @allocated compiled(row_vec, data, test_row)
-                println("   Allocations: $allocs bytes")
-                
-                push!(results, (description, true, allocs))
-            else
-                println("❌ FAILED: Error = $error")
-                push!(results, (description, false, error))
-            end
-            
-        catch e
-            println("❌ EXCEPTION: $e")
-            push!(results, (description, false, "exception"))
-        end
-    end
-    
-    # Summary
-    successful = sum(r[2] for r in results)
-    println("\n" * "="^50)
-    println("RESULTS: $successful/$(length(test_cases)) passed")
-    
-    if successful == length(test_cases)
-        println("🎉 ALL TESTS PASSED!")
-        println("✅ Recursive compositional approach works for ALL cases!")
-    end
-    
-    return results
-end
-
-function check_evaluator_conformance(evaluator::AbstractEvaluator)
-    # Verify output_width is defined
-    try
-        width = output_width(evaluator)
-        @assert width > 0 "Output width must be positive"
-    catch
-        error("output_width not implemented for $(typeof(evaluator))")
-    end
-    
-    # Verify evaluate! is defined  
-    try
-        test_output = Vector{Float64}(undef, output_width(evaluator))
-        # Would need test data to fully verify
-    catch
-        error("evaluate! not implemented for $(typeof(evaluator))")
-    end
-    
-    return true
 end
