@@ -161,19 +161,102 @@ function compute_binary_function_derivative(func::Function, left_arg::AbstractEv
         end
         
     elseif func === (*)
-        # Multiplication: ∂(f*g)/∂x = f*∂g/∂x + g*∂f/∂x
-        # Always use ProductRuleEvaluator for consistency
-        if left_is_zero && right_is_zero
-            return ConstantEvaluator(0.0)
-        else
-            # Use ProductRuleEvaluator in all cases - it will handle zeros internally
-            return ProductRuleEvaluator(left_arg, left_derivative, right_arg, right_derivative)
-        end
+    # Multiplication: ∂(f*g)/∂x = f*∂g/∂x + g*∂f/∂x
+    # Handle commutative nature - position doesn't matter
+    
+    if left_is_zero && right_is_zero
+        return ConstantEvaluator(0.0)
+    else
+        # Check for unit derivatives (∂x/∂x = 1)
+        left_is_one = (left_derivative isa ConstantEvaluator && left_derivative.value == 1.0)
+        right_is_one = (right_derivative isa ConstantEvaluator && right_derivative.value == 1.0)
         
+        # Check if arguments are constants
+        left_is_constant = left_arg isa ConstantEvaluator
+        right_is_constant = right_arg isa ConstantEvaluator
+        
+        # Case 1: One argument is constant, other has unit derivative
+        # ∂(c*x)/∂x = c*1 + x*0 = c  OR  ∂(x*c)/∂x = x*0 + c*1 = c
+        if left_is_constant && right_is_one
+            return left_arg  # Return the constant
+        elseif right_is_constant && left_is_one
+            return right_arg  # Return the constant
+            
+        # Case 2: One argument is constant, other has zero derivative
+        # ∂(c*f)/∂x = c*f' + f*0 = c*f'  OR  ∂(f*c)/∂x = f*0 + c*f' = c*f'
+        elseif left_is_constant && right_is_zero
+            return ConstantEvaluator(0.0)  # c*0 = 0
+        elseif right_is_constant && left_is_zero
+            return ConstantEvaluator(0.0)  # c*0 = 0
+            
+        # Case 3: One argument is constant, other has general derivative
+        # ∂(c*f)/∂x = c*f'  OR  ∂(f*c)/∂x = c*f'
+        elseif left_is_constant
+            if left_arg.value == 1.0
+                return right_derivative  # 1*f' = f'
+            elseif left_arg.value == 0.0
+                return ConstantEvaluator(0.0)  # 0*f' = 0
+            else
+                return ScaledEvaluator(right_derivative, left_arg.value)  # c*f'
+            end
+        elseif right_is_constant
+            if right_arg.value == 1.0
+                return left_derivative  # f'*1 = f'
+            elseif right_arg.value == 0.0
+                return ConstantEvaluator(0.0)  # f'*0 = 0
+            else
+                return ScaledEvaluator(left_derivative, right_arg.value)  # f'*c
+            end
+            
+        # Case 4: Both derivatives are zero
+        elseif left_is_zero && right_is_zero
+            return ConstantEvaluator(0.0)
+            
+        # Case 5: One derivative is zero, other is not
+        elseif left_is_zero
+            # ∂(f*g)/∂x = f*g' + g*0 = f*g'
+            product = ProductEvaluator([left_arg, right_derivative])
+            return simplify_product_evaluator(product)
+        elseif right_is_zero
+            # ∂(f*g)/∂x = f*0 + g*f' = g*f'
+            product = ProductEvaluator([right_arg, left_derivative])
+            return simplify_product_evaluator(product)
+            
+        # Case 6: Both derivatives are unit (both are variables w.r.t. focal_variable)
+        elseif left_is_one && right_is_one
+            # ∂(f*g)/∂x = f*1 + g*1 = f + g
+            return CombinedEvaluator([left_arg, right_arg])
+            
+        # Case 7: One derivative is unit, other is not
+        elseif left_is_one
+            # ∂(f*g)/∂x = f*g' + g*1 = f*g' + g
+            term1 = ProductEvaluator([left_arg, right_derivative])
+            return CombinedEvaluator([term1, right_arg])
+        elseif right_is_one
+            # ∂(f*g)/∂x = f*1 + g*f' = f + g*f'
+            term2 = ProductEvaluator([right_arg, left_derivative])
+            return CombinedEvaluator([left_arg, term2])
+            
+        # Case 8: General case - neither is constant, neither has unit/zero derivative
+        else
+            # ∂(f*g)/∂x = f*g' + g*f'
+            term1 = ProductEvaluator([left_arg, right_derivative])
+            term2 = ProductEvaluator([right_arg, left_derivative])
+            return CombinedEvaluator([term1, term2])
+        end
+    end 
     elseif func === (/)
         # Division: ∂(f/g)/∂x = (g*∂f/∂x - f*∂g/∂x) / g²
         if left_is_zero && right_is_zero
             return ConstantEvaluator(0.0)
+        elseif right_is_zero
+            # ∂(f/g)/∂x = (g*f' - f*0) / g² = g*f' / g² = f'/g
+            return FunctionEvaluator(/, [left_derivative, right_arg])
+        elseif left_is_zero
+            # ∂(f/g)/∂x = (g*0 - f*g') / g² = -f*g' / g²
+            numerator = ProductEvaluator([ScaledEvaluator(left_arg, -1.0), right_derivative])
+            denominator = ProductEvaluator([right_arg, right_arg])  # g²
+            return FunctionEvaluator(/, [numerator, denominator])
         else
             return compute_division_derivative(left_arg, left_derivative, right_arg, right_derivative)
         end
@@ -517,50 +600,53 @@ end
 """
     is_zero_derivative(evaluator::AbstractEvaluator, focal_variable::Symbol) -> Bool
 
-Check if an evaluator's derivative with respect to focal_variable is always zero.
-Used for optimization - if derivative is zero, we can use ConstantEvaluator(0.0).
+Check if an evaluator always evaluates to zero.
+Used for optimization in derivative computation - if a derivative evaluator is always zero, 
+we can skip it in sums or use ConstantEvaluator(0.0).
 
 # Examples
-- ContinuousEvaluator(:x) w.r.t. :y → true (∂x/∂y = 0)
-- ConstantEvaluator(5.0) w.r.t. anything → true (∂c/∂x = 0)
-- CategoricalEvaluator(...) w.r.t. continuous var → true
+- ConstantEvaluator(0.0) → true (always evaluates to 0)
+- ConstantEvaluator(5.0) → false (evaluates to 5, not 0)
+- ContinuousEvaluator(:x) → false (evaluates to x, not 0)
+- ProductEvaluator([ConstantEvaluator(0.0), anything]) → true (0 * anything = 0)
 """
 function is_zero_derivative(evaluator::AbstractEvaluator, focal_variable::Symbol)
     if evaluator isa ConstantEvaluator
-        return evaluator.value == 0.0
+        return evaluator.value == 0.0  # Check if the constant VALUE is zero
+        
     elseif evaluator isa ContinuousEvaluator
-        return evaluator.column != focal_variable
+        return false  # A variable is never always zero
+        
     elseif evaluator isa CategoricalEvaluator
-        return true  # Categorical variables have zero derivative w.r.t. continuous variables
+        return false  # Categorical values are never always zero
+        
     elseif evaluator isa ZScoreEvaluator
         return is_zero_derivative(evaluator.underlying, focal_variable)
+        
     elseif evaluator isa CombinedEvaluator
         return all(sub_eval -> is_zero_derivative(sub_eval, focal_variable), evaluator.sub_evaluators)
+        
     elseif evaluator isa ScaledEvaluator
         return evaluator.scale_factor == 0.0 || is_zero_derivative(evaluator.evaluator, focal_variable)
+        
     elseif evaluator isa ProductEvaluator
         return any(comp -> is_zero_derivative(comp, focal_variable), evaluator.components)
     
-    # NEW: Safe improvements for better optimization
     elseif evaluator isa InteractionEvaluator
-        # If ANY component has zero derivative, whole interaction is zero w.r.t. focal_variable
-        # This catches cases like: x * y * z has zero derivative w.r.t. w
+        # If ANY component is always zero, whole interaction is zero (0 * anything = 0)
         return any(comp -> is_zero_derivative(comp, focal_variable), evaluator.components)
     
     elseif evaluator isa FunctionEvaluator
-        # If ALL arguments have zero derivative, function derivative is zero
-        # This catches cases like: log(y) has zero derivative w.r.t. x
-        return all(arg -> is_zero_derivative(arg, focal_variable), evaluator.arg_evaluators)
+        # A function evaluator is zero if it always evaluates to zero
+        # This is hard to determine in general, so be conservative
+        return false
     
     elseif evaluator isa ChainRuleEvaluator
-        # Chain rule: f'(g(x)) * g'(x) is zero if either f'(g(x)) or g'(x) is zero
-        # Since we don't easily know if f'(g(x)) is zero, we check if g'(x) is zero
+        # Chain rule result f'(g) * g' is zero if g' is zero (conservative check)
         return is_zero_derivative(evaluator.inner_derivative, focal_variable)
     
     elseif evaluator isa ProductRuleEvaluator
-        # Product rule: f*g' + g*f' is zero if both terms are zero
-        # This happens when: f=0 AND g=0, or f'=0 AND g'=0
-        # Conservative check: both derivatives are zero
+        # Product rule f*g' + g*f' is zero if both derivatives are zero
         return is_zero_derivative(evaluator.left_derivative, focal_variable) && 
                is_zero_derivative(evaluator.right_derivative, focal_variable)
     
@@ -570,7 +656,6 @@ function is_zero_derivative(evaluator::AbstractEvaluator, focal_variable::Symbol
     
     else
         # Conservative: assume non-zero for any remaining unknown cases
-        # TODO: Could add more specific cases for additional evaluator types
         return false
     end
 end
@@ -591,7 +676,7 @@ Returns `nothing` if no analytical derivative is available.
 """
 function get_standard_derivative_function(func::Function)
     if func === log
-        return x -> 1/x
+        return x -> inv(x)
     elseif func === exp
         return x -> exp(x)
     elseif func === sqrt
@@ -621,5 +706,38 @@ function get_standard_derivative_function(func::Function)
         return x -> x == 0 ? 0.0 : sign(x)
     else
         return nothing
+    end
+end
+
+"""
+    simplify_product_evaluator(evaluator::ProductEvaluator) -> AbstractEvaluator
+
+Simplify ProductEvaluator by handling common cases like multiplication by 1 or 0.
+"""
+function simplify_product_evaluator(evaluator::ProductEvaluator)
+    components = evaluator.components
+    
+    # Check for multiplication by 0
+    for comp in components
+        if comp isa ConstantEvaluator && comp.value == 0.0
+            return ConstantEvaluator(0.0)
+        end
+    end
+    
+    # Filter out multiplication by 1
+    non_unit_components = AbstractEvaluator[]
+    for comp in components
+        if !(comp isa ConstantEvaluator && comp.value == 1.0)
+            push!(non_unit_components, comp)
+        end
+    end
+    
+    # Return simplified form
+    if isempty(non_unit_components)
+        return ConstantEvaluator(1.0)  # All components were 1
+    elseif length(non_unit_components) == 1
+        return non_unit_components[1]  # Only one non-unit component
+    else
+        return ProductEvaluator(non_unit_components)  # Multiple components remain
     end
 end

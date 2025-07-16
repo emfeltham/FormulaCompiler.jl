@@ -75,11 +75,13 @@ Contains the modified data that can be used directly with compiled formulas.
 - `name::String`: Descriptive name for the scenario
 - `overrides::Dict{Symbol,Any}`: Variable overrides (mutable for iterative development)  
 - `data::NamedTuple`: Modified column-table data with OverrideVectors applied
+- `original_data::NamedTuple`
 """
 mutable struct DataScenario
     name::String
-    overrides::Dict{Symbol,Any}
-    data::NamedTuple
+    overrides::Dict{Symbol,Any}  # ~48 bytes + contents
+    data::NamedTuple            # ~24 bytes + references  
+    original_data::NamedTuple   # ~24 bytes + references
 end
 
 """
@@ -109,36 +111,26 @@ compiled(row_vec, scenario1.data, row_idx)
 ```
 """
 function create_scenario(name::String, original_data::NamedTuple; overrides...)
-    if isempty(overrides)
-        # No overrides - just reference original data
-        override_dict = Dict{Symbol,Any}()
-        return DataScenario(name, override_dict, original_data)
-    end
-    
-    # Create Dict from keyword arguments
     override_dict = Dict{Symbol,Any}(overrides)
     
-    # Create modified data with overrides
-    modified_data = create_override_data(original_data, override_dict)
+    if isempty(override_dict)
+        modified_data = original_data
+    else
+        modified_data = create_override_data(original_data, override_dict)
+    end
     
-    return DataScenario(name, override_dict, modified_data)
+    return DataScenario(name, override_dict, modified_data, original_data)  # Add original_data
 end
 
-"""
-    create_scenario(name, original_data, overrides::Dict{Symbol})
-
-Create a data scenario with Dict overrides.
-"""
 function create_scenario(name::String, original_data::NamedTuple, overrides::Dict{Symbol,<:Any})
+    override_dict = Dict{Symbol,Any}(overrides)
+    
     if isempty(overrides)
-        return DataScenario(name, Dict{Symbol,Any}(), original_data)
+        return DataScenario(name, override_dict, original_data, original_data)  # Add original_data
     end
     
-    # Ensure consistent type
-    override_dict = Dict{Symbol,Any}(overrides)
     modified_data = create_override_data(original_data, override_dict)
-    
-    return DataScenario(name, override_dict, modified_data)
+    return DataScenario(name, override_dict, modified_data, original_data)  # Add original_data
 end
 
 """
@@ -199,13 +191,8 @@ set_override!(scenario, :x, 5.0)      # Update existing override
 ```
 """
 function set_override!(scenario::DataScenario, variable::Symbol, value)
-    # Update the overrides dict
     scenario.overrides[variable] = value
-    
-    # Rebuild the data with new overrides
-    original_data = extract_original_data(scenario)
-    scenario.data = create_override_data(original_data, scenario.overrides)
-    
+    scenario.data = create_override_data(scenario.original_data, scenario.overrides)  # Use original_data
     return scenario
 end
 
@@ -222,14 +209,9 @@ remove_override!(scenario, :x)  # x returns to original values
 """
 function remove_override!(scenario::DataScenario, variable::Symbol)
     if haskey(scenario.overrides, variable)
-        # Remove from overrides
         delete!(scenario.overrides, variable)
-        
-        # Rebuild the data  
-        original_data = extract_original_data(scenario)
-        scenario.data = create_override_data(original_data, scenario.overrides)
+        scenario.data = create_override_data(scenario.original_data, scenario.overrides)  # Use original_data
     end
-    
     return scenario
 end
 
@@ -245,76 +227,11 @@ update_scenario!(scenario; x = 2.0, y = 3.0, group = "B")
 """
 function update_scenario!(scenario::DataScenario; overrides...)
     if !isempty(overrides)
-        # Update all overrides
         for (key, value) in overrides
             scenario.overrides[key] = value
         end
-        
-        # Rebuild data once
-        original_data = extract_original_data(scenario)
-        scenario.data = create_override_data(original_data, scenario.overrides)
+        scenario.data = create_override_data(scenario.original_data, scenario.overrides)  # Use original_data
     end
-    
-    return scenario
-end
-
-"""
-    extract_original_data(scenario::DataScenario)
-
-Extract the original data from a scenario by finding non-OverrideVector columns.
-This is needed for rebuilding scenarios after override changes.
-"""
-function extract_original_data(scenario::DataScenario)
-    original_dict = Dict{Symbol, Any}()
-    
-    for (key, column) in pairs(scenario.data)
-        if column isa OverrideVector
-            # This is an override - we need to find the original
-            # For now, we'll skip it and let it be rebuilt
-            continue
-        else
-            # This is original data
-            original_dict[key] = column
-        end
-    end
-    
-    return NamedTuple(original_dict)
-end
-
-# Alternative: Store original data reference in DataScenario
-"""
-    DataScenarioWithOriginal
-
-Enhanced version that keeps reference to original data for efficient rebuilding.
-"""
-mutable struct DataScenarioWithOriginal
-    name::String
-    overrides::Dict{Symbol,Any}
-    data::NamedTuple
-    original_data::NamedTuple  # Keep reference for rebuilding
-end
-
-function create_scenario_with_original(name::String, original_data::NamedTuple; overrides...)
-    override_dict = Dict{Symbol,Any}(overrides)
-    
-    if isempty(override_dict)
-        modified_data = original_data
-    else
-        modified_data = create_override_data(original_data, override_dict)
-    end
-    
-    return DataScenarioWithOriginal(name, override_dict, modified_data, original_data)
-end
-
-function set_override!(scenario::DataScenarioWithOriginal, variable::Symbol, value)
-    scenario.overrides[variable] = value
-    scenario.data = create_override_data(scenario.original_data, scenario.overrides)
-    return scenario
-end
-
-function remove_override!(scenario::DataScenarioWithOriginal, variable::Symbol)
-    delete!(scenario.overrides, variable)
-    scenario.data = create_override_data(scenario.original_data, scenario.overrides)
     return scenario
 end
 

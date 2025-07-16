@@ -298,7 +298,8 @@ numerical differentiation using finite differences.
 # Returns
 `true` if analytical and numerical derivatives match within tolerance.
 """
-function validate_derivative_evaluator(evaluator::AbstractEvaluator, 
+function validate_derivative_evaluator(original_evaluator::AbstractEvaluator,
+                                     derivative_evaluator::AbstractEvaluator, 
                                      focal_variable::Symbol,
                                      test_data::NamedTuple, 
                                      tolerance::Float64 = 1e-8)
@@ -308,26 +309,35 @@ function validate_derivative_evaluator(evaluator::AbstractEvaluator,
     
     for row_idx in test_indices
         try
-            # Compute analytical derivative
-            analytical_result = Vector{Float64}(undef, output_width(evaluator))
-            evaluate!(evaluator, analytical_result, test_data, row_idx, 1)
+            # Compute analytical derivative by evaluating the derivative evaluator
+            analytical_result = Vector{Float64}(undef, output_width(derivative_evaluator))
+            evaluate!(derivative_evaluator, analytical_result, test_data, row_idx, 1)
             analytical_value = analytical_result[1]
             
-            # Compute numerical derivative using finite differences
+            # Compute numerical derivative using finite differences on the ORIGINAL function
             ε = sqrt(eps(Float64))
             current_value = Float64(test_data[focal_variable][row_idx])
             
-            # Evaluate at x + ε
-            data_plus = merge(test_data, (focal_variable => current_value + ε,))
-            result_plus = Vector{Float64}(undef, 1)
-            evaluate!(evaluator, result_plus, data_plus, row_idx, 1)
+            # Create modified data vectors (not scalars!)
+            original_vector = test_data[focal_variable]
+            modified_plus = copy(original_vector)
+            modified_minus = copy(original_vector)
+            modified_plus[row_idx] = current_value + ε
+            modified_minus[row_idx] = current_value - ε
             
-            # Evaluate at x - ε  
-            data_minus = merge(test_data, (focal_variable => current_value - ε,))
-            result_minus = Vector{Float64}(undef, 1)
-            evaluate!(evaluator, result_minus, data_minus, row_idx, 1)
+            # Create modified data tuples
+            data_plus = merge(test_data, (focal_variable => modified_plus,))
+            data_minus = merge(test_data, (focal_variable => modified_minus,))
             
-            # Numerical derivative
+            # Evaluate original function at x + ε
+            result_plus = Vector{Float64}(undef, output_width(original_evaluator))
+            evaluate!(original_evaluator, result_plus, data_plus, row_idx, 1)
+            
+            # Evaluate original function at x - ε  
+            result_minus = Vector{Float64}(undef, output_width(original_evaluator))
+            evaluate!(original_evaluator, result_minus, data_minus, row_idx, 1)
+            
+            # Numerical derivative using finite differences
             numerical_value = (result_plus[1] - result_minus[1]) / (2ε)
             
             # Check if they match within tolerance

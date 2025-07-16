@@ -59,4 +59,6 @@ export ScaledEvaluator, ProductEvaluator
 export ChainRuleEvaluator, ProductRuleEvaluator, ForwardDiffEvaluator
 export get_standard_derivative_function, is_zero_derivative, validate_derivative_evaluator
 
+include("testing.jl")
+
 end # module
