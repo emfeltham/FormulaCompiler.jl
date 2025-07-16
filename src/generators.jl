@@ -86,6 +86,23 @@ function generate_evaluator_code!(instructions::Vector{String}, evaluator::Abstr
     end
 end
 
+function generate_evaluator_code!(instructions::Vector{String}, evaluator::PositionalDerivativeEvaluator, pos::Int)
+    # Initialize all positions to zero
+    for i in 1:evaluator.target_width
+        target_pos = pos + i - 1
+        push!(instructions, "@inbounds row_vec[$target_pos] = 0.0")
+    end
+    
+    # Generate code to compute derivatives and place them in correct positions
+    if evaluator.original_evaluator isa CombinedEvaluator
+        generate_combined_positioning_instructions!(instructions, evaluator, pos)
+    else
+        generate_single_positioning_instructions!(instructions, evaluator, pos)
+    end
+    
+    return pos + evaluator.target_width
+end
+
 ###############################################################################
 # CATEGORICAL CODE GENERATION
 ###############################################################################
@@ -507,4 +524,102 @@ function generate_product_code!(instructions::Vector{String}, eval::ProductEvalu
     product_expr = join(component_vars, " * ")
     push!(instructions, "@inbounds row_vec[$pos] = $product_expr")
     return pos + 1
+end
+
+###############################################################################
+# DERIVATIVE HELPERS
+###############################################################################
+
+function generate_combined_positioning_instructions!(instructions::Vector{String}, evaluator::PositionalDerivativeEvaluator, pos::Int)
+    current_position = pos
+    
+    for sub_evaluator in evaluator.original_evaluator.sub_evaluators
+        sub_width = output_width(sub_evaluator)
+        sub_derivative = compute_derivative_evaluator(sub_evaluator, evaluator.focal_variable)
+        
+        if !is_zero_derivative(sub_derivative, evaluator.focal_variable)
+            if sub_derivative isa ConstantEvaluator && sub_derivative.value != 0.0
+                push!(instructions, "@inbounds row_vec[$current_position] = $(sub_derivative.value)")
+            elseif sub_derivative isa ContinuousEvaluator
+                push!(instructions, "@inbounds row_vec[$current_position] = Float64(data.$(sub_derivative.column)[row_idx])")
+            else
+                # For complex derivatives, generate a variable and compute
+                derivative_var = next_var("deriv")
+                generate_single_component_code!(instructions, sub_derivative, derivative_var)
+                push!(instructions, "@inbounds row_vec[$current_position] = $derivative_var")
+            end
+        end
+        
+        current_position += sub_width
+    end
+end
+
+function generate_single_positioning_instructions!(instructions::Vector{String}, evaluator::PositionalDerivativeEvaluator, pos::Int)
+    derivative_evaluator = compute_derivative_evaluator(evaluator.original_evaluator, evaluator.focal_variable)
+    
+    if !is_zero_derivative(derivative_evaluator, evaluator.focal_variable)
+        if derivative_evaluator isa ConstantEvaluator
+            push!(instructions, "@inbounds row_vec[$pos] = $(derivative_evaluator.value)")
+        elseif derivative_evaluator isa ContinuousEvaluator
+            push!(instructions, "@inbounds row_vec[$pos] = Float64(data.$(derivative_evaluator.column)[row_idx])")
+        else
+            # For complex derivatives, generate a variable
+            derivative_var = next_var("deriv")
+            generate_single_component_code!(instructions, derivative_evaluator, derivative_var)
+            push!(instructions, "@inbounds row_vec[$pos] = $derivative_var")
+        end
+    end
+end
+
+function generate_single_component_code!(instructions::Vector{String}, evaluator::AbstractEvaluator, var_name::String)
+    if evaluator isa ConstantEvaluator
+        push!(instructions, "$var_name = $(evaluator.value)")
+    elseif evaluator isa ContinuousEvaluator
+        push!(instructions, "$var_name = Float64(data.$(evaluator.column)[row_idx])")
+    elseif evaluator isa FunctionEvaluator
+        # Generate code for function derivative
+        inner_var = next_var("inner")
+        generate_single_component_code!(instructions, evaluator.arg_evaluator, inner_var)
+        
+        func_name = string(evaluator.func)
+        if func_name == "log"
+            push!(instructions, "$var_name = 1.0 / $inner_var")
+        elseif func_name == "exp"
+            push!(instructions, "$var_name = exp($inner_var)")
+        elseif func_name == "sqrt"
+            push!(instructions, "$var_name = 0.5 / sqrt($inner_var)")
+        else
+            # Fallback for unknown functions
+            push!(instructions, "$var_name = 1.0  # TODO: implement derivative for $func_name")
+        end
+    elseif evaluator isa ChainRuleEvaluator
+        # For chain rule: f'(g(x)) * g'(x)
+        inner_var = next_var("inner")
+        inner_deriv_var = next_var("inner_deriv")
+        
+        generate_single_component_code!(instructions, evaluator.inner_evaluator, inner_var)
+        generate_single_component_code!(instructions, evaluator.inner_derivative, inner_deriv_var)
+        
+        # Apply derivative function
+        func_deriv_var = next_var("func_deriv")
+        push!(instructions, "$func_deriv_var = $(evaluator.derivative_func)($inner_var)")
+        push!(instructions, "$var_name = $func_deriv_var * $inner_deriv_var")
+        
+    elseif evaluator isa ProductRuleEvaluator
+        # For product rule: f*g' + g*f'
+        f_var = next_var("f")
+        f_prime_var = next_var("f_prime")
+        g_var = next_var("g")
+        g_prime_var = next_var("g_prime")
+        
+        generate_single_component_code!(instructions, evaluator.left_evaluator, f_var)
+        generate_single_component_code!(instructions, evaluator.left_derivative, f_prime_var)
+        generate_single_component_code!(instructions, evaluator.right_evaluator, g_var)
+        generate_single_component_code!(instructions, evaluator.right_derivative, g_prime_var)
+        
+        push!(instructions, "$var_name = $f_var * $g_prime_var + $g_var * $f_prime_var")
+    else
+        # Fallback for other evaluator types
+        push!(instructions, "$var_name = 0.0  # TODO: implement derivative for $(typeof(evaluator))")
+    end
 end
