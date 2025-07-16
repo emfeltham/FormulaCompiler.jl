@@ -1,40 +1,5 @@
 # full_recursive_derivative_compilation.jl - Complete AST recursion for derivatives
 
-struct ScaledEvaluator <: AbstractEvaluator
-    evaluator::AbstractEvaluator
-    scale_factor::Float64
-end
-
-struct ProductEvaluator <: AbstractEvaluator
-    components::Vector{AbstractEvaluator}
-end
-
-# Output width functions
-output_width(eval::ScaledEvaluator) = output_width(eval.evaluator)
-output_width(eval::ProductEvaluator) = 1  # Products always yield single values
-
-# Evaluation functions
-function evaluate!(evaluator::ScaledEvaluator, output::AbstractVector{Float64}, 
-                  data, row_idx::Int, start_idx::Int=1)
-    next_idx = evaluate!(evaluator.evaluator, output, data, row_idx, start_idx)
-    @inbounds output[start_idx] *= evaluator.scale_factor
-    return next_idx
-end
-
-function evaluate!(evaluator::ProductEvaluator, output::AbstractVector{Float64}, 
-                  data, row_idx::Int, start_idx::Int=1)
-    product = 1.0
-    temp_buffer = Vector{Float64}(undef, 1)
-    
-    for component in evaluator.components
-        evaluate!(component, temp_buffer, data, row_idx, 1)
-        product *= temp_buffer[1]
-    end
-    
-    @inbounds output[start_idx] = product
-    return start_idx + 1
-end
-
 ###############################################################################
 # ENHANCED RECURSIVE DERIVATIVE COMPILATION - Trust the AST Recursion
 ###############################################################################
@@ -73,7 +38,7 @@ function compute_derivative_evaluator(evaluator::AbstractEvaluator, focal_variab
         underlying_derivative = compute_derivative_evaluator(evaluator.underlying, focal_variable)
         
         # Optimization: if underlying derivative is zero, whole thing is zero
-        if is_zero_evaluator(underlying_derivative)
+        if is_zero_derivative(underlying_derivative, focal_variable)
             return ConstantEvaluator(0.0)
         else
             return ScaledEvaluator(underlying_derivative, 1.0 / evaluator.scale)
@@ -147,7 +112,7 @@ function compute_unary_function_derivative(func::Function, arg_evaluator::Abstra
     inner_derivative = compute_derivative_evaluator(arg_evaluator, focal_variable)
     
     # Optimization: if inner derivative is zero, whole thing is zero
-    if is_zero_evaluator(inner_derivative)
+    if is_zero_derivative(inner_derivative, focal_variable)
         return ConstantEvaluator(0.0)
     end
     
@@ -176,8 +141,8 @@ function compute_binary_function_derivative(func::Function, left_arg::AbstractEv
     right_derivative = compute_derivative_evaluator(right_arg, focal_variable)
     
     # Check if either argument has zero derivative (optimization)
-    left_is_zero = is_zero_evaluator(left_derivative)
-    right_is_zero = is_zero_evaluator(right_derivative)
+    left_is_zero = is_zero_derivative(left_derivative, focal_variable)
+    right_is_zero = is_zero_derivative(right_derivative, focal_variable)
     
     if func === (+) || func === (-)
         # Addition/Subtraction: ∂(f ± g)/∂x = ∂f/∂x ± ∂g/∂x
@@ -305,7 +270,7 @@ function compute_nary_product_derivative(components::Vector{AbstractEvaluator}, 
         component_derivative = compute_derivative_evaluator(components[i], focal_variable)
         
         # Optimization: skip terms where derivative is zero
-        if is_zero_evaluator(component_derivative)
+        if is_zero_derivative(component_derivative, focal_variable)
             continue
         end
         
@@ -437,7 +402,7 @@ function compute_sum_derivative_recursive(evaluator::CombinedEvaluator, focal_va
         sub_derivative = compute_derivative_evaluator(sub_evaluator, focal_variable)
         
         # Optimization: skip zero derivatives
-        if !is_zero_evaluator(sub_derivative)
+        if !component_derivative(sub_derivative, focal_variable)
             push!(derivative_terms, sub_derivative)
         end
     end
@@ -504,7 +469,45 @@ function is_zero_evaluator(evaluator::AbstractEvaluator)
 end
 
 """
-    Enhanced get_standard_derivative_function with more functions.
+    is_zero_derivative(evaluator::AbstractEvaluator, focal_variable::Symbol) -> Bool
+
+Check if an evaluator's derivative with respect to focal_variable is always zero.
+Used for optimization - if derivative is zero, we can use ConstantEvaluator(0.0).
+
+# Examples
+- ContinuousEvaluator(:x) w.r.t. :y → true (∂x/∂y = 0)
+- ConstantEvaluator(5.0) w.r.t. anything → true (∂c/∂x = 0)
+- CategoricalEvaluator(...) w.r.t. continuous var → true
+"""
+function is_zero_derivative(evaluator::AbstractEvaluator, focal_variable::Symbol)
+    if evaluator isa ConstantEvaluator
+        return true
+    elseif evaluator isa ContinuousEvaluator
+        return evaluator.column != focal_variable
+    elseif evaluator isa CategoricalEvaluator
+        return true  # Categorical variables have zero derivative w.r.t. continuous variables
+    elseif evaluator isa ZScoreEvaluator
+        return is_zero_derivative(evaluator.underlying, focal_variable)
+    elseif evaluator isa CombinedEvaluator
+        return all(sub_eval -> is_zero_derivative(sub_eval, focal_variable), evaluator.sub_evaluators)
+    else
+        return false  # Conservative: assume non-zero for complex cases
+    end
+end
+
+"""
+    get_standard_derivative_function(func::Function) -> Union{Function, Nothing}
+
+Return the analytical derivative function for standard mathematical functions.
+Returns `nothing` if no analytical derivative is available.
+
+# Supported Functions
+- `log` → `x -> 1/x`
+- `exp` → `x -> exp(x)` 
+- `sqrt` → `x -> 1/(2*sqrt(x))`
+- `sin` → `x -> cos(x)`
+- `cos` → `x -> -sin(x)`
+- `abs` → `x -> sign(x)` (except at x=0)
 """
 function get_standard_derivative_function(func::Function)
     if func === log
@@ -518,7 +521,7 @@ function get_standard_derivative_function(func::Function)
     elseif func === cos
         return x -> -sin(x)
     elseif func === tan
-        return x -> 1 + tan(x)^2  # sec²(x)
+        return x -> 1 + tan(x)^2  # sec²(x) = 1 + tan²(x)
     elseif func === atan
         return x -> 1/(1 + x^2)
     elseif func === sinh
@@ -526,15 +529,16 @@ function get_standard_derivative_function(func::Function)
     elseif func === cosh
         return x -> sinh(x)
     elseif func === tanh
-        return x -> 1 - tanh(x)^2  # sech²(x)
+        return x -> 1 - tanh(x)^2  # sech²(x) = 1 - tanh²(x)
     elseif func === log10
         return x -> 1/(x * log(10))
     elseif func === log2
         return x -> 1/(x * log(2))
-    elseif func === abs
-        return x -> x == 0 ? 0.0 : sign(x)
     elseif func === sign
-        return x -> 0.0  # Derivative of sign is 0 (except at 0 where undefined)
+        return x -> 0.0  # Derivative of sign is 0 (except at 0 where undefined)   
+    elseif func === abs
+        # Note: derivative undefined at x=0, but we'll use sign function
+        return x -> x == 0 ? 0.0 : sign(x)
     else
         return nothing
     end
