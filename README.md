@@ -1,4 +1,4 @@
-# EfficientModelMatrices.jl
+# FormulaCompiler.jl
 
 High-performance, zero-allocation model matrix evaluation/update for Julia statistical models.
 
@@ -15,13 +15,13 @@ High-performance, zero-allocation model matrix evaluation/update for Julia stati
 
 ```julia
 using Pkg
-Pkg.add("EfficientModelMatrices")
+Pkg.add("FormulaCompiler")
 ```
 
 ## Quick Start
 
 ```julia
-using EfficientModelMatrices, GLM, DataFrames, Tables
+using FormulaCompiler, GLM, DataFrames, Tables
 
 # Fit your model normally
 df = DataFrame(
@@ -236,7 +236,7 @@ The scenario system uses `OverrideVector` for memory efficiency:
 # Traditional approach: allocates 8MB for 1M rows
 traditional = fill(42.0, 1_000_000)
 
-# EfficientModelMatrices: allocates ~32 bytes
+# FormulaCompiler: allocates ~32 bytes
 efficient = OverrideVector(42.0, 1_000_000)
 
 # Both provide identical interface
@@ -297,7 +297,7 @@ using BenchmarkTools
 @benchmark modelmatrix(model)[1, :]
 # ~10.2 μs (1 allocation: 896 bytes)
 
-# EfficientModelMatrices
+# FormulaCompiler
 @benchmark compiled(row_vec, data, 1)
 # ~85.3 ns (0 allocations: 0 bytes)
 
@@ -319,7 +319,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 ## Related Packages
 
-- [Margins.jl](https://github.com/juliangehring/Margins.jl): Marginal effects (uses EfficientModelMatrices for speed)
+- [Margins.jl](https://github.com/juliangehring/Margins.jl): Marginal effects (uses FormulaCompiler for speed)
 - [GLM.jl](https://github.com/JuliaStats/GLM.jl): Generalized linear models
 - [MixedModels.jl](https://github.com/JuliaStats/MixedModels.jl): Mixed-effects models
 - [StandardizedPredictors.jl](https://github.com/beacon-biosignals/StandardizedPredictors.jl): Standardized predictors

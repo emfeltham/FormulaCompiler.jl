@@ -1,4 +1,4 @@
-# derivative_evaluators.jl - Add to EfficientModelMatrices/src/evaluators.jl
+# derivative_evaluators.jl - Add to FormulaCompiler/src/evaluators.jl
 
 ###############################################################################
 # NEW DERIVATIVE EVALUATOR TYPES - Add to existing AbstractEvaluator hierarchy

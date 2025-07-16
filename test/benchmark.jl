@@ -1,12 +1,12 @@
 # test/benchmark.jl
 # Comprehensive benchmarking script
 
-using EfficientModelMatrices
+using FormulaCompiler
 using BenchmarkTools
 using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels, StandardizedPredictors
 
-println("🚀 EfficientModelMatrices.jl Benchmark Suite")
+println("🚀 FormulaCompiler.jl Benchmark Suite")
 println("=" ^ 50)
 
 # Create test data
