@@ -1,40 +1,64 @@
+# derivative_generators.jl
+# @generated workflow
 
-function generate_chain_rule_code!(instructions::Vector{String}, eval::ChainRuleEvaluator, pos::Int)
-    # For chain rule f'(g(x)) * g'(x)
+###############################################################################
+# CODE GENERATION FOR @GENERATED DERIVATIVES
+###############################################################################
+
+function generate_evaluator_code!(instructions::Vector{String}, evaluator::PositionalDerivativeEvaluator, pos::Int)
+    # Initialize all positions to zero
+    for i in 1:evaluator.target_width
+        target_pos = pos + i - 1
+        push!(instructions, "@inbounds row_vec[$target_pos] = 0.0")
+    end
     
-    # Generate variable for inner function value
-    inner_var = next_var("inner")
-    generate_single_component_code!(instructions, eval.inner_evaluator, inner_var)
+    # Generate code using the original sophisticated system
+    if evaluator.original_evaluator isa CombinedEvaluator
+        generate_combined_positioning_instructions!(instructions, evaluator, pos)
+    else
+        generate_single_positioning_instructions!(instructions, evaluator, pos)
+    end
     
-    # Generate variable for inner derivative
-    inner_deriv_var = next_var("inner_deriv")
-    generate_single_component_code!(instructions, eval.inner_derivative, inner_deriv_var)
-    
-    # Apply derivative function and multiply by inner derivative
-    # For now, we'll need to handle this case by case for standard functions
-    push!(instructions, "@inbounds row_vec[$pos] = $(eval.derivative_func)($inner_var) * $inner_deriv_var")
-    
-    return pos + 1
+    return pos + evaluator.target_width
 end
 
-function generate_product_rule_code!(instructions::Vector{String}, eval::ProductRuleEvaluator, pos::Int)
-    # For product rule f*g' + g*f'
+function generate_combined_positioning_instructions!(instructions::Vector{String}, evaluator::PositionalDerivativeEvaluator, pos::Int)
+    current_position = pos
     
-    # Generate variables for all components
-    f_var = next_var("f")
-    generate_single_component_code!(instructions, eval.left_evaluator, f_var)
+    for sub_evaluator in evaluator.original_evaluator.sub_evaluators
+        sub_width = output_width(sub_evaluator)
+        sub_derivative = compute_derivative_evaluator(sub_evaluator, evaluator.focal_variable)
+        
+        if !is_zero_derivative(sub_derivative, evaluator.focal_variable)
+            if sub_derivative isa ConstantEvaluator && sub_derivative.value != 0.0
+                push!(instructions, "@inbounds row_vec[$current_position] = $(sub_derivative.value)")
+            elseif sub_derivative isa ContinuousEvaluator
+                push!(instructions, "@inbounds row_vec[$current_position] = Float64(data.$(sub_derivative.column)[row_idx])")
+            else
+                # Use existing generate_single_component_code! from generators.jl
+                derivative_var = next_var("deriv")
+                generate_single_component_code!(instructions, sub_derivative, derivative_var)
+                push!(instructions, "@inbounds row_vec[$current_position] = $derivative_var")
+            end
+        end
+        
+        current_position += sub_width
+    end
+end
+
+function generate_single_positioning_instructions!(instructions::Vector{String}, evaluator::PositionalDerivativeEvaluator, pos::Int)
+    derivative_evaluator = compute_derivative_evaluator(evaluator.original_evaluator, evaluator.focal_variable)
     
-    f_prime_var = next_var("f_prime")
-    generate_single_component_code!(instructions, eval.left_derivative, f_prime_var)
-    
-    g_var = next_var("g")
-    generate_single_component_code!(instructions, eval.right_evaluator, g_var)
-    
-    g_prime_var = next_var("g_prime")
-    generate_single_component_code!(instructions, eval.right_derivative, g_prime_var)
-    
-    # Apply product rule: f*g' + g*f'
-    push!(instructions, "@inbounds row_vec[$pos] = $f_var * $g_prime_var + $g_var * $f_prime_var")
-    
-    return pos + 1
+    if !is_zero_derivative(derivative_evaluator, evaluator.focal_variable)
+        if derivative_evaluator isa ConstantEvaluator
+            push!(instructions, "@inbounds row_vec[$pos] = $(derivative_evaluator.value)")
+        elseif derivative_evaluator isa ContinuousEvaluator
+            push!(instructions, "@inbounds row_vec[$pos] = Float64(data.$(derivative_evaluator.column)[row_idx])")
+        else
+            # Use existing generate_single_component_code! from generators.jl
+            derivative_var = next_var("deriv")
+            generate_single_component_code!(instructions, derivative_evaluator, derivative_var)
+            push!(instructions, "@inbounds row_vec[$pos] = $derivative_var")
+        end
+    end
 end
