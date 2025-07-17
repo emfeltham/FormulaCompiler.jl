@@ -58,7 +58,6 @@ include("derivative_generators.jl")
 include("derivative_modelrow.jl")
 export compute_derivative_evaluator, compute_interaction_derivative_recursive
 export compute_nary_product_derivative, compute_division_derivative, compute_power_derivative
-export is_zero_evaluator
 export marginal_effects!
 
 export ScaledEvaluator, ProductEvaluator
