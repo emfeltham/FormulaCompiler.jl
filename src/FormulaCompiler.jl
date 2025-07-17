@@ -26,7 +26,6 @@ include("fixed_helpers.jl")     # No dependencies
 export fixed_effects_form
 include("evaluators.jl")        # Uses fixed_helpers
 include("CompiledFormula.jl")   # Defines key structs and methods - NOW INCLUDES DERIVATIVES
-include("CompiledDerivativeFormula.jl")   # Defines key structs and methods - NOW INCLUDES DERIVATIVES
 export compile_formula, CompiledFormula, test_complete
 # Derivatives
 export compile_derivative_formula, CompiledDerivativeFormula
@@ -54,11 +53,14 @@ export modelrow!, modelrow_scenarios!
 export test_scenario_foundation, example_scenario_usage
 
 include("derivative_evaluators.jl")
-include("derivative_compilation.jl")
+include("CompiledDerivativeFormula.jl")   # Defines key structs and methods - NOW INCLUDES DERIVATIVES
 include("derivative_generators.jl")
+include("derivative_modelrow.jl")
 export compute_derivative_evaluator, compute_interaction_derivative_recursive
 export compute_nary_product_derivative, compute_division_derivative, compute_power_derivative
 export is_zero_evaluator
+export derivative_modelrow!
+export marginal_effects!
 
 export ScaledEvaluator, ProductEvaluator
 export ChainRuleEvaluator, ProductRuleEvaluator, ForwardDiffEvaluator
