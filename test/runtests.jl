@@ -4,6 +4,7 @@
 using Revise
 using Test
 using FormulaCompiler
+
 using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels, StandardizedPredictors
 using MixedModels
