@@ -283,39 +283,206 @@ end
 # 4. SAFE FUNCTION APPLICATION
 ###############################################################################
 
+"""
+    apply_function_safe(func::Function, val::Float64)
+
+Apply function with mathematically correct error handling and proper logging.
+
+# Key Improvements
+1. Mathematically correct handling of domain errors
+2. Selective error catching - only catch expected domain errors
+3. Logging of problematic cases for debugging
+4. Clear documentation of behavior
+"""
 function apply_function_safe(func::Function, val::Float64)
+    
+    # Handle known functions with careful domain checking
     if func === log
-        return val > 0.0 ? log(val) : log(abs(val) + 1e-16)
+        if val > 0.0
+            return log(val)
+        elseif val == 0.0
+            @debug "log(0) encountered, returning -Inf"
+            return -Inf
+        else
+            @debug "log(negative) encountered: log($val), returning NaN"
+            return NaN
+        end
+        
     elseif func === exp
-        return exp(clamp(val, -700.0, 700.0))
+        # Clamp to prevent overflow, but warn about extreme values
+        if val > 700.0
+            @debug "exp(large) encountered: exp($val), clamping to exp(700)"
+            return exp(700.0)
+        elseif val < -700.0
+            @debug "exp(very negative) encountered: exp($val), clamping to exp(-700)"
+            return exp(-700.0)
+        else
+            return exp(val)
+        end
+        
     elseif func === sqrt
-        return sqrt(abs(val))
+        if val >= 0.0
+            return sqrt(val)
+        else
+            @debug "sqrt(negative) encountered: sqrt($val), returning NaN"
+            return NaN
+        end
+        
+    elseif func === log10
+        if val > 0.0
+            return log10(val)
+        elseif val == 0.0
+            @debug "log10(0) encountered, returning -Inf"
+            return -Inf
+        else
+            @debug "log10(negative) encountered: log10($val), returning NaN"
+            return NaN
+        end
+        
+    elseif func === log2
+        if val > 0.0
+            return log2(val)
+        elseif val == 0.0
+            @debug "log2(0) encountered, returning -Inf"
+            return -Inf
+        else
+            @debug "log2(negative) encountered: log2($val), returning NaN"
+            return NaN
+        end
+        
     elseif func === abs
         return abs(val)
+        
     elseif func === sin
         return sin(val)
+        
     elseif func === cos
         return cos(val)
+        
+    elseif func === tan
+        # Check for values near π/2 + nπ where tan is undefined
+        result = tan(val)
+        if !isfinite(result)
+            @debug "tan(undefined) encountered: tan($val), returning $(result)"
+        end
+        return result
+        
+    elseif func === atan
+        return atan(val)  # Always well-defined for real numbers
+        
+    elseif func === sinh
+        # Check for overflow
+        if abs(val) > 700.0
+            @debug "sinh(large) encountered: sinh($val), may overflow"
+        end
+        return sinh(val)
+        
+    elseif func === cosh
+        # Check for overflow  
+        if abs(val) > 700.0
+            @debug "cosh(large) encountered: cosh($val), may overflow"
+        end
+        return cosh(val)
+        
+    elseif func === tanh
+        return tanh(val)  # Always well-defined and bounded
+        
+    elseif func === sign
+        return sign(val)  # Always well-defined
+        
     else
+        # For unknown functions, be more selective about error catching
         try
-            return Float64(func(val))
-        catch
-            return NaN
+            result = Float64(func(val))
+            
+            # Check result validity
+            if !isfinite(result) && isfinite(val)
+                @debug "Function $func produced non-finite result $result from finite input $val"
+            end
+            
+            return result
+            
+        catch e
+            # Only catch domain-related errors, let others propagate
+            if e isa DomainError
+                @debug "DomainError in $func($val): $e, returning NaN"
+                return NaN
+            elseif e isa InexactError
+                @debug "InexactError in $func($val): $e, returning NaN" 
+                return NaN
+            elseif e isa OverflowError
+                @debug "OverflowError in $func($val): $e, returning Inf"
+                return val > 0 ? Inf : -Inf
+            else
+                # Re-throw unexpected errors for debugging
+                @error "Unexpected error in apply_function_safe for $func($val): $e"
+                rethrow(e)
+            end
         end
     end
 end
 
+"""
+    apply_function_safe(func::Function, val1::Float64, val2::Float64)
+
+Apply binary function with improved error handling.
+"""
 function apply_function_safe(func::Function, val1::Float64, val2::Float64)
+    
     if func === (^)
-        return val1^val2
+        # Handle power function carefully
+        if val1 == 0.0 && val2 < 0.0
+            @debug "0^(negative) encountered: 0^$val2, returning Inf"
+            return Inf
+        elseif val1 < 0.0 && !isinteger(val2)
+            @debug "negative^(non-integer) encountered: $val1^$val2, returning NaN"
+            return NaN
+        else
+            try
+                result = val1^val2
+                if !isfinite(result) && isfinite(val1) && isfinite(val2)
+                    @debug "Power operation produced non-finite result: $val1^$val2 = $result"
+                end
+                return result
+            catch e
+                if e isa DomainError
+                    @debug "DomainError in $val1^$val2: $e, returning NaN"
+                    return NaN
+                else
+                    rethrow(e)
+                end
+            end
+        end
+        
     elseif func === (+)
         return val1 + val2
+        
     elseif func === (-)
         return val1 - val2
+        
     elseif func === (*)
         return val1 * val2
+        
     elseif func === (/)
-        return abs(val2) > 1e-16 ? val1 / val2 : val1
+        if val2 == 0.0
+            if val1 == 0.0
+                @debug "0/0 encountered, returning NaN"
+                return NaN
+            elseif val1 > 0.0
+                @debug "positive/0 encountered: $val1/0, returning Inf"
+                return Inf
+            else
+                @debug "negative/0 encountered: $val1/0, returning -Inf"
+                return -Inf
+            end
+        elseif abs(val2) < 1e-16
+            @debug "Division by very small number: $val1/$val2, may be unstable"
+            return val1 / val2
+        else
+            return val1 / val2
+        end
+        
+    # Comparison operations
     elseif func === (>)
         return val1 > val2 ? 1.0 : 0.0
     elseif func === (<)
@@ -328,21 +495,106 @@ function apply_function_safe(func::Function, val1::Float64, val2::Float64)
         return val1 == val2 ? 1.0 : 0.0
     elseif func === (!=)
         return val1 != val2 ? 1.0 : 0.0
+        
     else
+        # For unknown binary functions
         try
-            return Float64(func(val1, val2))
-        catch
-            return NaN
+            result = Float64(func(val1, val2))
+            
+            # Check result validity
+            if !isfinite(result) && isfinite(val1) && isfinite(val2)
+                @debug "Binary function $func produced non-finite result $result from finite inputs ($val1, $val2)"
+            end
+            
+            return result
+            
+        catch e
+            if e isa DomainError
+                @debug "DomainError in $func($val1, $val2): $e, returning NaN"
+                return NaN
+            elseif e isa InexactError
+                @debug "InexactError in $func($val1, $val2): $e, returning NaN"
+                return NaN  
+            elseif e isa OverflowError
+                @debug "OverflowError in $func($val1, $val2): $e, returning Inf"
+                return Inf
+            else
+                @error "Unexpected error in apply_function_safe for $func($val1, $val2): $e"
+                rethrow(e)
+            end
         end
     end
 end
 
+"""
+    apply_function_safe(func::Function, args::Float64...)
+
+Apply n-ary function with error handling.
+"""
 function apply_function_safe(func::Function, args::Float64...)
     try
-        return Float64(func(args...))
-    catch
-        return NaN
+        result = Float64(func(args...))
+        
+        # Check result validity
+        if !isfinite(result) && all(isfinite, args)
+            @debug "N-ary function $func produced non-finite result $result from finite inputs $args"
+        end
+        
+        return result
+        
+    catch e
+        if e isa DomainError
+            @debug "DomainError in $func($args): $e, returning NaN"
+            return NaN
+        elseif e isa InexactError  
+            @debug "InexactError in $func($args): $e, returning NaN"
+            return NaN
+        elseif e isa OverflowError
+            @debug "OverflowError in $func($args): $e, returning Inf"
+            return Inf
+        else
+            @error "Unexpected error in apply_function_safe for $func($args): $e"
+            rethrow(e)
+        end
     end
+end
+
+###############################################################################
+# TESTING UTILITIES
+###############################################################################
+
+"""
+    test_function_safety()
+
+Test that apply_function_safe handles edge cases correctly.
+"""
+function test_function_safety()
+    println("Testing apply_function_safe improvements...")
+    
+    # Test log domain errors
+    @assert isnan(apply_function_safe(log, -1.0)) "log(-1) should return NaN"
+    @assert apply_function_safe(log, 0.0) == -Inf "log(0) should return -Inf" 
+    @assert apply_function_safe(log, 1.0) == 0.0 "log(1) should return 0"
+    println("✓ log domain handling works")
+    
+    # Test sqrt domain errors
+    @assert isnan(apply_function_safe(sqrt, -1.0)) "sqrt(-1) should return NaN"
+    @assert apply_function_safe(sqrt, 4.0) == 2.0 "sqrt(4) should return 2"
+    println("✓ sqrt domain handling works")
+    
+    # Test division by zero
+    @assert apply_function_safe(/, 1.0, 0.0) == Inf "1/0 should return Inf"
+    @assert apply_function_safe(/, -1.0, 0.0) == -Inf "-1/0 should return -Inf"
+    @assert isnan(apply_function_safe(/, 0.0, 0.0)) "0/0 should return NaN"
+    println("✓ division by zero handling works")
+    
+    # Test power function edge cases
+    @assert apply_function_safe(^, 0.0, -1.0) == Inf "0^(-1) should return Inf"
+    @assert isnan(apply_function_safe(^, -1.0, 0.5)) "(-1)^0.5 should return NaN"
+    println("✓ power function edge cases work")
+    
+    println("All function safety tests passed!")
+    return true
 end
 
 ###############################################################################

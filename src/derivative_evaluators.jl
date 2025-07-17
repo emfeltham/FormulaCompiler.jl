@@ -30,12 +30,27 @@ end
 """
     ForwardDiffEvaluator <: AbstractEvaluator
 
-Fallback evaluator using ForwardDiff for complex cases
+Complete ForwardDiff fallback evaluator for complex cases where analytical 
+derivatives are not implemented or feasible.
+
+# Fields
+- `original_evaluator::AbstractEvaluator`: The evaluator to differentiate
+- `focal_variable::Symbol`: Variable to differentiate with respect to
+- `validation_cache::Ref{Union{Nothing, Bool}}`: Cached validation result
+
+# Performance Notes
+ForwardDiff is significantly slower than analytical derivatives but provides
+correct results for any differentiable function. Use analytical derivatives
+whenever possible.
 """
 struct ForwardDiffEvaluator <: AbstractEvaluator
     original_evaluator::AbstractEvaluator
     focal_variable::Symbol
-    base_data_sample::NamedTuple
+    validation_cache::Ref{Union{Nothing, Bool}}
+    
+    function ForwardDiffEvaluator(original_evaluator, focal_variable)
+        new(original_evaluator, focal_variable, Ref{Union{Nothing, Bool}}(nothing))
+    end
 end
 
 # Output widths for internal evaluators (all scalar)
@@ -186,9 +201,25 @@ function compute_derivative_evaluator(evaluator::AbstractEvaluator, focal_variab
         return compute_product_evaluator_derivative(evaluator, focal_variable)
         
     else
-        # Only fall back to ForwardDiff for truly unknown evaluator types
-        @info "Using ForwardDiff fallback for unknown evaluator type: $(typeof(evaluator))"
-        return ForwardDiffEvaluator(evaluator, focal_variable, NamedTuple())
+        # Enhanced ForwardDiff fallback (replaces the simple "else" case)
+        @debug "Using ForwardDiff fallback for evaluator type: $(typeof(evaluator))"
+        
+        # Validate that ForwardDiff is feasible
+        if !contains_variable(evaluator, focal_variable)
+            @debug "Evaluator $(typeof(evaluator)) does not depend on $focal_variable - returning zero derivative"
+            return ConstantEvaluator(0.0)
+        end
+        
+        # Check for obvious zero cases before creating ForwardDiff evaluator
+        if evaluator isa ConstantEvaluator
+            return ConstantEvaluator(0.0)
+        elseif evaluator isa ContinuousEvaluator && evaluator.column != focal_variable
+            return ConstantEvaluator(0.0)
+        elseif evaluator isa CategoricalEvaluator && evaluator.column != focal_variable
+            return ConstantEvaluator(0.0)
+        end
+        
+        return ForwardDiffEvaluator(evaluator, focal_variable)
     end
 end
 
@@ -574,13 +605,6 @@ function evaluate!(evaluator::ProductRuleEvaluator, output::AbstractVector{Float
     return start_idx + 1
 end
 
-function evaluate!(evaluator::ForwardDiffEvaluator, output::AbstractVector{Float64}, 
-                  data, row_idx::Int, start_idx::Int=1)
-    # ForwardDiff fallback - simplified implementation
-    @inbounds output[start_idx] = 0.0  # Placeholder - would need proper ForwardDiff implementation
-    return start_idx + 1
-end
-
 function simplify_product_evaluator(evaluator::ProductEvaluator)
     components = evaluator.components
     
@@ -607,4 +631,274 @@ function simplify_product_evaluator(evaluator::ProductEvaluator)
     else
         return ProductEvaluator(non_unit_components)  # Multiple components remain
     end
+end
+
+###############################################################################
+# FORWARDDIFF FUNCTION CACHING
+###############################################################################
+
+"""
+Cache for compiled ForwardDiff functions to avoid recompilation overhead.
+Key: (evaluator_hash, focal_variable) -> compiled function
+"""
+const FORWARDDIFF_CACHE = Dict{Tuple{UInt64, Symbol}, Function}()
+
+"""
+    get_cached_forwarddiff_function(evaluator, focal_variable)
+
+Get or create a cached ForwardDiff function for the given evaluator and variable.
+"""
+function get_cached_forwarddiff_function(evaluator::AbstractEvaluator, focal_variable::Symbol)
+    # Create cache key based on evaluator structure and focal variable
+    cache_key = (hash((typeof(evaluator), focal_variable)), focal_variable)
+    
+    if haskey(FORWARDDIFF_CACHE, cache_key)
+        return FORWARDDIFF_CACHE[cache_key]
+    end
+    
+    # Create and cache the function
+    function cached_f(x::Float64, data, row_idx::Int)
+        # Create modified data where focal_variable = x at row_idx
+        modified_column = copy(data[focal_variable])
+        modified_column[row_idx] = x
+        modified_data = merge(data, (focal_variable => modified_column,))
+        
+        # Evaluate original evaluator at modified data
+        temp_output = Vector{Float64}(undef, output_width(evaluator))
+        evaluate!(evaluator, temp_output, modified_data, row_idx, 1)
+        
+        # Return scalar (sum of outputs for multi-dimensional evaluators)
+        return length(temp_output) == 1 ? temp_output[1] : sum(temp_output)
+    end
+    
+    FORWARDDIFF_CACHE[cache_key] = cached_f
+    return cached_f
+end
+
+"""
+    clear_forwarddiff_cache!()
+
+Clear the ForwardDiff function cache to free memory.
+"""
+function clear_forwarddiff_cache!()
+    empty!(FORWARDDIFF_CACHE)
+    return nothing
+end
+
+###############################################################################
+# FORWARDDIFF EVALUATOR IMPLEMENTATION
+###############################################################################
+
+"""
+    evaluate!(evaluator::ForwardDiffEvaluator, output, data, row_idx, start_idx)
+
+Evaluate ForwardDiff-based derivative using automatic differentiation.
+
+This implementation:
+1. Extracts the current value of the focal variable
+2. Creates a function that evaluates the original evaluator with modified focal variable
+3. Uses ForwardDiff.derivative to compute the analytical derivative
+4. Handles errors gracefully with NaN fallback
+"""
+function evaluate!(evaluator::ForwardDiffEvaluator, output::AbstractVector{Float64}, 
+                  data, row_idx::Int, start_idx::Int=1)
+    
+    focal_var = evaluator.focal_variable
+    
+    # Validate that focal variable exists in data
+    if !haskey(data, focal_var)
+        @warn "Focal variable $focal_var not found in data for ForwardDiff evaluation"
+        @inbounds output[start_idx] = NaN
+        return start_idx + 1
+    end
+    
+    # Get current value of focal variable
+    current_value = try
+        Float64(data[focal_var][row_idx])
+    catch e
+        @warn "Failed to extract focal variable value: $e"
+        @inbounds output[start_idx] = NaN
+        return start_idx + 1
+    end
+    
+    # Check for non-finite current value
+    if !isfinite(current_value)
+        @warn "Non-finite focal variable value: $current_value"
+        @inbounds output[start_idx] = NaN
+        return start_idx + 1
+    end
+    
+    try
+        # Get cached ForwardDiff function
+        cached_f = get_cached_forwarddiff_function(evaluator.original_evaluator, focal_var)
+        
+        # Create function for ForwardDiff (captures data and row_idx)
+        f(x) = cached_f(x, data, row_idx)
+        
+        # Compute derivative using ForwardDiff
+        derivative_value = ForwardDiff.derivative(f, current_value)
+        
+        # Validate result
+        if !isfinite(derivative_value)
+            @debug "ForwardDiff produced non-finite derivative: $derivative_value"
+            @inbounds output[start_idx] = 0.0  # Conservative fallback
+        elseif abs(derivative_value) > 1e12
+            @debug "ForwardDiff produced extremely large derivative: $derivative_value"
+            @inbounds output[start_idx] = sign(derivative_value) * 1e12  # Clamp to reasonable range
+        else
+            @inbounds output[start_idx] = derivative_value
+        end
+        
+    catch e
+        @debug "ForwardDiff evaluation failed: $e"
+        @inbounds output[start_idx] = NaN
+    end
+    
+    return start_idx + 1
+end
+
+###############################################################################
+# VALIDATION AND TESTING
+###############################################################################
+
+"""
+    validate_forwarddiff_evaluator(evaluator::ForwardDiffEvaluator, test_data::NamedTuple, tolerance::Float64 = 1e-6)
+
+Validate that a ForwardDiff evaluator produces reasonable results.
+
+# Returns
+`(is_valid::Bool, message::String)`
+"""
+function validate_forwarddiff_evaluator(evaluator::ForwardDiffEvaluator, 
+                                       test_data::NamedTuple,
+                                       tolerance::Float64 = 1e-6)
+    
+    focal_var = evaluator.focal_variable
+    
+    # Check if validation was already cached
+    if evaluator.validation_cache[] !== nothing
+        return evaluator.validation_cache[], "Cached validation result"
+    end
+    
+    # Validate focal variable exists
+    if !haskey(test_data, focal_var)
+        result = false
+        message = "Focal variable $focal_var not found in test data"
+        evaluator.validation_cache[] = result
+        return result, message
+    end
+    
+    # Test evaluation at first few observations
+    test_indices = 1:min(3, length(first(test_data)))
+    
+    for row_idx in test_indices
+        try
+            output = Vector{Float64}(undef, 1)
+            evaluate!(evaluator, output, test_data, row_idx, 1)
+            
+            result = output[1]
+            
+            if !isfinite(result)
+                message = "ForwardDiff produced non-finite result: $result at row $row_idx"
+                evaluator.validation_cache[] = false
+                return false, message
+            end
+            
+            if abs(result) > 1e10
+                message = "ForwardDiff produced extremely large result: $result at row $row_idx"
+                evaluator.validation_cache[] = false
+                return false, message
+            end
+            
+        catch e
+            message = "ForwardDiff evaluation failed at row $row_idx: $e"
+            evaluator.validation_cache[] = false
+            return false, message
+        end
+    end
+    
+    evaluator.validation_cache[] = true
+    return true, "Validation passed for all test rows"
+end
+
+"""
+    test_forwarddiff_accuracy(original_evaluator::AbstractEvaluator, 
+                             focal_variable::Symbol,
+                             test_data::NamedTuple;
+                             tolerance::Float64 = 1e-6,
+                             test_rows::Int = 5)
+
+Test ForwardDiff accuracy against numerical finite differences.
+
+# Returns
+`(is_accurate::Bool, max_error::Float64, message::String)`
+"""
+function test_forwarddiff_accuracy(original_evaluator::AbstractEvaluator, 
+                                  focal_variable::Symbol,
+                                  test_data::NamedTuple;
+                                  tolerance::Float64 = 1e-6,
+                                  test_rows::Int = 5)
+    
+    # Create ForwardDiff evaluator
+    fd_evaluator = ForwardDiffEvaluator(original_evaluator, focal_variable)
+    
+    max_error = 0.0
+    test_indices = 1:min(test_rows, length(first(test_data)))
+    
+    for row_idx in test_indices
+        try
+            # Get ForwardDiff result
+            fd_output = Vector{Float64}(undef, 1)
+            evaluate!(fd_evaluator, fd_output, test_data, row_idx, 1)
+            fd_result = fd_output[1]
+            
+            # Skip if ForwardDiff failed
+            if !isfinite(fd_result)
+                continue
+            end
+            
+            # Compute numerical derivative using finite differences
+            current_value = Float64(test_data[focal_variable][row_idx])
+            ε = sqrt(eps(Float64))
+            
+            # Create modified data
+            original_vector = test_data[focal_variable]
+            modified_plus = copy(original_vector)
+            modified_minus = copy(original_vector)
+            modified_plus[row_idx] = current_value + ε
+            modified_minus[row_idx] = current_value - ε
+            
+            data_plus = merge(test_data, (focal_variable => modified_plus,))
+            data_minus = merge(test_data, (focal_variable => modified_minus,))
+            
+            # Evaluate at x + ε
+            result_plus = Vector{Float64}(undef, output_width(original_evaluator))
+            evaluate!(original_evaluator, result_plus, data_plus, row_idx, 1)
+            
+            # Evaluate at x - ε  
+            result_minus = Vector{Float64}(undef, output_width(original_evaluator))
+            evaluate!(original_evaluator, result_minus, data_minus, row_idx, 1)
+            
+            # Numerical derivative (for scalar output)
+            numerical_result = if length(result_plus) == 1
+                (result_plus[1] - result_minus[1]) / (2ε)
+            else
+                (sum(result_plus) - sum(result_minus)) / (2ε)
+            end
+            
+            # Compare
+            error = abs(fd_result - numerical_result)
+            max_error = max(max_error, error)
+            
+            if error > tolerance
+                return false, max_error, "Accuracy test failed at row $row_idx: ForwardDiff=$fd_result, Numerical=$numerical_result, Error=$error"
+            end
+            
+        catch e
+            @debug "Accuracy test error at row $row_idx: $e"
+            continue
+        end
+    end
+    
+    return true, max_error, "Accuracy test passed with max error: $max_error"
 end

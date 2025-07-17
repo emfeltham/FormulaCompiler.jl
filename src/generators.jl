@@ -491,11 +491,60 @@ end
 # SCALED AND PRODUCT CODE GENERATION
 ###############################################################################
 
+"""
+    generate_scaled_code!(instructions, eval::ScaledEvaluator, pos)
+
+Generate code for ScaledEvaluator that properly scales ALL output positions.
+
+# Problem with Original
+The original implementation only scaled row_vec[pos], but the inner evaluator
+might write to multiple positions (e.g., categorical with 3 levels writes to
+pos, pos+1, pos+2). This left positions pos+1, pos+2, ... unscaled.
+
+# Fix
+Scale all positions from pos to next_pos-1 that the inner evaluator wrote to.
+
+# Example
+For categorical with 3 levels and scale factor 2.5:
+- Inner evaluator writes to row_vec[pos], row_vec[pos+1], row_vec[pos+2]  
+- We need to scale ALL three positions, not just row_vec[pos]
+"""
 function generate_scaled_code!(instructions::Vector{String}, eval::ScaledEvaluator, pos::Int)
+    # Generate code for inner evaluator first
     next_pos = generate_evaluator_code!(instructions, eval.evaluator, pos)
-    push!(instructions, "@inbounds row_vec[$pos] *= $(eval.scale_factor)")
+    
+    # Scale ALL positions that the inner evaluator wrote to
+    width = next_pos - pos  # Number of positions written
+    
+    if width == 1
+        # Single position - direct scaling (most common case)
+        push!(instructions, "@inbounds row_vec[$pos] *= $(eval.scale_factor)")
+    else
+        # Multiple positions - scale each one
+        for i in 0:(width-1)
+            current_pos = pos + i
+            push!(instructions, "@inbounds row_vec[$current_pos] *= $(eval.scale_factor)")
+        end
+    end
+    
     return next_pos
 end
+
+"""
+Test case that demonstrates the bug and verifies the fix:
+
+```julia
+# Create a categorical with 3 levels scaled by 2.0
+cat_eval = CategoricalEvaluator(:group, contrast_matrix, 3)
+scaled_eval = ScaledEvaluator(cat_eval, 2.0)
+
+# The inner categorical writes to positions [pos, pos+1, pos+2]
+# The scale should apply to ALL three positions
+```
+
+Before fix: Only row_vec[pos] gets scaled
+After fix: All row_vec[pos], row_vec[pos+1], row_vec[pos+2] get scaled
+"""
 
 function generate_product_code!(instructions::Vector{String}, eval::ProductEvaluator, pos::Int)
     component_vars = [next_var("prod_comp") for _ in eval.components]
