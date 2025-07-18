@@ -5,6 +5,7 @@ using Revise
 using Test
 using FormulaCompiler
 
+using Statistics
 using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels, StandardizedPredictors
 using MixedModels
@@ -41,6 +42,7 @@ Random.seed!(06515)
     
     # Advanced features
     include("test_derivatives.jl")
+    include("test_derivative_correctness.jl")
     include("test_scenarios.jl")
     include("test_evaluator_trees.jl")
     

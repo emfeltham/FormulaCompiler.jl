@@ -6,6 +6,7 @@ module FormulaCompiler
 
 using Random # testing
 using Test
+using Statistics
 using ForwardDiff
 using StatsModels, GLM, CategoricalArrays, Tables, DataFrames, Random
 
@@ -65,5 +66,6 @@ export ChainRuleEvaluator, ProductRuleEvaluator, ForwardDiffEvaluator
 export get_standard_derivative_function, is_zero_derivative, validate_derivative_evaluator
 
 include("testing.jl")
+include("testing_derivatives.jl")
 
 end # module
