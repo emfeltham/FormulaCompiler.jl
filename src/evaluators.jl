@@ -724,8 +724,7 @@ function compile_term(term::AbstractTerm)
         return CombinedEvaluator(sub_evaluators)
         
     else
-        @warn "Unknown term type: $(typeof(term)), using constant fallback"
-        return ConstantEvaluator(1.0)
+        error("Unknown term type: $(typeof(term)), using constant fallback")
     end
 end
 

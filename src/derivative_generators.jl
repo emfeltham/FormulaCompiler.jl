@@ -13,10 +13,10 @@ function generate_code_from_evaluator(evaluator::PositionalDerivativeEvaluator)
 end
 
 function generate_evaluator_code!(instructions::Vector{String}, evaluator::PositionalDerivativeEvaluator, pos::Int)
-    println("DEBUG: Generating code for PositionalDerivativeEvaluator")
-    println("  Target width: $(evaluator.target_width)")
-    println("  Focal variable: $(evaluator.focal_variable)")
-    println("  Original evaluator type: $(typeof(evaluator.original_evaluator))")
+    # println("DEBUG: Generating code for PositionalDerivativeEvaluator")
+    # println("  Target width: $(evaluator.target_width)")
+    # println("  Focal variable: $(evaluator.focal_variable)")
+    # println("  Original evaluator type: $(typeof(evaluator.original_evaluator))")
     
     # Initialize all positions to zero
     for i in 1:evaluator.target_width
@@ -26,10 +26,10 @@ function generate_evaluator_code!(instructions::Vector{String}, evaluator::Posit
     
     # Generate code using the original sophisticated system
     if evaluator.original_evaluator isa CombinedEvaluator
-        println("DEBUG: Using combined positioning instructions")
+        # println("DEBUG: Using combined positioning instructions")
         generate_combined_positioning_instructions!(instructions, evaluator, pos)
     else
-        println("DEBUG: Using single positioning instructions")
+        # println("DEBUG: Using single positioning instructions")
         generate_single_positioning_instructions!(instructions, evaluator, pos)
     end
     
@@ -39,61 +39,61 @@ end
 function generate_combined_positioning_instructions!(instructions::Vector{String}, evaluator::PositionalDerivativeEvaluator, pos::Int)
     current_position = pos
     
-    println("DEBUG: Starting generate_combined_positioning_instructions!")
-    println("  Number of sub-evaluators: $(length(evaluator.original_evaluator.sub_evaluators))")
-    println("  Focal variable: $(evaluator.focal_variable)")
+    # println("DEBUG: Starting generate_combined_positioning_instructions!")
+    # println("  Number of sub-evaluators: $(length(evaluator.original_evaluator.sub_evaluators))")
+    # println("  Focal variable: $(evaluator.focal_variable)")
     
     for (i, sub_evaluator) in enumerate(evaluator.original_evaluator.sub_evaluators)
         sub_width = output_width(sub_evaluator)
         
-        println("DEBUG: Processing sub-evaluator $i at position $current_position")
-        println("  Sub-evaluator type: $(typeof(sub_evaluator))")
-        println("  Sub-evaluator width: $sub_width")
+        # println("DEBUG: Processing sub-evaluator $i at position $current_position")
+        # println("  Sub-evaluator type: $(typeof(sub_evaluator))")
+        # println("  Sub-evaluator width: $sub_width")
         
         # Compute derivative
         sub_derivative = compute_derivative_evaluator(sub_evaluator, evaluator.focal_variable)
-        println("  Computed derivative type: $(typeof(sub_derivative))")
+        # println("  Computed derivative type: $(typeof(sub_derivative))")
         
         # Check if zero derivative
         is_zero = is_zero_derivative(sub_derivative, evaluator.focal_variable)
-        println("  Is zero derivative: $is_zero")
+        # println("  Is zero derivative: $is_zero")
         
         if !is_zero
-            println("  Generating code for non-zero derivative...")
+            # println("  Generating code for non-zero derivative...")
             
             if sub_derivative isa ConstantEvaluator && sub_derivative.value != 0.0
-                println("    Case: ConstantEvaluator (non-zero)")
+                # println("    Case: ConstantEvaluator (non-zero)")
                 push!(instructions, "@inbounds row_vec[$current_position] = $(sub_derivative.value)")
                 
             elseif sub_derivative isa ContinuousEvaluator && sub_derivative.column == evaluator.focal_variable
-                println("    Case: ContinuousEvaluator (focal variable)")
+                # println("    Case: ContinuousEvaluator (focal variable)")
                 push!(instructions, "@inbounds row_vec[$current_position] = 1.0")
                 
             elseif sub_derivative isa ContinuousEvaluator
-                println("    Case: ContinuousEvaluator (other variable)")
+                # println("    Case: ContinuousEvaluator (other variable)")
                 push!(instructions, "@inbounds row_vec[$current_position] = Float64(data.$(sub_derivative.column)[row_idx])")
                 
             elseif sub_derivative isa ChainRuleEvaluator
-                println("    Case: ChainRuleEvaluator")
+                # println("    Case: ChainRuleEvaluator")
                 generate_chain_rule_code!(instructions, sub_derivative, current_position)
                 
             elseif sub_derivative isa ProductRuleEvaluator  
-                println("    Case: ProductRuleEvaluator")
+                # println("    Case: ProductRuleEvaluator")
                 generate_product_rule_code!(instructions, sub_derivative, current_position)
                 
             elseif sub_derivative isa ProductEvaluator
-                println("    Case: ProductEvaluator - THIS IS WHAT WE'RE LOOKING FOR!")
-                println("      ProductEvaluator components: $(length(sub_derivative.components))")
-                for (j, comp) in enumerate(sub_derivative.components)
-                    println("        Component $j: $(typeof(comp))")
-                    if comp isa ContinuousEvaluator
-                        println("          Column: $(comp.column)")
-                    end
-                end
+                # println("    Case: ProductEvaluator - THIS IS WHAT WE'RE LOOKING FOR!")
+                # println("      ProductEvaluator components: $(length(sub_derivative.components))")
+                # for (j, comp) in enumerate(sub_derivative.components)
+                #     println("        Component $j: $(typeof(comp))")
+                #     if comp isa ContinuousEvaluator
+                #         println("          Column: $(comp.column)")
+                #     end
+                # end
                 generate_product_evaluator_derivative_code!(instructions, sub_derivative, current_position)
                 
             elseif sub_derivative isa ScaledEvaluator
-                println("    Case: ScaledEvaluator")
+                # println("    Case: ScaledEvaluator")
                 inner_expr = generate_inline_expression_for_derivatives(sub_derivative.evaluator)
                 scale = sub_derivative.scale_factor
                 push!(instructions, "@inbounds row_vec[$current_position] = $scale * ($inner_expr)")
@@ -103,71 +103,70 @@ function generate_combined_positioning_instructions!(instructions::Vector{String
                 error("Unsupported derivative evaluator type: $(typeof(sub_derivative))")
             end
         else
-            println("  Skipping zero derivative")
+            # println("  Skipping zero derivative")
         end
         
         current_position += sub_width
-        println("  New current_position: $current_position")
-        println()
+        # println("  New current_position: $current_position")
+        # println()
     end
     
-    println("DEBUG: Finished generate_combined_positioning_instructions!")
+    # println("DEBUG: Finished generate_combined_positioning_instructions!")
 end
 
 # 2. Update generate_product_evaluator_derivative_code! to handle categorical properly
 function generate_product_evaluator_derivative_code!(instructions::Vector{String}, evaluator::ProductEvaluator, pos::Int)
-    println("DEBUG: generate_product_evaluator_derivative_code! called")
-    println("  Position: $pos")
-    println("  Number of components: $(length(evaluator.components))")
+    # println("DEBUG: generate_product_evaluator_derivative_code! called")
+    # println("  Position: $pos")
+    # println("  Number of components: $(length(evaluator.components))")
     
     # Check if we have a categorical component - needs special handling
     has_categorical = any(comp -> comp isa CategoricalEvaluator, evaluator.components)
     
     if has_categorical
-        println("  Special case: ProductEvaluator with CategoricalEvaluator")
+        # println("  Special case: ProductEvaluator with CategoricalEvaluator")
         generate_product_with_categorical!(instructions, evaluator, pos)
     else
         # Original logic for non-categorical cases
         component_exprs = String[]
         
         for (i, component) in enumerate(evaluator.components)
-            println("  Processing component $i: $(typeof(component))")
+            # println("  Processing component $i: $(typeof(component))")
             
             if component isa ConstantEvaluator
                 expr = string(component.value)
-                println("    Generated: $expr")
+                # println("    Generated: $expr")
                 push!(component_exprs, expr)
                 
             elseif component isa ContinuousEvaluator
                 expr = "Float64(data.$(component.column)[row_idx])"
-                println("    Generated: $expr")
+                # println("    Generated: $expr")
                 push!(component_exprs, expr)
                 
             else
-                println("    Using fallback for $(typeof(component))")
-                push!(component_exprs, "1.0")
+                error("fallback for $(typeof(component))")
             end
         end
         
         if length(component_exprs) == 1
             instruction = "@inbounds row_vec[$pos] = $(component_exprs[1])"
-            println("  Final instruction: $instruction")
+            # println("  Final instruction: $instruction")
             push!(instructions, instruction)
         else
             product_expr = join(component_exprs, " * ")
             instruction = "@inbounds row_vec[$pos] = $product_expr"
-            println("  Final instruction: $instruction")
+            # println("  Final instruction: $instruction")
             push!(instructions, instruction)
         end
     end
     
-    println("DEBUG: generate_product_evaluator_derivative_code! finished")
+    # println("DEBUG: generate_product_evaluator_derivative_code! finished")
 end
 
 # 3. New function to handle ProductEvaluator with CategoricalEvaluator
 # Updated generate_product_with_categorical! to handle ChainRuleEvaluator and other complex scalars
 function generate_product_with_categorical!(instructions::Vector{String}, evaluator::ProductEvaluator, pos::Int)
-    println("DEBUG: generate_product_with_categorical! called at position $pos")
+    # println("DEBUG: generate_product_with_categorical! called at position $pos")
     
     # Find the categorical component and any scalar factors
     categorical_component = nothing
@@ -179,7 +178,7 @@ function generate_product_with_categorical!(instructions::Vector{String}, evalua
         else
             # All non-categorical components are scalar factors
             push!(scalar_components, component)
-            println("  Found scalar component: $(typeof(component))")
+            # println("  Found scalar component: $(typeof(component))")
         end
     end
     
@@ -192,9 +191,9 @@ function generate_product_with_categorical!(instructions::Vector{String}, evalua
     if !isempty(scalar_components)
         scalar_var = next_var("scalar")
         generate_scalar_factor_code!(instructions, scalar_components, scalar_var)
-        println("  Generated scalar factor variable: $scalar_var")
+        # println("  Generated scalar factor variable: $scalar_var")
     else
-        println("  No scalar factors")
+        # println("  No scalar factors")
     end
     
     # Generate categorical contrast lookup code
@@ -203,7 +202,7 @@ function generate_product_with_categorical!(instructions::Vector{String}, evalua
     contrast_matrix = categorical_component.contrast_matrix
     width = size(contrast_matrix, 2)
     
-    println("  Categorical: $col with $n_levels levels, $width contrasts")
+    # println("  Categorical: $col with $n_levels levels, $width contrasts")
     
     # Generate lookup variables
     cat_var = next_var("cat")
@@ -251,12 +250,12 @@ function generate_product_with_categorical!(instructions::Vector{String}, evalua
         end
     end
     
-    println("DEBUG: generate_product_with_categorical! finished")
+    # println("DEBUG: generate_product_with_categorical! finished")
 end
 
 function generate_scalar_factor_code!(instructions::Vector{String}, scalar_components::Vector{AbstractEvaluator}, scalar_var::String)
-    println("DEBUG: generate_scalar_factor_code! called")
-    println("  Number of scalar components: $(length(scalar_components))")
+    # println("DEBUG: generate_scalar_factor_code! called")
+    # println("  Number of scalar components: $(length(scalar_components))")
     
     if length(scalar_components) == 1
         # Single scalar component
@@ -306,12 +305,12 @@ function generate_scalar_factor_code!(instructions::Vector{String}, scalar_compo
         push!(instructions, "@inbounds $scalar_var = $product_expr")
     end
     
-    println("DEBUG: generate_scalar_factor_code! finished")
+    # println("DEBUG: generate_scalar_factor_code! finished")
 end
 
 # Generate code for ChainRuleEvaluator as scalar factor
 function generate_chain_rule_scalar_code!(instructions::Vector{String}, evaluator::ChainRuleEvaluator, scalar_var::String)
-    println("DEBUG: generate_chain_rule_scalar_code! for $(evaluator.original_func)")
+    # println("DEBUG: generate_chain_rule_scalar_code! for $(evaluator.original_func)")
     
     # Generate variables for inner function and its derivative
     inner_var = next_var("inner")
@@ -322,7 +321,7 @@ function generate_chain_rule_scalar_code!(instructions::Vector{String}, evaluato
         push!(instructions, "@inbounds $inner_var = Float64(data.$(evaluator.inner_evaluator.column)[row_idx])")
     else
         # For complex inner evaluators, this would need more work
-        push!(instructions, "@inbounds $inner_var = 1.0  # Complex inner evaluator fallback")
+        error("Complex inner evaluator fallback")
     end
     
     # Generate code to evaluate inner derivative
@@ -330,7 +329,7 @@ function generate_chain_rule_scalar_code!(instructions::Vector{String}, evaluato
         push!(instructions, "@inbounds $inner_deriv_var = $(evaluator.inner_derivative.value)")
     else
         # For complex inner derivatives, this would need more work
-        push!(instructions, "@inbounds $inner_deriv_var = 1.0  # Complex inner derivative fallback")
+        error("Complex inner derivative fallback")
     end
     
     # Apply the chain rule based on the original function
@@ -360,7 +359,7 @@ function generate_scaled_scalar_code!(instructions::Vector{String}, evaluator::S
     elseif evaluator.evaluator isa ContinuousEvaluator
         push!(instructions, "@inbounds $inner_var = Float64(data.$(evaluator.evaluator.column)[row_idx])")
     else
-        push!(instructions, "@inbounds $inner_var = 1.0  # Complex evaluator fallback")
+        error("Complex evaluator fallback")
     end
     
     push!(instructions, "@inbounds $scalar_var = $inner_var * $(evaluator.scale_factor)")
@@ -479,10 +478,12 @@ function generate_single_positioning_instructions!(instructions::Vector{String},
     end
 end
 
-function generate_function_derivative_inline!(instructions::Vector{String}, 
-                                                evaluator::FunctionEvaluator, 
-                                                focal_variable::Symbol, 
-                                                pos::Int)
+function generate_function_derivative_inline!(
+    instructions::Vector{String}, 
+    evaluator::FunctionEvaluator, 
+    focal_variable::Symbol, 
+    pos::Int
+)
     
     func = evaluator.func
     args = evaluator.arg_evaluators

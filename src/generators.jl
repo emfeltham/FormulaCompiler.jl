@@ -176,47 +176,6 @@ function generate_function_code!(instructions::Vector{String}, eval::FunctionEva
     return pos + 1
 end
 
-# """
-#     generate_inline_expression(evaluator::AbstractEvaluator) -> String
-
-# Generate an inline expression for an evaluator that can be used directly
-# in larger expressions without requiring temporary variable assignment.
-
-# # Examples
-# - ContinuousEvaluator(:x) → "Float64(data.x[row_idx])"
-# - ConstantEvaluator(2.5) → "2.5"  
-# - FunctionEvaluator(log, [x_eval]) → "log(Float64(data.x[row_idx]))"
-# """
-# function generate_inline_expression(evaluator::AbstractEvaluator)
-    
-#     if evaluator isa ConstantEvaluator
-#         return string(evaluator.value)
-        
-#     elseif evaluator isa ContinuousEvaluator
-#         return "Float64(data.$(evaluator.column)[row_idx])"
-        
-#     elseif evaluator isa CategoricalEvaluator
-#         # For categorical in expressions, use first contrast column
-#         return generate_categorical_inline_expression(evaluator)
-        
-#     elseif evaluator isa FunctionEvaluator
-#         # Recursively generate nested function expressions
-#         return generate_nested_function_expression(evaluator)
-        
-#     elseif evaluator isa ScaledEvaluator
-#         inner_expr = generate_inline_expression(evaluator.evaluator)
-#         return "($(inner_expr) * $(evaluator.scale_factor))"
-        
-#     elseif evaluator isa ProductEvaluator
-#         component_exprs = [generate_inline_expression(comp) for comp in evaluator.components]
-#         return "(" * join(component_exprs, " * ") * ")"
-        
-#     else
-#         @warn "Unsupported evaluator type for inline expression: $(typeof(evaluator))"
-#         return "1.0"  # Safe fallback
-#     end
-# end
-
 ###############################################################################
 # HELPER: GENERATE INLINE EXPRESSION (needed for fixes above)
 ###############################################################################
@@ -230,7 +189,6 @@ in larger expressions without requiring temporary variable assignment.
 This is a simplified version of the function from the interaction fixes.
 """
 function generate_inline_expression(evaluator::AbstractEvaluator)
-    
     if evaluator isa ConstantEvaluator
         return string(evaluator.value)
         
@@ -238,39 +196,38 @@ function generate_inline_expression(evaluator::AbstractEvaluator)
         return "Float64(data.$(evaluator.column)[row_idx])"
         
     elseif evaluator isa CategoricalEvaluator
-        # For categorical in expressions, use first contrast column (simplified)
-        col = evaluator.column
-        n_levels = evaluator.n_levels
-        values = [evaluator.contrast_matrix[i, 1] for i in 1:n_levels]
-        
-        if n_levels == 1
-            return string(values[1])
-        elseif n_levels == 2
-            return "(clamp(data.$col[row_idx] isa CategoricalValue ? levelcode(data.$col[row_idx]) : 1, 1, 2) == 1 ? $(values[1]) : $(values[2]))"
-        else
-            # Simplified for now
-            return "1.0  # Categorical expression placeholder"
-        end
+        # FIXED: No more multi-line generation in expressions
+        error("CategoricalEvaluator cannot be used in inline expressions. Use statement-level generation instead.")
         
     elseif evaluator isa FunctionEvaluator
-        # Very simplified function handling
-        if length(evaluator.arg_evaluators) == 1
-            arg_expr = generate_inline_expression(evaluator.arg_evaluators[1])
-            func_name = string(evaluator.func)
-            return "$func_name($arg_expr)"
+        # FIXED: Check for simple vs complex
+        if all(arg -> arg isa Union{ConstantEvaluator, ContinuousEvaluator}, evaluator.arg_evaluators)
+            # Simple case - generate inline
+            arg_exprs = [arg isa ConstantEvaluator ? string(arg.value) : "Float64(data.$(arg.column)[row_idx])" for arg in evaluator.arg_evaluators]
+            return generate_function_call(evaluator.func, arg_exprs)
         else
-            return "1.0  # Complex function placeholder"
+            error("Complex function arguments not supported in inline expressions: $(evaluator.func)")
         end
         
     elseif evaluator isa ScaledEvaluator
         inner_expr = generate_inline_expression(evaluator.evaluator)
         return "($(inner_expr) * $(evaluator.scale_factor))"
         
+    elseif evaluator isa ProductEvaluator
+        # FIXED: Check if all components are simple
+        if all(comp -> comp isa Union{ConstantEvaluator, ContinuousEvaluator}, evaluator.components)
+            component_exprs = [comp isa ConstantEvaluator ? string(comp.value) : "Float64(data.$(comp.column)[row_idx])" for comp in evaluator.components]
+            return "(" * join(component_exprs, " * ") * ")"
+        else
+            error("Complex ProductEvaluator components not supported in inline expressions")
+        end
+        
     else
-        @warn "Unsupported evaluator type for inline expression: $(typeof(evaluator))"
-        return "1.0"  # Safe fallback
+        # FIXED: No placeholder - clear error
+        error("Inline expression generation not implemented for $(typeof(evaluator))")
     end
 end
+
 
 """
 Generate inline categorical expression using ternary operators.
@@ -349,8 +306,7 @@ function generate_argument_code!(instructions::Vector{String}, arg_eval::Abstrac
         push!(instructions, "@inbounds $var_name = $nested_expr")
         
     else
-        # Fallback for complex arguments
-        push!(instructions, "@inbounds $var_name = 1.0  # Complex argument fallback")
+        error("Variable generation not implemented for $(typeof(evaluator))")
     end
 end
 
@@ -421,9 +377,8 @@ function generate_function_call(func::Function, arg_exprs::Vector{String})
         return "($(arg_exprs[1]) != $(arg_exprs[2]) ? 1.0 : 0.0)"
         
     else
-        # General function - handle any user-defined function
-        args_str = join(arg_exprs, ", ")
-        return "$func($args_str)"
+        error("Function $func with $(length(arg_exprs)) arguments not yet supported. " *
+              "Supported: log, exp, sqrt, abs, sin, cos, tan, ^, +, -, *, /, comparison ops")
     end
 end
 
@@ -489,8 +444,7 @@ function generate_evaluator_to_variable!(instructions::Vector{String}, evaluator
         expr = generate_inline_expression(evaluator)
         push!(instructions, "@inbounds $var_name = $expr")
     else
-        @warn "Complex evaluator type $(typeof(evaluator)) in function argument, using fallback"
-        push!(instructions, "@inbounds $var_name = 1.0")
+        error("Variable generation not implemented for $(typeof(evaluator))")
     end
 end
 
@@ -728,10 +682,7 @@ function generate_component_values!(instructions::Vector{String},
         
     else
         @error "Unsupported component type in interaction: $(typeof(component))"
-        # Fallback: set all to 1.0
-        for var_name in var_names
-            push!(instructions, "@inbounds $var_name = 1.0")
-        end
+        error("Unsupported component type in interaction: $(typeof(component))")
     end
 end
 
@@ -810,10 +761,7 @@ function generate_argument_expression(arg_evaluator::AbstractEvaluator)
     elseif arg_evaluator isa ContinuousEvaluator
         return "Float64(data.$(arg_evaluator.column)[row_idx])"
     else
-        # For complex arguments, use a temporary variable
-        temp_var = next_var("arg")
-        # Note: This might still need the old approach for very complex nested cases
-        return temp_var
+        error("Complex argument type $(typeof(arg_evaluator)) not supported in function arguments")
     end
 end
 
@@ -852,10 +800,11 @@ function generate_compact_interaction_code!(instructions::Vector{String},
         push!(instructions, "@inbounds end")
     else
         # For higher dimensions, fall back to index arithmetic
-        push!(instructions, "@inbounds for linear_idx in 0:$(total_width-1)")
-        push!(instructions, "@inbounds   # Multi-index computation and product would go here")
-        push!(instructions, "@inbounds   row_vec[$(pos) + linear_idx] = 1.0  # Placeholder")
-        push!(instructions, "@inbounds end")
+        errors("higher dimension error")
+        # push!(instructions, "@inbounds for linear_idx in 0:$(total_width-1)")
+        # push!(instructions, "@inbounds   # Multi-index computation and product would go here")
+        # push!(instructions, "@inbounds   row_vec[$(pos) + linear_idx] = 1.0  # Placeholder")
+        # push!(instructions, "@inbounds end")
     end
     
     return pos + total_width
@@ -888,7 +837,7 @@ function generate_zscore_code!(instructions::Vector{String}, eval::ZScoreEvaluat
             result_expr = generate_function_call(eval.underlying.func, arg_vars)
             push!(instructions, "@inbounds $temp_var = $result_expr")
         else
-            push!(instructions, "@inbounds $temp_var = 1.0  # ZScore fallback")
+            error("ZScore fallback")
         end
         
         # Apply Z-score transformation
