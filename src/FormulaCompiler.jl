@@ -37,6 +37,10 @@ export extract_root_evaluator, get_evaluator_tree, has_evaluator_access
 export count_evaluator_nodes, get_variable_dependencies, get_evaluator_summary
 export print_evaluator_tree, test_evaluator_storage
 include("generators.jl")        # Uses evaluators + fixed_helpers
+export generate_code_from_evaluator, generate_evaluator_code!
+export test_phase2a_complete, test_phase2a_architecture
+export generate_expression_recursive, generate_statements_recursive
+
 
 include("modelrow!.jl")
 include("modelrow.jl")
@@ -67,5 +71,7 @@ export get_standard_derivative_function, is_zero_derivative, validate_derivative
 
 include("testing.jl")
 include("testing_derivatives.jl")
+
+include("phase_tests.jl")
 
 end # module
