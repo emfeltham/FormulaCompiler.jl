@@ -1,8 +1,51 @@
-# generators.jl
-# Add code generation to your existing recursive evaluators
+# Export main functions
+"""
+Generate statements for ZScore evaluators with multi-output underlying terms.
+"""
+function generate_zscore_statements_recursive(evaluator::ZScoreEvaluator, start_pos::Int)
+    underlying = evaluator.underlying
+    center = evaluator.center
+    scale = evaluator.scale
+    width = output_width(underlying)
+    
+    instructions = String[]
+    
+    # Generate statements for underlying evaluator
+    underlying_instructions, next_pos = generate_statements_recursive(underlying, start_pos)
+    append!(instructions, underlying_instructions)
+    
+    # Apply Z-score transformation to each position
+    for i in 0:(width-1)
+        pos = start_pos + i
+        temp_var = next_var("zscore_temp")
+        push!(instructions, "@inbounds $temp_var = row_vec[$pos]")
+        push!(instructions, "@inbounds row_vec[$pos] = ($temp_var - $center) / $scale")
+    end
+    
+    return instructions, next_pos
+end
 
 ###############################################################################
-# CODE GENERATION FROM EVALUATOR TREE
+# PLACEHOLDER IMPLEMENTATIONS FOR PHASE 2D
+###############################################################################
+
+"""
+Phase 2D: Advanced Evaluator Types
+"""
+function generate_interaction_expression_recursive(evaluator::InteractionEvaluator)
+    error("InteractionEvaluator expression generation will be implemented in Phase 2D. " *
+          "Components: $(length(evaluator.components))")
+end
+
+function generate_zscore_expression_recursive(evaluator::ZScoreEvaluator)
+    error("ZScoreEvaluator expression generation will be implemented in Phase 2D. " *
+          "Underlying: $(typeof(evaluator.underlying))")
+end# generators.jl
+# Phase 2A: Core Recursive Expression Generation Architecture
+# This replaces the previous generators.jl with a recursive architecture that mirrors compile_term()
+
+###############################################################################
+# VARIABLE GENERATION SYSTEM (Preserved from original)
 ###############################################################################
 
 # Global variable counter for unique names
@@ -24,297 +67,185 @@ function reset_var_counter!()
 end
 
 ###############################################################################
-# MAIN CODE GENERATION INTERFACE
+# CORE RECURSIVE EXPRESSION GENERATION
 ###############################################################################
 
 """
-Generate instruction strings from evaluator tree for @generated function.
-"""
-function generate_code_from_evaluator(evaluator::AbstractEvaluator)
-    reset_var_counter!()
-    instructions = String[]
-    generate_evaluator_code!(instructions, evaluator, 1)
-    return instructions
-end
+    generate_expression_recursive(evaluator::AbstractEvaluator) -> String
 
+The inverse of compile_term() - converts any evaluator back to a Julia expression string.
+This function MUST handle every AbstractEvaluator type that compile_term() can create.
+
+This mirrors the exact structure of your compile_term() function:
+- ConstantTerm → ConstantEvaluator → back to constant expression
+- ContinuousTerm → ContinuousEvaluator → back to data access expression  
+- FunctionTerm → FunctionEvaluator → back to function call expression
+- etc.
 """
-Recursively generate code for any evaluator, writing to row_vec starting at pos.
-Returns the next position to write to.
-"""
-function generate_evaluator_code!(instructions::Vector{String}, evaluator::AbstractEvaluator, pos::Int)
+function generate_expression_recursive(evaluator::AbstractEvaluator)
     
     if evaluator isa ConstantEvaluator
-        push!(instructions, "@inbounds row_vec[$pos] = $(evaluator.value)")
-        return pos + 1
-        
-    elseif evaluator isa ContinuousEvaluator
-        push!(instructions, "@inbounds row_vec[$pos] = Float64(data.$(evaluator.column)[row_idx])")
-        return pos + 1
-        
-    elseif evaluator isa CategoricalEvaluator
-        return generate_categorical_code!(instructions, evaluator, pos)
-        
-    elseif evaluator isa FunctionEvaluator
-        if is_simple_for_inline(evaluator)
-            return generate_function_code!(instructions, evaluator, pos)  # New simple version
-        else
-            return generate_complex_function_code!(instructions, evaluator, pos)  # New complex version
-        end
-        
-    elseif evaluator isa InteractionEvaluator
-        return generate_interaction_code!(instructions, evaluator, pos)
-        
-    elseif evaluator isa ZScoreEvaluator
-        return generate_zscore_code!(instructions, evaluator, pos)
-        
-    elseif evaluator isa CombinedEvaluator
-        return generate_combined_code!(instructions, evaluator, pos)
-    elseif evaluator isa ScaledEvaluator
-    return generate_scaled_code!(instructions, evaluator, pos)    
-    elseif evaluator isa ProductEvaluator  
-        return generate_product_code!(instructions, evaluator, pos)
-    elseif evaluator isa ChainRuleEvaluator
-        return generate_chain_rule_code!(instructions, evaluator, pos)
-    elseif evaluator isa ProductRuleEvaluator
-        return generate_product_rule_code!(instructions, evaluator, pos)
-    elseif evaluator isa ChainRuleEvaluator
-        return generate_chain_rule_code!(instructions, evaluator, pos)
-    elseif evaluator isa ProductRuleEvaluator
-        return generate_product_rule_code!(instructions, evaluator, pos)
-    elseif evaluator isa ForwardDiffEvaluator
-        # For now, generate a placeholder - ForwardDiff would need special handling
-        push!(instructions, "@inbounds row_vec[$pos] = 0.0  # ForwardDiff placeholder")
-        return pos + 1
-    else
-        error("Unknown evaluator type: $(typeof(evaluator))")
-    end
-end
-
-###############################################################################
-# CATEGORICAL CODE GENERATION
-###############################################################################
-
-function generate_categorical_code!(instructions::Vector{String}, eval::CategoricalEvaluator, pos::Int)
-    col = eval.column
-    n_levels = eval.n_levels
-    contrast_matrix = eval.contrast_matrix
-    width = size(contrast_matrix, 2)
-    
-    # Generate unique variable names for this categorical
-    cat_var = next_var("cat")
-    level_var = next_var("level")
-    
-    # Extract categorical value and level code
-    push!(instructions, "@inbounds $cat_var = data.$col[row_idx]")
-    push!(instructions, "@inbounds $level_var = $cat_var isa CategoricalValue ? levelcode($cat_var) : 1")
-    push!(instructions, "@inbounds $level_var = clamp($level_var, 1, $n_levels)")
-    
-    # Generate code for each contrast column
-    for j in 1:width
-        output_pos = pos + j - 1
-        values = [contrast_matrix[i, j] for i in 1:n_levels]
-        
-        # Generate efficient lookup
-        if n_levels == 1
-            push!(instructions, "@inbounds row_vec[$output_pos] = $(values[1])")
-        elseif n_levels == 2
-            push!(instructions, "@inbounds row_vec[$output_pos] = $level_var == 1 ? $(values[1]) : $(values[2])")
-        elseif n_levels == 3
-            push!(instructions, "@inbounds row_vec[$output_pos] = $level_var == 1 ? $(values[1]) : $level_var == 2 ? $(values[2]) : $(values[3])")
-        else
-            # Chain of ternaries for more levels
-            ternary_chain = "$level_var == 1 ? $(values[1])"
-            for i in 2:(n_levels-1)
-                ternary_chain *= " : $level_var == $i ? $(values[i])"
-            end
-            ternary_chain *= " : $(values[n_levels])"
-            push!(instructions, "@inbounds row_vec[$output_pos] = $ternary_chain")
-        end
-    end
-    
-    return pos + width
-end
-
-###############################################################################
-# FUNCTION CODE GENERATION
-###############################################################################
-
-"""
-    generate_function_code!(instructions, eval::FunctionEvaluator, pos)
-
-Generate allocation-free function evaluation code using inline expressions.
-"""
-function generate_function_code!(instructions::Vector{String}, eval::FunctionEvaluator, pos::Int)
-    func = eval.func
-    n_args = length(eval.arg_evaluators)
-    
-    if n_args == 0
-        # Zero-argument function
-        result_expr = "$func()"
-        push!(instructions, "@inbounds row_vec[$pos] = $result_expr")
-        
-    elseif n_args == 1
-        # Unary function - most common case
-        arg_expr = generate_inline_expression(eval.arg_evaluators[1])
-        result_expr = generate_function_call(func, [arg_expr])
-        push!(instructions, "@inbounds row_vec[$pos] = $result_expr")
-        
-    elseif n_args == 2
-        # Binary function
-        arg1_expr = generate_inline_expression(eval.arg_evaluators[1])
-        arg2_expr = generate_inline_expression(eval.arg_evaluators[2])
-        result_expr = generate_function_call(func, [arg1_expr, arg2_expr])
-        push!(instructions, "@inbounds row_vec[$pos] = $result_expr")
-        
-    else
-        # General case - evaluate all arguments as expressions
-        arg_exprs = [generate_inline_expression(arg_eval) for arg_eval in eval.arg_evaluators]
-        result_expr = generate_function_call(func, arg_exprs)
-        push!(instructions, "@inbounds row_vec[$pos] = $result_expr")
-    end
-    
-    return pos + 1
-end
-
-###############################################################################
-# HELPER: GENERATE INLINE EXPRESSION (needed for fixes above)
-###############################################################################
-
-"""
-    generate_inline_expression(evaluator::AbstractEvaluator) -> String
-
-Generate an inline expression for an evaluator that can be used directly
-in larger expressions without requiring temporary variable assignment.
-
-This is a simplified version of the function from the interaction fixes.
-"""
-function generate_inline_expression(evaluator::AbstractEvaluator)
-    if evaluator isa ConstantEvaluator
+        # Mirror: ConstantTerm → ConstantEvaluator → back to constant
         return string(evaluator.value)
         
     elseif evaluator isa ContinuousEvaluator
+        # Mirror: ContinuousTerm/Term → ContinuousEvaluator → back to data access
         return "Float64(data.$(evaluator.column)[row_idx])"
         
     elseif evaluator isa CategoricalEvaluator
-        # FIXED: No more multi-line generation in expressions
-        error("CategoricalEvaluator cannot be used in inline expressions. Use statement-level generation instead.")
+        # Mirror: CategoricalTerm → CategoricalEvaluator → back to categorical expression
+        return generate_categorical_expression_recursive(evaluator)
         
     elseif evaluator isa FunctionEvaluator
-        # FIXED: Check for simple vs complex
-        if all(arg -> arg isa Union{ConstantEvaluator, ContinuousEvaluator}, evaluator.arg_evaluators)
-            # Simple case - generate inline
-            arg_exprs = [arg isa ConstantEvaluator ? string(arg.value) : "Float64(data.$(arg.column)[row_idx])" for arg in evaluator.arg_evaluators]
-            return generate_function_call(evaluator.func, arg_exprs)
-        else
-            error("Complex function arguments not supported in inline expressions: $(evaluator.func)")
-        end
+        # Mirror: FunctionTerm → FunctionEvaluator → back to function call
+        # This is the CRITICAL recursive case
+        return generate_function_expression_recursive(evaluator)
+        
+    elseif evaluator isa InteractionEvaluator
+        # Mirror: InteractionTerm → InteractionEvaluator → back to product expression
+        return generate_interaction_expression_recursive(evaluator)
+        
+    elseif evaluator isa ZScoreEvaluator
+        # Mirror: ZScoredTerm → ZScoreEvaluator → back to standardization expression
+        return generate_zscore_expression_recursive(evaluator)
         
     elseif evaluator isa ScaledEvaluator
-        inner_expr = generate_inline_expression(evaluator.evaluator)
+        # Handle scaled expressions recursively
+        inner_expr = generate_expression_recursive(evaluator.evaluator)
         return "($(inner_expr) * $(evaluator.scale_factor))"
         
     elseif evaluator isa ProductEvaluator
-        # FIXED: Check if all components are simple
-        if all(comp -> comp isa Union{ConstantEvaluator, ContinuousEvaluator}, evaluator.components)
-            component_exprs = [comp isa ConstantEvaluator ? string(comp.value) : "Float64(data.$(comp.column)[row_idx])" for comp in evaluator.components]
-            return "(" * join(component_exprs, " * ") * ")"
-        else
-            error("Complex ProductEvaluator components not supported in inline expressions")
-        end
+        # Handle product expressions recursively
+        return generate_product_expression_recursive(evaluator)
         
     else
-        # FIXED: No placeholder - clear error
-        error("Inline expression generation not implemented for $(typeof(evaluator))")
+        error("Expression generation not implemented for $(typeof(evaluator)). " *
+              "This must be implemented to maintain completeness with compile_term().")
     end
 end
 
+###############################################################################
+# MULTI-OUTPUT STATEMENT GENERATION
+###############################################################################
 
 """
-Generate inline categorical expression using ternary operators.
+    generate_statements_recursive(evaluator::AbstractEvaluator, start_pos::Int) -> (Vector{String}, Int)
+
+Handle evaluators that produce multiple outputs (like CombinedEvaluator).
+Returns (instructions, next_position).
+
+This mirrors how compile_term() handles MatrixTerm → CombinedEvaluator.
 """
-function generate_categorical_inline_expression(evaluator::CategoricalEvaluator)
-    col = evaluator.column
-    n_levels = evaluator.n_levels
-    values = [evaluator.contrast_matrix[i, 1] for i in 1:n_levels]  # Use first contrast column
+function generate_statements_recursive(evaluator::AbstractEvaluator, start_pos::Int)
     
-    if n_levels == 1
-        return string(values[1])
-    elseif n_levels == 2
-        return "(data.$col[row_idx] isa CategoricalValue ? (clamp(levelcode(data.$col[row_idx]), 1, 2) == 1 ? $(values[1]) : $(values[2])) : $(values[1]))"
+    if evaluator isa CombinedEvaluator
+        # Mirror: MatrixTerm → CombinedEvaluator → back to multiple statements
+        return generate_combined_statements_recursive(evaluator, start_pos)
+        
+    elseif is_multi_output_evaluator(evaluator)
+        # Handle other multi-output cases (complex categoricals, interactions)
+        return generate_multi_output_statements_recursive(evaluator, start_pos)
+        
     else
-        # Build nested ternary expression
-        level_expr = "clamp(data.$col[row_idx] isa CategoricalValue ? levelcode(data.$col[row_idx]) : 1, 1, $n_levels)"
-        
-        ternary_chain = "$level_expr == 1 ? $(values[1])"
-        for i in 2:(n_levels-1)
-            ternary_chain *= " : $level_expr == $i ? $(values[i])"
-        end
-        ternary_chain *= " : $(values[n_levels])"
-        
-        return "($ternary_chain)"
+        # Single output - use expression generator
+        expr = generate_expression_recursive(evaluator)
+        instructions = ["@inbounds row_vec[$start_pos] = $expr"]
+        return instructions, start_pos + 1
     end
 end
 
 """
-Generate nested function expression recursively.
+Check if an evaluator produces multiple outputs.
 """
-function generate_nested_function_expression(evaluator::FunctionEvaluator)
+function is_multi_output_evaluator(evaluator::AbstractEvaluator)
+    return evaluator isa CombinedEvaluator ||
+           (evaluator isa CategoricalEvaluator && size(evaluator.contrast_matrix, 2) > 1) ||
+           (evaluator isa InteractionEvaluator && output_width(evaluator) > 1)
+end
+
+###############################################################################
+# COMBINED EVALUATOR HANDLING (EXACT INVERSE OF MATRIXTERM)
+###############################################################################
+
+"""
+    generate_combined_statements_recursive(evaluator::CombinedEvaluator, start_pos::Int)
+
+EXACT INVERSE of MatrixTerm → CombinedEvaluator parsing.
+Mirrors this code from compile_term():
+
+    if term isa MatrixTerm
+        sub_evaluators = [compile_term(t) for t in term.terms if width(t) > 0]
+        return CombinedEvaluator(sub_evaluators)
+"""
+function generate_combined_statements_recursive(evaluator::CombinedEvaluator, start_pos::Int)
+    
+    instructions = String[]
+    current_pos = start_pos
+    
+    # Mirror the recursive compilation in compile_term()
+    for sub_evaluator in evaluator.sub_evaluators
+        # Recursively generate each sub-evaluator (mirrors compile_term recursion)
+        sub_instructions, new_pos = generate_statements_recursive(sub_evaluator, current_pos)
+        append!(instructions, sub_instructions)
+        current_pos = new_pos
+    end
+    
+    return instructions, current_pos
+end
+
+###############################################################################
+# FUNCTION EXPRESSION GENERATION (Phase 2B - Full Recursive Implementation)
+###############################################################################
+
+"""
+    generate_function_expression_recursive(evaluator::FunctionEvaluator) -> String
+
+Phase 2B: Full recursive function expression generation.
+Handles arbitrarily nested functions like log(x^2 + sin(y) * z).
+
+This is the key recursive case that mirrors how compile_term() handles FunctionTerm:
+- FunctionTerm(log, [FunctionTerm(^, [x, 2])]) → FunctionEvaluator(log, [FunctionEvaluator(^, [x, 2])])
+- Now we reverse it: FunctionEvaluator(log, [FunctionEvaluator(^, [x, 2])]) → "log(x^2)"
+"""
+function generate_function_expression_recursive(evaluator::FunctionEvaluator)
     func = evaluator.func
-    arg_exprs = [generate_inline_expression(arg) for arg in evaluator.arg_evaluators]
-    return generate_function_call(func, arg_exprs)
+    args = evaluator.arg_evaluators
+    
+    # Phase 2B: Handle ALL cases recursively
+    # Generate argument expressions recursively - this is the key insight!
+    arg_exprs = [generate_expression_recursive(arg) for arg in args]
+    
+    # Generate the function call with domain safety
+    return generate_function_call_safe(func, arg_exprs)
 end
 
-
-function generate_argument_code!(instructions::Vector{String}, arg_eval::AbstractEvaluator, var_name::String)
-    if arg_eval isa ContinuousEvaluator
-        push!(instructions, "@inbounds $var_name = Float64(data.$(arg_eval.column)[row_idx])")
-        
-    elseif arg_eval isa ConstantEvaluator
-        push!(instructions, "@inbounds $var_name = $(arg_eval.value)")
-        
-    elseif arg_eval isa CategoricalEvaluator
-        # For categorical in function argument, use first contrast column
-        col = arg_eval.column
-        n_levels = arg_eval.n_levels
-        values = [arg_eval.contrast_matrix[i, 1] for i in 1:n_levels]
-        
-        cat_var = next_var("cat")
-        level_var = next_var("level")
-        
-        push!(instructions, "@inbounds $cat_var = data.$col[row_idx]")
-        push!(instructions, "@inbounds $level_var = $cat_var isa CategoricalValue ? levelcode($cat_var) : 1")
-        push!(instructions, "@inbounds $level_var = clamp($level_var, 1, $n_levels)")
-        
-        if n_levels == 2
-            push!(instructions, "@inbounds $var_name = $level_var == 1 ? $(values[1]) : $(values[2])")
-        else
-            ternary_chain = "$level_var == 1 ? $(values[1])"
-            for i in 2:(n_levels-1)
-                ternary_chain *= " : $level_var == $i ? $(values[i])"
-            end
-            ternary_chain *= " : $(values[n_levels])"
-            push!(instructions, "@inbounds $var_name = $ternary_chain")
-        end
-        
-    elseif arg_eval isa FunctionEvaluator
-        # Recursively handle nested functions
-        nested_args = [next_var("nested_arg") for _ in arg_eval.arg_evaluators]
-        for (i, nested_arg_eval) in enumerate(arg_eval.arg_evaluators)
-            generate_argument_code!(instructions, nested_arg_eval, nested_args[i])
-        end
-        nested_expr = generate_function_call(arg_eval.func, nested_args)
-        push!(instructions, "@inbounds $var_name = $nested_expr")
-        
+"""
+Check if an evaluator can be expressed as a simple inline expression.
+Phase 2B: Expanded to handle more cases recursively.
+"""
+function is_simple_expression(evaluator::AbstractEvaluator)
+    if evaluator isa ConstantEvaluator || evaluator isa ContinuousEvaluator
+        return true
+    elseif evaluator isa CategoricalEvaluator
+        return size(evaluator.contrast_matrix, 2) == 1 && evaluator.n_levels <= 3
+    elseif evaluator isa FunctionEvaluator
+        # Phase 2B: Functions are simple if their arguments are simple
+        return all(arg -> is_simple_expression(arg), evaluator.arg_evaluators)
+    elseif evaluator isa ScaledEvaluator
+        return is_simple_expression(evaluator.evaluator)
+    elseif evaluator isa ProductEvaluator
+        # Simple if all components are simple
+        return all(comp -> is_simple_expression(comp), evaluator.components)
     else
-        error("Variable generation not implemented for $(typeof(evaluator))")
+        return false
     end
 end
 
 """
-Enhanced generate_function_call that handles more function types and 
-works with inline expressions.
+Generate function calls with domain safety and enhanced mathematical function support.
+Phase 2B: Expanded with more functions and better error handling.
 """
-function generate_function_call(func::Function, arg_exprs::Vector{String})
+function generate_function_call_safe(func::Function, arg_exprs::Vector{String})
     if func === log
         @assert length(arg_exprs) == 1 "log expects 1 argument"
         arg = arg_exprs[1]
@@ -334,6 +265,7 @@ function generate_function_call(func::Function, arg_exprs::Vector{String})
         @assert length(arg_exprs) == 1 "abs expects 1 argument"
         return "abs($(arg_exprs[1]))"
         
+    # Trigonometric functions
     elseif func === sin
         @assert length(arg_exprs) == 1 "sin expects 1 argument"
         return "sin($(arg_exprs[1]))"
@@ -344,12 +276,88 @@ function generate_function_call(func::Function, arg_exprs::Vector{String})
         
     elseif func === tan
         @assert length(arg_exprs) == 1 "tan expects 1 argument"
-        return "tan($(arg_exprs[1]))"
+        arg = arg_exprs[1]
+        return "tan($arg)"  # Let Julia handle undefined values
         
-    elseif func === (^) && length(arg_exprs) == 2
-        arg1, arg2 = arg_exprs[1], arg_exprs[2]
-        return "($arg1^$arg2)"
+    elseif func === asin
+        @assert length(arg_exprs) == 1 "asin expects 1 argument"
+        arg = arg_exprs[1]
+        return "(abs($arg) <= 1.0 ? asin($arg) : NaN)"
         
+    elseif func === acos
+        @assert length(arg_exprs) == 1 "acos expects 1 argument"
+        arg = arg_exprs[1]
+        return "(abs($arg) <= 1.0 ? acos($arg) : NaN)"
+        
+    elseif func === atan
+        @assert length(arg_exprs) == 1 "atan expects 1 argument"
+        return "atan($(arg_exprs[1]))"
+        
+    # Hyperbolic functions
+    elseif func === sinh
+        @assert length(arg_exprs) == 1 "sinh expects 1 argument"
+        arg = arg_exprs[1]
+        return "sinh(clamp($arg, -700.0, 700.0))"
+        
+    elseif func === cosh
+        @assert length(arg_exprs) == 1 "cosh expects 1 argument"
+        arg = arg_exprs[1]
+        return "cosh(clamp($arg, -700.0, 700.0))"
+        
+    elseif func === tanh
+        @assert length(arg_exprs) == 1 "tanh expects 1 argument"
+        return "tanh($(arg_exprs[1]))"
+        
+    # Logarithmic functions
+    elseif func === log10
+        @assert length(arg_exprs) == 1 "log10 expects 1 argument"
+        arg = arg_exprs[1]
+        return "($arg > 0.0 ? log10($arg) : ($arg == 0.0 ? -Inf : NaN))"
+        
+    elseif func === log2
+        @assert length(arg_exprs) == 1 "log2 expects 1 argument"
+        arg = arg_exprs[1]
+        return "($arg > 0.0 ? log2($arg) : ($arg == 0.0 ? -Inf : NaN))"
+        
+    elseif func === log1p
+        @assert length(arg_exprs) == 1 "log1p expects 1 argument"
+        arg = arg_exprs[1]
+        return "($arg > -1.0 ? log1p($arg) : NaN)"
+        
+    # Power and exponential functions
+    elseif func === exp2
+        @assert length(arg_exprs) == 1 "exp2 expects 1 argument"
+        arg = arg_exprs[1]
+        return "exp2(clamp($arg, -1000.0, 1000.0))"
+        
+    elseif func === exp10
+        @assert length(arg_exprs) == 1 "exp10 expects 1 argument"
+        arg = arg_exprs[1]
+        return "exp10(clamp($arg, -300.0, 300.0))"
+        
+    elseif func === expm1
+        @assert length(arg_exprs) == 1 "expm1 expects 1 argument"
+        arg = arg_exprs[1]
+        return "expm1(clamp($arg, -700.0, 700.0))"
+        
+    # Rounding and sign functions
+    elseif func === round
+        @assert length(arg_exprs) == 1 "round expects 1 argument"
+        return "round($(arg_exprs[1]))"
+        
+    elseif func === floor
+        @assert length(arg_exprs) == 1 "floor expects 1 argument"
+        return "floor($(arg_exprs[1]))"
+        
+    elseif func === ceil
+        @assert length(arg_exprs) == 1 "ceil expects 1 argument"
+        return "ceil($(arg_exprs[1]))"
+        
+    elseif func === sign
+        @assert length(arg_exprs) == 1 "sign expects 1 argument"
+        return "sign($(arg_exprs[1]))"
+        
+    # Binary arithmetic operations
     elseif func === (+) && length(arg_exprs) == 2
         return "($(arg_exprs[1]) + $(arg_exprs[2]))"
         
@@ -363,6 +371,19 @@ function generate_function_call(func::Function, arg_exprs::Vector{String})
         arg1, arg2 = arg_exprs[1], arg_exprs[2]
         return "(abs($arg2) > 1e-16 ? $arg1 / $arg2 : ($arg1 == 0.0 ? NaN : ($arg1 > 0.0 ? Inf : -Inf)))"
         
+    elseif func === (^) && length(arg_exprs) == 2
+        arg1, arg2 = arg_exprs[1], arg_exprs[2]
+        return "($arg1 == 0.0 && $arg2 < 0.0 ? Inf : ($arg1 < 0.0 && !isinteger($arg2) ? NaN : $arg1^$arg2))"
+        
+    elseif func === mod && length(arg_exprs) == 2
+        arg1, arg2 = arg_exprs[1], arg_exprs[2]
+        return "($arg2 == 0.0 ? NaN : mod($arg1, $arg2))"
+        
+    elseif func === rem && length(arg_exprs) == 2
+        arg1, arg2 = arg_exprs[1], arg_exprs[2]
+        return "($arg2 == 0.0 ? NaN : rem($arg1, $arg2))"
+        
+    # Comparison operations
     elseif func === (>) && length(arg_exprs) == 2
         return "($(arg_exprs[1]) > $(arg_exprs[2]) ? 1.0 : 0.0)"
     elseif func === (<) && length(arg_exprs) == 2
@@ -376,568 +397,428 @@ function generate_function_call(func::Function, arg_exprs::Vector{String})
     elseif func === (!=) && length(arg_exprs) == 2
         return "($(arg_exprs[1]) != $(arg_exprs[2]) ? 1.0 : 0.0)"
         
+    # Min/max functions
+    elseif func === min && length(arg_exprs) == 2
+        return "min($(arg_exprs[1]), $(arg_exprs[2]))"
+    elseif func === max && length(arg_exprs) == 2
+        return "max($(arg_exprs[1]), $(arg_exprs[2]))"
+        
+    # N-ary operations
+    elseif func === (+) && length(arg_exprs) > 2
+        return "(" * join(arg_exprs, " + ") * ")"
+    elseif func === (*) && length(arg_exprs) > 2
+        return "(" * join(arg_exprs, " * ") * ")"
+    elseif func === min && length(arg_exprs) > 2
+        return "min(" * join(arg_exprs, ", ") * ")"
+    elseif func === max && length(arg_exprs) > 2
+        return "max(" * join(arg_exprs, ", ") * ")"
+        
     else
-        error("Function $func with $(length(arg_exprs)) arguments not yet supported. " *
-              "Supported: log, exp, sqrt, abs, sin, cos, tan, ^, +, -, *, /, comparison ops")
+        error("Function $func with $(length(arg_exprs)) arguments not supported in Phase 2B. " *
+              "Supported functions: log, exp, sqrt, abs, sin, cos, tan, asin, acos, atan, " *
+              "sinh, cosh, tanh, log10, log2, log1p, exp2, exp10, expm1, round, floor, ceil, sign, " *
+              "+, -, *, /, ^, mod, rem, >, <, >=, <=, ==, !=, min, max")
     end
 end
 
 ###############################################################################
-# COMPLEX EXPRESSION HANDLING
+# CATEGORICAL EXPRESSION GENERATION (Phase 2A - Simple Cases Only)
+###############################################################################
+
+###############################################################################
+# CATEGORICAL EXPRESSION GENERATION (Phase 2C - Full Implementation)
 ###############################################################################
 
 """
-For very complex nested expressions, we might need to break them into
-multiple statements to avoid extremely long lines. This function detects
-when an expression is getting too complex and breaks it down.
+    generate_categorical_expression_recursive(evaluator::CategoricalEvaluator) -> String
+
+Phase 2C: Full categorical expression generation.
+Handles both single-contrast (inline expressions) and multi-contrast (requires statements).
 """
-function generate_complex_function_code!(instructions::Vector{String}, eval::FunctionEvaluator, pos::Int)
-    # Check if any argument is too complex for inline generation
-    complex_args = AbstractEvaluator[]
-    simple_exprs = String[]
+function generate_categorical_expression_recursive(evaluator::CategoricalEvaluator)
+    col = evaluator.column
+    n_levels = evaluator.n_levels
+    contrast_matrix = evaluator.contrast_matrix
     
-    for (i, arg_eval) in enumerate(eval.arg_evaluators)
-        if is_simple_for_inline(arg_eval)
-            push!(simple_exprs, generate_inline_expression(arg_eval))
-        else
-            push!(complex_args, arg_eval)
-            # Generate temporary variable for complex argument
-            temp_var = next_var("complex_arg")
-            generate_evaluator_to_variable!(instructions, arg_eval, temp_var)
-            push!(simple_exprs, temp_var)
+    if size(contrast_matrix, 2) == 1
+        # Single contrast - can generate as inline expression
+        return generate_single_contrast_categorical_expression(evaluator)
+    else
+        # Multi-contrast - requires statement generation
+        error("Multi-contrast categorical expressions require statement generation. " *
+              "Use generate_statements_recursive() instead of generate_expression_recursive(). " *
+              "Contrasts: $(size(contrast_matrix, 2))")
+    end
+end
+
+"""
+Generate single-contrast categorical expressions (Phase 2C enhanced).
+"""
+function generate_single_contrast_categorical_expression(evaluator::CategoricalEvaluator)
+    col = evaluator.column
+    n_levels = evaluator.n_levels
+    contrast_matrix = evaluator.contrast_matrix
+    
+    values = [contrast_matrix[i, 1] for i in 1:n_levels]
+    level_expr = "clamp(data.$col[row_idx] isa CategoricalValue ? levelcode(data.$col[row_idx]) : 1, 1, $n_levels)"
+    
+    if n_levels == 1
+        return string(values[1])
+    elseif n_levels == 2
+        return "($level_expr == 1 ? $(values[1]) : $(values[2]))"
+    else
+        # Phase 2C: Handle larger categoricals more efficiently
+        return generate_categorical_lookup_expression(level_expr, values, n_levels)
+    end
+end
+
+"""
+Generate efficient categorical lookup expressions for larger categoricals.
+"""
+function generate_categorical_lookup_expression(level_expr::String, values::Vector{Float64}, n_levels::Int)
+    if n_levels <= 8
+        # Use ternary chain for small categoricals
+        ternary = "$level_expr == 1 ? $(values[1])"
+        for i in 2:(n_levels-1)
+            ternary *= " : $level_expr == $i ? $(values[i])"
         end
-    end
-    
-    # Now generate the function call with mix of expressions and variables
-    result_expr = generate_function_call(eval.func, simple_exprs)
-    push!(instructions, "@inbounds row_vec[$pos] = $result_expr")
-    
-    return pos + 1
-end
-
-"""
-Check if an evaluator is simple enough for inline expression generation.
-"""
-function is_simple_for_inline(evaluator::AbstractEvaluator)
-    if evaluator isa ConstantEvaluator || evaluator isa ContinuousEvaluator
-        return true
-    elseif evaluator isa CategoricalEvaluator
-        return evaluator.n_levels <= 3  # Avoid very long ternary chains
-    elseif evaluator isa FunctionEvaluator
-        return length(evaluator.arg_evaluators) <= 2 && all(is_simple_for_inline, evaluator.arg_evaluators)
+        ternary *= " : $(values[n_levels])"
+        return "($ternary)"
     else
-        return false
-    end
-end
-
-"""
-Generate code to evaluate an evaluator into a single variable.
-This is used as a fallback for complex expressions.
-"""
-function generate_evaluator_to_variable!(instructions::Vector{String}, evaluator::AbstractEvaluator, var_name::String)
-    if evaluator isa ConstantEvaluator
-        push!(instructions, "@inbounds $var_name = $(evaluator.value)")
-    elseif evaluator isa ContinuousEvaluator
-        push!(instructions, "@inbounds $var_name = Float64(data.$(evaluator.column)[row_idx])")
-    elseif evaluator isa FunctionEvaluator
-        # Use the new inline approach
-        expr = generate_inline_expression(evaluator)
-        push!(instructions, "@inbounds $var_name = $expr")
-    else
-        error("Variable generation not implemented for $(typeof(evaluator))")
+        # For large categoricals, this becomes unwieldy - should use statement generation
+        error("Categorical with $n_levels levels is too large for inline expression. " *
+              "Use generate_statements_recursive() for multi-statement generation.")
     end
 end
 
 ###############################################################################
-# INTERACTION CODE GENERATION
+# PLACEHOLDER IMPLEMENTATIONS FOR PHASE 2B-2D
 ###############################################################################
 
 """
-    generate_interaction_code!(instructions, eval::InteractionEvaluator, pos)
-
-Generate fully unrolled, allocation-free code for interaction terms.
-
-# Strategy
-Instead of computing Kronecker products dynamically, we pre-analyze the 
-interaction structure and generate explicit code for each output position.
-
-# Key Insight
-An interaction x₁ × x₂ × ... × xₙ produces a Kronecker product where each
-output element is the product of specific elements from each component.
-We can pre-compute which elements multiply together and generate direct code.
-
-# Example
-For x * group (where group has 3 levels):
-- Output[1] = x * group_contrast[1] 
-- Output[2] = x * group_contrast[2]
-- Output[3] = x * group_contrast[3]
-
-Instead of computing this as a Kronecker product, we generate 3 separate
-multiplication instructions.
+Phase 2B: Complex Function Expression Generation
+Will handle arbitrarily nested functions like log(x^2 + sin(y)).
 """
-function generate_interaction_code!(instructions::Vector{String}, eval::InteractionEvaluator, pos::Int)
-    n_components = length(eval.components)
-    component_widths = [output_width(comp) for comp in eval.components]
-    total_width = eval.total_width
+function generate_complex_function_expression_recursive(evaluator::FunctionEvaluator)
+    error("Complex nested function expressions will be implemented in Phase 2B. " *
+          "Function: $(evaluator.func)")
+end
+
+###############################################################################
+# MULTI-OUTPUT STATEMENT GENERATION (Phase 2C - Full Implementation)
+###############################################################################
+
+"""
+    generate_multi_output_statements_recursive(evaluator::AbstractEvaluator, start_pos::Int)
+
+Phase 2C: Full multi-output statement generation.
+Handles complex categoricals, interactions, and other multi-output evaluators.
+"""
+function generate_multi_output_statements_recursive(evaluator::AbstractEvaluator, start_pos::Int)
     
-    if n_components == 0
-        # Empty interaction - shouldn't happen but handle gracefully
-        return pos
+    if evaluator isa CategoricalEvaluator
+        return generate_categorical_statements_recursive(evaluator, start_pos)
         
-    elseif n_components == 1
-        # Single component - just delegate to regular generation
-        return generate_evaluator_code!(instructions, eval.components[1], pos)
+    elseif evaluator isa InteractionEvaluator
+        return generate_interaction_statements_recursive(evaluator, start_pos)
         
-    elseif n_components == 2
-        # Two-way interaction - optimize common case
-        return generate_binary_interaction_unrolled!(instructions, eval.components, component_widths, pos)
-        
-    elseif n_components == 3
-        # Three-way interaction - still manageable to unroll
-        return generate_ternary_interaction_unrolled!(instructions, eval.components, component_widths, pos)
+    elseif evaluator isa ZScoreEvaluator && output_width(evaluator.underlying) > 1
+        return generate_zscore_statements_recursive(evaluator, start_pos)
         
     else
-        # High-order interactions - use general unrolling
-        return generate_general_interaction_unrolled!(instructions, eval.components, component_widths, pos)
-    end
-end
-
-###############################################################################
-# BINARY INTERACTION UNROLLING (Most Common Case)
-###############################################################################
-
-"""
-Generate unrolled code for two-way interactions like x * group.
-This handles the most common case efficiently.
-"""
-function generate_binary_interaction_unrolled!(instructions::Vector{String}, 
-                                              components::Vector{AbstractEvaluator}, 
-                                              widths::Vector{Int}, 
-                                              pos::Int)
-    
-    comp1, comp2 = components[1], components[2]
-    w1, w2 = widths[1], widths[2]
-    
-    # Generate variable names for first component values
-    comp1_vars = if w1 == 1
-        [next_var("c1")]
-    else
-        [next_var("c1_$i") for i in 1:w1]
-    end
-    
-    # Generate variable names for second component values  
-    comp2_vars = if w2 == 1
-        [next_var("c2")]
-    else
-        [next_var("c2_$i") for i in 1:w2]
-    end
-    
-    # Generate code to evaluate first component
-    generate_component_values!(instructions, comp1, comp1_vars)
-    
-    # Generate code to evaluate second component
-    generate_component_values!(instructions, comp2, comp2_vars)
-    
-    # Generate unrolled Kronecker product: comp1[i] * comp2[j] for all i,j
-    output_idx = pos
-    for j in 1:w2
-        for i in 1:w1
-            push!(instructions, "@inbounds row_vec[$output_idx] = $(comp1_vars[i]) * $(comp2_vars[j])")
-            output_idx += 1
-        end
-    end
-    
-    return output_idx
-end
-
-###############################################################################
-# TERNARY INTERACTION UNROLLING
-###############################################################################
-
-"""
-Generate unrolled code for three-way interactions like x * y * group.
-Still manageable for reasonable component widths.
-"""
-function generate_ternary_interaction_unrolled!(instructions::Vector{String}, 
-                                               components::Vector{AbstractEvaluator}, 
-                                               widths::Vector{Int}, 
-                                               pos::Int)
-    
-    comp1, comp2, comp3 = components[1], components[2], components[3]
-    w1, w2, w3 = widths[1], widths[2], widths[3]
-    
-    # Check if unrolling is reasonable (avoid code explosion)
-    total_terms = w1 * w2 * w3
-    if total_terms > 100
-        @warn "Three-way interaction has $total_terms terms, code may be large"
-    end
-    
-    # Generate variable names for each component
-    comp1_vars = [next_var("c1_$i") for i in 1:w1]
-    comp2_vars = [next_var("c2_$i") for i in 1:w2] 
-    comp3_vars = [next_var("c3_$i") for i in 1:w3]
-    
-    # Generate code to evaluate each component
-    generate_component_values!(instructions, comp1, comp1_vars)
-    generate_component_values!(instructions, comp2, comp2_vars)
-    generate_component_values!(instructions, comp3, comp3_vars)
-    
-    # Generate triple-nested unrolled product
-    output_idx = pos
-    for k in 1:w3
-        for j in 1:w2
-            for i in 1:w1
-                push!(instructions, "@inbounds row_vec[$output_idx] = $(comp1_vars[i]) * $(comp2_vars[j]) * $(comp3_vars[k])")
-                output_idx += 1
-            end
-        end
-    end
-    
-    return output_idx
-end
-
-###############################################################################
-# GENERAL INTERACTION UNROLLING
-###############################################################################
-
-"""
-Generate unrolled code for n-way interactions.
-Uses index arithmetic to avoid exponential code generation.
-"""
-function generate_general_interaction_unrolled!(instructions::Vector{String}, 
-                                               components::Vector{AbstractEvaluator}, 
-                                               widths::Vector{Int}, 
-                                               pos::Int)
-    
-    n_components = length(components)
-    total_width = prod(widths)
-    
-    # Warn about potential code explosion
-    if total_width > 200
-        @warn "High-order interaction has $total_width terms, generating compact code"
-        return generate_compact_interaction_code!(instructions, components, widths, pos)
-    end
-    
-    # Generate variable names for each component
-    all_component_vars = Vector{Vector{String}}(undef, n_components)
-    for i in 1:n_components
-        all_component_vars[i] = [next_var("c$(i)_$j") for j in 1:widths[i]]
-        generate_component_values!(instructions, components[i], all_component_vars[i])
-    end
-    
-    # Generate unrolled products using index arithmetic
-    for linear_idx in 0:(total_width-1)
-        # Convert linear index to multi-dimensional indices
-        indices = linear_to_multi_index(linear_idx, widths)
-        
-        # Generate product expression
-        product_terms = String[]
-        for comp_idx in 1:n_components
-            element_idx = indices[comp_idx] + 1  # Convert to 1-based
-            push!(product_terms, all_component_vars[comp_idx][element_idx])
-        end
-        
-        product_expr = join(product_terms, " * ")
-        output_pos = pos + linear_idx
-        push!(instructions, "@inbounds row_vec[$output_pos] = $product_expr")
-    end
-    
-    return pos + total_width
-end
-
-###############################################################################
-# COMPONENT VALUE GENERATION
-###############################################################################
-
-"""
-    generate_component_values!(instructions, component, var_names)
-
-Generate code to evaluate a single interaction component into named variables.
-This is the allocation-free replacement for the old buffer-based approach.
-"""
-function generate_component_values!(instructions::Vector{String}, 
-                                   component::AbstractEvaluator, 
-                                   var_names::Vector{String})
-    
-    if component isa ConstantEvaluator
-        # All variables get the same constant value
-        for var_name in var_names
-            push!(instructions, "@inbounds $var_name = $(component.value)")
-        end
-        
-    elseif component isa ContinuousEvaluator
-        # Single variable gets the data value (should only be one var_name)
-        @assert length(var_names) == 1 "Continuous component should have width 1"
-        push!(instructions, "@inbounds $(var_names[1]) = Float64(data.$(component.column)[row_idx])")
-        
-    elseif component isa CategoricalEvaluator
-        # Generate categorical contrast lookup code
-        generate_categorical_component_values!(instructions, component, var_names)
-        
-    elseif component isa FunctionEvaluator
-        # Single variable gets the function result (should only be one var_name)
-        @assert length(var_names) == 1 "Function component should have width 1"
-        func_result = generate_function_expression(component)
-        push!(instructions, "@inbounds $(var_names[1]) = $func_result")
-        
-    else
-        @error "Unsupported component type in interaction: $(typeof(component))"
-        error("Unsupported component type in interaction: $(typeof(component))")
+        error("Multi-output statement generation for $(typeof(evaluator)) not implemented. " *
+              "Output width: $(output_width(evaluator))")
     end
 end
 
 """
-Generate categorical contrast values efficiently.
+Generate statements for multi-contrast categorical evaluators.
 """
-function generate_categorical_component_values!(instructions::Vector{String}, 
-                                               component::CategoricalEvaluator, 
-                                               var_names::Vector{String})
+function generate_categorical_statements_recursive(evaluator::CategoricalEvaluator, start_pos::Int)
+    col = evaluator.column
+    n_levels = evaluator.n_levels
+    contrast_matrix = evaluator.contrast_matrix
+    width = size(contrast_matrix, 2)
     
-    col = component.column
-    n_levels = component.n_levels
-    contrast_matrix = component.contrast_matrix
-    width = length(var_names)
+    if width == 1
+        # Single contrast - can use expression generation
+        expr = generate_single_contrast_categorical_expression(evaluator)
+        instructions = ["@inbounds row_vec[$start_pos] = $expr"]
+        return instructions, start_pos + 1
+    end
     
-    @assert width == size(contrast_matrix, 2) "Variable count must match contrast width"
+    instructions = String[]
     
-    # Generate categorical lookup variables
+    # Generate unique variable names for this categorical
     cat_var = next_var("cat")
     level_var = next_var("level")
     
+    # Extract categorical value and level code
     push!(instructions, "@inbounds $cat_var = data.$col[row_idx]")
     push!(instructions, "@inbounds $level_var = $cat_var isa CategoricalValue ? levelcode($cat_var) : 1")
     push!(instructions, "@inbounds $level_var = clamp($level_var, 1, $n_levels)")
     
-    # Generate efficient contrast lookup for each variable
+    # Generate efficient contrast assignments
+    if n_levels <= 4 && width <= 3
+        # Small categorical - use direct ternary assignments
+        generate_small_categorical_statements!(instructions, contrast_matrix, level_var, n_levels, width, start_pos)
+    else
+        # Large categorical - use lookup table approach
+        generate_large_categorical_statements!(instructions, contrast_matrix, level_var, n_levels, width, start_pos)
+    end
+    
+    return instructions, start_pos + width
+end
+
+"""
+Generate statements for small categoricals using direct ternary operations.
+"""
+function generate_small_categorical_statements!(instructions::Vector{String}, 
+                                               contrast_matrix::Matrix{Float64},
+                                               level_var::String, 
+                                               n_levels::Int, 
+                                               width::Int, 
+                                               start_pos::Int)
+    
     for j in 1:width
+        output_pos = start_pos + j - 1
         values = [contrast_matrix[i, j] for i in 1:n_levels]
-        var_name = var_names[j]
         
         if n_levels == 1
-            push!(instructions, "@inbounds $var_name = $(values[1])")
+            push!(instructions, "@inbounds row_vec[$output_pos] = $(values[1])")
         elseif n_levels == 2
-            push!(instructions, "@inbounds $var_name = $level_var == 1 ? $(values[1]) : $(values[2])")
+            push!(instructions, "@inbounds row_vec[$output_pos] = $level_var == 1 ? $(values[1]) : $(values[2])")
         elseif n_levels == 3
-            push!(instructions, "@inbounds $var_name = $level_var == 1 ? $(values[1]) : $level_var == 2 ? $(values[2]) : $(values[3])")
+            push!(instructions, "@inbounds row_vec[$output_pos] = $level_var == 1 ? $(values[1]) : $level_var == 2 ? $(values[2]) : $(values[3])")
+        elseif n_levels == 4
+            push!(instructions, "@inbounds row_vec[$output_pos] = $level_var == 1 ? $(values[1]) : $level_var == 2 ? $(values[2]) : $level_var == 3 ? $(values[3]) : $(values[4])")
         else
-            # Chain of ternaries for more levels
+            # Build general ternary chain
             ternary_chain = "$level_var == 1 ? $(values[1])"
             for i in 2:(n_levels-1)
                 ternary_chain *= " : $level_var == $i ? $(values[i])"
             end
             ternary_chain *= " : $(values[n_levels])"
-            push!(instructions, "@inbounds $var_name = $ternary_chain")
+            push!(instructions, "@inbounds row_vec[$output_pos] = $ternary_chain")
         end
     end
 end
 
 """
-Generate inline function evaluation expression.
+Generate statements for large categoricals using lookup table approach.
 """
-function generate_function_expression(component::FunctionEvaluator)
-    func = component.func
-    n_args = length(component.arg_evaluators)
+function generate_large_categorical_statements!(instructions::Vector{String}, 
+                                               contrast_matrix::Matrix{Float64},
+                                               level_var::String, 
+                                               n_levels::Int, 
+                                               width::Int, 
+                                               start_pos::Int)
     
-    if n_args == 1
-        arg_expr = generate_argument_expression(component.arg_evaluators[1])
-        return generate_function_call(func, [arg_expr])
-    elseif n_args == 2
-        arg1_expr = generate_argument_expression(component.arg_evaluators[1])
-        arg2_expr = generate_argument_expression(component.arg_evaluators[2])
-        return generate_function_call(func, [arg1_expr, arg2_expr])
-    else
-        # General case
-        arg_exprs = [generate_argument_expression(arg) for arg in component.arg_evaluators]
-        return generate_function_call(func, arg_exprs)
+    # For very large categoricals, we can use a more compact approach
+    # Generate lookup arrays as local variables
+    for j in 1:width
+        output_pos = start_pos + j - 1
+        values = [contrast_matrix[i, j] for i in 1:n_levels]
+        
+        # Create a lookup array variable
+        lookup_var = next_var("lookup")
+        values_str = "[" * join(string.(values), ", ") * "]"
+        push!(instructions, "@inbounds $lookup_var = $values_str")
+        push!(instructions, "@inbounds row_vec[$output_pos] = $lookup_var[$level_var]")
     end
 end
 
 """
-Generate expression for function argument.
+Generate statements for simple interactions (Phase 2C).
+More complex interactions will be handled in Phase 2D.
 """
-function generate_argument_expression(arg_evaluator::AbstractEvaluator)
-    if arg_evaluator isa ConstantEvaluator
-        return string(arg_evaluator.value)
-    elseif arg_evaluator isa ContinuousEvaluator
-        return "Float64(data.$(arg_evaluator.column)[row_idx])"
-    else
-        error("Complex argument type $(typeof(arg_evaluator)) not supported in function arguments")
-    end
-end
-
-###############################################################################
-# COMPACT CODE GENERATION FOR VERY LARGE INTERACTIONS
-###############################################################################
-
-"""
-For interactions with hundreds of terms, generate compact loop-based code
-that's still allocation-free but uses runtime loops instead of full unrolling.
-"""
-function generate_compact_interaction_code!(instructions::Vector{String}, 
-                                           components::Vector{AbstractEvaluator}, 
-                                           widths::Vector{Int}, 
-                                           pos::Int)
-    
+function generate_interaction_statements_recursive(evaluator::InteractionEvaluator, start_pos::Int)
+    components = evaluator.components
     n_components = length(components)
-    total_width = prod(widths)
     
-    # Generate component evaluation code
-    all_component_vars = Vector{Vector{String}}(undef, n_components)
-    for i in 1:n_components
-        all_component_vars[i] = [next_var("c$(i)_$j") for j in 1:widths[i]]
-        generate_component_values!(instructions, components[i], all_component_vars[i])
-    end
-    
-    # Generate compact nested loops (still no allocations)
-    if n_components == 2
-        w1, w2 = widths[1], widths[2]
-        output_idx = pos
-        push!(instructions, "@inbounds for j in 1:$w2")
-        push!(instructions, "@inbounds   for i in 1:$w1")
-        push!(instructions, "@inbounds     row_vec[$output_idx] = $(all_component_vars[1])[i] * $(all_component_vars[2])[j]")
-        push!(instructions, "@inbounds     $output_idx += 1")
-        push!(instructions, "@inbounds   end")
-        push!(instructions, "@inbounds end")
+    if n_components == 0
+        return String[], start_pos
+    elseif n_components == 1
+        # Single component - delegate to regular statement generation
+        return generate_statements_recursive(components[1], start_pos)
+    elseif n_components == 2
+        # Binary interaction - handle in Phase 2C
+        return generate_binary_interaction_statements(components, start_pos)
     else
-        # For higher dimensions, fall back to index arithmetic
-        errors("higher dimension error")
-        # push!(instructions, "@inbounds for linear_idx in 0:$(total_width-1)")
-        # push!(instructions, "@inbounds   # Multi-index computation and product would go here")
-        # push!(instructions, "@inbounds   row_vec[$(pos) + linear_idx] = 1.0  # Placeholder")
-        # push!(instructions, "@inbounds end")
+        # Complex interactions - defer to Phase 2D
+        error("Interactions with $(n_components) components will be implemented in Phase 2D. " *
+              "Components: $(typeof.(components))")
     end
-    
-    return pos + total_width
 end
 
-###############################################################################
-# ZSCORE AND COMBINED CODE GENERATION
-###############################################################################
+"""
+Generate statements for binary interactions (Phase 2C).
+"""
+function generate_binary_interaction_statements(components::Vector{AbstractEvaluator}, start_pos::Int)
+    comp1, comp2 = components[1], components[2]
+    w1, w2 = output_width(comp1), output_width(comp2)
+    total_width = w1 * w2
+    
+    instructions = String[]
+    
+    # Check if both components can be generated as simple expressions
+    if is_simple_expression(comp1) && is_simple_expression(comp2)
+        return generate_simple_binary_interaction_statements(comp1, comp2, start_pos)
+    else
+        # One or both components are complex - use statement-based approach
+        return generate_complex_binary_interaction_statements(comp1, comp2, w1, w2, start_pos)
+    end
+end
 
-function generate_zscore_code!(instructions::Vector{String}, eval::ZScoreEvaluator, pos::Int)
-    center = eval.center
-    scale = eval.scale
+"""
+Generate statements for simple binary interactions (both components expressible inline).
+"""
+function generate_simple_binary_interaction_statements(comp1::AbstractEvaluator, comp2::AbstractEvaluator, start_pos::Int)
+    w1, w2 = output_width(comp1), output_width(comp2)
+    instructions = String[]
     
-    # Generate code for underlying evaluator
-    underlying_width = output_width(eval.underlying)
-    
-    if underlying_width == 1
-        # Single-column case - generate inline
-        temp_var = next_var("zscore_temp")
+    # Generate expressions for both components
+    if w1 == 1 && w2 == 1
+        # Both scalar - simple product
+        expr1 = generate_expression_recursive(comp1)
+        expr2 = generate_expression_recursive(comp2)
+        push!(instructions, "@inbounds row_vec[$start_pos] = ($expr1) * ($expr2)")
+        return instructions, start_pos + 1
         
-        if eval.underlying isa ContinuousEvaluator
-            col = eval.underlying.column
-            push!(instructions, "@inbounds $temp_var = Float64(data.$col[row_idx])")
-        elseif eval.underlying isa FunctionEvaluator
-            # Generate function evaluation
-            arg_vars = [next_var("zarg") for _ in eval.underlying.arg_evaluators]
-            for (i, arg_eval) in enumerate(eval.underlying.arg_evaluators)
-                generate_argument_code!(instructions, arg_eval, arg_vars[i])
+    elseif w1 == 1 && w2 > 1
+        # Scalar × Vector interaction (e.g., x * group)
+        expr1 = generate_expression_recursive(comp1)
+        return generate_scalar_vector_interaction(expr1, comp2, start_pos, w2)
+        
+    elseif w1 > 1 && w2 == 1
+        # Vector × Scalar interaction (e.g., group * x) 
+        expr2 = generate_expression_recursive(comp2)
+        return generate_vector_scalar_interaction(comp1, expr2, start_pos, w1)
+        
+    else
+        # Vector × Vector - defer to complex case
+        return generate_complex_binary_interaction_statements(comp1, comp2, w1, w2, start_pos)
+    end
+end
+
+"""
+Generate statements for scalar × vector interactions.
+"""
+function generate_scalar_vector_interaction(scalar_expr::String, vector_comp::AbstractEvaluator, start_pos::Int, width::Int)
+    instructions = String[]
+    
+    if vector_comp isa CategoricalEvaluator
+        # Scalar × Categorical: multiply scalar by each contrast
+        col = vector_comp.column
+        n_levels = vector_comp.n_levels
+        contrast_matrix = vector_comp.contrast_matrix
+        
+        # Generate categorical lookup
+        cat_var = next_var("cat")
+        level_var = next_var("level")
+        push!(instructions, "@inbounds $cat_var = data.$col[row_idx]")
+        push!(instructions, "@inbounds $level_var = $cat_var isa CategoricalValue ? levelcode($cat_var) : 1")
+        push!(instructions, "@inbounds $level_var = clamp($level_var, 1, $n_levels)")
+        
+        # Generate scaled contrasts
+        for j in 1:width
+            output_pos = start_pos + j - 1
+            values = [contrast_matrix[i, j] for i in 1:n_levels]
+            
+            if n_levels <= 4
+                # Small categorical - direct ternary with scaling
+                if n_levels == 2
+                    contrast_expr = "$level_var == 1 ? $(values[1]) : $(values[2])"
+                else
+                    contrast_expr = "$level_var == 1 ? $(values[1])"
+                    for i in 2:(n_levels-1)
+                        contrast_expr *= " : $level_var == $i ? $(values[i])"
+                    end
+                    contrast_expr *= " : $(values[n_levels])"
+                end
+                
+                push!(instructions, "@inbounds row_vec[$output_pos] = ($scalar_expr) * ($contrast_expr)")
+            else
+                # Large categorical - use lookup
+                lookup_var = next_var("lookup")
+                values_str = "[" * join(string.(values), ", ") * "]"
+                push!(instructions, "@inbounds $lookup_var = $values_str")
+                push!(instructions, "@inbounds row_vec[$output_pos] = ($scalar_expr) * $lookup_var[$level_var]")
             end
-            result_expr = generate_function_call(eval.underlying.func, arg_vars)
-            push!(instructions, "@inbounds $temp_var = $result_expr")
-        else
-            error("ZScore fallback")
         end
         
-        # Apply Z-score transformation
-        push!(instructions, "@inbounds row_vec[$pos] = ($temp_var - $center) / $scale")
-        
-        return pos + 1
+        return instructions, start_pos + width
     else
-        # Multi-column case - recursively generate underlying code then transform
-        # For now, simplified handling
-        next_pos = generate_evaluator_code!(instructions, eval.underlying, pos)
-        
-        # Apply Z-score to each generated column
-        for i in 0:(underlying_width-1)
-            col_pos = pos + i
-            temp_var = next_var("zscore_col")
-            push!(instructions, "@inbounds $temp_var = row_vec[$col_pos]")
-            push!(instructions, "@inbounds row_vec[$col_pos] = ($temp_var - $center) / $scale")
-        end
-        
-        return next_pos
+        error("Scalar × Vector interaction with $(typeof(vector_comp)) not implemented in Phase 2C")
     end
 end
 
-function generate_combined_code!(instructions::Vector{String}, eval::CombinedEvaluator, pos::Int)
-    current_pos = pos
-    
-    for sub_eval in eval.sub_evaluators
-        current_pos = generate_evaluator_code!(instructions, sub_eval, current_pos)
-    end
-    
-    return current_pos
+"""
+Generate statements for vector × scalar interactions.
+"""
+function generate_vector_scalar_interaction(vector_comp::AbstractEvaluator, scalar_expr::String, start_pos::Int, width::Int)
+    # Vector × Scalar is the same as Scalar × Vector
+    return generate_scalar_vector_interaction(scalar_expr, vector_comp, start_pos, width)
+end
+
+"""
+Generate statements for complex binary interactions (fallback).
+"""
+function generate_complex_binary_interaction_statements(comp1::AbstractEvaluator, comp2::AbstractEvaluator, w1::Int, w2::Int, start_pos::Int)
+    error("Complex binary interactions between $(typeof(comp1)) (width $w1) and $(typeof(comp2)) (width $w2) " *
+          "will be implemented in Phase 2D. Use simpler interaction patterns for Phase 2C.")
 end
 
 ###############################################################################
-# SCALED AND PRODUCT CODE GENERATION
+# PRODUCT EXPRESSION GENERATION (Phase 2B Implementation)
 ###############################################################################
 
 """
-    generate_scaled_code!(instructions, eval::ScaledEvaluator, pos)
+    generate_product_expression_recursive(evaluator::ProductEvaluator) -> String
 
-Generate code for ScaledEvaluator that properly scales ALL output positions.
-
-# Problem with Original
-The original implementation only scaled row_vec[pos], but the inner evaluator
-might write to multiple positions (e.g., categorical with 3 levels writes to
-pos, pos+1, pos+2). This left positions pos+1, pos+2, ... unscaled.
-
-# Fix
-Scale all positions from pos to next_pos-1 that the inner evaluator wrote to.
-
-# Example
-For categorical with 3 levels and scale factor 2.5:
-- Inner evaluator writes to row_vec[pos], row_vec[pos+1], row_vec[pos+2]  
-- We need to scale ALL three positions, not just row_vec[pos]
+Phase 2B: Generate product expressions recursively.
+Handles products like (x + 1) * (y + 2) by recursively generating each component.
 """
-function generate_scaled_code!(instructions::Vector{String}, eval::ScaledEvaluator, pos::Int)
-    # Generate code for inner evaluator first
-    next_pos = generate_evaluator_code!(instructions, eval.evaluator, pos)
+function generate_product_expression_recursive(evaluator::ProductEvaluator)
+    # Recursively generate each component expression
+    component_exprs = [generate_expression_recursive(comp) for comp in evaluator.components]
     
-    # Scale ALL positions that the inner evaluator wrote to
-    width = next_pos - pos  # Number of positions written
-    
-    if width == 1
-        # Single position - direct scaling (most common case)
-        push!(instructions, "@inbounds row_vec[$pos] *= $(eval.scale_factor)")
+    if length(component_exprs) == 1
+        return component_exprs[1]
     else
-        # Multiple positions - scale each one
-        for i in 0:(width-1)
-            current_pos = pos + i
-            push!(instructions, "@inbounds row_vec[$current_pos] *= $(eval.scale_factor)")
-        end
+        return "(" * join(component_exprs, " * ") * ")"
     end
-    
+end
+
+###############################################################################
+# MAIN CODE GENERATION INTERFACE (Replaces previous generate_code_from_evaluator)
+###############################################################################
+
+"""
+    generate_code_from_evaluator(evaluator::AbstractEvaluator) -> Vector{String}
+
+Main interface for generating code from evaluator trees.
+This replaces the previous non-recursive generate_code_from_evaluator function.
+"""
+function generate_code_from_evaluator(evaluator::AbstractEvaluator)
+    reset_var_counter!()
+    instructions, _ = generate_statements_recursive(evaluator, 1)
+    return instructions
+end
+
+"""
+    generate_evaluator_code!(instructions::Vector{String}, evaluator::AbstractEvaluator, pos::Int) -> Int
+
+Backward compatibility interface that uses the new recursive system.
+This maintains compatibility with existing code while using the new architecture.
+"""
+function generate_evaluator_code!(instructions::Vector{String}, evaluator::AbstractEvaluator, pos::Int)
+    # Use the new recursive statement generation
+    new_instructions, next_pos = generate_statements_recursive(evaluator, pos)
+    append!(instructions, new_instructions)
     return next_pos
 end
 
-"""
-Test case that demonstrates the bug and verifies the fix:
-
-```julia
-# Create a categorical with 3 levels scaled by 2.0
-cat_eval = CategoricalEvaluator(:group, contrast_matrix, 3)
-scaled_eval = ScaledEvaluator(cat_eval, 2.0)
-
-# The inner categorical writes to positions [pos, pos+1, pos+2]
-# The scale should apply to ALL three positions
-```
-
-Before fix: Only row_vec[pos] gets scaled
-After fix: All row_vec[pos], row_vec[pos+1], row_vec[pos+2] get scaled
-"""
-
-function generate_product_code!(instructions::Vector{String}, eval::ProductEvaluator, pos::Int)
-    component_vars = [next_var("prod_comp") for _ in eval.components]
-    
-    for (i, component) in enumerate(eval.components)
-        generate_argument_code!(instructions, component, component_vars[i])
-    end
-    
-    product_expr = join(component_vars, " * ")
-    push!(instructions, "@inbounds row_vec[$pos] = $product_expr")
-    return pos + 1
-end
+# Export main functions
+export generate_code_from_evaluator, generate_evaluator_code!
+export generate_expression_recursive, generate_statements_recursive
