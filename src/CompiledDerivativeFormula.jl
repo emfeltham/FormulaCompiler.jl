@@ -6,7 +6,7 @@ const DERIVATIVE_CACHE = Dict{UInt64, Tuple{Vector{String}, Vector{Symbol}, Int}
 
 struct CompiledDerivativeFormula{H}
     formula_val::Val{H}
-    output_width::Int  # BREAKING CHANGE: Now same as original
+    output_width::Int  # Same as original
     focal_variable::Symbol
     root_derivative_evaluator::PositionalDerivativeEvaluator
 end
@@ -28,17 +28,40 @@ function compile_derivative_formula(compiled_formula::CompiledFormula, focal_var
         println("Focal variable: $focal_variable")
     end
     
-    # SIMPLE: Just wrap the original system with position tracking
+    # Check if focal variable exists in the formula
+    dependencies = get_variable_dependencies(compiled_formula)
+    if focal_variable ∉ dependencies
+        if verbose
+            println("Warning: Variable $focal_variable not found in formula dependencies: $dependencies")
+        end
+        # Still proceed but derivatives will be all zeros
+    end
+    
+    # Create positional derivative evaluator
     positional_derivative_evaluator = PositionalDerivativeEvaluator(
         root_evaluator, 
         focal_variable, 
         target_width
     )
     
+    # Generate code using the specialized derivative code generation
     instructions = generate_code_from_evaluator(positional_derivative_evaluator)
     
     if verbose
         println("Generated $(length(instructions)) full-width derivative instructions")
+        if length(instructions) <= 10
+            for (i, instr) in enumerate(instructions)
+                println("  $i: $instr")
+            end
+        else
+            for i in 1:5
+                println("  $i: $(instructions[i])")
+            end
+            println("  ... ($(length(instructions) - 10) more)")
+            for i in (length(instructions)-4):length(instructions)
+                println("  $i: $(instructions[i])")
+            end
+        end
     end
     
     derivative_hash = hash((compiled_formula.formula_val, focal_variable, :full_width))

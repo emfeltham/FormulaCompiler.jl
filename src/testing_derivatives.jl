@@ -5,12 +5,14 @@
 """
 Test derivative correctness for a single variable using finite differences.
 """
-function test_single_variable_derivative(compiled::CompiledFormula, 
-                                        focal_var::Symbol, 
-                                        data::NamedTuple, 
-                                        n_obs::Int, 
-                                        tolerance::Float64,
-                                        verbose::Bool)
+function test_single_variable_derivative(
+    compiled::CompiledFormula, 
+    focal_var::Symbol, 
+    data::NamedTuple, 
+    n_obs::Int, 
+    tolerance::Float64,
+    verbose::Bool
+)
     
     try
         derivative_compiled = compile_derivative_formula(compiled, focal_var)
