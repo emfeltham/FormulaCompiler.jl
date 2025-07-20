@@ -114,59 +114,256 @@ function generate_combined_positioning_instructions!(instructions::Vector{String
     println("DEBUG: Finished generate_combined_positioning_instructions!")
 end
 
+# 2. Update generate_product_evaluator_derivative_code! to handle categorical properly
 function generate_product_evaluator_derivative_code!(instructions::Vector{String}, evaluator::ProductEvaluator, pos::Int)
     println("DEBUG: generate_product_evaluator_derivative_code! called")
     println("  Position: $pos")
     println("  Number of components: $(length(evaluator.components))")
     
-    component_exprs = String[]
+    # Check if we have a categorical component - needs special handling
+    has_categorical = any(comp -> comp isa CategoricalEvaluator, evaluator.components)
     
-    for (i, component) in enumerate(evaluator.components)
-        println("  Processing component $i: $(typeof(component))")
+    if has_categorical
+        println("  Special case: ProductEvaluator with CategoricalEvaluator")
+        generate_product_with_categorical!(instructions, evaluator, pos)
+    else
+        # Original logic for non-categorical cases
+        component_exprs = String[]
         
-        if component isa ConstantEvaluator
-            expr = string(component.value)
-            println("    Generated: $expr")
-            push!(component_exprs, expr)
+        for (i, component) in enumerate(evaluator.components)
+            println("  Processing component $i: $(typeof(component))")
             
-        elseif component isa ContinuousEvaluator
-            expr = "Float64(data.$(component.column)[row_idx])"
-            println("    Generated: $expr")
-            push!(component_exprs, expr)
-            
-        elseif component isa ScaledEvaluator
-            inner_expr = generate_inline_expression_for_derivatives(component.evaluator)
-            expr = "($(inner_expr) * $(component.scale_factor))"
-            println("    Generated: $expr")
-            push!(component_exprs, expr)
-            
-        else
-            println("    Trying inline expression for $(typeof(component))")
-            try
-                expr = generate_inline_expression_for_derivatives(component)
+            if component isa ConstantEvaluator
+                expr = string(component.value)
                 println("    Generated: $expr")
                 push!(component_exprs, expr)
-            catch e
-                println("    Failed: $e")
-                expr = "1.0  # Fallback for $(typeof(component))"
-                println("    Fallback: $expr")
+                
+            elseif component isa ContinuousEvaluator
+                expr = "Float64(data.$(component.column)[row_idx])"
+                println("    Generated: $expr")
                 push!(component_exprs, expr)
+                
+            else
+                println("    Using fallback for $(typeof(component))")
+                push!(component_exprs, "1.0")
+            end
+        end
+        
+        if length(component_exprs) == 1
+            instruction = "@inbounds row_vec[$pos] = $(component_exprs[1])"
+            println("  Final instruction: $instruction")
+            push!(instructions, instruction)
+        else
+            product_expr = join(component_exprs, " * ")
+            instruction = "@inbounds row_vec[$pos] = $product_expr"
+            println("  Final instruction: $instruction")
+            push!(instructions, instruction)
+        end
+    end
+    
+    println("DEBUG: generate_product_evaluator_derivative_code! finished")
+end
+
+# 3. New function to handle ProductEvaluator with CategoricalEvaluator
+# Updated generate_product_with_categorical! to handle ChainRuleEvaluator and other complex scalars
+function generate_product_with_categorical!(instructions::Vector{String}, evaluator::ProductEvaluator, pos::Int)
+    println("DEBUG: generate_product_with_categorical! called at position $pos")
+    
+    # Find the categorical component and any scalar factors
+    categorical_component = nothing
+    scalar_components = AbstractEvaluator[]  # Changed: store evaluators, not just values
+    
+    for component in evaluator.components
+        if component isa CategoricalEvaluator
+            categorical_component = component
+        else
+            # All non-categorical components are scalar factors
+            push!(scalar_components, component)
+            println("  Found scalar component: $(typeof(component))")
+        end
+    end
+    
+    if categorical_component === nothing
+        error("No categorical component found in categorical product evaluator")
+    end
+    
+    # Generate code for scalar factor (if any)
+    scalar_var = nothing
+    if !isempty(scalar_components)
+        scalar_var = next_var("scalar")
+        generate_scalar_factor_code!(instructions, scalar_components, scalar_var)
+        println("  Generated scalar factor variable: $scalar_var")
+    else
+        println("  No scalar factors")
+    end
+    
+    # Generate categorical contrast lookup code
+    col = categorical_component.column
+    n_levels = categorical_component.n_levels
+    contrast_matrix = categorical_component.contrast_matrix
+    width = size(contrast_matrix, 2)
+    
+    println("  Categorical: $col with $n_levels levels, $width contrasts")
+    
+    # Generate lookup variables
+    cat_var = next_var("cat")
+    level_var = next_var("level")
+    
+    push!(instructions, "@inbounds $cat_var = data.$col[row_idx]")
+    push!(instructions, "@inbounds $level_var = $cat_var isa CategoricalValue ? levelcode($cat_var) : 1")
+    push!(instructions, "@inbounds $level_var = clamp($level_var, 1, $n_levels)")
+    
+    # Generate contrast assignments for each position
+    for j in 1:width
+        output_pos = pos + j - 1
+        values = [contrast_matrix[i, j] for i in 1:n_levels]
+        
+        if scalar_var === nothing
+            # No scaling needed
+            if n_levels == 1
+                push!(instructions, "@inbounds row_vec[$output_pos] = $(values[1])")
+            elseif n_levels == 2
+                push!(instructions, "@inbounds row_vec[$output_pos] = $level_var == 1 ? $(values[1]) : $(values[2])")
+            else
+                # General ternary chain
+                ternary_chain = "$level_var == 1 ? $(values[1])"
+                for i in 2:(n_levels-1)
+                    ternary_chain *= " : $level_var == $i ? $(values[i])"
+                end
+                ternary_chain *= " : $(values[n_levels])"
+                push!(instructions, "@inbounds row_vec[$output_pos] = $ternary_chain")
+            end
+        else
+            # Apply scalar factor
+            if n_levels == 1
+                push!(instructions, "@inbounds row_vec[$output_pos] = $scalar_var * $(values[1])")
+            elseif n_levels == 2
+                push!(instructions, "@inbounds row_vec[$output_pos] = $scalar_var * ($level_var == 1 ? $(values[1]) : $(values[2]))")
+            else
+                # General ternary chain with scaling
+                ternary_chain = "$level_var == 1 ? $(values[1])"
+                for i in 2:(n_levels-1)
+                    ternary_chain *= " : $level_var == $i ? $(values[i])"
+                end
+                ternary_chain *= " : $(values[n_levels])"
+                push!(instructions, "@inbounds row_vec[$output_pos] = $scalar_var * ($ternary_chain)")
             end
         end
     end
     
-    if length(component_exprs) == 1
-        instruction = "@inbounds row_vec[$pos] = $(component_exprs[1])"
-        println("  Final instruction: $instruction")
-        push!(instructions, instruction)
+    println("DEBUG: generate_product_with_categorical! finished")
+end
+
+function generate_scalar_factor_code!(instructions::Vector{String}, scalar_components::Vector{AbstractEvaluator}, scalar_var::String)
+    println("DEBUG: generate_scalar_factor_code! called")
+    println("  Number of scalar components: $(length(scalar_components))")
+    
+    if length(scalar_components) == 1
+        # Single scalar component
+        component = scalar_components[1]
+        println("  Single scalar: $(typeof(component))")
+        
+        if component isa ConstantEvaluator
+            push!(instructions, "@inbounds $scalar_var = $(component.value)")
+            
+        elseif component isa ContinuousEvaluator
+            push!(instructions, "@inbounds $scalar_var = Float64(data.$(component.column)[row_idx])")
+            
+        elseif component isa ChainRuleEvaluator
+            # This is the key case for ∂(log(z) * group)/∂z
+            generate_chain_rule_scalar_code!(instructions, component, scalar_var)
+            
+        elseif component isa ScaledEvaluator
+            generate_scaled_scalar_code!(instructions, component, scalar_var)
+            
+        else
+            println("  Warning: Unsupported scalar component type $(typeof(component)), using 1.0")
+            push!(instructions, "@inbounds $scalar_var = 1.0")
+        end
+        
     else
-        product_expr = join(component_exprs, " * ")
-        instruction = "@inbounds row_vec[$pos] = $product_expr"
-        println("  Final instruction: $instruction")
-        push!(instructions, instruction)
+        # Multiple scalar components - multiply them
+        temp_vars = String[]
+        
+        for (i, component) in enumerate(scalar_components)
+            temp_var = next_var("scalar_$i")
+            push!(temp_vars, temp_var)
+            
+            if component isa ConstantEvaluator
+                push!(instructions, "@inbounds $temp_var = $(component.value)")
+            elseif component isa ContinuousEvaluator
+                push!(instructions, "@inbounds $temp_var = Float64(data.$(component.column)[row_idx])")
+            elseif component isa ChainRuleEvaluator
+                generate_chain_rule_scalar_code!(instructions, component, temp_var)
+            else
+                println("  Warning: Unsupported scalar component type $(typeof(component)), using 1.0")
+                push!(instructions, "@inbounds $temp_var = 1.0")
+            end
+        end
+        
+        # Multiply all scalar factors
+        product_expr = join(temp_vars, " * ")
+        push!(instructions, "@inbounds $scalar_var = $product_expr")
     end
     
-    println("DEBUG: generate_product_evaluator_derivative_code! finished")
+    println("DEBUG: generate_scalar_factor_code! finished")
+end
+
+# Generate code for ChainRuleEvaluator as scalar factor
+function generate_chain_rule_scalar_code!(instructions::Vector{String}, evaluator::ChainRuleEvaluator, scalar_var::String)
+    println("DEBUG: generate_chain_rule_scalar_code! for $(evaluator.original_func)")
+    
+    # Generate variables for inner function and its derivative
+    inner_var = next_var("inner")
+    inner_deriv_var = next_var("inner_deriv")
+    
+    # Generate code to evaluate inner function
+    if evaluator.inner_evaluator isa ContinuousEvaluator
+        push!(instructions, "@inbounds $inner_var = Float64(data.$(evaluator.inner_evaluator.column)[row_idx])")
+    else
+        # For complex inner evaluators, this would need more work
+        push!(instructions, "@inbounds $inner_var = 1.0  # Complex inner evaluator fallback")
+    end
+    
+    # Generate code to evaluate inner derivative
+    if evaluator.inner_derivative isa ConstantEvaluator
+        push!(instructions, "@inbounds $inner_deriv_var = $(evaluator.inner_derivative.value)")
+    else
+        # For complex inner derivatives, this would need more work
+        push!(instructions, "@inbounds $inner_deriv_var = 1.0  # Complex inner derivative fallback")
+    end
+    
+    # Apply the chain rule based on the original function
+    original_func = evaluator.original_func
+    
+    if original_func === log
+        # ∂log(u)/∂x = (1/u) * ∂u/∂x
+        push!(instructions, "@inbounds $scalar_var = (1.0 / $inner_var) * $inner_deriv_var")
+    elseif original_func === sqrt
+        # ∂sqrt(u)/∂x = (0.5/sqrt(u)) * ∂u/∂x
+        push!(instructions, "@inbounds $scalar_var = (0.5 / sqrt($inner_var)) * $inner_deriv_var")
+    elseif original_func === exp
+        # ∂exp(u)/∂x = exp(u) * ∂u/∂x
+        push!(instructions, "@inbounds $scalar_var = exp($inner_var) * $inner_deriv_var")
+    else
+        println("  Warning: Unknown function $(original_func) in chain rule, using 1.0")
+        push!(instructions, "@inbounds $scalar_var = 1.0")
+    end
+end
+
+# Generate code for ScaledEvaluator as scalar factor
+function generate_scaled_scalar_code!(instructions::Vector{String}, evaluator::ScaledEvaluator, scalar_var::String)
+    inner_var = next_var("inner_scaled")
+    
+    if evaluator.evaluator isa ConstantEvaluator
+        push!(instructions, "@inbounds $inner_var = $(evaluator.evaluator.value)")
+    elseif evaluator.evaluator isa ContinuousEvaluator
+        push!(instructions, "@inbounds $inner_var = Float64(data.$(evaluator.evaluator.column)[row_idx])")
+    else
+        push!(instructions, "@inbounds $inner_var = 1.0  # Complex evaluator fallback")
+    end
+    
+    push!(instructions, "@inbounds $scalar_var = $inner_var * $(evaluator.scale_factor)")
 end
 
 function generate_chain_rule_code!(instructions::Vector{String}, evaluator::ChainRuleEvaluator, pos::Int)
@@ -340,13 +537,19 @@ function generate_function_derivative_inline!(instructions::Vector{String},
     end
 end
 
-# Generate inline expression for derivative evaluators - separate namespace
+# 1. Update generate_inline_expression_for_derivatives to handle CategoricalEvaluator
 function generate_inline_expression_for_derivatives(evaluator::AbstractEvaluator)
     if evaluator isa ConstantEvaluator
         return string(evaluator.value)
         
     elseif evaluator isa ContinuousEvaluator
         return "Float64(data.$(evaluator.column)[row_idx])"
+        
+    elseif evaluator isa CategoricalEvaluator
+        # For categorical in derivatives, we need to generate contrast lookup
+        # But since this is inline, we can't generate the full lookup
+        # We need to handle this case differently
+        error("CategoricalEvaluator requires multi-line code generation, cannot be inlined")
         
     elseif evaluator isa ScaledEvaluator
         inner_expr = generate_inline_expression_for_derivatives(evaluator.evaluator)
@@ -360,8 +563,8 @@ function generate_inline_expression_for_derivatives(evaluator::AbstractEvaluator
             elseif component isa ContinuousEvaluator
                 push!(component_exprs, "Float64(data.$(component.column)[row_idx])")
             else
-                # Recursive call for complex components
-                push!(component_exprs, generate_inline_expression_for_derivatives(component))
+                # For complex components like CategoricalEvaluator, we can't inline
+                error("Complex component $(typeof(component)) cannot be inlined in ProductEvaluator")
             end
         end
         return "(" * join(component_exprs, " * ") * ")"
