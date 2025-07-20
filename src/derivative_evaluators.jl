@@ -188,9 +188,9 @@ function compute_unary_function_derivative(func::Function, arg_evaluator::Abstra
         
     elseif func === sqrt
         # ∂sqrt(u)/∂x = (1/(2*sqrt(u))) * ∂u/∂x
-        println("DEBUG: Creating ChainRuleEvaluator for sqrt")
+        # println("DEBUG: Creating ChainRuleEvaluator for sqrt")
         result = ChainRuleEvaluator(x -> 0.5/sqrt(x), arg_evaluator, inner_derivative, sqrt)
-        println("DEBUG: Created ChainRuleEvaluator with original_func = $(result.original_func)")
+        # println("DEBUG: Created ChainRuleEvaluator with original_func = $(result.original_func)")
         return result
         
     elseif func === sin
