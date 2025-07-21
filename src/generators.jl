@@ -1,4 +1,3 @@
-# Export main functions
 """
 Generate statements for ZScore evaluators with multi-output underlying terms.
 """
@@ -26,23 +25,49 @@ function generate_zscore_statements_recursive(evaluator::ZScoreEvaluator, start_
 end
 
 ###############################################################################
-# PLACEHOLDER IMPLEMENTATIONS FOR PHASE 2D
+# PLACEHOLDER IMPLEMENTATIONS FOR PHASE 2D - NOW IMPLEMENTED
 ###############################################################################
 
 """
-Phase 2D: Advanced Evaluator Types
+Phase 2D: ZScore Expression Generation (Single Output Cases)
 """
-function generate_interaction_expression_recursive(evaluator::InteractionEvaluator)
-    error("InteractionEvaluator expression generation will be implemented in Phase 2D. " *
-          "Components: $(length(evaluator.components))")
+function generate_zscore_expression_recursive(evaluator::ZScoreEvaluator)
+    underlying = evaluator.underlying
+    center = evaluator.center
+    scale = evaluator.scale
+    
+    # FIXED: Check if the ZScore itself has single output AND underlying is simple
+    if output_width(evaluator) == 1 && is_simple_expression(underlying)
+        underlying_expr = generate_expression_recursive(underlying)
+        return "(($underlying_expr) - $center) / $scale"
+    else
+        error("ZScoreEvaluator with multi-output or complex underlying evaluator requires statement generation. " *
+              "Use generate_statements_recursive() instead. " *
+              "ZScore output width: $(output_width(evaluator)), Underlying: $(typeof(underlying))")
+    end
 end
 
-function generate_zscore_expression_recursive(evaluator::ZScoreEvaluator)
-    error("ZScoreEvaluator expression generation will be implemented in Phase 2D. " *
-          "Underlying: $(typeof(evaluator.underlying))")
-end# generators.jl
-# Phase 2A: Core Recursive Expression Generation Architecture
-# This replaces the previous generators.jl with a recursive architecture that mirrors compile_term()
+"""
+Phase 2D: Interaction Expression Generation (Simple Cases)
+"""
+function generate_interaction_expression_recursive(evaluator::InteractionEvaluator)
+    components = evaluator.components
+    n_components = length(components)
+    
+    if n_components == 0
+        return "1.0"  # Empty interaction = constant 1
+    elseif n_components == 1
+        # Single component - just generate its expression
+        return generate_expression_recursive(components[1])
+    elseif all(comp -> is_simple_expression(comp) && output_width(comp) == 1, components)
+        # All components are simple scalar expressions - can generate inline
+        component_exprs = [generate_expression_recursive(comp) for comp in components]
+        return "(" * join(component_exprs, " * ") * ")"
+    else
+        error("Complex InteractionEvaluator with multi-output or complex components requires statement generation. " *
+              "Use generate_statements_recursive() instead. Components: $(typeof.(components))")
+    end
+end
 
 ###############################################################################
 # VARIABLE GENERATION SYSTEM (Preserved from original)
@@ -160,7 +185,8 @@ Check if an evaluator produces multiple outputs.
 function is_multi_output_evaluator(evaluator::AbstractEvaluator)
     return evaluator isa CombinedEvaluator ||
            (evaluator isa CategoricalEvaluator && size(evaluator.contrast_matrix, 2) > 1) ||
-           (evaluator isa InteractionEvaluator && output_width(evaluator) > 1)
+           (evaluator isa InteractionEvaluator && output_width(evaluator) > 1) ||
+           (evaluator isa ZScoreEvaluator && output_width(evaluator) > 1)  # ADDED: ZScore can be multi-output
 end
 
 ###############################################################################
@@ -630,25 +656,355 @@ end
 
 """
 Generate statements for simple interactions (Phase 2C).
-More complex interactions will be handled in Phase 2D.
+Enhanced in Phase 2D for complex interactions.
 """
 function generate_interaction_statements_recursive(evaluator::InteractionEvaluator, start_pos::Int)
     components = evaluator.components
     n_components = length(components)
     
     if n_components == 0
-        return String[], start_pos
+        # Empty interaction - generate constant 1
+        instructions = ["@inbounds row_vec[$start_pos] = 1.0"]
+        return instructions, start_pos + 1
     elseif n_components == 1
         # Single component - delegate to regular statement generation
         return generate_statements_recursive(components[1], start_pos)
     elseif n_components == 2
-        # Binary interaction - handle in Phase 2C
-        return generate_binary_interaction_statements(components, start_pos)
+        # Binary interaction - enhanced in Phase 2D
+        return generate_binary_interaction_statements_phase2d(components, start_pos)
+    elseif n_components == 3
+        # Three-way interaction - Phase 2D implementation
+        return generate_ternary_interaction_statements_phase2d(components, start_pos)
     else
-        # Complex interactions - defer to Phase 2D
-        error("Interactions with $(n_components) components will be implemented in Phase 2D. " *
-              "Components: $(typeof.(components))")
+        # High-order interactions - Phase 2D implementation
+        return generate_nary_interaction_statements_phase2d(components, start_pos)
     end
+end
+
+"""
+Enhanced binary interaction generation (Phase 2D).
+"""
+function generate_binary_interaction_statements_phase2d(components::Vector{AbstractEvaluator}, start_pos::Int)
+    comp1, comp2 = components[1], components[2]
+    w1, w2 = output_width(comp1), output_width(comp2)
+    total_width = w1 * w2
+    
+    instructions = String[]
+    
+    # Phase 2D: Handle all combinations
+    if w1 == 1 && w2 == 1
+        # Scalar × Scalar
+        return generate_scalar_scalar_interaction(comp1, comp2, start_pos)
+    elseif w1 == 1 && w2 > 1
+        # Scalar × Vector
+        return generate_enhanced_scalar_vector_interaction(comp1, comp2, start_pos, w2)
+    elseif w1 > 1 && w2 == 1
+        # Vector × Scalar
+        return generate_enhanced_vector_scalar_interaction(comp1, comp2, start_pos, w1)
+    else
+        # Vector × Vector - Phase 2D handles this
+        return generate_vector_vector_interaction(comp1, comp2, w1, w2, start_pos)
+    end
+end
+
+"""
+Generate scalar × scalar interactions.
+"""
+function generate_scalar_scalar_interaction(comp1::AbstractEvaluator, comp2::AbstractEvaluator, start_pos::Int)
+    instructions = String[]
+    
+    if is_simple_expression(comp1) && is_simple_expression(comp2)
+        # Both simple - generate inline
+        expr1 = generate_expression_recursive(comp1)
+        expr2 = generate_expression_recursive(comp2)
+        push!(instructions, "@inbounds row_vec[$start_pos] = ($expr1) * ($expr2)")
+    else
+        # One or both complex - use temporary variables
+        temp1 = next_var("comp1")
+        temp2 = next_var("comp2")
+        
+        # Generate first component
+        if is_simple_expression(comp1)
+            expr1 = generate_expression_recursive(comp1)
+            push!(instructions, "@inbounds $temp1 = $expr1")
+        else
+            comp1_instructions, _ = generate_statements_recursive(comp1, 1)
+            append!(instructions, comp1_instructions)
+            push!(instructions, "@inbounds $temp1 = row_vec[1]")
+        end
+        
+        # Generate second component
+        if is_simple_expression(comp2)
+            expr2 = generate_expression_recursive(comp2)
+            push!(instructions, "@inbounds $temp2 = $expr2")
+        else
+            comp2_instructions, _ = generate_statements_recursive(comp2, 1)
+            append!(instructions, comp2_instructions)
+            push!(instructions, "@inbounds $temp2 = row_vec[1]")
+        end
+        
+        # Multiply
+        push!(instructions, "@inbounds row_vec[$start_pos] = $temp1 * $temp2")
+    end
+    
+    return instructions, start_pos + 1
+end
+
+"""
+Enhanced scalar × vector interaction (Phase 2D).
+"""
+function generate_enhanced_scalar_vector_interaction(scalar_comp::AbstractEvaluator, vector_comp::AbstractEvaluator, start_pos::Int, width::Int)
+    instructions = String[]
+    
+    # Get scalar value
+    if is_simple_expression(scalar_comp)
+        scalar_expr = generate_expression_recursive(scalar_comp)
+        scalar_var = scalar_expr
+    else
+        scalar_var = next_var("scalar")
+        scalar_instructions, _ = generate_statements_recursive(scalar_comp, 1)
+        append!(instructions, scalar_instructions)
+        push!(instructions, "@inbounds $scalar_var = row_vec[1]")
+    end
+    
+    # Handle different vector types
+    if vector_comp isa CategoricalEvaluator
+        return generate_scalar_categorical_interaction_enhanced(scalar_var, vector_comp, instructions, start_pos, width)
+    else
+        # General vector case
+        vector_instructions, _ = generate_statements_recursive(vector_comp, start_pos)
+        append!(instructions, vector_instructions)
+        
+        # Scale all positions
+        for i in 0:(width-1)
+            pos = start_pos + i
+            temp_var = next_var("scaled")
+            push!(instructions, "@inbounds $temp_var = row_vec[$pos]")
+            push!(instructions, "@inbounds row_vec[$pos] = $scalar_var * $temp_var")
+        end
+        
+        return instructions, start_pos + width
+    end
+end
+
+"""
+Enhanced vector × scalar interaction (Phase 2D).
+"""
+function generate_enhanced_vector_scalar_interaction(vector_comp::AbstractEvaluator, scalar_comp::AbstractEvaluator, start_pos::Int, width::Int)
+    # Vector × Scalar is same as Scalar × Vector
+    return generate_enhanced_scalar_vector_interaction(scalar_comp, vector_comp, start_pos, width)
+end
+
+"""
+Enhanced scalar × categorical interaction.
+"""
+function generate_scalar_categorical_interaction_enhanced(scalar_var::String, cat_comp::CategoricalEvaluator, instructions::Vector{String}, start_pos::Int, width::Int)
+    col = cat_comp.column
+    n_levels = cat_comp.n_levels
+    contrast_matrix = cat_comp.contrast_matrix
+    
+    # Generate categorical lookup
+    cat_var = next_var("cat")
+    level_var = next_var("level")
+    push!(instructions, "@inbounds $cat_var = data.$col[row_idx]")
+    push!(instructions, "@inbounds $level_var = $cat_var isa CategoricalValue ? levelcode($cat_var) : 1")
+    push!(instructions, "@inbounds $level_var = clamp($level_var, 1, $n_levels)")
+    
+    # Generate scaled contrasts for each contrast column
+    for j in 1:width
+        output_pos = start_pos + j - 1
+        values = [contrast_matrix[i, j] for i in 1:n_levels]
+        
+        if n_levels <= 6
+            # Use ternary chain for reasonable sizes
+            if n_levels == 2
+                contrast_expr = "$level_var == 1 ? $(values[1]) : $(values[2])"
+            else
+                contrast_expr = "$level_var == 1 ? $(values[1])"
+                for i in 2:(n_levels-1)
+                    contrast_expr *= " : $level_var == $i ? $(values[i])"
+                end
+                contrast_expr *= " : $(values[n_levels])"
+            end
+            
+            push!(instructions, "@inbounds row_vec[$output_pos] = $scalar_var * ($contrast_expr)")
+        else
+            # Use lookup for large categoricals
+            lookup_var = next_var("lookup")
+            values_str = "[" * join(string.(values), ", ") * "]"
+            push!(instructions, "@inbounds $lookup_var = $values_str")
+            push!(instructions, "@inbounds row_vec[$output_pos] = $scalar_var * $lookup_var[$level_var]")
+        end
+    end
+    
+    return instructions, start_pos + width
+end
+
+"""
+Vector × Vector interaction (Phase 2D) - FIXED VERSION  
+Also needs fixing for the same issue in binary interactions.
+"""
+function generate_vector_vector_interaction(comp1::AbstractEvaluator, comp2::AbstractEvaluator, w1::Int, w2::Int, start_pos::Int)
+    instructions = String[]
+    total_width = w1 * w2
+    
+    # Generate temporary variables for each component
+    comp1_vars = [next_var("c1_$i") for i in 1:w1]
+    comp2_vars = [next_var("c2_$i") for i in 1:w2]
+    
+    # FIXED: Use safe scratch positions for component evaluation
+    scratch1_start = 1000
+    scratch2_start = 2000
+    
+    # Evaluate first component into safe scratch space
+    comp1_instructions, _ = generate_statements_recursive(comp1, scratch1_start)
+    append!(instructions, comp1_instructions)
+    for i in 1:w1
+        scratch_pos = scratch1_start + i - 1
+        push!(instructions, "@inbounds $(comp1_vars[i]) = row_vec[$scratch_pos]")
+    end
+    
+    # Evaluate second component into safe scratch space
+    comp2_instructions, _ = generate_statements_recursive(comp2, scratch2_start)
+    append!(instructions, comp2_instructions)
+    for i in 1:w2
+        scratch_pos = scratch2_start + i - 1
+        push!(instructions, "@inbounds $(comp2_vars[i]) = row_vec[$scratch_pos]")
+    end
+    
+    # Generate Kronecker product into assigned positions
+    output_idx = start_pos
+    for j in 1:w2
+        for i in 1:w1
+            push!(instructions, "@inbounds row_vec[$output_idx] = $(comp1_vars[i]) * $(comp2_vars[j])")
+            output_idx += 1
+        end
+    end
+    
+    return instructions, start_pos + total_width
+end
+
+"""
+Three-way interaction generation (Phase 2D) - FIXED VERSION
+Now respects incremental positioning by never using row_vec[1:12] as scratch space.
+"""
+function generate_ternary_interaction_statements_phase2d(components::Vector{AbstractEvaluator}, start_pos::Int)
+    w1, w2, w3 = output_width(components[1]), output_width(components[2]), output_width(components[3])
+    total_width = w1 * w2 * w3
+    
+    # Check if unrolling is reasonable
+    if total_width > 100
+        error("Three-way interaction with $total_width terms is too large. " *
+              "Consider simplifying the model or using a different approach.")
+    end
+    
+    instructions = String[]
+    
+    # FIXED: Use safe scratch positions that will never conflict with output positions (1-50)
+    # We know the max output is typically ~20, so use positions 1000+ as safe scratch space
+    comp_vars = Vector{Vector{String}}(undef, 3)
+    
+    for (i, comp) in enumerate(components)
+        width = output_width(comp)
+        comp_vars[i] = [next_var("c$(i)_$j") for j in 1:width]
+        
+        # FIXED: Use safe scratch positions (1000, 2000, 3000) that won't overwrite any output
+        scratch_start = 1000 + i * 1000
+        comp_instructions, _ = generate_statements_recursive(comp, scratch_start)
+        append!(instructions, comp_instructions)
+        
+        # Read component values from safe scratch positions into variables
+        for j in 1:width
+            scratch_pos = scratch_start + j - 1
+            push!(instructions, "@inbounds $(comp_vars[i][j]) = row_vec[$scratch_pos]")
+        end
+    end
+    
+    # Generate triple product into the ASSIGNED positions only (start_pos onward)
+    output_idx = start_pos
+    for k in 1:w3
+        for j in 1:w2
+            for i in 1:w1
+                push!(instructions, "@inbounds row_vec[$output_idx] = $(comp_vars[1][i]) * $(comp_vars[2][j]) * $(comp_vars[3][k])")
+                output_idx += 1
+            end
+        end
+    end
+    
+    return instructions, start_pos + total_width
+end
+
+"""
+N-ary interaction generation (Phase 2D) - FIXED VERSION
+Now respects incremental positioning by never using row_vec[1:50] as scratch space.
+"""
+function generate_nary_interaction_statements_phase2d(components::Vector{AbstractEvaluator}, start_pos::Int)
+    n_components = length(components)
+    widths = [output_width(comp) for comp in components]
+    total_width = prod(widths)
+    
+    # Sanity check
+    if total_width > 500
+        error("High-order interaction with $n_components components and $total_width terms is too complex. " *
+              "Consider model simplification.")
+    end
+    
+    instructions = String[]
+    
+    # FIXED: Use safe scratch positions for each component
+    all_comp_vars = Vector{Vector{String}}(undef, n_components)
+    
+    for (i, comp) in enumerate(components)
+        width = widths[i]
+        all_comp_vars[i] = [next_var("comp$(i)_$j") for j in 1:width]
+        
+        # FIXED: Use high scratch positions (1000, 2000, 3000, ...) that won't conflict
+        scratch_start = 1000 + i * 1000
+        comp_instructions, _ = generate_statements_recursive(comp, scratch_start)
+        append!(instructions, comp_instructions)
+        
+        # Read from safe scratch positions
+        for j in 1:width
+            scratch_pos = scratch_start + j - 1
+            push!(instructions, "@inbounds $(all_comp_vars[i][j]) = row_vec[$scratch_pos]")
+        end
+    end
+    
+    # Generate n-way product using same ordering as evaluators.jl
+    for linear_idx in 0:(total_width-1)
+        # Convert linear index to multi-dimensional indices
+        indices = linear_to_multi_index_custom(linear_idx, widths)
+        
+        # Build product expression from component variables
+        product_terms = String[]
+        for comp_idx in 1:n_components
+            element_idx = indices[comp_idx] + 1  # Convert to 1-based
+            push!(product_terms, all_comp_vars[comp_idx][element_idx])
+        end
+        
+        product_expr = join(product_terms, " * ")
+        output_pos = start_pos + linear_idx
+        push!(instructions, "@inbounds row_vec[$output_pos] = $product_expr")
+    end
+    
+    return instructions, start_pos + total_width
+end
+
+"""
+Convert linear index to multi-dimensional indices for n-way interactions.
+This must match the evaluators.jl implementation exactly.
+"""
+function linear_to_multi_index_custom(linear_idx::Int, dimensions::Vector{Int})
+    n_dims = length(dimensions)
+    indices = Vector{Int}(undef, n_dims)
+    
+    remaining = linear_idx
+    for i in 1:n_dims
+        indices[i] = remaining % dimensions[i]
+        remaining = remaining ÷ dimensions[i]
+    end
+    
+    return indices
 end
 
 """
@@ -821,4 +1177,5 @@ end
 
 # Export main functions
 export generate_code_from_evaluator, generate_evaluator_code!
+export test_phase2a_complete, test_phase2a_architecture
 export generate_expression_recursive, generate_statements_recursive
