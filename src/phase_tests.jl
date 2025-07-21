@@ -5,6 +5,57 @@
 ###############################################################################
 
 """
+Run all Phase 2A tests.
+"""
+function test_phase2a_complete()
+    println("🧪 PHASE 2A COMPREHENSIVE TESTING")
+    println("=" ^ 50)
+    
+    arch_success = false
+    syntax_success = false
+    integration_success = false
+    
+    try
+        test_phase2a_architecture()
+        arch_success = true
+    catch e
+        println("❌ Architecture test failed: $e")
+    end
+    
+    try
+        syntax_success = validate_phase2a_syntax()
+    catch e
+        println("❌ Syntax validation failed: $e")
+    end
+    
+    try
+        integration_success = test_phase2a_integration()
+    catch e
+        println("❌ Integration test failed: $e")
+    end
+    
+    println("\n" * "=" ^ 60)
+    println("PHASE 2A TEST SUMMARY")
+    println("=" ^ 60)
+    println("Architecture:  $(arch_success ? "✅ PASS" : "❌ FAIL")")
+    println("Syntax:        $(syntax_success ? "✅ PASS" : "❌ FAIL")")  
+    println("Integration:   $(integration_success ? "✅ PASS" : "❌ FAIL")")
+    
+    overall_success = arch_success && syntax_success && integration_success
+    println("OVERALL:       $(overall_success ? "✅ SUCCESS" : "⚠️  NEEDS WORK")")
+    
+    if overall_success
+        println("\n🚀 Phase 2A foundation is solid!")
+        println("📋 Ready for Phase 2B: Complex function expressions")
+        println("   Ask: 'Write Phase 2B: Implement recursive function expression generation'")
+    else
+        println("\n🔧 Phase 2A needs fixes before proceeding to Phase 2B")
+    end
+    
+    return overall_success
+end
+
+"""
 Test the Phase 2A core architecture with simple cases.
 """
 function test_phase2a_architecture()
@@ -939,42 +990,45 @@ function test_phase2d_zscore_generation()
         try
             println("   Test $i: $description")
             
-            if output_width(evaluator) == 1
-                # Try expression generation
+            # Check the evaluator's output width to decide approach
+            width = output_width(evaluator)
+            println("     Output width: $width")
+            
+            if width == 1
+                # Single output - should work as expression
                 try
                     expr = generate_expression_recursive(evaluator)
                     parsed = Meta.parse(expr)
                     println("     Expression: '$expr' ✅")
                 catch e
-                    println("     Expression failed (trying statements): $e")
-                    # Fall back to statements
-                    instructions, next_pos = generate_statements_recursive(evaluator, 1)
-                    println("     Statements: $(length(instructions)) instructions ✅")
+                    println("     ❌ Expression generation failed: $e")
+                    all_passed = false
                 end
             else
-                # Multi-output - use statements
-                instructions, next_pos = generate_statements_recursive(evaluator, 1)
-                println("     Generated $(length(instructions)) statements, next_pos=$next_pos")
-                
-                # Validate syntax
-                for instr in instructions
-                    try
-                        Meta.parse(instr)
-                    catch e
-                        println("     ❌ Invalid syntax: $instr")
-                        all_passed = false
+                # Multi-output - must use statements
+                try
+                    instructions, next_pos = generate_statements_recursive(evaluator, 1)
+                    println("     Generated $(length(instructions)) statements, next_pos=$next_pos")
+                    
+                    # Validate syntax
+                    for instr in instructions
+                        try
+                            Meta.parse(instr)
+                        catch e
+                            println("     ❌ Invalid syntax: $instr")
+                            all_passed = false
+                        end
                     end
+                    println("     ✅ ZScore statements work")
+                catch e
+                    println("     ❌ Statement generation failed: $e")
+                    all_passed = false
                 end
-                println("     ✅ ZScore statements work")
             end
             
         catch e
-            if occursin("Phase 2", string(e))
-                println("     ⚠️  Expected limitation: $e")
-            else
-                println("     ❌ Unexpected error: $e")
-                all_passed = false
-            end
+            println("     ❌ Unexpected error: $e")
+            all_passed = false
         end
     end
     
