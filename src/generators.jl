@@ -708,7 +708,8 @@ function generate_binary_interaction_statements_phase2d(components::Vector{Abstr
 end
 
 """
-Generate scalar × scalar interactions.
+Generate scalar × scalar interactions - FIXED VERSION
+Now uses safe scratch positions instead of hardcoded positions 1, 1.
 """
 function generate_scalar_scalar_interaction(comp1::AbstractEvaluator, comp2::AbstractEvaluator, start_pos::Int)
     instructions = String[]
@@ -723,14 +724,18 @@ function generate_scalar_scalar_interaction(comp1::AbstractEvaluator, comp2::Abs
         temp1 = next_var("comp1")
         temp2 = next_var("comp2")
         
+        # FIXED: Use safe scratch positions instead of hardcoded position 1
+        scratch1_pos = 5000  # Safe position that won't conflict
+        scratch2_pos = 6000  # Safe position that won't conflict
+        
         # Generate first component
         if is_simple_expression(comp1)
             expr1 = generate_expression_recursive(comp1)
             push!(instructions, "@inbounds $temp1 = $expr1")
         else
-            comp1_instructions, _ = generate_statements_recursive(comp1, 1)
+            comp1_instructions, _ = generate_statements_recursive(comp1, scratch1_pos)  # FIXED: Use safe position
             append!(instructions, comp1_instructions)
-            push!(instructions, "@inbounds $temp1 = row_vec[1]")
+            push!(instructions, "@inbounds $temp1 = row_vec[$scratch1_pos]")  # FIXED: Read from safe position
         end
         
         # Generate second component
@@ -738,9 +743,9 @@ function generate_scalar_scalar_interaction(comp1::AbstractEvaluator, comp2::Abs
             expr2 = generate_expression_recursive(comp2)
             push!(instructions, "@inbounds $temp2 = $expr2")
         else
-            comp2_instructions, _ = generate_statements_recursive(comp2, 1)
+            comp2_instructions, _ = generate_statements_recursive(comp2, scratch2_pos)  # FIXED: Use safe position
             append!(instructions, comp2_instructions)
-            push!(instructions, "@inbounds $temp2 = row_vec[1]")
+            push!(instructions, "@inbounds $temp2 = row_vec[$scratch2_pos]")  # FIXED: Read from safe position
         end
         
         # Multiply
@@ -750,8 +755,9 @@ function generate_scalar_scalar_interaction(comp1::AbstractEvaluator, comp2::Abs
     return instructions, start_pos + 1
 end
 
+# ALSO FIX: The enhanced scalar vector interaction has the same issue
 """
-Enhanced scalar × vector interaction (Phase 2D).
+Enhanced scalar × vector interaction (Phase 2D) - FIXED VERSION
 """
 function generate_enhanced_scalar_vector_interaction(scalar_comp::AbstractEvaluator, vector_comp::AbstractEvaluator, start_pos::Int, width::Int)
     instructions = String[]
@@ -762,25 +768,30 @@ function generate_enhanced_scalar_vector_interaction(scalar_comp::AbstractEvalua
         scalar_var = scalar_expr
     else
         scalar_var = next_var("scalar")
-        scalar_instructions, _ = generate_statements_recursive(scalar_comp, 1)
+        # FIXED: Use safe scratch position instead of position 1
+        scratch_pos = 7000
+        scalar_instructions, _ = generate_statements_recursive(scalar_comp, scratch_pos)
         append!(instructions, scalar_instructions)
-        push!(instructions, "@inbounds $scalar_var = row_vec[1]")
+        push!(instructions, "@inbounds $scalar_var = row_vec[$scratch_pos]")  # FIXED: Safe position
     end
     
     # Handle different vector types
     if vector_comp isa CategoricalEvaluator
         return generate_scalar_categorical_interaction_enhanced(scalar_var, vector_comp, instructions, start_pos, width)
     else
-        # General vector case
-        vector_instructions, _ = generate_statements_recursive(vector_comp, start_pos)
+        # General vector case - ALSO NEEDS FIXING
+        # FIXED: Use safe scratch positions for vector evaluation too
+        vector_scratch_start = 8000
+        vector_instructions, _ = generate_statements_recursive(vector_comp, vector_scratch_start)
         append!(instructions, vector_instructions)
         
-        # Scale all positions
+        # Scale all positions (read from scratch, write to actual positions)
         for i in 0:(width-1)
-            pos = start_pos + i
+            vector_scratch_pos = vector_scratch_start + i
+            output_pos = start_pos + i
             temp_var = next_var("scaled")
-            push!(instructions, "@inbounds $temp_var = row_vec[$pos]")
-            push!(instructions, "@inbounds row_vec[$pos] = $scalar_var * $temp_var")
+            push!(instructions, "@inbounds $temp_var = row_vec[$vector_scratch_pos]")  # FIXED: Read from scratch
+            push!(instructions, "@inbounds row_vec[$output_pos] = $scalar_var * $temp_var")  # Write to actual position
         end
         
         return instructions, start_pos + width
