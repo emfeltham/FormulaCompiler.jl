@@ -4,16 +4,16 @@
 @testset "Formula Compilation" begin
     
     # Create comprehensive test data
-    Random.seed!(42)
     df = DataFrame(
         x = randn(100),
         y = randn(100),
         z = abs.(randn(100)) .+ 0.1,
+        o = randn(100),
         group = categorical(rand(["A", "B", "C"], 100)),
         flag = rand([true, false], 100),
         cat2 = categorical(rand(["X", "Y"], 100))
     )
-    data = Tables.columntable(df)
+    data = Tables.columntable(df);
     
     @testset "Basic Formula Compilation" begin
         # Simple linear model
@@ -102,32 +102,75 @@
     end
     
     @testset "Complex Formulas" begin
-        # Test three-way interaction
-        model = lm(@formula(y ~ x * z * group), df)
-        compiled = compile_formula(model)
-        
-        row_vec = Vector{Float64}(undef, length(compiled))
-        compiled(row_vec, data, 1)
-        expected = modelmatrix(model)[1, :]
-        @test isapprox(row_vec, expected, rtol=1e-12)
-        
-        # Test function in interaction
-        model = lm(@formula(y ~ log(z) * group), df)
-        compiled = compile_formula(model)
-        
-        row_vec = Vector{Float64}(undef, length(compiled))
-        compiled(row_vec, data, 1)
-        expected = modelmatrix(model)[1, :]
-        @test isapprox(row_vec, expected, rtol=1e-12)
-        
-        # Test boolean function
-        model = lm(@formula(y ~ (x > 0) * group), df)
-        compiled = compile_formula(model)
-        
-        row_vec = Vector{Float64}(undef, length(compiled))
-        compiled(row_vec, data, 1)
-        expected = modelmatrix(model)[1, :]
-        @test isapprox(row_vec, expected, rtol=1e-12)
+        @testset "Test three-way interaction 1" begin
+            model = lm(@formula(y ~ x * z * group), df)
+            compiled = compile_formula(model)
+            
+            row_vec = Vector{Float64}(undef, length(compiled))
+            compiled(row_vec, data, 1)
+            expected = modelmatrix(model)[1, :]
+            @test isapprox(row_vec, expected, rtol=1e-12)
+        end
+
+        @testset "Test four-way interaction" begin
+            # test four-way interaction
+                # Test three-way interaction
+            model = lm(@formula(y ~ x * z * group * cat2), df)
+            compiled = compile_formula(model)
+            
+            row_vec = Vector{Float64}(undef, length(compiled))
+            compiled(row_vec, data, 1)
+            expected = modelmatrix(model)[1, :]
+            @test isapprox(row_vec, expected, rtol=1e-12)
+        end
+
+        @testset "Test three-way interaction 2" begin
+            model = lm(@formula(y ~ x * z * o + group), df)
+            compiled = compile_formula(model)
+            
+            row_vec = Vector{Float64}(undef, length(compiled))
+            compiled(row_vec, data, 1)
+            expected = modelmatrix(model)[1, :]
+            @test isapprox(row_vec, expected, rtol=1e-12)
+        end
+
+        @testset "Test three-way interaction 3" begin
+            model = lm(@formula(y ~ x * z * flag + group), df)
+            compiled = compile_formula(model)
+            
+            row_vec = Vector{Float64}(undef, length(compiled))
+            compiled(row_vec, data, 1)
+            expected = modelmatrix(model)[1, :]
+            @test isapprox(row_vec, expected, rtol=1e-12)
+        end
+
+        @testset "Test three-way interaction 4" begin
+            model = lm(@formula(y ~ x * group * flag), df)
+            compiled = compile_formula(model)
+            
+            row_vec = Vector{Float64}(undef, length(compiled))
+            compiled(row_vec, data, 1)
+            expected = modelmatrix(model)[1, :]
+            @test isapprox(row_vec, expected, rtol=1e-12)
+            
+            # Test function in interaction
+            model = lm(@formula(y ~ log(z) * group), df)
+            compiled = compile_formula(model)
+            
+            row_vec = Vector{Float64}(undef, length(compiled))
+            compiled(row_vec, data, 1)
+            expected = modelmatrix(model)[1, :]
+            @test isapprox(row_vec, expected, rtol=1e-12)
+            
+            # Test boolean function
+            model = lm(@formula(y ~ (x > 0) * group), df)
+            compiled = compile_formula(model)
+            
+            row_vec = Vector{Float64}(undef, length(compiled))
+            compiled(row_vec, data, 1)
+            expected = modelmatrix(model)[1, :]
+            @test isapprox(row_vec, expected, rtol=1e-12)
+        end
     end
     
     @testset "Edge Cases" begin
