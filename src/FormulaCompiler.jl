@@ -74,4 +74,8 @@ include("testing_derivatives.jl")
 
 include("phase_tests.jl")
 
+## alt approach
+
+include("execution_plans.jl")
+
 end # module
