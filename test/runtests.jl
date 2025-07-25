@@ -24,45 +24,57 @@ using FormulaCompiler:
     validate_derivative_evaluator, test_scenario_foundation,
     example_scenario_usage,
     set_override!, remove_override!,
-    update_scenario!
+    update_scenario!,
+    apply_function_safe, CategoricalBlock,
+    CategoricalLayout, FunctionOp,
+    generate_execution_plan, execute_plan!,
+    execute_block!, AssignmentBlock,
+    execute_categorical_block!,
+    create_execution_plan, ValidatedExecutionPlan,
+    Assignment,
+    AssignmentBlock,
+    ConstantAssignment, ContinuousAssignment,
+    execute_assignment!
+
 
 using FormulaCompiler:
     compile_term
     
-
 # Set consistent random seed for reproducible tests
 Random.seed!(06515)
 
-@testset "FormulaCompiler.jl Tests" begin
-    
-    # Core functionality tests
-    include("test_evaluators.jl")
-    include("test_compilation.jl")
-    include("test_modelrow.jl")
-    
-    # Advanced features
-    include("test_derivatives.jl")
-    include("test_derivative_correctness.jl")
-    include("test_scenarios.jl")
-    include("test_evaluator_trees.jl")
-    
-    # Integration and compatibility tests
-    include("test_integration.jl")
-    include("test_mixed_models.jl")
-    
-    # Performance and regression tests
-    # include("test_performance.jl") these may not be right, and are non-essential
-    include("test_regression.jl")
-end
+include("test_execution_plans.jl")
 
-#=
-using Test
-using Revise
-using Random
-using FormulaCompiler
-
-@testset "FormulaCompiler.jl" begin
-    include("initial_tests.jl")
+# @testset "FormulaCompiler.jl Tests" begin
     
-end
-=#
+#     # Core functionality tests
+    # include("test_evaluators.jl")
+    # include("test_compilation.jl")
+#     include("test_modelrow.jl")
+    
+#     # Advanced features
+#     include("test_derivatives.jl")
+#     include("test_derivative_correctness.jl")
+#     include("test_scenarios.jl")
+#     include("test_evaluator_trees.jl")
+    
+#     # Integration and compatibility tests
+#     include("test_integration.jl")
+#     include("test_mixed_models.jl")
+    
+#     # Performance and regression tests
+#     # include("test_performance.jl") these may not be right, and are non-essential
+#     include("test_regression.jl")
+# end
+
+# #=
+# using Test
+# using Revise
+# using Random
+# using FormulaCompiler
+
+# @testset "FormulaCompiler.jl" begin
+#     include("initial_tests.jl")
+    
+# end
+# =#
