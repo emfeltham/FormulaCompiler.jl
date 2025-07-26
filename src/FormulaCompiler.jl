@@ -26,17 +26,56 @@ export not
 include("fixed_helpers.jl")     # No dependencies
 export fixed_effects_form
 include("evaluators.jl")        # Uses fixed_helpers
+
+
+"""
+    ExecutionBlock
+
+Abstract base type for different kinds of execution blocks.
+Each block represents a group of operations that can be executed together.
+"""
+abstract type ExecutionBlock end
+
+"""
+    ValidatedExecutionPlan
+
+The only execution plan type. Construction validates everything once,
+execution is guaranteed zero-allocation.
+"""
+struct ValidatedExecutionPlan
+    scratch_size::Int
+    blocks::Vector{ExecutionBlock}
+    total_output_width::Int
+    data_length::Int                    # Cached for bounds checking
+    validated_columns::Set{Symbol}     # Columns guaranteed to exist
+    
+    function ValidatedExecutionPlan(evaluator::AbstractEvaluator, data::NamedTuple)
+        # Generate the execution plan structure
+        basic_plan = generate_execution_plan_structure(evaluator)
+        
+        # Comprehensive validation with helpful error messages
+        validate_plan_against_data!(basic_plan, data)
+        
+        # Cache information for zero-allocation execution
+        data_length = length(first(data))
+        validated_columns = Set(keys(data))
+        
+        new(basic_plan.scratch_size, basic_plan.blocks, basic_plan.total_output_width, 
+            data_length, validated_columns)
+    end
+end
+
 include("CompiledFormula.jl")   # Defines key structs and methods - NOW INCLUDES DERIVATIVES
 export compile_formula, CompiledFormula, test_complete
 # Derivatives
 export compile_derivative_formula, CompiledDerivativeFormula
 export clear_derivative_cache!, list_compiled_derivatives
 
-include("evaluator_trees.jl")
+# include("evaluator_trees.jl")
 export extract_root_evaluator, get_evaluator_tree, has_evaluator_access
 export count_evaluator_nodes, get_variable_dependencies, get_evaluator_summary
 export print_evaluator_tree, test_evaluator_storage
-include("generators.jl")        # Uses evaluators + fixed_helpers
+# include("generators.jl")        # Uses evaluators + fixed_helpers
 export generate_code_from_evaluator, generate_evaluator_code!
 export test_phase2a_complete, test_phase2a_architecture
 export generate_expression_recursive, generate_statements_recursive
@@ -76,6 +115,8 @@ include("phase_tests.jl")
 
 ## alt approach
 
+include("ast_decomposition.jl")
 include("execution_plans.jl")
+include("test_updated_execution_plans.jl")
 
 end # module
