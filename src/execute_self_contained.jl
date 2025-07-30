@@ -3,17 +3,22 @@
 function execute_self_contained!(evaluator::CombinedEvaluator, scratch::Vector{Float64},
                                  output::AbstractVector{Float64}, data::NamedTuple, row_idx::Int)
     
-    # Zero-allocation loops using precomputed operations
-    @inbounds for op in evaluator.constant_ops
+    # PRE-EXTRACT ALL FIELDS at function entry (eliminates field access allocations)
+    constant_ops = evaluator.constant_ops
+    continuous_ops = evaluator.continuous_ops
+    categorical_evaluators = evaluator.categorical_evaluators
+    function_evaluators = evaluator.function_evaluators
+    interaction_evaluators = evaluator.interaction_evaluators
+    
+    # Now use the local variables (no more field access in loops)
+    @inbounds for op in constant_ops
         output[op.position] = op.value
     end
     
-    # FIXED: Type-stable data access using direct field access
-    @inbounds for op in evaluator.continuous_ops
+    @inbounds for op in continuous_ops
         col = op.column
         pos = op.position
         
-        # Type-stable data access - eliminates Union return types
         val = if col === :x
             data.x[row_idx]
         elseif col === :y
@@ -29,14 +34,13 @@ function execute_self_contained!(evaluator::CombinedEvaluator, scratch::Vector{F
         elseif col === :flag
             data.flag[row_idx]
         else
-            # Fallback for any other columns (will still cause union but rarely used)
             data[col][row_idx]
         end
         
         output[pos] = Float64(val)
     end
     
-    @inbounds for eval in evaluator.categorical_evaluators
+    @inbounds for eval in categorical_evaluators
         level_codes = eval.level_codes
         cm = eval.contrast_matrix
         positions = eval.positions
@@ -47,7 +51,6 @@ function execute_self_contained!(evaluator::CombinedEvaluator, scratch::Vector{F
         
         n_contrasts = length(positions)
         
-        # FIXED: Manual unrolling for common cases
         if n_contrasts == 1
             output[positions[1]] = cm[lvl, 1]
         elseif n_contrasts == 2
@@ -69,21 +72,48 @@ function execute_self_contained!(evaluator::CombinedEvaluator, scratch::Vector{F
             output[positions[4]] = cm[lvl, 4]
             output[positions[5]] = cm[lvl, 5]
         else
-            # Fallback preserves full generality
             for j in 1:n_contrasts
                 output[positions[j]] = cm[lvl, j]
             end
         end
     end
     
-    @inbounds for eval in evaluator.function_evaluators
+    @inbounds for eval in function_evaluators
         execute_function_self_contained!(eval, scratch, output, data, row_idx)
     end
     
-    @inbounds for eval in evaluator.interaction_evaluators
+    @inbounds for eval in interaction_evaluators
         execute_interaction_self_contained!(eval, scratch, output, data, row_idx)
     end
     
+    return nothing
+end
+
+"""
+    execute_interaction_self_contained!(evaluator::InteractionEvaluator{N}, 
+                                       scratch::Vector{Float64},
+                                       output::AbstractVector{Float64}, 
+                                       data::NamedTuple, row_idx::Int) where N
+
+"""
+@inline function execute_interaction_self_contained!(ev::InteractionEvaluator{N},
+                                                     scratch::Vector{Float64},
+                                                     output::Vector{Float64},
+                                                     data::NamedTuple,
+                                                     row_idx::Int) where N
+    # 1. evaluate every component into its assigned scratch block
+    @inbounds for i in eachindex(ev.components)
+        r = ev.component_scratch_map[i]
+        execute_to_scratch!(ev.components[i], scratch,
+                            first(r), last(r), data, row_idx)
+    end
+
+    # 2. build the interaction columns from the scratch results
+    apply_kronecker_pattern_to_positions!(ev.kronecker_pattern,
+                                          ev.component_scratch_map,
+                                          scratch,
+                                          output,
+                                          ev.positions)
     return nothing
 end
 
@@ -137,61 +167,47 @@ end
 end
 
 @inline function execute_function_self_contained!(
-    evaluator::FunctionEvaluator, 
+    evaluator::FunctionEvaluator,
     scratch::Vector{Float64},
-    output::AbstractVector{Float64}, 
-    data::NamedTuple, 
-    row_idx::Int
-)
-    # Cache all field accesses at the top for type stability
-    func = evaluator.func
-    arg_evaluators = evaluator.arg_evaluators
-    pos = evaluator.position
-    
-    n_args = length(arg_evaluators)
-    
-    if n_args == 1
-        arg = arg_evaluators[1]
-        val = if arg isa ConstantEvaluator
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int)
+
+    func            = evaluator.func
+    arg_evaluators  = evaluator.arg_evaluators
+    arg_scratch_map = evaluator.arg_scratch_map
+    pos             = evaluator.position
+    n_args          = length(arg_evaluators)
+
+    # Gather (and if needed, compute) each argument value --------------------
+    vals = ntuple(i -> begin
+        arg = arg_evaluators[i]
+        if arg isa ConstantEvaluator
             arg.value
         elseif arg isa ContinuousEvaluator
-            col = arg.column  # Cache field access
-            Float64(data[col][row_idx])
+            Float64(data[arg.column][row_idx])
         else
-            error("Complex function arguments not supported")
+            r = arg_scratch_map[i]                 # pre-allocated range
+            execute_to_scratch!(arg, scratch,
+                                first(r), last(r),
+                                data, row_idx)     # recurse
+            scratch[first(r)]                      # scalar argument → take 1st
         end
-        result = apply_function_safe(func, val)
-        @inbounds output[pos] = result
-        
-    elseif n_args == 2
-        arg1, arg2 = arg_evaluators
-        val1 = if arg1 isa ConstantEvaluator
-            arg1.value
-        elseif arg1 isa ContinuousEvaluator
-            col1 = arg1.column
-            Float64(data[col1][row_idx])
-        else
-            error("Complex function arguments not supported")
-        end
-        
-        val2 = if arg2 isa ConstantEvaluator
-            arg2.value
-        elseif arg2 isa ContinuousEvaluator
-            col2 = arg2.column
-            Float64(data[col2][row_idx])
-        else
-            error("Complex function arguments not supported")
-        end
-        
-        result = apply_function_safe(func, val1, val2)
-        @inbounds output[pos] = result
-        
-    else
-        error("Functions with $n_args arguments not supported")
-    end
-    
+    end, n_args)
+
+    # Apply, store -----------------------------------------------------------
+    @inbounds output[pos] = apply_function_safe(func, vals...)
     return nothing
 end
+
+execute_function_self_contained!(pf::ParametricFunctionEvaluator, scratch, output, data, row_idx) =
+    execute_function_self_contained!(FunctionEvaluator(pf.func,
+                                                       collect(pf.arg_evaluators),
+                                                       0,                      # dummy position
+                                                       Int[],                  # no own scratch
+                                                       collect(pf.arg_scratch_map)),
+                                     scratch, output, data, row_idx)
+
 
 @inline function execute_self_contained!(
     evaluator::InteractionEvaluator{N}, 
@@ -219,5 +235,32 @@ end
         evaluator.positions
     )
     
+    return nothing
+end
+
+"""
+    execute_categorical_self_contained!(evaluator::CategoricalEvaluator, output::AbstractVector{Float64},
+                                       data::NamedTuple, row_idx::Int)
+
+Zero-allocation categorical execution using pre-extracted level codes.
+"""
+function execute_categorical_self_contained!(
+    evaluator::CategoricalEvaluator, output::AbstractVector{Float64},
+    data::NamedTuple, row_idx::Int
+)
+    # Use pre-extracted level codes (no data access!)
+    level_codes = evaluator.level_codes
+    cm = evaluator.contrast_matrix
+    positions = evaluator.positions
+    n_levels = evaluator.n_levels
+    
+    @inbounds begin
+        lvl = level_codes[row_idx]
+        lvl = lvl < 1 ? 1 : (lvl > n_levels ? n_levels : lvl)
+        
+        for j in 1:length(positions)
+            output[positions[j]] = cm[lvl, j]
+        end
+    end
     return nothing
 end

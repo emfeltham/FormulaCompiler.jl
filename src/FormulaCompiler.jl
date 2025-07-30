@@ -39,20 +39,11 @@ export FunctionEvaluator, InteractionEvaluator, ZScoreEvaluator, CombinedEvaluat
 export ScaledEvaluator, ProductEvaluator
 export output_width, evaluate!, compile_term, extract_all_columns
 
-# Execution plan system
-# include("ExecutionPlan.jl")
-# export ExecutionPlan
-
-# include("create_execution_blocks.jl")
-# include("validate_execution_plan.jl")
-include("assign_names.jl")
-
-# include("execute_block.jl")
-# export create_execution_plan, execute_plan!
+# include("assign_names.jl")
 
 # include("execution.jl") # OLD
 include("execute_self_contained.jl")
-include("execute_to_scratch.jl")
+# include("execute_to_scratch.jl")
 include("compile_term.jl")
 export test_self_contained_evaluators, compile_term, execute_self_contained!
 export create_execution_plan, generate_blocks!
@@ -96,5 +87,8 @@ export ModelRowEvaluator
 
 include("step1_specialized_core.jl")
 include("step2_categorical_support.jl")
+include("step3_function_support.jl")
+include("step3_polish_linear.jl")
+include("step4_interactions.jl")
 
 end # end module
