@@ -43,7 +43,7 @@ export output_width, evaluate!, compile_term, extract_all_columns
 
 # include("execution.jl") # OLD
 include("execute_self_contained.jl")
-# include("execute_to_scratch.jl")
+include("execute_to_scratch.jl")
 include("compile_term.jl")
 export test_self_contained_evaluators, compile_term, execute_self_contained!
 export create_execution_plan, generate_blocks!
