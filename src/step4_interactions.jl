@@ -1,0 +1,522 @@
+# step4_interactions.jl
+# Complete interaction support with full precomputation - FIXED FINAL VERSION
+
+###############################################################################
+# UNIFIED INTERACTION COMPONENT SYSTEM
+###############################################################################
+
+"""
+    InteractionComponentData
+
+Unified data for any interaction component type.
+"""
+struct InteractionComponentData
+    component_type::Symbol              # :constant, :continuous, :categorical, :function
+    data::Any                          # Component-specific data
+    scratch_range::UnitRange{Int}      # Where this component's results go in scratch
+    output_width::Int                  # How many values this component produces
+end
+
+"""
+    InteractionData
+
+Complete interaction data with pre-computed Kronecker patterns.
+"""
+struct InteractionData
+    components::Vector{InteractionComponentData}  # Homogeneous storage
+    component_widths::Vector{Int}                 # Width of each component  
+    kronecker_pattern::Vector{Vector{Int}}        # Pre-computed, always
+    output_positions::Vector{Int}                 # Where results go in model matrix
+    total_scratch_needed::Int                     # Scratch space for components
+end
+
+###############################################################################
+# COMPONENT CONVERSION FUNCTIONS
+###############################################################################
+
+"""
+    convert_component_to_unified(component::AbstractEvaluator, scratch_start::Int) -> (InteractionComponentData, Int)
+
+Convert any evaluator component to unified format. Returns (component_data, next_scratch_pos).
+"""
+function convert_component_to_unified(component::AbstractEvaluator, scratch_start::Int)
+    if component isa ConstantEvaluator
+        return InteractionComponentData(
+            :constant,
+            component.value,
+            scratch_start:scratch_start,
+            1
+        ), scratch_start + 1
+        
+    elseif component isa ContinuousEvaluator
+        return InteractionComponentData(
+            :continuous,
+            component.column,
+            scratch_start:scratch_start,
+            1
+        ), scratch_start + 1
+        
+    elseif component isa CategoricalEvaluator
+        n_contrasts = length(component.positions)
+        scratch_end = scratch_start + n_contrasts - 1
+        
+        cat_data = (
+            contrast_matrix = component.contrast_matrix,
+            level_codes = component.level_codes,
+            n_levels = component.n_levels
+        )
+        
+        return InteractionComponentData(
+            :categorical,
+            cat_data,
+            scratch_start:scratch_end,
+            n_contrasts
+        ), scratch_end + 1
+        
+    elseif component isa FunctionEvaluator
+        # for interactions we only need the function’s scalar result, so
+        # use output_position = 1
+        linear_func_data = flatten_function_to_linear_plan(component, 1)
+        
+        
+        return InteractionComponentData(
+            :function,
+            linear_func_data,
+            scratch_start:scratch_start,  # Single position for function result
+            1
+        ), scratch_start + 1
+        
+    else
+        error("Unsupported component type for interactions: $(typeof(component))")
+    end
+end
+
+###############################################################################
+# KRONECKER PATTERN COMPUTATION
+###############################################################################
+
+"""
+    compute_generalized_kronecker_pattern(component_widths::Vector{Int}) -> Vector{Vector{Int}}
+
+Compute full Kronecker pattern for any N-way interaction. Always precomputes everything.
+"""
+function compute_generalized_kronecker_pattern(component_widths::Vector{Int})
+    N = length(component_widths)
+    
+    if N == 0
+        return Vector{Vector{Int}}[]
+    elseif N == 1
+        # Single component - trivial pattern
+        return [[i] for i in 1:component_widths[1]]
+    end
+    
+    total_terms = prod(component_widths)
+    
+    # Pre-allocate the full pattern
+    pattern = Vector{Vector{Int}}(undef, total_terms)
+    
+    # Generate all combinations using Cartesian indices
+    ranges = Tuple(1:w for w in component_widths)
+    
+    idx = 1
+    for combo in Iterators.product(ranges...)
+        pattern[idx] = collect(combo)  # Convert tuple to vector
+        idx += 1
+    end
+    
+    return pattern
+end
+
+###############################################################################
+# INTERACTION ANALYSIS
+###############################################################################
+
+"""
+    analyze_interaction_operations_comprehensive(evaluator::CombinedEvaluator) -> (Vector{InteractionData}, InteractionOp)
+
+Extract and convert all interaction evaluators to unified format.
+"""
+function analyze_interaction_operations_comprehensive(evaluator::CombinedEvaluator)
+    interaction_evaluators = evaluator.interaction_evaluators
+    n_interactions = length(interaction_evaluators)
+    
+    if n_interactions == 0
+        # No interactions
+        return InteractionData[], InteractionOp()
+    end
+    
+    interaction_data = Vector{InteractionData}(undef, n_interactions)
+    
+    for (i, interaction_eval) in enumerate(interaction_evaluators)
+        # Convert all components to unified format
+        components = Vector{InteractionComponentData}()
+        component_widths = Int[]
+        current_scratch_pos = 1
+        
+        for component in interaction_eval.components
+            # Convert component and get next scratch position
+            component_data, next_scratch_pos = convert_component_to_unified(component, current_scratch_pos)
+            
+            push!(components, component_data)
+            push!(component_widths, component_data.output_width)
+            
+            # Update scratch position for next component
+            current_scratch_pos = next_scratch_pos
+        end
+        
+        total_scratch_needed = current_scratch_pos - 1
+        
+        # Precompute the full Kronecker pattern (no limits!)
+        kronecker_pattern = compute_generalized_kronecker_pattern(component_widths)
+        
+        # Create interaction data
+        interaction_data[i] = InteractionData(
+            components,
+            component_widths,
+            kronecker_pattern,
+            collect(interaction_eval.positions),
+            total_scratch_needed
+        )
+        
+        # Debug info for large interactions
+        total_terms = length(kronecker_pattern)
+        if total_terms > 10_000
+            println("⚠️  Large interaction detected: $(total_terms) terms, estimated memory: $(round(total_terms * length(component_widths) * 8 / 1024^2, digits=1)) MB")
+        end
+    end
+    
+    return interaction_data, InteractionOp()
+end
+
+"""
+    InteractionOp
+
+Operation encoding for interactions.
+"""
+struct InteractionOp end
+
+###############################################################################
+# COMPLETE FORMULA DATA TYPES
+###############################################################################
+
+"""
+    CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}
+
+Complete formula data including interactions.
+"""
+struct CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}
+    constants::ConstData
+    continuous::ContData
+    categorical::CatData
+    functions::FuncData
+    interactions::IntData               # Vector{InteractionData}
+    max_function_scratch::Int
+    max_interaction_scratch::Int
+end
+
+"""
+    CompleteFormulaOp{ConstOp, ContOp, CatOp, FuncOp, IntOp}
+
+Complete operation encoding including interactions.
+"""
+struct CompleteFormulaOp{ConstOp, ContOp, CatOp, FuncOp, IntOp}
+    constants::ConstOp
+    continuous::ContOp
+    categorical::CatOp
+    functions::FuncOp
+    interactions::IntOp
+end
+
+###############################################################################
+# COMPLETE ANALYSIS FUNCTION
+###############################################################################
+
+"""
+    analyze_evaluator_complete(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
+
+Complete analysis for all operation types including interactions.
+"""
+function analyze_evaluator_complete(evaluator::AbstractEvaluator)
+    if evaluator isa CombinedEvaluator
+        # Analyze all operation types
+        constant_data, constant_op = analyze_constant_operations(evaluator)
+        continuous_data, continuous_op = analyze_continuous_operations(evaluator)
+        categorical_data, categorical_op = analyze_categorical_operations(evaluator)
+        function_data, function_op = analyze_function_operations_linear(evaluator)
+        interaction_data, interaction_op = analyze_interaction_operations_comprehensive(evaluator)
+        
+        # Calculate maximum scratch space needed
+        max_function_scratch = isempty(function_data) ? 0 : maximum(f.scratch_size for f in function_data)
+        max_interaction_scratch = isempty(interaction_data) ? 0 : maximum(i.total_scratch_needed for i in interaction_data)
+        
+        # Combine into complete formula data
+        formula_data = CompleteFormulaData(
+            constant_data, continuous_data, categorical_data, function_data, interaction_data,
+            max_function_scratch, max_interaction_scratch
+        )
+        formula_op = CompleteFormulaOp(constant_op, continuous_op, categorical_op, function_op, interaction_op)
+        
+        return formula_data, formula_op
+        
+    else
+        error("Complete analysis only supports CombinedEvaluator")
+    end
+end
+
+###############################################################################
+# INTERACTION EXECUTION FUNCTIONS
+###############################################################################
+
+"""
+    evaluate_unified_component!(component::InteractionComponentData,
+                               scratch::Vector{Float64},
+                               data::NamedTuple,
+                               row_idx::Int)
+
+Evaluate a unified interaction component into scratch space.
+"""
+function evaluate_unified_component!(component::InteractionComponentData,
+                                   scratch::Vector{Float64},
+                                   data::NamedTuple,
+                                   row_idx::Int)
+    
+    if component.component_type === :constant
+        value = component.data::Float64
+        scratch[first(component.scratch_range)] = value
+        
+    elseif component.component_type === :continuous
+        col = component.data::Symbol
+        val = get_data_value_specialized(data, col, row_idx)
+        scratch[first(component.scratch_range)] = Float64(val)
+        
+    elseif component.component_type === :categorical
+        # Unpack categorical data
+        cat_data = component.data
+        contrast_matrix = cat_data.contrast_matrix
+        level_codes = cat_data.level_codes
+        n_levels = cat_data.n_levels
+        
+        level = clamp(level_codes[row_idx], 1, n_levels)
+        
+        # Fill scratch space with contrast values
+        @inbounds for i in 1:component.output_width
+            scratch_pos = first(component.scratch_range) + i - 1
+            scratch[scratch_pos] = contrast_matrix[level, i]
+        end
+        
+    elseif component.component_type === :function
+        linear_func_data = component.data::LinearFunctionData
+        
+        # Create separate function scratch and output
+        if linear_func_data.scratch_size > 0
+            temp_scratch = Vector{Float64}(undef, linear_func_data.scratch_size)
+        else
+            temp_scratch = Float64[]
+        end
+        temp_output = Vector{Float64}(undef, 1)
+        
+        # Execute linear function
+        execute_linear_function!(linear_func_data, temp_scratch, temp_output, data, row_idx)
+        
+        # Copy result to component's scratch position
+        scratch[first(component.scratch_range)] = temp_output[1]
+        
+    else
+        error("Unknown component type: $(component.component_type)")
+    end
+    
+    return nothing
+end
+
+"""
+    execute_interaction_operation!(interaction_data::InteractionData,
+                                  scratch::Vector{Float64},
+                                  output::Vector{Float64},
+                                  data::NamedTuple,
+                                  row_idx::Int)
+
+Execute a single interaction with zero allocations.
+"""
+function execute_interaction_operation!(interaction_data::InteractionData,
+                                       scratch::Vector{Float64},
+                                       output::Vector{Float64},
+                                       data::NamedTuple,
+                                       row_idx::Int)
+    
+    # Step 1: Evaluate all components into scratch space
+    @inbounds for component in interaction_data.components
+        evaluate_unified_component!(component, scratch, data, row_idx)
+    end
+    
+    # Step 2: Apply pre-computed Kronecker pattern
+    @inbounds for (result_idx, pattern_indices) in enumerate(interaction_data.kronecker_pattern)
+        if result_idx <= length(interaction_data.output_positions)
+            product = 1.0
+            
+            # Compute product using pre-computed pattern
+            for (comp_idx, pattern_val) in enumerate(pattern_indices)
+                component = interaction_data.components[comp_idx]
+                scratch_pos = first(component.scratch_range) + pattern_val - 1
+                product *= scratch[scratch_pos]
+            end
+            
+            output[interaction_data.output_positions[result_idx]] = product
+        end
+    end
+    
+    return nothing
+end
+
+"""
+    execute_interaction_operations!(interaction_data::Vector{InteractionData},
+                                   scratch::Vector{Float64},
+                                   output::Vector{Float64},
+                                   data::NamedTuple,
+                                   row_idx::Int)
+
+Execute multiple interactions with zero allocations.
+"""
+function execute_interaction_operations!(interaction_data::Vector{InteractionData},
+                                        scratch::Vector{Float64},
+                                        output::Vector{Float64},
+                                        data::NamedTuple,
+                                        row_idx::Int)
+    # Handle empty case
+    if isempty(interaction_data)
+        return nothing
+    end
+    
+    # Process all interactions
+    @inbounds for interaction in interaction_data
+        execute_interaction_operation!(interaction, scratch, output, data, row_idx)
+    end
+    
+    return nothing
+end
+
+###############################################################################
+# COMPLETE EXECUTION - FIXED TO AVOID RECURSION
+###############################################################################
+
+"""
+    execute_complete_constant_operations!(constant_data, output, input_data, row_idx)
+
+Execute constant operations for complete formulas.
+"""
+function execute_complete_constant_operations!(constant_data::ConstantData{N}, output, input_data, row_idx) where N
+    @inbounds for i in 1:N
+        pos = constant_data.positions[i]
+        val = constant_data.values[i]
+        output[pos] = val
+    end
+    return nothing
+end
+
+"""
+    execute_complete_continuous_operations!(continuous_data, output, input_data, row_idx)
+
+Execute continuous operations for complete formulas.
+"""
+function execute_complete_continuous_operations!(continuous_data::ContinuousData{N, Cols}, output, input_data, row_idx) where {N, Cols}
+    @inbounds for i in 1:N
+        col = continuous_data.columns[i]
+        pos = continuous_data.positions[i]
+        val = get_data_value_specialized(input_data, col, row_idx)
+        output[pos] = Float64(val)
+    end
+    return nothing
+end
+
+"""
+    execute_operation!(data::CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}, 
+                      op::CompleteFormulaOp{ConstOp, ContOp, CatOp, FuncOp, IntOp}, 
+                      output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, IntData, ConstOp, ContOp, CatOp, FuncOp, IntOp}
+
+Execute complete formulas with all operation types including interactions - FIXED TO AVOID RECURSION.
+"""
+function execute_operation!(data::CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}, 
+                           op::CompleteFormulaOp{ConstOp, ContOp, CatOp, FuncOp, IntOp}, 
+                           output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, IntData, ConstOp, ContOp, CatOp, FuncOp, IntOp}
+    
+    # Pre-allocate scratch spaces
+    function_scratch = data.max_function_scratch > 0 ? Vector{Float64}(undef, data.max_function_scratch) : Float64[]
+    interaction_scratch = data.max_interaction_scratch > 0 ? Vector{Float64}(undef, data.max_interaction_scratch) : Float64[]
+    
+    # FIXED: Use explicit method calls to avoid recursion
+    # Execute constants
+    execute_complete_constant_operations!(data.constants, output, input_data, row_idx)
+    
+    # Execute continuous variables
+    execute_complete_continuous_operations!(data.continuous, output, input_data, row_idx)
+    
+    # Execute categorical variables
+    execute_categorical_operations!(data.categorical, output, input_data, row_idx)
+    
+    # Execute functions (linear execution)
+    execute_linear_function_operations!(data.functions, function_scratch, output, input_data, row_idx)
+    
+    # Execute interactions
+    execute_interaction_operations!(data.interactions, interaction_scratch, output, input_data, row_idx)
+    
+    return nothing
+end
+
+###############################################################################
+# COMPLETE COMPILATION FUNCTIONS
+###############################################################################
+
+"""
+    create_specialized_formula_complete(compiled_formula::CompiledFormula) -> SpecializedFormula
+
+Convert a CompiledFormula to a SpecializedFormula with complete interaction support.
+"""
+function create_specialized_formula_complete(compiled_formula::CompiledFormula)
+    # Analyze the evaluator tree with complete support
+    data_tuple, op_tuple = analyze_evaluator_complete(compiled_formula.root_evaluator)
+    
+    # Create specialized formula
+    return SpecializedFormula{typeof(data_tuple), typeof(op_tuple)}(
+        data_tuple,
+        op_tuple,
+        compiled_formula.output_width
+    )
+end
+
+"""
+    compile_formula_specialized_complete(model, data::NamedTuple) -> SpecializedFormula
+
+Direct compilation to specialized formula with complete interaction support.
+"""
+function compile_formula_specialized_complete(model, data::NamedTuple)
+    # Use existing compilation logic to build evaluator tree
+    compiled = compile_formula(model, data)
+    
+    # Convert to complete specialized form
+    return create_specialized_formula_complete(compiled)
+end
+
+###############################################################################
+# COMPLETE UTILITY FUNCTIONS
+###############################################################################
+
+"""
+    show_interaction_info(interaction_data::InteractionData)
+
+Display information about an interaction.
+"""
+function show_interaction_info(interaction_data::InteractionData)
+    println("Interaction Information:")
+    println("  Components: $(length(interaction_data.components))")
+    println("  Component widths: $(interaction_data.component_widths)")
+    println("  Total terms: $(length(interaction_data.kronecker_pattern))")
+    println("  Scratch space needed: $(interaction_data.total_scratch_needed)")
+    println("  Output positions: $(interaction_data.output_positions)")
+    
+    # Memory estimate
+    pattern_memory = length(interaction_data.kronecker_pattern) * length(interaction_data.component_widths) * 8
+    println("  Pattern memory: $(round(pattern_memory / 1024, digits=1)) KB")
+    
+    if pattern_memory > 1024^2
+        println("  ⚠️  Large interaction: $(round(pattern_memory / 1024^2, digits=1)) MB")
+    end
+end

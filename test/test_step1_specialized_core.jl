@@ -22,7 +22,6 @@ using FormulaCompiler:
 using FormulaCompiler:
     compile_formula_specialized, show_specialized_info
 
-
 ###############################################################################
 # TESTING AND VALIDATION
 ###############################################################################

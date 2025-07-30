@@ -1,4 +1,4 @@
-# test_step2_categorical_support.jl
+# test_step4_interactions.jl
 
 using Revise
 using Test
@@ -24,23 +24,24 @@ using FormulaCompiler:
     compile_formula_specialized, show_specialized_info
 using FormulaCompiler:
     compile_formula_specialized_enhanced
+using FormulaCompiler: compile_formula_specialized_linear_comprehensive
 
 ###############################################################################
-# ENHANCED TESTING FUNCTIONS
+# COMPLETE TESTING FUNCTIONS
 ###############################################################################
 
 """
-    test_enhanced_specialization(formula, df, data; n_iterations=1000)
+    test_complete_specialization(formula, df, data; n_iterations=1000)
 
-Test enhanced specialization (constants + continuous + categorical) against current implementation.
+Test complete specialization including interactions against current implementation.
 """
-function test_enhanced_specialization(formula, df, data; n_iterations=1000)
-    println("Testing enhanced specialization (constants + continuous + categorical)...")
+function test_complete_specialization(formula, df, data; n_iterations=1000)
+    println("Testing complete specialization (all operations including interactions)...")
     
     # Compile both versions
     model = fit(LinearModel, formula, df)
     current_compiled = compile_formula(model, data)
-    specialized_compiled = compile_formula_specialized_enhanced(model, data)
+    specialized_compiled = compile_formula_specialized_complete(model, data)
     
     println("Formula: $formula")
     println("Output width: $(length(current_compiled))")
@@ -114,18 +115,18 @@ function test_enhanced_specialization(formula, df, data; n_iterations=1000)
 end
 
 """
-    run_step2_tests()
+    run_step4_tests()
 
-Run comprehensive tests for Step 2 implementation.
+Run comprehensive tests for Step 4 implementation (complete with interactions).
 """
-function run_step2_tests()
-    # Create test data with categorical variables
+function run_step4_tests()
+    # Create test data with all variable types
     
     n = 200
     df = DataFrame(
         x = randn(n),
         y = randn(n), 
-        z = abs.(randn(n)) .+ 0.01,
+        z = abs.(randn(n)) .+ 0.01,  # Positive for log
         w = randn(n),
         t = randn(n),
         group3 = categorical(rand(["A", "B", "C"], n)),           
@@ -136,30 +137,35 @@ function run_step2_tests()
     )
     data = Tables.columntable(df)
     
-    println("="^60)
-    println("STEP 2 TESTING: CONSTANTS + CONTINUOUS + CATEGORICAL")
-    println("="^60)
+    println("="^80)
+    println("STEP 4 TESTING: COMPLETE SPECIALIZATION WITH INTERACTIONS")
+    println("="^80)
     
-    # Test formulas (no functions or interactions yet)
+    # Test formulas with interactions
     test_formulas = [
-        @formula(response ~ 1),                      # Constants only
-        @formula(response ~ x),                      # Continuous only  
-        @formula(response ~ group3),                 # Categorical only
-        @formula(response ~ x + group3),             # Continuous + categorical
-        @formula(response ~ x + y + group3),         # Multiple continuous + categorical
-        @formula(response ~ group3 + group4),        # Multiple categorical
-        @formula(response ~ x + y + group3 + binary), # Mixed: continuous + multiple categorical
-        @formula(response ~ x + y + z + group3 + group4 + binary), # Many variables
+        @formula(response ~ 1),                          # Baseline (no interactions)
+        @formula(response ~ x),                          # Baseline (no interactions)
+        @formula(response ~ x * y),                      # Simple 2-way interaction
+        @formula(response ~ x * group3),                 # Continuous × Categorical
+        @formula(response ~ group3 * binary),            # Categorical × Categorical  
+        @formula(response ~ log(z) * group4),            # Function × Categorical
+        @formula(response ~ x * y * group3),             # 3-way interaction
+        @formula(response ~ x * log(z)),                 # Continuous × Function
+        @formula(response ~ x * y * group3 + log(z) * group4),  # Your original formula!
+        @formula(response ~ x * y * z),                  # 3-way continuous
+        @formula(response ~ group3 * group4 * binary),   # 3-way categorical
+        @formula(response ~ x * y * z * w),              # 4-way interaction
+        @formula(response ~ log(z) * exp(w) * group3),   # Multiple functions × categorical
     ]
     
     for (i, formula) in enumerate(test_formulas)
         println("\n--- Test $i: $formula ---")
         try
-            test_enhanced_specialization(formula, df, data)
+            test_complete_specialization(formula, df, data)
             println("✅ Test $i passed")
         catch e
-            if occursin("only supports constants, continuous, and categorical", string(e))
-                println("⏭️  Test $i skipped (contains functions/interactions)")
+            if occursin("not yet implemented", string(e)) || occursin("not yet supported", string(e))
+                println("⏭️  Test $i skipped (feature not yet implemented: $e)")
             else
                 println("❌ Test $i failed: $e")
                 rethrow(e)
@@ -167,10 +173,17 @@ function run_step2_tests()
         end
     end
     
-    println("\n" * "="^60)
-    println("STEP 2 TESTING COMPLETE")
-    println("="^60)
+    println("\n" * "="^80)
+    println("STEP 4 TESTING COMPLETE")
+    println("="^80)
 end
 
-# Run the comprehensive test suite
-run_step2_tests()
+using FormulaCompiler:
+    compile_formula_specialized_complete,
+    execute_to_scratch!
+
+# Run the complete test suite
+run_step4_tests()
+
+# Test your original formula specifically
+# test_complete_specialization(@formula(response ~ x * y * group3 + log(z) * group4), df, data)
