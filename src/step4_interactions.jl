@@ -212,6 +212,8 @@ struct CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}
     interactions::IntData               # Vector{InteractionData}
     max_function_scratch::Int
     max_interaction_scratch::Int
+    function_scratch::Vector{Float64}   # Pre-allocated function scratch
+    interaction_scratch::Vector{Float64}# Pre-allocated interaction scratch
 end
 
 """
@@ -245,18 +247,27 @@ function analyze_evaluator_complete(evaluator::AbstractEvaluator)
         function_data, function_op = analyze_function_operations_linear(evaluator)
         interaction_data, interaction_op = analyze_interaction_operations_comprehensive(evaluator)
         
-        # Calculate maximum scratch space needed
         max_function_scratch = isempty(function_data) ? 0 : maximum(f.scratch_size for f in function_data)
         max_interaction_scratch = isempty(interaction_data) ? 0 : maximum(i.total_scratch_needed for i in interaction_data)
-        
-        # Combine into complete formula data
+
+        # Pre-allocate once
+        function_scratch = max_function_scratch > 0 ? Vector{Float64}(undef, max_function_scratch) : Float64[]
+        interaction_scratch = max_interaction_scratch > 0 ? Vector{Float64}(undef, max_interaction_scratch) : Float64[]
+
+        # Construct data with buffers
         formula_data = CompleteFormulaData(
-            constant_data, continuous_data, categorical_data, function_data, interaction_data,
-            max_function_scratch, max_interaction_scratch
+            constant_data,
+            continuous_data,
+            categorical_data,
+            function_data,
+            interaction_data,
+            max_function_scratch,
+            max_interaction_scratch,
+            function_scratch,
+            interaction_scratch
         )
         formula_op = CompleteFormulaOp(constant_op, continuous_op, categorical_op, function_op, interaction_op)
-        
-        return formula_data, formula_op
+    return formula_data, formula_op
         
     else
         error("Complete analysis only supports CombinedEvaluator")
@@ -434,30 +445,22 @@ end
 
 Execute complete formulas with all operation types including interactions - FIXED TO AVOID RECURSION.
 """
-function execute_operation!(data::CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}, 
-                           op::CompleteFormulaOp{ConstOp, ContOp, CatOp, FuncOp, IntOp}, 
-                           output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, IntData, ConstOp, ContOp, CatOp, FuncOp, IntOp}
-    
-    # Pre-allocate scratch spaces
-    function_scratch = data.max_function_scratch > 0 ? Vector{Float64}(undef, data.max_function_scratch) : Float64[]
-    interaction_scratch = data.max_interaction_scratch > 0 ? Vector{Float64}(undef, data.max_interaction_scratch) : Float64[]
-    
-    # FIXED: Use explicit method calls to avoid recursion
-    # Execute constants
+# 3. Use stored buffers in execution, removing per-call allocations
+function execute_operation!(data::CompleteFormulaData{ConstData,ContData,CatData,FuncData,IntData},
+                            op::CompleteFormulaOp{ConstOp,ContOp,CatOp,FuncOp,IntOp},
+                            output, input_data, row_idx) where {ConstData,ContData,CatData,FuncData,IntData,ConstOp,ContOp,CatOp,FuncOp,IntOp}
+    # Reuse pre-allocated buffers
+    fs = data.function_scratch
+    is = data.interaction_scratch
+
+    # Execute constants, continuous, categorical as before
     execute_complete_constant_operations!(data.constants, output, input_data, row_idx)
-    
-    # Execute continuous variables
     execute_complete_continuous_operations!(data.continuous, output, input_data, row_idx)
-    
-    # Execute categorical variables
     execute_categorical_operations!(data.categorical, output, input_data, row_idx)
-    
-    # Execute functions (linear execution)
-    execute_linear_function_operations!(data.functions, function_scratch, output, input_data, row_idx)
-    
-    # Execute interactions
-    execute_interaction_operations!(data.interactions, interaction_scratch, output, input_data, row_idx)
-    
+
+    # Functions and interactions use fs and is
+    execute_linear_function_operations!(data.functions, fs, output, input_data, row_idx)
+    execute_interaction_operations!(data.interactions, is, output, input_data, row_idx)
     return nothing
 end
 
