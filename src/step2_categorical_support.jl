@@ -2,40 +2,37 @@
 # Add categorical variable support to the specialized formula system
 
 ###############################################################################
-# CATEGORICAL DATA TYPES
+# CATEGORICAL DATA TYPES (SIMPLIFIED - NO TYPE PARAMETER)
 ###############################################################################
 
 """
-    CategoricalData{N}
+    CategoricalData
 
-Pre-computed data for categorical variables with N contrast columns.
+Pre-computed data for categorical variables (simplified, no type parameter).
 """
-struct CategoricalData{N}
+struct CategoricalData
     contrast_matrix::Matrix{Float64}  # Pre-computed contrast matrix
     level_codes::Vector{Int}          # Pre-extracted level codes for all rows
-    positions::NTuple{N, Int}         # Output positions for contrast columns
+    positions::Vector{Int}            # Output positions for contrast columns
     n_levels::Int                     # Number of categorical levels
+    n_contrasts::Int                  # Number of contrast columns
     
-    # Inner constructor with explicit N parameter
-    function CategoricalData{N}(contrast_matrix::Matrix{Float64}, 
-                               level_codes::Vector{Int}, 
-                               positions::NTuple{N, Int}, 
-                               n_levels::Int) where N
-        @assert size(contrast_matrix, 2) == N "Contrast matrix columns must match N"
-        new{N}(contrast_matrix, level_codes, positions, n_levels)
+    function CategoricalData(contrast_matrix::Matrix{Float64}, 
+                            level_codes::Vector{Int}, 
+                            positions::Vector{Int}, 
+                            n_levels::Int)
+        n_contrasts = size(contrast_matrix, 2)
+        @assert length(positions) == n_contrasts "Positions length must match contrast columns"
+        new(contrast_matrix, level_codes, positions, n_levels, n_contrasts)
     end
 end
 
 """
-    CategoricalOp{N}
+    CategoricalOp
 
-Compile-time encoding of categorical variable operations with N contrast columns.
+Compile-time encoding of categorical variable operations (simplified).
 """
-struct CategoricalOp{N}
-    function CategoricalOp(::CategoricalData{N}) where N
-        new{N}()
-    end
-end
+struct CategoricalOp end
 
 ###############################################################################
 # ENHANCED FORMULA DATA TYPES
@@ -45,11 +42,12 @@ end
     EnhancedFormulaData{ConstData, ContData, CatData}
 
 Combined data for formulas with constants, continuous, and categorical variables.
+CatData is now Vector{CategoricalData} for homogeneous storage.
 """
 struct EnhancedFormulaData{ConstData, ContData, CatData}
     constants::ConstData
     continuous::ContData
-    categorical::CatData
+    categorical::CatData  # This will be Vector{CategoricalData}
 end
 
 """
@@ -60,7 +58,7 @@ Combined operation encoding for enhanced formulas.
 struct EnhancedFormulaOp{ConstOp, ContOp, CatOp}
     constants::ConstOp
     continuous::ContOp
-    categorical::CatOp
+    categorical::CatOp  # This will be CategoricalOp
 end
 
 ###############################################################################
@@ -68,51 +66,35 @@ end
 ###############################################################################
 
 """
-    analyze_categorical_operations(evaluator::CombinedEvaluator) -> (CategoricalData, CategoricalOp)
+    analyze_categorical_operations(evaluator::CombinedEvaluator) -> (Vector{CategoricalData}, CategoricalOp)
 
 Extract categorical data from a CombinedEvaluator's categorical evaluators.
+Returns homogeneous vector for allocation-free iteration.
 """
 function analyze_categorical_operations(evaluator::CombinedEvaluator)
     categorical_evaluators = evaluator.categorical_evaluators
     n_cats = length(categorical_evaluators)
     
     if n_cats == 0
-        # No categorical operations - return empty tuple
-        return (), ()
-    elseif n_cats == 1
-        # Single categorical variable
-        cat_eval = categorical_evaluators[1]
-        N = length(cat_eval.positions)
+        # No categorical operations - return empty vector
+        return CategoricalData[], CategoricalOp()
+    end
+    
+    # Create vector of homogeneous CategoricalData (no type parameters)
+    categorical_data = Vector{CategoricalData}(undef, n_cats)
+    
+    for i in 1:n_cats
+        cat_eval = categorical_evaluators[i]
         
-        categorical_data = CategoricalData{N}(
+        categorical_data[i] = CategoricalData(
             cat_eval.contrast_matrix,
             cat_eval.level_codes,
-            Tuple(cat_eval.positions),
+            collect(cat_eval.positions),  # Convert to Vector{Int}
             cat_eval.n_levels
         )
-        categorical_op = CategoricalOp(categorical_data)
-        
-        return (categorical_data,), (categorical_op,)
-    else
-        # Multiple categorical variables - create tuple of data
-        categorical_data_tuple = ntuple(n_cats) do i
-            cat_eval = categorical_evaluators[i]
-            N = length(cat_eval.positions)
-            
-            CategoricalData{N}(
-                cat_eval.contrast_matrix,
-                cat_eval.level_codes,
-                Tuple(cat_eval.positions),
-                cat_eval.n_levels
-            )
-        end
-        
-        categorical_op_tuple = ntuple(n_cats) do i
-            CategoricalOp(categorical_data_tuple[i])
-        end
-        
-        return categorical_data_tuple, categorical_op_tuple
     end
+    
+    return categorical_data, CategoricalOp()
 end
 
 """
@@ -153,13 +135,13 @@ end
 ###############################################################################
 
 """
-    execute_operation!(data::CategoricalData{N}, op::CategoricalOp{N}, 
-                      output, input_data, row_idx) where N
+    execute_operation!(data::CategoricalData, op::CategoricalOp, 
+                      output, input_data, row_idx)
 
 Execute categorical variable operations with zero allocations.
 """
-function execute_operation!(data::CategoricalData{N}, op::CategoricalOp{N}, 
-                           output, input_data, row_idx) where N
+function execute_operation!(data::CategoricalData, op::CategoricalOp, 
+                           output, input_data, row_idx)
     
     # Get level for this row (pre-extracted during compilation)
     level = data.level_codes[row_idx]
@@ -168,7 +150,7 @@ function execute_operation!(data::CategoricalData{N}, op::CategoricalOp{N},
     level = clamp(level, 1, data.n_levels)
     
     # Direct contrast matrix lookup and assignment
-    @inbounds for i in 1:N
+    @inbounds for i in 1:data.n_contrasts
         pos = data.positions[i]
         output[pos] = data.contrast_matrix[level, i]
     end
@@ -177,36 +159,26 @@ function execute_operation!(data::CategoricalData{N}, op::CategoricalOp{N},
 end
 
 """
-    execute_categorical_operations!(categorical_data::Tuple, output, input_data, row_idx)
+    execute_categorical_operations!(categorical_data::Vector{CategoricalData}, output, input_data, row_idx)
 
-Execute multiple categorical variables.
+Execute multiple categorical variables with zero allocations.
 """
-function execute_categorical_operations!(categorical_data::Tuple, output, input_data, row_idx)
-    for cat_data in categorical_data
-        execute_categorical_operation_single!(cat_data, output, input_data, row_idx)
-    end
-    return nothing
-end
-
-function execute_categorical_operations!(categorical_data::Tuple{}, output, input_data, row_idx)
-    # No categorical variables - do nothing
-    return nothing
-end
-
-"""
-    execute_categorical_operation_single!(data::CategoricalData{N}, output, input_data, row_idx) where N
-
-Execute a single categorical variable operation.
-"""
-function execute_categorical_operation_single!(data::CategoricalData{N}, output, input_data, row_idx) where N
-    level = data.level_codes[row_idx]
-    level = clamp(level, 1, data.n_levels)
-    
-    @inbounds for i in 1:N
-        pos = data.positions[i]
-        output[pos] = data.contrast_matrix[level, i]
+function execute_categorical_operations!(categorical_data::Vector{CategoricalData}, output, input_data, row_idx)
+    # Handle empty case
+    if isempty(categorical_data)
+        return nothing
     end
     
+    # Homogeneous vector iteration - no allocations!
+    @inbounds for cat_data in categorical_data
+        level = cat_data.level_codes[row_idx]
+        level = clamp(level, 1, cat_data.n_levels)
+        
+        for i in 1:cat_data.n_contrasts
+            pos = cat_data.positions[i]
+            output[pos] = cat_data.contrast_matrix[level, i]
+        end
+    end
     return nothing
 end
 
@@ -286,11 +258,11 @@ function show_enhanced_specialized_info(sf::SpecializedFormula{D, O}) where {D, 
         println("  Constants: $(sf.data.constants.values)")
         println("  Continuous variables: $(sf.data.continuous.columns)")
         
-        if sf.data.categorical isa Tuple && !isempty(sf.data.categorical)
+        if !isempty(sf.data.categorical)
             println("  Categorical variables:")
             for (i, cat_data) in enumerate(sf.data.categorical)
                 n_levels = cat_data.n_levels
-                n_contrasts = length(cat_data.positions)
+                n_contrasts = cat_data.n_contrasts
                 println("    Categorical $i: $n_levels levels, $n_contrasts contrasts")
             end
         else
