@@ -1,82 +1,669 @@
 # evaluators.jl
 # Complete recursive implementation that handles all cases
 
-###############################################################################
-# 1. CORE EVALUATOR TYPES (Fixed)
-###############################################################################
+# Global context for categorical levels during compilation
+const CATEGORICAL_LEVELS_CONTEXT = Ref{Union{Dict{Symbol, Vector{Int}}, Nothing}}(nothing)
 
+"""
+    set_categorical_context!(levels::Dict{Symbol, Vector{Int}})
+    
+Set global categorical levels context for compilation.
+"""
+function set_categorical_context!(levels::Dict{Symbol, Vector{Int}})
+    CATEGORICAL_LEVELS_CONTEXT[] = levels
+end
+
+"""
+    clear_categorical_context!()
+    
+Clear global categorical levels context after compilation.
+"""
+function clear_categorical_context!()
+    CATEGORICAL_LEVELS_CONTEXT[] = nothing
+end
+
+"""
+    get_categorical_levels_for_column(column::Symbol) -> Vector{Int}
+    
+Get pre-extracted categorical levels for a column from global context.
+"""
+function get_categorical_levels_for_column(column::Symbol)
+    context = CATEGORICAL_LEVELS_CONTEXT[]
+    if context !== nothing && haskey(context, column)
+        return context[column]
+    else
+        return Int[]  # Empty vector for non-categorical or missing columns
+    end
+end
+
+"""
+    AbstractEvaluator
+
+Base type for all self-contained evaluators with positions and scratch space.
+"""
 abstract type AbstractEvaluator end
 
+"""
+    ConstantEvaluator
+
+Self-contained constant evaluator.
+"""
 struct ConstantEvaluator <: AbstractEvaluator
     value::Float64
+    position::Int                    # Where output goes in model matrix
+    # No scratch space needed for constants
 end
 
+"""
+    ContinuousEvaluator
+
+Self-contained continuous variable evaluator.
+"""
 struct ContinuousEvaluator <: AbstractEvaluator
     column::Symbol
+    position::Int                    # Where output goes in model matrix
+    # No scratch space needed for direct data access
 end
 
+"""
+    CategoricalEvaluator
+
+Self-contained categorical evaluator with pre-computed lookup tables.
+"""
 struct CategoricalEvaluator <: AbstractEvaluator
     column::Symbol
     contrast_matrix::Matrix{Float64}
     n_levels::Int
+    positions::Vector{Int}
+    level_codes::Vector{Int}  # Pre-extracted level codes
 end
 
+"""
+    FunctionEvaluator
+
+Self-contained function evaluator with argument scratch space.
+"""
 struct FunctionEvaluator <: AbstractEvaluator
     func::Function
     arg_evaluators::Vector{AbstractEvaluator}
+    position::Int                    # Where output goes in model matrix
+    scratch_positions::Vector{Int}   # Scratch space for argument evaluation
+    arg_scratch_map::Vector{UnitRange{Int}}  # Where each argument's result goes in scratch
 end
 
-struct InteractionEvaluator <: AbstractEvaluator
+struct ParametricFunctionEvaluator{F,N} <: AbstractEvaluator
+    func::F
+    arg_evaluators::NTuple{N,AbstractEvaluator}
+    arg_scratch_map::NTuple{N,UnitRange{Int}}
+end
+
+"""
+    InteractionEvaluator{N}
+
+Self-contained interaction evaluator with component scratch space.
+"""
+struct InteractionEvaluator{N} <: AbstractEvaluator
     components::Vector{AbstractEvaluator}
     total_width::Int
-    
-    function InteractionEvaluator(components)
-        total_width = prod([output_width(comp) for comp in components])
-        new(components, total_width)
-    end
+    positions::Vector{Int} # Where interaction terms go in model matrix
+    scratch_positions::Vector{Int} # Scratch space for component evaluation
+    component_scratch_map::Vector{UnitRange{Int}} # Where each component goes in scratch
+    kronecker_pattern::Vector{NTuple{N,Int}} # Pre-computed interaction pattern; N known at compile time!
 end
 
+"""
+    ZScoreEvaluator
+
+Self-contained Z-score evaluator.
+"""
 struct ZScoreEvaluator <: AbstractEvaluator
     underlying::AbstractEvaluator
     center::Float64
     scale::Float64
+    positions::Vector{Int}           # Where outputs go in model matrix
+    scratch_positions::Vector{Int}   # Scratch space for underlying evaluation
+    underlying_scratch_map::UnitRange{Int}  # Where underlying result goes in scratch
 end
 
+# Precomputed operations to eliminate field access during execution
+struct PrecomputedConstantOp
+    value::Float64  # Ensure this is exactly Float64
+    position::Int64 # Ensure this is exactly Int64 (not Int)
+end
+
+struct PrecomputedContinuousOp
+    column::Symbol   # This should be fine
+    position::Int64  # Ensure this is exactly Int64
+end
+
+"""
+    CombinedEvaluator
+
+Container with precomputed operations for zero-allocation execution.
+"""
 struct CombinedEvaluator <: AbstractEvaluator
-    sub_evaluators::Vector{AbstractEvaluator}
-    total_width::Int
+    # Pre-computed operations to eliminate field access
+    constant_ops::Vector{PrecomputedConstantOp}
+    continuous_ops::Vector{PrecomputedContinuousOp}
     
-    function CombinedEvaluator(sub_evaluators)
-        total_width = sum([output_width(eval) for eval in sub_evaluators])
-        new(sub_evaluators, total_width)
-    end
+    # Keep evaluator objects for complex operations that need field access
+    categorical_evaluators::Vector{CategoricalEvaluator}
+    function_evaluators::Vector{FunctionEvaluator}
+    interaction_evaluators::Vector{InteractionEvaluator}
+    
+    total_width::Int
+    max_scratch_needed::Int
 end
 
+"""
+    ScaledEvaluator
+
+Self-contained scaled evaluator.
+"""
 struct ScaledEvaluator <: AbstractEvaluator
     evaluator::AbstractEvaluator
     scale_factor::Float64
+    positions::Vector{Int}           # Where outputs go in model matrix
+    scratch_positions::Vector{Int}   # Scratch space for underlying evaluation
+    underlying_scratch_map::UnitRange{Int}  # Where underlying result goes in scratch
 end
 
+"""
+    ProductEvaluator
+
+Self-contained product evaluator.
+"""
 struct ProductEvaluator <: AbstractEvaluator
     components::Vector{AbstractEvaluator}
+    position::Int                    # Where product goes in model matrix (always scalar)
+    scratch_positions::Vector{Int}   # Scratch space for component evaluation
+    component_scratch_map::Vector{UnitRange{Int}}  # Where each component goes in scratch
 end
 
 ###############################################################################
-# 2. OUTPUT WIDTH CALCULATIONS
+# EVALUATOR ANALYSIS FUNCTIONS
 ###############################################################################
 
+"""
+    output_width(evaluator::AbstractEvaluator) -> Int
+
+Get output width from positions.
+"""
 output_width(eval::ConstantEvaluator) = 1
 output_width(eval::ContinuousEvaluator) = 1
-output_width(eval::CategoricalEvaluator) = size(eval.contrast_matrix, 2)
-output_width(eval::FunctionEvaluator) = 1  # Functions always produce 1 column
-output_width(eval::InteractionEvaluator) = eval.total_width
-output_width(eval::ZScoreEvaluator) = output_width(eval.underlying)
+output_width(eval::CategoricalEvaluator) = length(eval.positions)
+output_width(eval::FunctionEvaluator) = 1
+output_width(eval::InteractionEvaluator) = length(eval.positions)
+output_width(eval::ZScoreEvaluator) = length(eval.positions)
 output_width(eval::CombinedEvaluator) = eval.total_width
-output_width(eval::ScaledEvaluator) = output_width(eval.evaluator)
-output_width(eval::ProductEvaluator) = 1  # Products always yield single values
+output_width(eval::ScaledEvaluator) = length(eval.positions)
+output_width(eval::ProductEvaluator) = 1
+
+"""
+    get_positions(evaluator::AbstractEvaluator) -> Vector{Int}
+
+Get model matrix positions for any evaluator.
+"""
+get_positions(eval::ConstantEvaluator) = [eval.position]
+get_positions(eval::ContinuousEvaluator) = [eval.position]
+get_positions(eval::CategoricalEvaluator) = eval.positions
+get_positions(eval::FunctionEvaluator) = [eval.position]
+get_positions(eval::InteractionEvaluator) = eval.positions
+get_positions(eval::ZScoreEvaluator) = eval.positions
+get_positions(eval::ScaledEvaluator) = eval.positions
+get_positions(eval::ProductEvaluator) = [eval.position]
+
+function get_positions(eval::CombinedEvaluator)
+    positions = Int[]
+    
+    # Collect from precomputed operations
+    for op in eval.constant_ops
+        push!(positions, op.position)
+    end
+    for op in eval.continuous_ops
+        push!(positions, op.position)
+    end
+    
+    # Collect from complex evaluators (these still have get_positions methods)
+    for sub_eval in eval.categorical_evaluators
+        append!(positions, get_positions(sub_eval))
+    end
+    for sub_eval in eval.function_evaluators
+        append!(positions, get_positions(sub_eval))
+    end
+    for sub_eval in eval.interaction_evaluators
+        append!(positions, get_positions(sub_eval))
+    end
+    
+    return positions
+end
+
+"""
+    get_scratch_positions(evaluator::AbstractEvaluator) -> Vector{Int}
+
+Get scratch space positions for any evaluator.
+"""
+get_scratch_positions(eval::ConstantEvaluator) = Int[]  # No scratch needed
+get_scratch_positions(eval::ContinuousEvaluator) = Int[]  # No scratch needed
+get_scratch_positions(eval::CategoricalEvaluator) = Int[]  # No scratch needed
+# get_scratch_positions(eval::FunctionEvaluator) = eval.scratch_positions
+function get_scratch_positions(eval::FunctionEvaluator)
+    # start with this function’s own scratch slots
+    positions = collect(eval.scratch_positions)
+    # then recurse into each argument evaluator
+    for arg_eval in eval.arg_evaluators
+        append!(positions, get_scratch_positions(arg_eval))
+    end
+    return positions
+end
+get_scratch_positions(eval::InteractionEvaluator) = eval.scratch_positions
+get_scratch_positions(eval::ZScoreEvaluator) = eval.scratch_positions
+get_scratch_positions(eval::ScaledEvaluator) = eval.scratch_positions
+get_scratch_positions(eval::ProductEvaluator) = eval.scratch_positions
+
+function get_scratch_positions(eval::CombinedEvaluator)
+    positions = Int[]
+    
+    # Precomputed operations (constants and continuous) don't need scratch space
+    # No scratch positions to collect from them
+    
+    # Collect scratch positions from complex evaluators only
+    for sub_eval in eval.categorical_evaluators
+        append!(positions, get_scratch_positions(sub_eval))
+    end
+    for sub_eval in eval.function_evaluators
+        append!(positions, get_scratch_positions(sub_eval))
+    end
+    for sub_eval in eval.interaction_evaluators
+        append!(positions, get_scratch_positions(sub_eval))
+    end
+    
+    return positions
+end
+
+"""
+    max_scratch_needed(evaluator::AbstractEvaluator) -> Int
+
+Get maximum scratch position needed by evaluator tree.
+"""
+function max_scratch_needed(evaluator::AbstractEvaluator)
+    scratch_positions = get_scratch_positions(evaluator)
+    return isempty(scratch_positions) ? 0 : maximum(scratch_positions)
+end
+
 
 ###############################################################################
-# 3. RECURSIVE EVALUATION (The Key Fix)
+# SELF-CONTAINED COMPILATION SYSTEM
+###############################################################################
+
+"""
+    ScratchAllocator
+
+Tracks scratch space allocation during compilation.
+"""
+mutable struct ScratchAllocator
+    next_position::Int
+    
+    ScratchAllocator() = new(1)
+end
+
+"""
+    allocate_scratch!(allocator::ScratchAllocator, size::Int) -> UnitRange{Int}
+
+Allocate a block of scratch space.
+"""
+function allocate_scratch!(allocator::ScratchAllocator, size::Int)
+    if size == 0
+        return 1:0  # Empty range
+    end
+    
+    start_pos = allocator.next_position
+    end_pos = start_pos + size - 1
+    allocator.next_position = end_pos + 1
+    
+    return start_pos:end_pos
+end
+
+"""
+    compile_term(
+        term::AbstractTerm, start_position::Int = 1, 
+        scratch_allocator::ScratchAllocator = ScratchAllocator()
+    ) -> (AbstractEvaluator, Int)
+
+Compile term into self-contained evaluator with positions and scratch space.
+"""
+function compile_term(
+    term::AbstractTerm, 
+    start_position::Int = 1, 
+    scratch_allocator::ScratchAllocator = ScratchAllocator(),
+    categorical_levels::Union{Dict{Symbol, Vector{Int}}, Nothing} = nothing
+)
+    # Use explicit levels if provided, fall back to global context
+    levels = categorical_levels !== nothing ? categorical_levels : CATEGORICAL_LEVELS_CONTEXT[]
+    
+    if term isa InterceptTerm
+        evaluator = ConstantEvaluator(hasintercept(term) ? 1.0 : 0.0, start_position)
+        return evaluator
+        
+    elseif term isa ConstantTerm
+        evaluator = ConstantEvaluator(Float64(term.n), start_position)
+        return evaluator
+        
+    elseif term isa Union{ContinuousTerm, Term}
+        evaluator = ContinuousEvaluator(term.sym, start_position)
+        return evaluator
+        
+    elseif term isa CategoricalTerm
+        contrast_matrix = Matrix{Float64}(term.contrasts.matrix)
+        n_contrasts = size(contrast_matrix, 2)
+        positions = collect(start_position:(start_position + n_contrasts - 1))
+        
+        # Debug: Check what levels we have
+        # println("Compiling CategoricalTerm for $(term.sym)")
+        # println("  levels dict: $(levels)")
+        # println("  levels is nothing: $(levels === nothing)")
+        # if levels !== nothing
+        #     println("  has key $(term.sym): $(haskey(levels, term.sym))")
+        #     if haskey(levels, term.sym)
+        #         println("  level codes: $(levels[term.sym])")
+        #     end
+        # end
+        
+        # Use explicit levels if available
+        level_codes = if levels !== nothing && haskey(levels, term.sym)
+            levels[term.sym]
+        else
+            println("  WARNING: Using empty level codes for $(term.sym)!")
+            Int[]  # Empty fallback
+        end
+        
+        evaluator = CategoricalEvaluator(
+            term.sym,
+            contrast_matrix,
+            size(contrast_matrix, 1),
+            positions,
+            level_codes
+        )
+        
+        # debug_categorical_evaluator(evaluator)
+        return evaluator
+        
+    elseif term isa FunctionTerm
+        arg_evaluators = AbstractEvaluator[]
+        arg_scratch_map = UnitRange{Int}[]
+        
+        for arg in term.args
+            arg_width = 1
+            arg_scratch = allocate_scratch!(scratch_allocator, arg_width)
+            arg_start_pos = first(arg_scratch)
+            
+            # Pass categorical_levels through recursive call
+            arg_eval = compile_term(arg, arg_start_pos, scratch_allocator, categorical_levels)
+            
+            push!(arg_evaluators, arg_eval)
+            push!(arg_scratch_map, arg_scratch)
+        end
+        
+        all_scratch = Int[]
+        for range in arg_scratch_map
+            append!(all_scratch, collect(range))
+        end
+        
+        return FunctionEvaluator(
+            term.f,
+            arg_evaluators,
+            start_position,
+            all_scratch,
+            arg_scratch_map
+        )
+        
+    elseif term isa InteractionTerm
+        component_evaluators = AbstractEvaluator[]
+        component_scratch_map = UnitRange{Int}[]
+        component_widths = Int[]
+        
+        for comp in term.terms
+            comp_width = width(comp)
+            push!(component_widths, comp_width)
+            comp_scratch = allocate_scratch!(scratch_allocator, comp_width)
+            comp_start_pos = first(comp_scratch)
+            
+            # Pass categorical_levels through recursive call
+            comp_eval = compile_term(comp, comp_start_pos, scratch_allocator, categorical_levels)
+            
+            push!(component_evaluators, comp_eval)
+            push!(component_scratch_map, comp_scratch)
+        end
+        
+        total_width = prod(component_widths)
+        positions = collect(start_position:(start_position + total_width - 1))
+        N = length(component_widths)
+        pattern = compute_kronecker_pattern(component_widths)
+        
+        all_scratch = Int[]
+        for range in component_scratch_map
+            append!(all_scratch, collect(range))
+        end
+        
+        return InteractionEvaluator{N}(
+            component_evaluators,
+            total_width,
+            positions,
+            all_scratch,
+            component_scratch_map,
+            pattern
+        )
+        
+    elseif term isa ZScoredTerm
+        underlying_width = width(term.term)
+        underlying_scratch = allocate_scratch!(scratch_allocator, underlying_width)
+        underlying_start_pos = first(underlying_scratch)
+        
+        # Pass categorical_levels through recursive call
+        underlying_eval = compile_term(term.term, underlying_start_pos, scratch_allocator, categorical_levels)
+        
+        positions = collect(start_position:(start_position + underlying_width - 1))
+        center = term.center isa Number ? Float64(term.center) : Float64(term.center[1])
+        scale = term.scale isa Number ? Float64(term.scale) : Float64(term.scale[1])
+        
+        return ZScoreEvaluator(
+            underlying_eval,
+            center,
+            scale,
+            positions,
+            collect(underlying_scratch),
+            underlying_scratch
+        )
+        
+    elseif term isa MatrixTerm
+        sub_evaluators = AbstractEvaluator[]
+        current_pos = start_position
+        max_scratch = 0
+        
+        for sub_term in term.terms
+            if width(sub_term) > 0
+                sub_eval = compile_term(sub_term, current_pos, scratch_allocator, categorical_levels)
+                next_pos = current_pos + output_width(sub_eval)
+                push!(sub_evaluators, sub_eval)
+                current_pos = next_pos
+                
+                sub_scratch = max_scratch_needed(sub_eval)
+                max_scratch = max(max_scratch, sub_scratch)
+            end
+        end
+        
+        total_width = current_pos - start_position
+        
+        # FIXED: Create precomputed operations instead of storing evaluators
+        constant_ops = PrecomputedConstantOp[]
+        continuous_ops = PrecomputedContinuousOp[]
+        categorical_evals = CategoricalEvaluator[]
+        function_evals = FunctionEvaluator[]
+        interaction_evals = InteractionEvaluator[]
+        
+        for eval in sub_evaluators
+            if eval isa ConstantEvaluator
+                # Precompute: extract fields at compilation time
+                push!(constant_ops, PrecomputedConstantOp(eval.value, eval.position))
+            elseif eval isa ContinuousEvaluator
+                # Precompute: extract fields at compilation time
+                push!(continuous_ops, PrecomputedContinuousOp(eval.column, eval.position))
+            elseif eval isa CategoricalEvaluator
+                push!(categorical_evals, eval)
+            elseif eval isa FunctionEvaluator
+                push!(function_evals, eval)
+            elseif eval isa InteractionEvaluator
+                push!(interaction_evals, eval)
+            else
+                error("Unknown evaluator type in matrix term: $(typeof(eval))")
+            end
+        end
+        
+        return CombinedEvaluator(
+            constant_ops,
+            continuous_ops,
+            categorical_evals,
+            function_evals,
+            interaction_evals,
+            total_width,
+            max_scratch
+        )
+    else
+        error("Unknown term type: $(typeof(term))")
+    end
+end
+
+function compile_term(
+    term::CategoricalTerm, start_position::Int = 1, 
+    scratch_allocator::ScratchAllocator = ScratchAllocator()
+)
+    contrast_matrix = Matrix{Float64}(term.contrasts.matrix)
+    n_contrasts = size(contrast_matrix, 2)
+    positions = collect(start_position:(start_position + n_contrasts - 1))
+    
+    # Get pre-extracted level codes from global context
+    level_codes = get_categorical_levels_for_column(term.sym)
+    
+    return CategoricalEvaluator(
+        term.sym,
+        contrast_matrix,
+        size(contrast_matrix, 1),
+        positions,
+        level_codes  # NEW: Include pre-extracted level codes
+    )
+end
+
+"""
+    Helper function to allocate scratch space for nested terms.
+"""
+function allocate_scratch_for_nested_term(term::AbstractTerm, scratch_allocator::ScratchAllocator)
+    term_width = width(term)
+    if term_width > 0
+        return allocate_scratch!(scratch_allocator, term_width)
+    else
+        return 1:0  # Empty range for zero-width terms
+    end
+end
+
+################################################################################
+
+"""
+    output_width_structural(evaluator::AbstractEvaluator) -> Int
+
+Get output width based on structure (for evaluators without positions assigned yet).
+"""
+function output_width_structural(evaluator::AbstractEvaluator)
+    if evaluator isa ConstantEvaluator || evaluator isa ContinuousEvaluator
+        return 1
+    elseif evaluator isa CategoricalEvaluator
+        return size(evaluator.contrast_matrix, 2)
+    elseif evaluator isa FunctionEvaluator || evaluator isa ProductEvaluator
+        return 1
+    elseif evaluator isa InteractionEvaluator || evaluator isa ZScoreEvaluator || evaluator isa ScaledEvaluator
+        return length(evaluator.positions)
+    elseif evaluator isa CombinedEvaluator
+        return evaluator.total_width
+    else
+        return 1
+    end
+end
+
+"""
+    compute_kronecker_pattern(component_widths::Vector{Int}) -> Vector{Tuple{Vararg{Int}}}
+
+Compute the Kronecker‑product index pattern for an interaction term of arbitrary arity.
+
+# Arguments
+
+- `component_widths::Vector{Int}`: A vector of positive integers, where each entry `w_i` is the number of columns contributed by the i‑th component (e.g., the number of basis functions, dummy columns, or features for that variable or transform).
+
+# Returns
+
+- `pattern::Vector{Tuple{Vararg{Int}}}`: A vector of tuples, each of length `n = length(component_widths)`. Each tuple `(i₁, i₂, …, iₙ)` represents one combination of column indices: take column `i₁` from component 1, `i₂` from component 2, …, `iₙ` from component n, and multiply them to form one column of the full interaction design.
+
+# Details
+
+- Preallocates a vector of length `prod(component_widths)` to hold all index combinations.
+- Uses `Iterators.product` to efficiently generate the Cartesian product of the ranges `1:w_i`.
+- Converts each `NTuple{n,Int}` returned by `product` into a plain `Tuple{Vararg{Int}}`.
+- Complexity: Time and memory are O(∏₁ⁿ w_i). Suitable for moderate‑sized interactions.
+- Throws an `ArgumentError` if any width is less than 1.
+
+# Examples
+
+```julia
+julia> compute_kronecker_pattern([2, 3])
+6-element Vector{Tuple{Vararg{Int}}}:
+ (1, 1)
+ (1, 2)
+ (1, 3)
+ (2, 1)
+ (2, 2)
+ (2, 3)
+
+julia> compute_kronecker_pattern([2, 3, 2])
+12-element Vector{Tuple{Vararg{Int}}}:
+ (1, 1, 1)
+ (1, 1, 2)
+ (1, 2, 1)
+ (1, 2, 2)
+ (1, 3, 1)
+ (1, 3, 2)
+ (2, 1, 1)
+ (2, 1, 2)
+ (2, 2, 1)
+ (2, 2, 2)
+ (2, 3, 1)
+ (2, 3, 2)
+```
+"""
+function compute_kronecker_pattern(component_widths::Vector{Int})
+    # Validate input
+    if any(w -> w < 1, component_widths)
+        throw(ArgumentError("All component widths must be positive integers. Received: $(component_widths)"))
+    end
+
+    N = length(component_widths)
+    
+    # Prepare ranges 1:w for each component - use ntuple for type stability
+    ranges = ntuple(i -> 1:component_widths[i], N)
+
+    # Preallocate output vector with parametric type
+    total = prod(component_widths)
+    pattern = Vector{NTuple{N,Int}}(undef, total)
+
+    # Fill with index tuples from Cartesian product
+    idx = 1
+    for combo in Iterators.product(ranges...)
+        pattern[idx] = combo  # combo is already NTuple{N,Int}
+        idx += 1
+    end
+
+    return pattern
+end
+
+###############################################################################
+# 3. RECURSIVE EVALUATION
 ###############################################################################
 
 """
@@ -280,286 +867,6 @@ function evaluate!(evaluator::ProductEvaluator, output::AbstractVector{Float64},
 end
 
 ###############################################################################
-# 4. SAFE FUNCTION APPLICATION
-###############################################################################
-
-"""
-    apply_function_safe(func::Function, val::Float64)
-
-Apply function with mathematically correct error handling and proper logging.
-
-# Key Improvements
-1. Mathematically correct handling of domain errors
-2. Selective error catching - only catch expected domain errors
-3. Logging of problematic cases for debugging
-4. Clear documentation of behavior
-"""
-# function apply_function_safe(func::Function, val::Float64)
-    
-#     # Handle known functions with careful domain checking
-#     if func === log
-#         if val > 0.0
-#             return log(val)
-#         elseif val == 0.0
-#             @debug "log(0) encountered, returning -Inf"
-#             return -Inf
-#         else
-#             @debug "log(negative) encountered: log($val), returning NaN"
-#             return NaN
-#         end
-        
-#     elseif func === exp
-#         # Clamp to prevent overflow, but warn about extreme values
-#         if val > 700.0
-#             @debug "exp(large) encountered: exp($val), clamping to exp(700)"
-#             return exp(700.0)
-#         elseif val < -700.0
-#             @debug "exp(very negative) encountered: exp($val), clamping to exp(-700)"
-#             return exp(-700.0)
-#         else
-#             return exp(val)
-#         end
-        
-#     elseif func === sqrt
-#         if val >= 0.0
-#             return sqrt(val)
-#         else
-#             @debug "sqrt(negative) encountered: sqrt($val), returning NaN"
-#             return NaN
-#         end
-        
-#     elseif func === log10
-#         if val > 0.0
-#             return log10(val)
-#         elseif val == 0.0
-#             @debug "log10(0) encountered, returning -Inf"
-#             return -Inf
-#         else
-#             @debug "log10(negative) encountered: log10($val), returning NaN"
-#             return NaN
-#         end
-        
-#     elseif func === log2
-#         if val > 0.0
-#             return log2(val)
-#         elseif val == 0.0
-#             @debug "log2(0) encountered, returning -Inf"
-#             return -Inf
-#         else
-#             @debug "log2(negative) encountered: log2($val), returning NaN"
-#             return NaN
-#         end
-        
-#     elseif func === abs
-#         return abs(val)
-        
-#     elseif func === sin
-#         return sin(val)
-        
-#     elseif func === cos
-#         return cos(val)
-        
-#     elseif func === tan
-#         # Check for values near π/2 + nπ where tan is undefined
-#         result = tan(val)
-#         if !isfinite(result)
-#             @debug "tan(undefined) encountered: tan($val), returning $(result)"
-#         end
-#         return result
-        
-#     elseif func === atan
-#         return atan(val)  # Always well-defined for real numbers
-        
-#     elseif func === sinh
-#         # Check for overflow
-#         if abs(val) > 700.0
-#             @debug "sinh(large) encountered: sinh($val), may overflow"
-#         end
-#         return sinh(val)
-        
-#     elseif func === cosh
-#         # Check for overflow  
-#         if abs(val) > 700.0
-#             @debug "cosh(large) encountered: cosh($val), may overflow"
-#         end
-#         return cosh(val)
-        
-#     elseif func === tanh
-#         return tanh(val)  # Always well-defined and bounded
-        
-#     elseif func === sign
-#         return sign(val)  # Always well-defined
-        
-#     else
-#         # For unknown functions, be more selective about error catching
-#         try
-#             result = Float64(func(val))
-            
-#             # Check result validity
-#             if !isfinite(result) && isfinite(val)
-#                 @debug "Function $func produced non-finite result $result from finite input $val"
-#             end
-            
-#             return result
-            
-#         catch e
-#             # Only catch domain-related errors, let others propagate
-#             if e isa DomainError
-#                 @debug "DomainError in $func($val): $e, returning NaN"
-#                 return NaN
-#             elseif e isa InexactError
-#                 @debug "InexactError in $func($val): $e, returning NaN" 
-#                 return NaN
-#             elseif e isa OverflowError
-#                 @debug "OverflowError in $func($val): $e, returning Inf"
-#                 return val > 0 ? Inf : -Inf
-#             else
-#                 # Re-throw unexpected errors for debugging
-#                 @error "Unexpected error in apply_function_safe for $func($val): $e"
-#                 rethrow(e)
-#             end
-#         end
-#     end
-# end
-
-# """
-#     apply_function_safe(func::Function, val1::Float64, val2::Float64)
-
-# Apply binary function with improved error handling.
-# """
-# function apply_function_safe(func::Function, val1::Float64, val2::Float64)
-    
-#     if func === (^)
-#         # Handle power function carefully
-#         if val1 == 0.0 && val2 < 0.0
-#             @debug "0^(negative) encountered: 0^$val2, returning Inf"
-#             return Inf
-#         elseif val1 < 0.0 && !isinteger(val2)
-#             @debug "negative^(non-integer) encountered: $val1^$val2, returning NaN"
-#             return NaN
-#         else
-#             try
-#                 result = val1^val2
-#                 if !isfinite(result) && isfinite(val1) && isfinite(val2)
-#                     @debug "Power operation produced non-finite result: $val1^$val2 = $result"
-#                 end
-#                 return result
-#             catch e
-#                 if e isa DomainError
-#                     @debug "DomainError in $val1^$val2: $e, returning NaN"
-#                     return NaN
-#                 else
-#                     rethrow(e)
-#                 end
-#             end
-#         end
-        
-#     elseif func === (+)
-#         return val1 + val2
-        
-#     elseif func === (-)
-#         return val1 - val2
-        
-#     elseif func === (*)
-#         return val1 * val2
-        
-#     elseif func === (/)
-#         if val2 == 0.0
-#             if val1 == 0.0
-#                 @debug "0/0 encountered, returning NaN"
-#                 return NaN
-#             elseif val1 > 0.0
-#                 @debug "positive/0 encountered: $val1/0, returning Inf"
-#                 return Inf
-#             else
-#                 @debug "negative/0 encountered: $val1/0, returning -Inf"
-#                 return -Inf
-#             end
-#         elseif abs(val2) < 1e-16
-#             @debug "Division by very small number: $val1/$val2, may be unstable"
-#             return val1 / val2
-#         else
-#             return val1 / val2
-#         end
-        
-#     # Comparison operations
-#     elseif func === (>)
-#         return val1 > val2 ? 1.0 : 0.0
-#     elseif func === (<)
-#         return val1 < val2 ? 1.0 : 0.0
-#     elseif func === (>=)
-#         return val1 >= val2 ? 1.0 : 0.0
-#     elseif func === (<=)
-#         return val1 <= val2 ? 1.0 : 0.0
-#     elseif func === (==)
-#         return val1 == val2 ? 1.0 : 0.0
-#     elseif func === (!=)
-#         return val1 != val2 ? 1.0 : 0.0
-        
-#     else
-#         # For unknown binary functions
-#         try
-#             result = Float64(func(val1, val2))
-            
-#             # Check result validity
-#             if !isfinite(result) && isfinite(val1) && isfinite(val2)
-#                 @debug "Binary function $func produced non-finite result $result from finite inputs ($val1, $val2)"
-#             end
-            
-#             return result
-            
-#         catch e
-#             if e isa DomainError
-#                 @debug "DomainError in $func($val1, $val2): $e, returning NaN"
-#                 return NaN
-#             elseif e isa InexactError
-#                 @debug "InexactError in $func($val1, $val2): $e, returning NaN"
-#                 return NaN  
-#             elseif e isa OverflowError
-#                 @debug "OverflowError in $func($val1, $val2): $e, returning Inf"
-#                 return Inf
-#             else
-#                 @error "Unexpected error in apply_function_safe for $func($val1, $val2): $e"
-#                 rethrow(e)
-#             end
-#         end
-#     end
-# end
-
-# """
-#     apply_function_safe(func::Function, args::Float64...)
-
-# Apply n-ary function with error handling.
-# """
-# function apply_function_safe(func::Function, args::Float64...)
-#     try
-#         result = Float64(func(args...))
-        
-#         # Check result validity
-#         if !isfinite(result) && all(isfinite, args)
-#             @debug "N-ary function $func produced non-finite result $result from finite inputs $args"
-#         end
-        
-#         return result
-        
-#     catch e
-#         if e isa DomainError
-#             @debug "DomainError in $func($args): $e, returning NaN"
-#             return NaN
-#         elseif e isa InexactError  
-#             @debug "InexactError in $func($args): $e, returning NaN"
-#             return NaN
-#         elseif e isa OverflowError
-#             @debug "OverflowError in $func($args): $e, returning Inf"
-#             return Inf
-#         else
-#             @error "Unexpected error in apply_function_safe for $func($args): $e"
-#             rethrow(e)
-#         end
-#     end
-# end
-
-###############################################################################
 # TESTING UTILITIES
 ###############################################################################
 
@@ -682,53 +989,6 @@ function linear_to_multi_index(linear_idx::Int, dimensions::Vector{Int})
 end
 
 ###############################################################################
-# 6. TERM COMPILATION (Recursive)
-###############################################################################
-
-function compile_term(term::AbstractTerm)
-    if term isa InterceptTerm
-        return hasintercept(term) ? ConstantEvaluator(1.0) : ConstantEvaluator(0.0)
-        
-    elseif term isa ConstantTerm
-        return ConstantEvaluator(Float64(term.n))
-        
-    elseif term isa Union{ContinuousTerm, Term}
-        return ContinuousEvaluator(term.sym)
-        
-    elseif term isa CategoricalTerm
-        return CategoricalEvaluator(
-            term.sym,
-            Matrix{Float64}(term.contrasts.matrix),
-            size(term.contrasts.matrix, 1)
-        )
-        
-    elseif term isa FunctionTerm
-        # Recursively compile arguments
-        arg_evaluators = [compile_term(arg) for arg in term.args]
-        return FunctionEvaluator(term.f, arg_evaluators)
-        
-    elseif term isa InteractionTerm
-        # Recursively compile components
-        component_evaluators = [compile_term(comp) for comp in term.terms]
-        return InteractionEvaluator(component_evaluators)
-        
-    elseif term isa ZScoredTerm
-        underlying_evaluator = compile_term(term.term)
-        center = term.center isa Number ? Float64(term.center) : Float64(term.center[1])
-        scale = term.scale isa Number ? Float64(term.scale) : Float64(term.scale[1])
-        return ZScoreEvaluator(underlying_evaluator, center, scale)
-        
-    elseif term isa MatrixTerm
-        # Compile each sub-term
-        sub_evaluators = [compile_term(t) for t in term.terms if width(t) > 0]
-        return CombinedEvaluator(sub_evaluators)
-        
-    else
-        error("Unknown term type: $(typeof(term)), using constant fallback")
-    end
-end
-
-###############################################################################
 # 8. UTILITY FUNCTIONS
 ###############################################################################
 
@@ -772,24 +1032,12 @@ function extract_columns_recursive!(columns::Vector{Symbol}, term::Union{Interce
     # No columns
 end
 
-# Fix the InteractionEvaluator constructor to handle type stability
-function InteractionEvaluator(components::Vector{AbstractEvaluator})
-    if isempty(components)
-        total_width = 1
-    else
-        # Ensure we work with integers
-        widths = [Int(output_width(comp)) for comp in components]
-        total_width = prod(widths)
-    end
-    
-    InteractionEvaluator(components, total_width)
-end
+############
 
-# Make sure the struct has the inner constructor
-struct InteractionEvaluator <: AbstractEvaluator
-    components::Vector{AbstractEvaluator}
-    total_width::Int
-    
-    # Inner constructor that takes both arguments
-    InteractionEvaluator(components, total_width) = new(components, total_width)
+function debug_categorical_evaluator(eval::CategoricalEvaluator)
+    println("CategoricalEvaluator Debug:")
+    println("  Column: $(eval.column)")
+    println("  Level codes: $(eval.level_codes)")
+    println("  Level codes length: $(length(eval.level_codes))")
+    println("  Is empty: $(isempty(eval.level_codes))")
 end

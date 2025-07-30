@@ -12,38 +12,13 @@ using MixedModels
 using BenchmarkTools
 
 using FormulaCompiler:
-    AbstractEvaluator,
-    ConstantEvaluator, ContinuousEvaluator,
-    CombinedEvaluator, InteractionEvaluator, FunctionEvaluator, CategoricalEvaluator,
-    ZScoreEvaluator,
-    output_width, evaluate!
-
-using FormulaCompiler:
-    test_evaluator_storage,
-    test_comprehensive_compilation, test_complete, 
-    validate_derivative_evaluator, test_scenario_foundation,
-    example_scenario_usage,
-    set_override!, remove_override!,
-    update_scenario!,
-    apply_function_safe, CategoricalBlock,
-    CategoricalLayout, FunctionOp,
-    generate_execution_plan, execute_plan!,
-    execute_block!, AssignmentBlock,
-    execute_categorical_block!,
-    create_execution_plan, ValidatedExecutionPlan,
-    Assignment,
-    AssignmentBlock,
-    ConstantAssignment, ContinuousAssignment,
-    execute_assignment!
-
-
-using FormulaCompiler:
     compile_term
     
 # Set consistent random seed for reproducible tests
 Random.seed!(06515)
 
 include("test_execution_plans.jl")
+# include("test_2d.jl")
 
 # @testset "FormulaCompiler.jl Tests" begin
     
