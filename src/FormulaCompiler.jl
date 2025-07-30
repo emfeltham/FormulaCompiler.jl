@@ -23,100 +23,115 @@ not(x::T) where {T<:Real} = one(x) - x
 export not
 
 # Include files in dependency order
-include("fixed_helpers.jl")     # No dependencies
+include("fixed_helpers.jl") # No dependencies
 export fixed_effects_form
-include("evaluators.jl")        # Uses fixed_helpers
 
 
-"""
-    ExecutionBlock
+using Base.Iterators: product # -> compute_kronecker_pattern
 
-Abstract base type for different kinds of execution blocks.
-Each block represents a group of operations that can be executed together.
-"""
-abstract type ExecutionBlock end
+include("evaluators.jl") # Uses fixed_helpers
+# Core evaluator system exports
+export AbstractEvaluator, ConstantEvaluator, ContinuousEvaluator, CategoricalEvaluator
+export FunctionEvaluator, InteractionEvaluator, ZScoreEvaluator, CombinedEvaluator
+export ScaledEvaluator, ProductEvaluator
+export output_width, evaluate!, compile_term, extract_all_columns
 
-"""
-    ValidatedExecutionPlan
+# Execution plan system
+# include("ExecutionPlan.jl")
+# export ExecutionPlan
 
-The only execution plan type. Construction validates everything once,
-execution is guaranteed zero-allocation.
-"""
-struct ValidatedExecutionPlan
-    scratch_size::Int
-    blocks::Vector{ExecutionBlock}
-    total_output_width::Int
-    data_length::Int                    # Cached for bounds checking
-    validated_columns::Set{Symbol}     # Columns guaranteed to exist
-    
-    function ValidatedExecutionPlan(evaluator::AbstractEvaluator, data::NamedTuple)
-        # Generate the execution plan structure
-        basic_plan = generate_execution_plan_structure(evaluator)
-        
-        # Comprehensive validation with helpful error messages
-        validate_plan_against_data!(basic_plan, data)
-        
-        # Cache information for zero-allocation execution
-        data_length = length(first(data))
-        validated_columns = Set(keys(data))
-        
-        new(basic_plan.scratch_size, basic_plan.blocks, basic_plan.total_output_width, 
-            data_length, validated_columns)
-    end
-end
+# include("create_execution_blocks.jl")
+# include("validate_execution_plan.jl")
+include("assign_names.jl")
 
-include("CompiledFormula.jl")   # Defines key structs and methods - NOW INCLUDES DERIVATIVES
-export compile_formula, CompiledFormula, test_complete
-# Derivatives
-export compile_derivative_formula, CompiledDerivativeFormula
-export clear_derivative_cache!, list_compiled_derivatives
+# include("execute_block.jl")
+# export create_execution_plan, execute_plan!
 
-# include("evaluator_trees.jl")
-export extract_root_evaluator, get_evaluator_tree, has_evaluator_access
-export count_evaluator_nodes, get_variable_dependencies, get_evaluator_summary
-export print_evaluator_tree, test_evaluator_storage
-# include("generators.jl")        # Uses evaluators + fixed_helpers
-export generate_code_from_evaluator, generate_evaluator_code!
-export test_phase2a_complete, test_phase2a_architecture
-export generate_expression_recursive, generate_statements_recursive
+include("execution.jl")
+include("execute_self_contained.jl")
+include("execute_to_scratch.jl")
+include("compile_term.jl")
+export test_self_contained_evaluators, compile_term, execute_self_contained!
+export create_execution_plan, generate_blocks!
 
 
+# Main compilation interface
+include("CompiledFormula.jl") # Clean execution plan system
+export CompiledFormula, compile_formula
+export get_scratch_size, get_column_names, get_evaluator_tree
+export show_execution_plan, benchmark_execution, is_zero_allocation
+
+# Row evaluation interfaces
+# include("matrix_writer.jl")
 include("modelrow!.jl")
+export modelrow!, test_updated_modelrow_system
 include("modelrow.jl")
-# export modelrow!
 export modelrow
-export clear_model_cache!, test_modelrow_interface
+export clear_model_cache!
 export ModelRowEvaluator
 
+# Override and scenario system
 include("override.jl")
 export OverrideVector, create_categorical_override
 export DataScenario, create_scenario, create_override_data, create_override_vector
 export ScenarioCollection, create_scenario_grid, create_scenario_combinations
 export get_scenario_by_name, list_scenarios
 export modelrow!, modelrow_scenarios!
-export test_scenario_foundation, example_scenario_usage
 
+# Derivative system
 include("derivative_evaluators.jl")
-include("CompiledDerivativeFormula.jl")   # Defines key structs and methods - NOW INCLUDES DERIVATIVES
+include("CompiledDerivativeFormula.jl")   
 include("derivative_generators.jl")
 include("derivative_modelrow.jl")
+export compile_derivative_formula, CompiledDerivativeFormula
+export clear_derivative_cache!, list_compiled_derivatives
 export compute_derivative_evaluator, compute_interaction_derivative_recursive
 export compute_nary_product_derivative, compute_division_derivative, compute_power_derivative
 export marginal_effects!
-
-export ScaledEvaluator, ProductEvaluator
 export ChainRuleEvaluator, ProductRuleEvaluator, ForwardDiffEvaluator
 export get_standard_derivative_function, is_zero_derivative, validate_derivative_evaluator
 
+# Testing and development utilities
 include("testing.jl")
 include("testing_derivatives.jl")
-
 include("phase_tests.jl")
 
-## alt approach
-
-include("ast_decomposition.jl")
-include("execution_plans.jl")
+# Testing utilities for execution plans
 include("test_updated_execution_plans.jl")
+export test_complex_function_execution
 
-end # module
+"""
+    test_zero_allocation_system()
+
+Test the complete zero-allocation execution system.
+"""
+function test_zero_allocation_system()
+    println("Testing zero-allocation execution system...")
+    
+    # Test simple formula
+    df = DataFrame(x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0])
+    data = Tables.columntable(df)
+    model = lm(@formula(y ~ x), df)
+    
+    compiled = compile_formula(model, data)
+    
+    # Test zero allocation
+    output = Vector{Float64}(undef, length(compiled))
+    
+    # Warmup
+    compiled(output, data, 1)
+    
+    # Test allocation
+    allocs = @allocated compiled(output, data, 1)
+    println("  Allocations: $allocs bytes")
+    
+    if allocs == 0
+        println("  ✅ Perfect zero allocation achieved!")
+        return true
+    else
+        println("  ❌ Still allocating $allocs bytes - needs optimization")
+        return false
+    end
+end
+
+end # end module
