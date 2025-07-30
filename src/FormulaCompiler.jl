@@ -4,8 +4,11 @@ module FormulaCompiler
 # Deps.
 # ============================================================================
 
-using Random # testing
+ # testing
+using Random
 using Test
+
+# true deps
 using Statistics
 using ForwardDiff
 using StatsModels, GLM, CategoricalArrays, Tables, DataFrames, Random
@@ -47,7 +50,7 @@ include("assign_names.jl")
 # include("execute_block.jl")
 # export create_execution_plan, execute_plan!
 
-include("execution.jl")
+# include("execution.jl") # OLD
 include("execute_self_contained.jl")
 include("execute_to_scratch.jl")
 include("compile_term.jl")
@@ -71,67 +74,27 @@ export clear_model_cache!
 export ModelRowEvaluator
 
 # Override and scenario system
-include("override.jl")
-export OverrideVector, create_categorical_override
-export DataScenario, create_scenario, create_override_data, create_override_vector
-export ScenarioCollection, create_scenario_grid, create_scenario_combinations
-export get_scenario_by_name, list_scenarios
-export modelrow!, modelrow_scenarios!
+# include("override.jl")
+# export OverrideVector, create_categorical_override
+# export DataScenario, create_scenario, create_override_data, create_override_vector
+# export ScenarioCollection, create_scenario_grid, create_scenario_combinations
+# export get_scenario_by_name, list_scenarios
+# export modelrow!, modelrow_scenarios!
 
 # Derivative system
-include("derivative_evaluators.jl")
-include("CompiledDerivativeFormula.jl")   
-include("derivative_generators.jl")
-include("derivative_modelrow.jl")
-export compile_derivative_formula, CompiledDerivativeFormula
-export clear_derivative_cache!, list_compiled_derivatives
-export compute_derivative_evaluator, compute_interaction_derivative_recursive
-export compute_nary_product_derivative, compute_division_derivative, compute_power_derivative
-export marginal_effects!
-export ChainRuleEvaluator, ProductRuleEvaluator, ForwardDiffEvaluator
-export get_standard_derivative_function, is_zero_derivative, validate_derivative_evaluator
+# include("derivative_evaluators.jl")
+# include("CompiledDerivativeFormula.jl")   
+# include("derivative_generators.jl")
+# include("derivative_modelrow.jl")
+# export compile_derivative_formula, CompiledDerivativeFormula
+# export clear_derivative_cache!, list_compiled_derivatives
+# export compute_derivative_evaluator, compute_interaction_derivative_recursive
+# export compute_nary_product_derivative, compute_division_derivative, compute_power_derivative
+# export marginal_effects!
+# export ChainRuleEvaluator, ProductRuleEvaluator, ForwardDiffEvaluator
+# export get_standard_derivative_function, is_zero_derivative, validate_derivative_evaluator
 
-# Testing and development utilities
-include("testing.jl")
-include("testing_derivatives.jl")
-include("phase_tests.jl")
-
-# Testing utilities for execution plans
-include("test_updated_execution_plans.jl")
-export test_complex_function_execution
-
-"""
-    test_zero_allocation_system()
-
-Test the complete zero-allocation execution system.
-"""
-function test_zero_allocation_system()
-    println("Testing zero-allocation execution system...")
-    
-    # Test simple formula
-    df = DataFrame(x = [1.0, 2.0, 3.0], y = [4.0, 5.0, 6.0])
-    data = Tables.columntable(df)
-    model = lm(@formula(y ~ x), df)
-    
-    compiled = compile_formula(model, data)
-    
-    # Test zero allocation
-    output = Vector{Float64}(undef, length(compiled))
-    
-    # Warmup
-    compiled(output, data, 1)
-    
-    # Test allocation
-    allocs = @allocated compiled(output, data, 1)
-    println("  Allocations: $allocs bytes")
-    
-    if allocs == 0
-        println("  ✅ Perfect zero allocation achieved!")
-        return true
-    else
-        println("  ❌ Still allocating $allocs bytes - needs optimization")
-        return false
-    end
-end
+include("step1_specialized_core.jl")
+include("step2_categorical_support.jl")
 
 end # end module
