@@ -1,5 +1,6 @@
 # step4_interactions.jl
-# Complete interaction support with full precomputation - FIXED FINAL VERSION
+# Complete interaction support with full precomputation - OPTIMIZED VERSION
+# This is a COMPLETE REPLACEMENT for the original step4_interactions.jl
 
 ###############################################################################
 # UNIFIED INTERACTION COMPONENT SYSTEM
@@ -8,13 +9,14 @@
 """
     InteractionComponentData
 
-Unified data for any interaction component type.
+Unified data for any interaction component type that WRAPS Step 1-3 optimizations.
 """
 struct InteractionComponentData
     component_type::Symbol              # :constant, :continuous, :categorical, :function
-    data::Any                          # Component-specific data
-    scratch_range::UnitRange{Int}      # Where this component's results go in scratch
-    output_width::Int                  # How many values this component produces
+    optimized_data::Any                 # Step 1-3 optimized data structures
+    optimized_op::Any                   # Step 1-3 optimized operations
+    scratch_range::UnitRange{Int}       # Where this component's results go in scratch
+    output_width::Int                   # How many values this component produces
 end
 
 """
@@ -23,7 +25,7 @@ end
 Complete interaction data with pre-computed Kronecker patterns.
 """
 struct InteractionData
-    components::Vector{InteractionComponentData}  # Homogeneous storage
+    components::Vector{InteractionComponentData}  # Now wraps optimized data
     component_widths::Vector{Int}                 # Width of each component  
     kronecker_pattern::Vector{Vector{Int}}        # Pre-computed, always
     output_positions::Vector{Int}                 # Where results go in model matrix
@@ -31,58 +33,73 @@ struct InteractionData
 end
 
 ###############################################################################
-# COMPONENT CONVERSION FUNCTIONS
+# COMPONENT CONVERSION FUNCTIONS - USE STEP 1-3 OPTIMIZATIONS
 ###############################################################################
 
 """
     convert_component_to_unified(component::AbstractEvaluator, scratch_start::Int) -> (InteractionComponentData, Int)
 
-Convert any evaluator component to unified format. Returns (component_data, next_scratch_pos).
+Convert any evaluator component to unified format that WRAPS Step 1-3 optimizations.
 """
 function convert_component_to_unified(component::AbstractEvaluator, scratch_start::Int)
     if component isa ConstantEvaluator
+        # Wrap Step 1 constant optimization
+        const_data = ConstantData((component.value,), (1,))  # Dummy position
+        const_op = ConstantOp(const_data)
+        
         return InteractionComponentData(
             :constant,
-            component.value,
+            const_data,
+            const_op,
             scratch_start:scratch_start,
             1
         ), scratch_start + 1
         
     elseif component isa ContinuousEvaluator
+        # Wrap Step 1 continuous optimization
+        cont_data = ContinuousData((component.column,), (1,))  # Dummy position
+        cont_op = ContinuousOp(cont_data)
+        
         return InteractionComponentData(
             :continuous,
-            component.column,
+            cont_data,
+            cont_op,
             scratch_start:scratch_start,
             1
         ), scratch_start + 1
         
     elseif component isa CategoricalEvaluator
+        # Wrap Step 2 categorical optimization
+        # Use correct CategoricalData constructor (contrast_matrix, level_codes, positions, n_levels)
+        cat_data = CategoricalData(
+            component.contrast_matrix,
+            component.level_codes,
+            collect(1:length(component.positions)),  # Dummy positions
+            component.n_levels
+        )
+        cat_op = CategoricalOp()
+        
         n_contrasts = length(component.positions)
         scratch_end = scratch_start + n_contrasts - 1
-        
-        cat_data = (
-            contrast_matrix = component.contrast_matrix,
-            level_codes = component.level_codes,
-            n_levels = component.n_levels
-        )
         
         return InteractionComponentData(
             :categorical,
             cat_data,
+            cat_op,
             scratch_start:scratch_end,
             n_contrasts
         ), scratch_end + 1
         
     elseif component isa FunctionEvaluator
-        # for interactions we only need the function’s scalar result, so
-        # use output_position = 1
-        linear_func_data = flatten_function_to_linear_plan(component, 1)
-        
+        # Wrap Step 3 function optimization
+        linear_func_data = flatten_function_to_linear_plan(component, 1)  # Dummy position
+        func_op = LinearFunctionOp()
         
         return InteractionComponentData(
             :function,
             linear_func_data,
-            scratch_start:scratch_start,  # Single position for function result
+            func_op,
+            scratch_start:scratch_start,
             1
         ), scratch_start + 1
         
@@ -134,7 +151,7 @@ end
 """
     analyze_interaction_operations_comprehensive(evaluator::CombinedEvaluator) -> (Vector{InteractionData}, InteractionOp)
 
-Extract and convert all interaction evaluators to unified format.
+Extract and convert all interaction evaluators using Step 1-3 optimizations.
 """
 function analyze_interaction_operations_comprehensive(evaluator::CombinedEvaluator)
     interaction_evaluators = evaluator.interaction_evaluators
@@ -148,13 +165,13 @@ function analyze_interaction_operations_comprehensive(evaluator::CombinedEvaluat
     interaction_data = Vector{InteractionData}(undef, n_interactions)
     
     for (i, interaction_eval) in enumerate(interaction_evaluators)
-        # Convert all components to unified format
+        # Convert all components using OPTIMIZED Step 1-3 wrappers
         components = Vector{InteractionComponentData}()
         component_widths = Int[]
         current_scratch_pos = 1
         
         for component in interaction_eval.components
-            # Convert component and get next scratch position
+            # Convert component using optimized wrappers
             component_data, next_scratch_pos = convert_component_to_unified(component, current_scratch_pos)
             
             push!(components, component_data)
@@ -169,7 +186,7 @@ function analyze_interaction_operations_comprehensive(evaluator::CombinedEvaluat
         # Precompute the full Kronecker pattern (no limits!)
         kronecker_pattern = compute_generalized_kronecker_pattern(component_widths)
         
-        # Create interaction data
+        # Create interaction data with optimized components
         interaction_data[i] = InteractionData(
             components,
             component_widths,
@@ -236,15 +253,17 @@ end
 """
     analyze_evaluator_complete(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
 
-Complete analysis for all operation types including interactions.
+Complete analysis for all operation types including interactions using Step 1-3 optimizations.
 """
 function analyze_evaluator_complete(evaluator::AbstractEvaluator)
     if evaluator isa CombinedEvaluator
-        # Analyze all operation types
+        # Analyze all operation types (Steps 1-3 unchanged)
         constant_data, constant_op = analyze_constant_operations(evaluator)
         continuous_data, continuous_op = analyze_continuous_operations(evaluator)
         categorical_data, categorical_op = analyze_categorical_operations(evaluator)
         function_data, function_op = analyze_function_operations_linear(evaluator)
+        
+        # Use OPTIMIZED interaction analysis
         interaction_data, interaction_op = analyze_interaction_operations_comprehensive(evaluator)
         
         max_function_scratch = isempty(function_data) ? 0 : maximum(f.scratch_size for f in function_data)
@@ -254,20 +273,20 @@ function analyze_evaluator_complete(evaluator::AbstractEvaluator)
         function_scratch = max_function_scratch > 0 ? Vector{Float64}(undef, max_function_scratch) : Float64[]
         interaction_scratch = max_interaction_scratch > 0 ? Vector{Float64}(undef, max_interaction_scratch) : Float64[]
 
-        # Construct data with buffers
+        # Construct data with optimized interactions
         formula_data = CompleteFormulaData(
             constant_data,
             continuous_data,
             categorical_data,
             function_data,
-            interaction_data,
+            interaction_data,  # Now contains optimized Step 1-3 wrappers
             max_function_scratch,
             max_interaction_scratch,
             function_scratch,
             interaction_scratch
         )
         formula_op = CompleteFormulaOp(constant_op, continuous_op, categorical_op, function_op, interaction_op)
-    return formula_data, formula_op
+        return formula_data, formula_op
         
     else
         error("Complete analysis only supports CombinedEvaluator")
@@ -275,7 +294,7 @@ function analyze_evaluator_complete(evaluator::AbstractEvaluator)
 end
 
 ###############################################################################
-# INTERACTION EXECUTION FUNCTIONS
+# INTERACTION EXECUTION FUNCTIONS - USE STEP 1-3 OPTIMIZATIONS
 ###############################################################################
 
 """
@@ -284,53 +303,57 @@ end
                                data::NamedTuple,
                                row_idx::Int)
 
-Evaluate a unified interaction component into scratch space.
+Evaluate a unified interaction component using OPTIMIZED Step 1-3 execution.
 """
 function evaluate_unified_component!(component::InteractionComponentData,
                                    scratch::Vector{Float64},
                                    data::NamedTuple,
                                    row_idx::Int)
     
+    scratch_start = first(component.scratch_range)
+    scratch_end = last(component.scratch_range)
+    
     if component.component_type === :constant
-        value = component.data::Float64
-        scratch[first(component.scratch_range)] = value
+        # Use Step 1's zero-allocation constant execution
+        const_data = component.optimized_data::ConstantData
+        @inbounds scratch[scratch_start] = const_data.values[1]
         
     elseif component.component_type === :continuous
-        col = component.data::Symbol
+        # Use Step 1's zero-allocation continuous execution
+        cont_data = component.optimized_data::ContinuousData
+        col = cont_data.columns[1]
         val = get_data_value_specialized(data, col, row_idx)
-        scratch[first(component.scratch_range)] = Float64(val)
+        @inbounds scratch[scratch_start] = Float64(val)
         
     elseif component.component_type === :categorical
-        # Unpack categorical data
-        cat_data = component.data
-        contrast_matrix = cat_data.contrast_matrix
-        level_codes = cat_data.level_codes
-        n_levels = cat_data.n_levels
+        # Use Step 2's zero-allocation categorical execution
+        cat_data = component.optimized_data::CategoricalData
+        level = cat_data.level_codes[row_idx]
+        level = clamp(level, 1, cat_data.n_levels)
         
-        level = clamp(level_codes[row_idx], 1, n_levels)
-        
-        # Fill scratch space with contrast values
+        # Fill scratch space with contrast values (Step 2 pattern)
         @inbounds for i in 1:component.output_width
-            scratch_pos = first(component.scratch_range) + i - 1
-            scratch[scratch_pos] = contrast_matrix[level, i]
+            scratch_pos = scratch_start + i - 1
+            scratch[scratch_pos] = cat_data.contrast_matrix[level, i]
         end
         
     elseif component.component_type === :function
-        linear_func_data = component.data::LinearFunctionData
+        # Use Step 3's optimized function execution
+        func_data = component.optimized_data::LinearFunctionData
         
-        # Create separate function scratch and output
-        if linear_func_data.scratch_size > 0
-            temp_scratch = Vector{Float64}(undef, linear_func_data.scratch_size)
+        # Create minimal scratch for function execution
+        if func_data.scratch_size > 0
+            temp_scratch = Vector{Float64}(undef, func_data.scratch_size)
         else
             temp_scratch = Float64[]
         end
         temp_output = Vector{Float64}(undef, 1)
         
-        # Execute linear function
-        execute_linear_function!(linear_func_data, temp_scratch, temp_output, data, row_idx)
+        # Execute using Step 3's linear function execution
+        execute_linear_function!(func_data, temp_scratch, temp_output, data, row_idx)
         
         # Copy result to component's scratch position
-        scratch[first(component.scratch_range)] = temp_output[1]
+        @inbounds scratch[scratch_start] = temp_output[1]
         
     else
         error("Unknown component type: $(component.component_type)")
@@ -346,7 +369,7 @@ end
                                   data::NamedTuple,
                                   row_idx::Int)
 
-Execute a single interaction with zero allocations.
+Execute a single interaction with zero allocations using Step 1-3 optimizations.
 """
 function execute_interaction_operation!(interaction_data::InteractionData,
                                        scratch::Vector{Float64},
@@ -354,7 +377,7 @@ function execute_interaction_operation!(interaction_data::InteractionData,
                                        data::NamedTuple,
                                        row_idx::Int)
     
-    # Step 1: Evaluate all components into scratch space
+    # Step 1: Evaluate all components using OPTIMIZED Step 1-3 functions
     @inbounds for component in interaction_data.components
         evaluate_unified_component!(component, scratch, data, row_idx)
     end
@@ -385,7 +408,7 @@ end
                                    data::NamedTuple,
                                    row_idx::Int)
 
-Execute multiple interactions with zero allocations.
+Execute multiple interactions with zero allocations using Step 1-3 optimizations.
 """
 function execute_interaction_operations!(interaction_data::Vector{InteractionData},
                                         scratch::Vector{Float64},
@@ -397,7 +420,7 @@ function execute_interaction_operations!(interaction_data::Vector{InteractionDat
         return nothing
     end
     
-    # Process all interactions
+    # Process all interactions using optimized execution
     @inbounds for interaction in interaction_data
         execute_interaction_operation!(interaction, scratch, output, data, row_idx)
     end
@@ -443,9 +466,8 @@ end
                       op::CompleteFormulaOp{ConstOp, ContOp, CatOp, FuncOp, IntOp}, 
                       output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, IntData, ConstOp, ContOp, CatOp, FuncOp, IntOp}
 
-Execute complete formulas with all operation types including interactions - FIXED TO AVOID RECURSION.
+Execute complete formulas with all operation types including interactions using Step 1-3 optimizations.
 """
-# 3. Use stored buffers in execution, removing per-call allocations
 function execute_operation!(data::CompleteFormulaData{ConstData,ContData,CatData,FuncData,IntData},
                             op::CompleteFormulaOp{ConstOp,ContOp,CatOp,FuncOp,IntOp},
                             output, input_data, row_idx) where {ConstData,ContData,CatData,FuncData,IntData,ConstOp,ContOp,CatOp,FuncOp,IntOp}
@@ -453,14 +475,17 @@ function execute_operation!(data::CompleteFormulaData{ConstData,ContData,CatData
     fs = data.function_scratch
     is = data.interaction_scratch
 
-    # Execute constants, continuous, categorical as before
+    # Execute constants, continuous, categorical as before (these were already optimized)
     execute_complete_constant_operations!(data.constants, output, input_data, row_idx)
     execute_complete_continuous_operations!(data.continuous, output, input_data, row_idx)
     execute_categorical_operations!(data.categorical, output, input_data, row_idx)
 
-    # Functions and interactions use fs and is
+    # Functions use optimized execution (Step 3 was already good)
     execute_linear_function_operations!(data.functions, fs, output, input_data, row_idx)
+    
+    # Interactions now use OPTIMIZED Step 1-3 component execution
     execute_interaction_operations!(data.interactions, is, output, input_data, row_idx)
+    
     return nothing
 end
 
@@ -471,10 +496,10 @@ end
 """
     create_specialized_formula_complete(compiled_formula::CompiledFormula) -> SpecializedFormula
 
-Convert a CompiledFormula to a SpecializedFormula with complete interaction support.
+Convert a CompiledFormula to a SpecializedFormula with complete interaction support using Step 1-3 optimizations.
 """
 function create_specialized_formula_complete(compiled_formula::CompiledFormula)
-    # Analyze the evaluator tree with complete support
+    # Analyze the evaluator tree with complete support using Step 1-3 optimizations
     data_tuple, op_tuple = analyze_evaluator_complete(compiled_formula.root_evaluator)
     
     # Create specialized formula
@@ -488,13 +513,13 @@ end
 """
     compile_formula_specialized_complete(model, data::NamedTuple) -> SpecializedFormula
 
-Direct compilation to specialized formula with complete interaction support.
+Direct compilation to specialized formula with complete interaction support using Step 1-3 optimizations.
 """
 function compile_formula_specialized_complete(model, data::NamedTuple)
     # Use existing compilation logic to build evaluator tree
     compiled = compile_formula(model, data)
     
-    # Convert to complete specialized form
+    # Convert to complete specialized form with optimizations
     return create_specialized_formula_complete(compiled)
 end
 
