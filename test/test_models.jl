@@ -57,6 +57,8 @@ using FormulaCompiler:
                 @formula(continuous_response ~ x * group3),           # Interaction
                 @formula(continuous_response ~ log(z)),               # Function
                 @formula(continuous_response ~ x * y * group3),       # Three-way interaction
+                @formula(continuous_response ~ x * y * group3 * group4), # Four-way interaction
+                @formula(continuous_response ~ exp(x) * y * group3 * group4), # Four-way interaction w/ func
             ]
             
             for formula in linear_formulas
