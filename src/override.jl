@@ -173,67 +173,7 @@ function create_override_vector(value, original_column::AbstractVector)
     end
 end
 
-###############################################################################
-# SCENARIO MUTATION OPERATIONS
-###############################################################################
-
-"""
-    set_override!(scenario::DataScenario, variable::Symbol, value)
-
-Add or update a variable override in the scenario.
-Rebuilds the scenario data to reflect the change.
-
-# Example
-```julia
-scenario = create_scenario("test", data; x = 1.0)
-set_override!(scenario, :y, 2.0)      # Add new override
-set_override!(scenario, :x, 5.0)      # Update existing override
-```
-"""
-function set_override!(scenario::DataScenario, variable::Symbol, value)
-    scenario.overrides[variable] = value
-    scenario.data = create_override_data(scenario.original_data, scenario.overrides)  # Use original_data
-    return scenario
-end
-
-"""
-    remove_override!(scenario::DataScenario, variable::Symbol)
-
-Remove a variable override from the scenario.
-The variable will revert to its original values.
-
-# Example
-```julia
-remove_override!(scenario, :x)  # x returns to original values
-```
-"""
-function remove_override!(scenario::DataScenario, variable::Symbol)
-    if haskey(scenario.overrides, variable)
-        delete!(scenario.overrides, variable)
-        scenario.data = create_override_data(scenario.original_data, scenario.overrides)  # Use original_data
-    end
-    return scenario
-end
-
-"""
-    update_scenario!(scenario::DataScenario; overrides...)
-
-Update multiple overrides at once.
-
-# Example
-```julia
-update_scenario!(scenario; x = 2.0, y = 3.0, group = "B")
-```
-"""
-function update_scenario!(scenario::DataScenario; overrides...)
-    if !isempty(overrides)
-        for (key, value) in overrides
-            scenario.overrides[key] = value
-        end
-        scenario.data = create_override_data(scenario.original_data, scenario.overrides)  # Use original_data
-    end
-    return scenario
-end
+######
 
 ###############################################################################
 # SCENARIO COLLECTIONS

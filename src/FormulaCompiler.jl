@@ -8,6 +8,8 @@ module FormulaCompiler
 using Random
 using Test
 
+using Dates: now
+
 # true deps
 using Statistics
 using ForwardDiff
@@ -57,12 +59,12 @@ export show_execution_plan, benchmark_execution, is_zero_allocation
 
 # Row evaluation interfaces
 # include("matrix_writer.jl")
-include("modelrow!.jl")
-export modelrow!, test_updated_modelrow_system
-include("modelrow.jl")
-export modelrow
-export clear_model_cache!
-export ModelRowEvaluator
+# include("modelrow!.jl")
+# export modelrow!, test_updated_modelrow_system
+# include("modelrow.jl")
+# export modelrow
+# export clear_model_cache!
+# export ModelRowEvaluator
 
 # Override and scenario system
 # include("override.jl")
@@ -90,5 +92,14 @@ include("step2_categorical_support.jl")
 include("step3_function_support.jl")
 include("step3_polish_linear.jl")
 include("step4_interactions.jl")
+include("modelrow.jl")
+export ModelRowEvaluator, modelrow!, modelrow
+
+include("override_1.jl")
+export OverrideVector, create_categorical_override
+export DataScenario, create_scenario, create_override_data, create_override_vector
+include("override_2.jl")
+include("override_4.jl")
+
 
 end # end module

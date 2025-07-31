@@ -265,7 +265,7 @@ end
                              data::NamedTuple, 
                              row_idx::Int)
 
-Execute a linear function plan with zero allocations.
+REVERTED: Back to Step 3's original working implementation.
 """
 function execute_linear_function!(linear_data::LinearFunctionData, 
                                   scratch::Vector{Float64},
@@ -273,7 +273,7 @@ function execute_linear_function!(linear_data::LinearFunctionData,
                                   data::NamedTuple, 
                                   row_idx::Int)
     
-    # Execute each step in sequence
+    # Execute each step in sequence using scratch space
     @inbounds for step in linear_data.execution_steps
         if step.operation === :load_constant
             scratch[step.output_position] = step.constant_value
@@ -361,6 +361,10 @@ function apply_function_direct_binary(func::Function, val1::Float64, val2::Float
     end
 end
 
+###############################################################################
+# STANDALONE FUNCTION EXECUTION - ALSO USE POSITION MAPPING
+###############################################################################
+
 """
     execute_linear_function_operations!(function_data::Vector{LinearFunctionData}, 
                                        scratch::Vector{Float64},
@@ -368,7 +372,7 @@ end
                                        data::NamedTuple, 
                                        row_idx::Int)
 
-Execute multiple linear function operations with zero allocations.
+Standalone functions also use position mappings.
 """
 function execute_linear_function_operations!(function_data::Vector{LinearFunctionData}, 
                                            scratch::Vector{Float64},
@@ -380,10 +384,16 @@ function execute_linear_function_operations!(function_data::Vector{LinearFunctio
         return nothing
     end
     
-    # Process all function operations
+    # Execute each function using position mappings
     @inbounds for func_data in function_data
-        execute_linear_function!(func_data, scratch, output, data, row_idx)
+        # Get result via position mapping approach
+        result = execute_function_via_position_mapping(func_data, data, row_idx)
+        
+        # Position mapping: func_data.output_position tells us where to write
+        output_pos = func_data.output_position  # Position map!
+        output[output_pos] = result
     end
+    
     return nothing
 end
 

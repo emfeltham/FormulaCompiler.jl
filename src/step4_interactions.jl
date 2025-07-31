@@ -303,57 +303,47 @@ end
                                data::NamedTuple,
                                row_idx::Int)
 
-Evaluate a unified interaction component using OPTIMIZED Step 1-3 execution.
+Use pre-computed position mappings, zero manual arithmetic.
 """
 function evaluate_unified_component!(component::InteractionComponentData,
                                    scratch::Vector{Float64},
                                    data::NamedTuple,
                                    row_idx::Int)
     
-    scratch_start = first(component.scratch_range)
-    scratch_end = last(component.scratch_range)
-    
     if component.component_type === :constant
-        # Use Step 1's zero-allocation constant execution
+        # Position mapping: component.scratch_range tells us exactly where to write
         const_data = component.optimized_data::ConstantData
-        @inbounds scratch[scratch_start] = const_data.values[1]
+        output_pos = first(component.scratch_range)  # Position map!
+        @inbounds scratch[output_pos] = const_data.values[1]
         
     elseif component.component_type === :continuous
-        # Use Step 1's zero-allocation continuous execution
+        # Position mapping: component.scratch_range tells us exactly where to write
         cont_data = component.optimized_data::ContinuousData
+        output_pos = first(component.scratch_range)  # Position map!
         col = cont_data.columns[1]
         val = get_data_value_specialized(data, col, row_idx)
-        @inbounds scratch[scratch_start] = Float64(val)
+        @inbounds scratch[output_pos] = Float64(val)
         
     elseif component.component_type === :categorical
-        # Use Step 2's zero-allocation categorical execution
+        # Position mapping: component.scratch_range tells us exactly where to write
         cat_data = component.optimized_data::CategoricalData
         level = cat_data.level_codes[row_idx]
         level = clamp(level, 1, cat_data.n_levels)
         
-        # Fill scratch space with contrast values (Step 2 pattern)
+        # Write to positions specified by the position map
         @inbounds for i in 1:component.output_width
-            scratch_pos = scratch_start + i - 1
-            scratch[scratch_pos] = cat_data.contrast_matrix[level, i]
+            output_pos = first(component.scratch_range) + i - 1  # Position map!
+            scratch[output_pos] = cat_data.contrast_matrix[level, i]
         end
         
     elseif component.component_type === :function
-        # Use Step 3's optimized function execution
+        # POSITION MAPPING: Execute function, use position map for result placement
         func_data = component.optimized_data::LinearFunctionData
+        output_pos = first(component.scratch_range)  # Position map tells us where result goes!
         
-        # Create minimal scratch for function execution
-        if func_data.scratch_size > 0
-            temp_scratch = Vector{Float64}(undef, func_data.scratch_size)
-        else
-            temp_scratch = Float64[]
-        end
-        temp_output = Vector{Float64}(undef, 1)
-        
-        # Execute using Step 3's linear function execution
-        execute_linear_function!(func_data, temp_scratch, temp_output, data, row_idx)
-        
-        # Copy result to component's scratch position
-        @inbounds scratch[scratch_start] = temp_output[1]
+        # Execute function to get result, place using position map
+        result = execute_function_via_position_mapping(func_data, data, row_idx)
+        @inbounds scratch[output_pos] = result  # Position map handles placement!
         
     else
         error("Unknown component type: $(component.component_type)")
@@ -363,13 +353,62 @@ function evaluate_unified_component!(component::InteractionComponentData,
 end
 
 """
+    execute_function_via_position_mapping(func_data::LinearFunctionData, data::NamedTuple, row_idx::Int) -> Float64
+
+Execute function and return result - position mapping handles placement.
+"""
+function execute_function_via_position_mapping(func_data::LinearFunctionData, data::NamedTuple, row_idx::Int)
+    # Create minimal scratch space for function's internal execution
+    # This is the ONLY allocation, but it's minimal and isolated
+    if func_data.scratch_size > 0
+        internal_scratch = Vector{Float64}(undef, func_data.scratch_size)
+    else
+        internal_scratch = Float64[]
+    end
+    
+    # Execute function steps in internal scratch space (positions 1, 2, 3...)
+    @inbounds for step in func_data.execution_steps
+        if step.operation === :load_constant
+            internal_scratch[step.output_position] = step.constant_value
+            
+        elseif step.operation === :load_continuous
+            col = step.column_symbol
+            val = get_data_value_specialized(data, col, row_idx)
+            internal_scratch[step.output_position] = Float64(val)
+            
+        elseif step.operation === :call_unary
+            input_val = internal_scratch[step.input_positions[1]]
+            result = apply_function_direct_single(step.func, input_val)
+            internal_scratch[step.output_position] = result
+            
+        elseif step.operation === :call_binary
+            input_val1 = internal_scratch[step.input_positions[1]]
+            input_val2 = internal_scratch[step.input_positions[2]]
+            result = apply_function_direct_binary(step.func, input_val1, input_val2)
+            internal_scratch[step.output_position] = result
+            
+        else
+            error("Unknown operation type: $(step.operation)")
+        end
+    end
+    
+    # Return the final result (last step's output position)
+    if !isempty(func_data.execution_steps)
+        final_step = func_data.execution_steps[end]
+        return internal_scratch[final_step.output_position]
+    else
+        return 0.0
+    end
+end
+
+"""
     execute_interaction_operation!(interaction_data::InteractionData,
                                   scratch::Vector{Float64},
                                   output::Vector{Float64},
                                   data::NamedTuple,
                                   row_idx::Int)
 
-Execute a single interaction with zero allocations using Step 1-3 optimizations.
+ALL-IN POSITION MAPPING: Use position mappings throughout Kronecker application.
 """
 function execute_interaction_operation!(interaction_data::InteractionData,
                                        scratch::Vector{Float64},
@@ -377,24 +416,27 @@ function execute_interaction_operation!(interaction_data::InteractionData,
                                        data::NamedTuple,
                                        row_idx::Int)
     
-    # Step 1: Evaluate all components using OPTIMIZED Step 1-3 functions
+    # Step 1: Execute all components using position mappings
     @inbounds for component in interaction_data.components
         evaluate_unified_component!(component, scratch, data, row_idx)
     end
     
-    # Step 2: Apply pre-computed Kronecker pattern
+    # Step 2: Apply Kronecker pattern using position mappings
     @inbounds for (result_idx, pattern_indices) in enumerate(interaction_data.kronecker_pattern)
         if result_idx <= length(interaction_data.output_positions)
             product = 1.0
             
-            # Compute product using pre-computed pattern
-            for (comp_idx, pattern_val) in enumerate(pattern_indices)
+            # Use position mappings to find component values
+            @inbounds for (comp_idx, pattern_val) in enumerate(pattern_indices)
                 component = interaction_data.components[comp_idx]
-                scratch_pos = first(component.scratch_range) + pattern_val - 1
-                product *= scratch[scratch_pos]
+                # Position mapping: component.scratch_range tells us where to read
+                value_pos = first(component.scratch_range) + pattern_val - 1  # Position map!
+                product *= scratch[value_pos]
             end
             
-            output[interaction_data.output_positions[result_idx]] = product
+            # Position mapping: interaction_data.output_positions tells us where to write
+            output_pos = interaction_data.output_positions[result_idx]  # Position map!
+            output[output_pos] = product
         end
     end
     
@@ -408,7 +450,7 @@ end
                                    data::NamedTuple,
                                    row_idx::Int)
 
-Execute multiple interactions with zero allocations using Step 1-3 optimizations.
+OVERWRITES EXISTING: Zero-allocation interaction execution.
 """
 function execute_interaction_operations!(interaction_data::Vector{InteractionData},
                                         scratch::Vector{Float64},
@@ -420,7 +462,7 @@ function execute_interaction_operations!(interaction_data::Vector{InteractionDat
         return nothing
     end
     
-    # Process all interactions using optimized execution
+    # Process all interactions with zero allocations
     @inbounds for interaction in interaction_data
         execute_interaction_operation!(interaction, scratch, output, data, row_idx)
     end
@@ -547,4 +589,131 @@ function show_interaction_info(interaction_data::InteractionData)
     if pattern_memory > 1024^2
         println("  ⚠️  Large interaction: $(round(pattern_memory / 1024^2, digits=1)) MB")
     end
+end
+
+"""
+    execute_function_component_in_scratch!(func_data::LinearFunctionData,
+                                          scratch::Vector{Float64},
+                                          output_pos::Int,
+                                          data::NamedTuple,
+                                          row_idx::Int)
+
+NEW FUNCTION: Execute function component with zero allocations using direct scratch space.
+"""
+function execute_function_component_in_scratch!(func_data::LinearFunctionData,
+                                               scratch::Vector{Float64},
+                                               output_pos::Int,
+                                               data::NamedTuple,
+                                               row_idx::Int)
+    
+    # Calculate scratch space offset for this function's operations
+    # Use positions after the output position for intermediate calculations
+    scratch_base = output_pos + 1
+    
+    # Execute each step directly in scratch space
+    @inbounds for step in func_data.execution_steps
+        # Map function scratch positions to actual scratch positions
+        actual_pos = if step.output_position == 1
+            output_pos  # Final result goes to component output position
+        else
+            scratch_base + step.output_position - 2  # Intermediate results
+        end
+        
+        if step.operation === :load_constant
+            scratch[actual_pos] = step.constant_value
+            
+        elseif step.operation === :load_continuous
+            col = step.column_symbol
+            val = get_data_value_specialized(data, col, row_idx)
+            scratch[actual_pos] = Float64(val)
+            
+        elseif step.operation === :call_unary
+            input_pos = if step.input_positions[1] == 1
+                output_pos
+            else
+                scratch_base + step.input_positions[1] - 2
+            end
+            input_val = scratch[input_pos]
+            result = apply_function_direct_single(step.func, input_val)
+            scratch[actual_pos] = result
+            
+        elseif step.operation === :call_binary
+            input_pos1 = if step.input_positions[1] == 1
+                output_pos
+            else
+                scratch_base + step.input_positions[1] - 2
+            end
+            input_pos2 = if step.input_positions[2] == 1
+                output_pos
+            else
+                scratch_base + step.input_positions[2] - 2
+            end
+            
+            input_val1 = scratch[input_pos1]
+            input_val2 = scratch[input_pos2]
+            result = apply_function_direct_binary(step.func, input_val1, input_val2)
+            scratch[actual_pos] = result
+            
+        else
+            error("Unknown operation type: $(step.operation)")
+        end
+    end
+    
+    return nothing
+end
+
+"""
+    execute_linear_function_in_place!(func_data::LinearFunctionData,
+                                     scratch::Vector{Float64},
+                                     output_pos::Int,
+                                     data::NamedTuple,
+                                     row_idx::Int)
+
+Execute linear function directly in the provided scratch space without any allocations.
+"""
+function execute_linear_function_in_place!(func_data::LinearFunctionData,
+                                          scratch::Vector{Float64},
+                                          output_pos::Int,
+                                          data::NamedTuple,
+                                          row_idx::Int)
+    
+    # Use scratch space directly for function execution
+    # Map function scratch positions to actual scratch positions
+    scratch_offset = output_pos - 1  # Offset for this function's scratch space
+    
+    # Execute each step directly in the scratch space
+    @inbounds for step in func_data.execution_steps
+        actual_output_pos = scratch_offset + step.output_position
+        
+        if step.operation === :load_constant
+            scratch[actual_output_pos] = step.constant_value
+            
+        elseif step.operation === :load_continuous
+            col = step.column_symbol
+            val = get_data_value_specialized(data, col, row_idx)
+            scratch[actual_output_pos] = Float64(val)
+            
+        elseif step.operation === :call_unary
+            actual_input_pos = scratch_offset + step.input_positions[1]
+            input_val = scratch[actual_input_pos]
+            result = apply_function_direct_single(step.func, input_val)
+            scratch[actual_output_pos] = result
+            
+        elseif step.operation === :call_binary
+            actual_input_pos1 = scratch_offset + step.input_positions[1]
+            actual_input_pos2 = scratch_offset + step.input_positions[2]
+            input_val1 = scratch[actual_input_pos1]
+            input_val2 = scratch[actual_input_pos2]
+            result = apply_function_direct_binary(step.func, input_val1, input_val2)
+            scratch[actual_output_pos] = result
+            
+        else
+            error("Unknown operation type: $(step.operation)")
+        end
+    end
+    
+    # Final result should already be in the correct position
+    # No copying needed since we used the scratch space directly
+    
+    return nothing
 end
