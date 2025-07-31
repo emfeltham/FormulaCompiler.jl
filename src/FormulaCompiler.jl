@@ -38,6 +38,7 @@ include("compile_term.jl")
 
 # Main compilation interface
 include("CompiledFormula.jl") # Clean execution plan system
+export compile_formula
 
 ################################# Core system #################################
 

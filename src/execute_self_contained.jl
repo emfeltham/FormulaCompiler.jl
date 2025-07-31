@@ -1,7 +1,9 @@
-# Remove ALL existing execute_self_contained! methods and replace with these:
+# execute_self_contained.jl
 
-function execute_self_contained!(evaluator::CombinedEvaluator, scratch::Vector{Float64},
-                                 output::AbstractVector{Float64}, data::NamedTuple, row_idx::Int)
+function execute_self_contained!(
+    evaluator::CombinedEvaluator, scratch::Vector{Float64},
+    output::AbstractVector{Float64}, data::NamedTuple, row_idx::Int
+)
     
     # PRE-EXTRACT ALL FIELDS at function entry (eliminates field access allocations)
     constant_ops = evaluator.constant_ops
@@ -207,7 +209,6 @@ execute_function_self_contained!(pf::ParametricFunctionEvaluator, scratch, outpu
                                                        Int[],                  # no own scratch
                                                        collect(pf.arg_scratch_map)),
                                      scratch, output, data, row_idx)
-
 
 @inline function execute_self_contained!(
     evaluator::InteractionEvaluator{N}, 
