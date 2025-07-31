@@ -1,16 +1,13 @@
 module FormulaCompiler
 
-###############################################################################
-# Dependencies
-###############################################################################
+################################ Dependencies ################################
 
-# testing
+# used only for testing
 using Random
 using Test
 
-using Dates: now
-
 # true deps
+using Dates: now
 using Statistics
 using StatsModels, GLM, CategoricalArrays, Tables, DataFrames, Random
 
