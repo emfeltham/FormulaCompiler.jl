@@ -35,7 +35,6 @@ end
     ContinuousDerivativeData{N, Cols}
 
 Pre-computed derivative data for continuous variables.
-Simplified without problematic type parameters.
 """
 struct ContinuousDerivativeData{N, Cols}
     columns::Cols  # NTuple{N, Symbol} - original columns
@@ -319,7 +318,9 @@ end
                                   op::CompleteDerivativeFormulaOp{ConstOp, ContOp, CatOp}, 
                                   output, input_data, row_idx) where {ConstData, ContData, CatData, ConstOp, ContOp, CatOp}
 
-Execute complete derivative formulas. Functions and interactions are set to zero in Phase 1.
+Execute complete derivative formulas.
+
+N.B., Functions and interactions are set to zero in Phase 1.
 """
 function execute_derivative_operation!(data::CompleteDerivativeFormulaData{ConstData, ContData, CatData}, 
                                       op::CompleteDerivativeFormulaOp{ConstOp, ContOp, CatOp}, 
