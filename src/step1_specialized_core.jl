@@ -239,31 +239,6 @@ function execute_operation!(data::SimpleFormulaData{ConstData, ContData},
     return nothing
 end
 
-"""
-    get_data_value_specialized(data::NamedTuple, column::Symbol, row_idx::Int)
-
-Type-stable data access for continuous variables. Optimized for common column names.
-"""
-@inline function get_data_value_specialized(data::NamedTuple, column::Symbol, row_idx::Int)
-    # Fast path for common column names
-    if column === :x
-        return data.x[row_idx]
-    elseif column === :y
-        return data.y[row_idx]
-    elseif column === :z
-        return data.z[row_idx]
-    elseif column === :w
-        return data.w[row_idx]
-    elseif column === :t
-        return data.t[row_idx]
-    elseif column === :response
-        return data.response[row_idx]
-    else
-        # Fallback for any other column
-        return data[column][row_idx]
-    end
-end
-
 ###############################################################################
 # UTILITY FUNCTIONS
 ###############################################################################
