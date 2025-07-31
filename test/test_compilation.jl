@@ -1,5 +1,5 @@
 # test/test_compilation.jl
-# Tests for formula compilation and code generation
+# Tests for formula compilation and code generation - UPDATED for v2.0 API
 
 @testset "Formula Compilation" begin
     
@@ -18,7 +18,7 @@
     @testset "Basic Formula Compilation" begin
         # Simple linear model
         model = lm(@formula(y ~ x), df)
-        compiled = compile_formula(model)
+        compiled = compile_formula(model, data)  # FIXED: Added data parameter
         
         @test compiled isa CompiledFormula
         @test compiled.output_width == 2  # intercept + x
@@ -35,7 +35,7 @@
     @testset "Categorical Variables" begin
         # Test categorical with default contrasts
         model = lm(@formula(y ~ group), df)
-        compiled = compile_formula(model)
+        compiled = compile_formula(model, data)  # FIXED: Added data parameter
         
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
@@ -44,7 +44,7 @@
         
         # Test binary categorical
         model = lm(@formula(y ~ cat2), df)
-        compiled = compile_formula(model)
+        compiled = compile_formula(model, data)  # FIXED: Added data parameter
         
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
@@ -55,7 +55,7 @@
     @testset "Function Terms" begin
         # Test mathematical functions
         model = lm(@formula(y ~ log(z)), df)
-        compiled = compile_formula(model)
+        compiled = compile_formula(model, data)  # FIXED: Added data parameter
         
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
@@ -64,7 +64,7 @@
         
         # Test polynomial terms
         model = lm(@formula(y ~ x^2), df)
-        compiled = compile_formula(model)
+        compiled = compile_formula(model, data)  # FIXED: Added data parameter
         
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
@@ -75,7 +75,7 @@
     @testset "Interactions" begin
         # Test continuous × continuous
         model = lm(@formula(y ~ x * z), df)
-        compiled = compile_formula(model)
+        compiled = compile_formula(model, data)  # FIXED: Added data parameter
         
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
@@ -84,7 +84,7 @@
         
         # Test continuous × categorical
         model = lm(@formula(y ~ x * group), df)
-        compiled = compile_formula(model)
+        compiled = compile_formula(model, data)  # FIXED: Added data parameter
         
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
@@ -93,7 +93,7 @@
         
         # Test categorical × categorical
         model = lm(@formula(y ~ group * cat2), df)
-        compiled = compile_formula(model)
+        compiled = compile_formula(model, data)  # FIXED: Added data parameter
         
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
@@ -104,7 +104,7 @@
     @testset "Complex Formulas" begin
         @testset "Test three-way interaction 1" begin
             model = lm(@formula(y ~ x * z * group), df)
-            compiled = compile_formula(model)
+            compiled = compile_formula(model, data)  # FIXED: Added data parameter
             
             row_vec = Vector{Float64}(undef, length(compiled))
             compiled(row_vec, data, 1)
@@ -114,9 +114,8 @@
 
         @testset "Test four-way interaction" begin
             # test four-way interaction
-                # Test three-way interaction
             model = lm(@formula(y ~ x * z * group * cat2), df)
-            compiled = compile_formula(model)
+            compiled = compile_formula(model, data)  # FIXED: Added data parameter
             
             row_vec = Vector{Float64}(undef, length(compiled))
             compiled(row_vec, data, 1)
@@ -126,7 +125,7 @@
 
         @testset "Test three-way interaction 2" begin
             model = lm(@formula(y ~ x * z * o + group), df)
-            compiled = compile_formula(model)
+            compiled = compile_formula(model, data)  # FIXED: Added data parameter
             
             row_vec = Vector{Float64}(undef, length(compiled))
             compiled(row_vec, data, 1)
@@ -136,7 +135,7 @@
 
         @testset "Test three-way interaction 3" begin
             model = lm(@formula(y ~ x * z * flag + group), df)
-            compiled = compile_formula(model)
+            compiled = compile_formula(model, data)  # FIXED: Added data parameter
             
             row_vec = Vector{Float64}(undef, length(compiled))
             compiled(row_vec, data, 1)
@@ -146,7 +145,7 @@
 
         @testset "Test three-way interaction 4" begin
             model = lm(@formula(y ~ x * group * flag), df)
-            compiled = compile_formula(model)
+            compiled = compile_formula(model, data)  # FIXED: Added data parameter
             
             row_vec = Vector{Float64}(undef, length(compiled))
             compiled(row_vec, data, 1)
@@ -155,7 +154,7 @@
             
             # Test function in interaction
             model = lm(@formula(y ~ log(z) * group), df)
-            compiled = compile_formula(model)
+            compiled = compile_formula(model, data)  # FIXED: Added data parameter
             
             row_vec = Vector{Float64}(undef, length(compiled))
             compiled(row_vec, data, 1)
@@ -164,7 +163,7 @@
             
             # Test boolean function
             model = lm(@formula(y ~ (x > 0) * group), df)
-            compiled = compile_formula(model)
+            compiled = compile_formula(model, data)  # FIXED: Added data parameter
             
             row_vec = Vector{Float64}(undef, length(compiled))
             compiled(row_vec, data, 1)
@@ -176,7 +175,7 @@
     @testset "Edge Cases" begin
         # Test intercept-only model
         model = lm(@formula(y ~ 1), df)
-        compiled = compile_formula(model)
+        compiled = compile_formula(model, data)  # FIXED: Added data parameter
         
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
@@ -185,7 +184,7 @@
         
         # Test no-intercept model
         model = lm(@formula(y ~ 0 + x), df)
-        compiled = compile_formula(model)
+        compiled = compile_formula(model, data)  # FIXED: Added data parameter
         
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
@@ -198,10 +197,10 @@
         model = lm(@formula(y ~ x * group), df)
         
         # First compilation
-        compiled1 = compile_formula(model)
+        compiled1 = compile_formula(model, data)  # FIXED: Added data parameter
         
         # Second compilation should use cache
-        compiled2 = compile_formula(model)
+        compiled2 = compile_formula(model, data)  # FIXED: Added data parameter
         
         # Should produce same results
         row_vec1 = Vector{Float64}(undef, length(compiled1))
