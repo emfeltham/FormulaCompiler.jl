@@ -242,7 +242,7 @@ end
     execute_categorical_self_contained!(evaluator::CategoricalEvaluator, output::AbstractVector{Float64},
                                        data::NamedTuple, row_idx::Int)
 
-Zero-allocation categorical execution using pre-extracted level codes.
+Categorical execution using pre-extracted level codes.
 """
 function execute_categorical_self_contained!(
     evaluator::CategoricalEvaluator, output::AbstractVector{Float64},

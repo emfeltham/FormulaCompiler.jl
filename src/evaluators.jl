@@ -36,7 +36,7 @@ Self-contained constant evaluator.
 """
 struct ConstantEvaluator <: AbstractEvaluator
     value::Float64
-    position::Int                    # Where output goes in model matrix
+    position::Int # Where output goes in model matrix
     # No scratch space needed for constants
 end
 
@@ -47,7 +47,7 @@ Self-contained continuous variable evaluator.
 """
 struct ContinuousEvaluator <: AbstractEvaluator
     column::Symbol
-    position::Int                    # Where output goes in model matrix
+    position::Int # Where output goes in model matrix
     # No scratch space needed for direct data access
 end
 
@@ -72,9 +72,9 @@ Self-contained function evaluator with argument scratch space.
 struct FunctionEvaluator <: AbstractEvaluator
     func::Function
     arg_evaluators::Vector{AbstractEvaluator}
-    position::Int                    # Where output goes in model matrix
-    scratch_positions::Vector{Int}   # Scratch space for argument evaluation
-    arg_scratch_map::Vector{UnitRange{Int}}  # Where each argument's result goes in scratch
+    position::Int # Where output goes in model matrix
+    scratch_positions::Vector{Int} # Scratch space for argument evaluation
+    arg_scratch_map::Vector{UnitRange{Int}} # Where each argument's result goes in scratch
 end
 
 struct ParametricFunctionEvaluator{F,N} <: AbstractEvaluator
@@ -106,26 +106,26 @@ struct ZScoreEvaluator <: AbstractEvaluator
     underlying::AbstractEvaluator
     center::Float64
     scale::Float64
-    positions::Vector{Int}           # Where outputs go in model matrix
-    scratch_positions::Vector{Int}   # Scratch space for underlying evaluation
-    underlying_scratch_map::UnitRange{Int}  # Where underlying result goes in scratch
+    positions::Vector{Int} # Where outputs go in model matrix
+    scratch_positions::Vector{Int} # Scratch space for underlying evaluation
+    underlying_scratch_map::UnitRange{Int} # Where underlying result goes in scratch
 end
 
 # Precomputed operations to eliminate field access during execution
 struct PrecomputedConstantOp
-    value::Float64  # Ensure this is exactly Float64
+    value::Float64 # Ensure this is exactly Float64
     position::Int64 # Ensure this is exactly Int64 (not Int)
 end
 
 struct PrecomputedContinuousOp
-    column::Symbol   # This should be fine
-    position::Int64  # Ensure this is exactly Int64
+    column::Symbol # This should be fine
+    position::Int64 # Ensure this is exactly Int64
 end
 
 """
     CombinedEvaluator
 
-Container with precomputed operations for zero-allocation execution.
+Container with precomputed operations for execution.
 """
 struct CombinedEvaluator <: AbstractEvaluator
     # Pre-computed operations to eliminate field access
@@ -507,90 +507,6 @@ function test_function_safety()
     println("All function safety tests passed!")
     return true
 end
-
-###############################################################################
-# 5. KRONECKER PRODUCT COMPUTATION
-###############################################################################
-
-# function compute_kronecker_product!(
-#     component_buffers::Vector{Vector{Float64}}, 
-#     component_widths::Vector{Int}, 
-#     output::AbstractVector{Float64}
-# )
-#     n_components = length(component_buffers)
-    
-#     if n_components == 1
-#         # Single component - just copy
-#         copy!(output, component_buffers[1])
-        
-#     elseif n_components == 2
-#         # Two components - direct computation
-#         w1, w2 = component_widths[1], component_widths[2]
-#         buf1, buf2 = component_buffers[1], component_buffers[2]
-        
-#         idx = 1
-#         @inbounds for j in 1:w2
-#             for i in 1:w1
-#                 output[idx] = buf1[i] * buf2[j]
-#                 idx += 1
-#             end
-#         end
-        
-#     elseif n_components == 3
-#         # Three components - common case
-#         w1, w2, w3 = component_widths[1], component_widths[2], component_widths[3]
-#         buf1, buf2, buf3 = component_buffers[1], component_buffers[2], component_buffers[3]
-        
-#         idx = 1
-#         @inbounds for k in 1:w3
-#             for j in 1:w2
-#                 for i in 1:w1
-#                     output[idx] = buf1[i] * buf2[j] * buf3[k]
-#                     idx += 1
-#                 end
-#             end
-#         end
-        
-#     else
-#         # General case - recursive approach
-#         compute_general_kronecker!(component_buffers, component_widths, output)
-#     end
-# end
-
-# function compute_general_kronecker!(
-#     component_buffers::Vector{Vector{Float64}}, 
-#     component_widths::Vector{Int}, 
-#     output::AbstractVector{Float64}
-# )
-#     n_components = length(component_buffers)
-#     total_size = length(output)
-    
-#     @inbounds for i in 1:total_size
-#         # Convert linear index to multi-dimensional indices
-#         indices = linear_to_multi_index(i - 1, component_widths) .+ 1
-        
-#         # Compute product across all components
-#         product = 1.0
-#         for j in 1:n_components
-#             product *= component_buffers[j][indices[j]]
-#         end
-        
-#         output[i] = product
-#     end
-# end
-
-# function linear_to_multi_index(linear_idx::Int, dimensions::Vector{Int})
-#     n_dims = length(dimensions)
-#     indices = Vector{Int}(undef, n_dims)
-    
-#     remaining = linear_idx
-#     for i in 1:n_dims
-#         indices[i] = remaining % dimensions[i]
-#         remaining = remaining ÷ dimensions[i]
-#     end
-    
-#     return indices
-# end
 
 ###############################################################################
 # OPTIMIZED KRONECKER PATTERN APPLICATION
