@@ -10,9 +10,6 @@ using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels, StandardizedPredictors
 using MixedModels
 using BenchmarkTools
-
-using FormulaCompiler:
-    compile_term
     
 # Set consistent random seed for reproducible tests
 Random.seed!(06515)
@@ -23,7 +20,7 @@ using FormulaCompiler:
 using FormulaCompiler:
     compile_formula_specialized, show_specialized_info
 using FormulaCompiler:
-    compile_formula_specialized_enhanced
+    compile_formula_specialized
 
 ###############################################################################
 # ENHANCED TESTING FUNCTIONS
@@ -40,7 +37,7 @@ function test_enhanced_specialization(formula, df, data; n_iterations=1000)
     # Compile both versions
     model = fit(LinearModel, formula, df)
     current_compiled = compile_formula(model, data)
-    specialized_compiled = compile_formula_specialized_enhanced(model, data)
+    specialized_compiled = compile_formula_specialized(model, data)
     
     println("Formula: $formula")
     println("Output width: $(length(current_compiled))")

@@ -9,15 +9,12 @@ using FormulaCompiler
 using Statistics
 using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels, StandardizedPredictors
-
-using FormulaCompiler:
-    compile_term
     
 # Set consistent random seed for reproducible tests
 Random.seed!(06515)
 
 using FormulaCompiler:
-    compile_formula_specialized_complete
+    compile_formula_specialized
 
 ###############################################################################
 # TESTING AND VALIDATION
@@ -37,7 +34,7 @@ function test_position_mapping_approach(formula, df, data)
     # Compile both versions
     model = fit(LinearModel, formula, df)
     current_compiled = compile_formula(model, data)
-    specialized_compiled = compile_formula_specialized_complete(model, data)
+    specialized_compiled = compile_formula_specialized(model, data)
     
     # Test correctness first - this is critical
     output_current = Vector{Float64}(undef, length(current_compiled))

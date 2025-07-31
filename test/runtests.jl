@@ -5,62 +5,42 @@ using Revise
 using Test
 using BenchmarkTools, Profile
 using FormulaCompiler
+using Random
 
 using Statistics
-using DataFrames, GLM, Tables, CategoricalArrays, Random
+using DataFrames, Tables, CategoricalArrays
 using StatsModels, StandardizedPredictors
-using MixedModels
-using BenchmarkTools
-
-using FormulaCompiler:
-    compile_term
+using MixedModels, GLM
     
 # Set consistent random seed for reproducible tests
 Random.seed!(06515)
 
-using FormulaCompiler:
-    compile_function_term, compile_matrix_term,
-    ScratchAllocator
-
-include("test_execution_plans_phase1.jl")
-
-include("test_execution_plans_phase1.jl")
-
-# test_constructor_fixes()
-# test_self_contained_evaluators()
-# test_updated_modelrow_system()
-
-# @testset "FormulaCompiler.jl Tests" begin
+@testset "FormulaCompiler.jl Tests" begin
     
-#     # Core functionality tests
-#     include("test_evaluators.jl")
-#     include("test_execution_plans.jl") # all failures due to allocations
-#     # include("test_compilation.jl")
-#     # include("test_modelrow.jl")
+    # Core functionality tests
     
-#     # Advanced features
-#     # include("test_derivatives.jl")
-#     # include("test_derivative_correctness.jl")
-#     # include("test_scenarios.jl")
-#     # include("test_evaluator_trees.jl")
-    
-#     # Integration and compatibility tests
-#     # include("test_integration.jl")
-#     # include("test_mixed_models.jl")
-    
-#     # Performance and regression tests
-#     # include("test_performance.jl") these may not be right, and are non-essential
-#     # include("test_regression.jl")
-# end
+    # these are dignostic rather than formal tests
+    # include("test_step1_specialized_core.jl")
+    # include("test_step2_categorical_support.jl")
+    # include("test_step3_function_support.jl")
+    # include("test_step4_interactions.jl")
 
-# #=
-# using Test
-# using Revise
-# using Random
-# using FormulaCompiler
-
-# @testset "FormulaCompiler.jl" begin
-#     include("initial_tests.jl")
+    # include("test_position_mapping.jl")
+    # include("step4_run_profiling.jl")
+    # include("test_modelrow.jl")
     
-# end
-# =#
+    # Models
+    include("test_models.jl")
+
+    # Derivatives
+    include("test_derivative_phase1.jl")
+    include("test_derivative_phase2.jl")
+    
+    # Integration and compatibility tests
+    # include("test_integration.jl")
+    # include("test_mixed_models.jl")
+    
+    # Performance and regression tests
+    # include("test_performance.jl") these may not be right, and are non-essential
+    # include("test_regression.jl")
+end

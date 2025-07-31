@@ -7,7 +7,7 @@ using DataFrames, GLM, Tables, CategoricalArrays, Random
 using BenchmarkTools, Profile
 
 using FormulaCompiler:
-    compile_formula_specialized_complete, execute_interaction_operation!,
+    compile_formula_specialized, execute_interaction_operation!,
     evaluate_unified_component!, execute_to_scratch!,
     execute_complete_constant_operations!,
     execute_complete_continuous_operations!,
@@ -63,7 +63,7 @@ for formula in worst_cases
     
     # Compile and get detailed breakdown
     model = fit(LinearModel, formula, df)
-    specialized = compile_formula_specialized_complete(model, data)
+    specialized = compile_formula_specialized(model, data)
     output = Vector{Float64}(undef, length(specialized))
     
     # Test if we can isolate interaction component issues

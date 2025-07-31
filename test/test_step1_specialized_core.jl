@@ -9,9 +9,6 @@ using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels, StandardizedPredictors
 using MixedModels
 using BenchmarkTools
-
-using FormulaCompiler:
-    compile_term
     
 # Set consistent random seed for reproducible tests
 Random.seed!(06515)

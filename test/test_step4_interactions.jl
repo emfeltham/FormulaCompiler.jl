@@ -10,9 +10,6 @@ using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels, StandardizedPredictors
 using MixedModels
 using BenchmarkTools
-
-using FormulaCompiler:
-    compile_term
     
 # Set consistent random seed for reproducible tests
 Random.seed!(06515)
@@ -22,9 +19,6 @@ using FormulaCompiler:
     ScratchAllocator
 using FormulaCompiler:
     compile_formula_specialized, show_specialized_info
-using FormulaCompiler:
-    compile_formula_specialized_enhanced
-using FormulaCompiler: compile_formula_specialized_linear_comprehensive
 
 ###############################################################################
 # COMPLETE TESTING FUNCTIONS
@@ -41,7 +35,7 @@ function test_complete_specialization(formula, df, data; n_iterations=1000)
     # Compile both versions
     model = fit(LinearModel, formula, df)
     current_compiled = compile_formula(model, data)
-    specialized_compiled = compile_formula_specialized_complete(model, data)
+    specialized_compiled = compile_formula_specialized(model, data)
     
     println("Formula: $formula")
     println("Output width: $(length(current_compiled))")
@@ -179,7 +173,7 @@ function run_step4_tests()
 end
 
 using FormulaCompiler:
-    compile_formula_specialized_complete,
+    compile_formula_specialized,
     execute_to_scratch!
 
 # Run the complete test suite
