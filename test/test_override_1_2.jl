@@ -8,7 +8,7 @@ using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels, StandardizedPredictors
 
 using FormulaCompiler:
-    compile_formula_specialized_complete,
+    compile_formula_specialized,
     SpecializedFormula,
     ModelRowEvaluator,
     set_categorical_override!,

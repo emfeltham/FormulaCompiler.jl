@@ -15,7 +15,7 @@ function test_comprehensive_fix(formula, df, data)
     
     # Compile using standard function names (now with fixes applied)
     model = fit(LinearModel, formula, df)
-    specialized = compile_formula_specialized_complete(model, data)
+    specialized = compile_formula_specialized(model, data)
     output = Vector{Float64}(undef, length(specialized))
     
     # Warmup

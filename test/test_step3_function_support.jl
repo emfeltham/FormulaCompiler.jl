@@ -10,20 +10,13 @@ using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels, StandardizedPredictors
 using MixedModels
 using BenchmarkTools
-
-using FormulaCompiler:
-    compile_term
     
 # Set consistent random seed for reproducible tests
 Random.seed!(06515)
 
-using FormulaCompiler:
-    compile_function_term, compile_matrix_term,
     ScratchAllocator
 using FormulaCompiler:
     compile_formula_specialized, show_specialized_info
-using FormulaCompiler:
-    compile_formula_specialized_enhanced
 
 ###############################################################################
 # COMPREHENSIVE TESTING FUNCTIONS
@@ -40,7 +33,7 @@ function test_comprehensive_specialization(formula, df, data; n_iterations=1000)
     # Compile both versions
     model = fit(LinearModel, formula, df)
     current_compiled = compile_formula(model, data)
-    specialized_compiled = compile_formula_specialized_comprehensive(model, data)
+    specialized_compiled = compile_formula_specialized(model, data)
     
     println("Formula: $formula")
     println("Output width: $(length(current_compiled))")
@@ -177,9 +170,6 @@ function run_step3_tests()
     println("="^60)
 end
 
-using FormulaCompiler:
-    compile_formula_specialized_comprehensive
-
 # Run the comprehensive test suite
 run_step3_tests()
 
@@ -198,7 +188,7 @@ function test_linear_comprehensive_specialization(formula, df, data; n_iteration
     # Compile both versions
     model = fit(LinearModel, formula, df)
     current_compiled = compile_formula(model, data)
-    specialized_compiled = compile_formula_specialized_linear_comprehensive(model, data)
+    specialized_compiled = compile_formula_specialized(model, data)
     
     println("Formula: $formula")
     println("Output width: $(length(current_compiled))")
@@ -333,7 +323,7 @@ function run_step3_polish_tests()
     println("="^70)
 end
 
-using FormulaCompiler: compile_formula_specialized_linear_comprehensive
+using FormulaCompiler: compile_formula_specialized
 
 
 run_step3_polish_tests()

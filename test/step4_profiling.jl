@@ -16,7 +16,7 @@ function profile_allocations_detailed(formula, df, data)
     # Compile both versions
     model = fit(LinearModel, formula, df)
     current_compiled = compile_formula(model, data)
-    specialized_compiled = compile_formula_specialized_complete(model, data)
+    specialized_compiled = compile_formula_specialized(model, data)
     
     # Pre-allocate outputs
     output_current = Vector{Float64}(undef, length(current_compiled))
