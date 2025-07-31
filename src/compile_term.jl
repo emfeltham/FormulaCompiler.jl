@@ -243,8 +243,12 @@ function compile_function_term(term::FunctionTerm, start_position::Int,
     
     for arg in term.args
         # Allocate scratch space first, then compile with those positions
+        
         # arg_width = width(arg)  # Use StatsModels width() before compilation
-        arg_width = 1 # ALWAYS = 1?
+        # This does not work on the individual arg, only the term itself in this case
+        # Is this loop unnecessary?
+        
+        arg_width = 1 # FunctionTerm -> ALWAYS = 1?
         arg_scratch = allocate_scratch!(scratch_allocator, arg_width)
         
         # Compile argument with its actual scratch positions
