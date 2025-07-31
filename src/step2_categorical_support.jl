@@ -97,39 +97,6 @@ function analyze_categorical_operations(evaluator::CombinedEvaluator)
     return categorical_data, CategoricalOp()
 end
 
-"""
-    analyze_evaluator_enhanced(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
-
-Enhanced analysis for constants, continuous, and categorical variables.
-"""
-function analyze_evaluator_enhanced(evaluator::AbstractEvaluator)
-    if evaluator isa CombinedEvaluator
-        # Check that this only has simple operation types (no functions/interactions yet)
-        has_complex_operations = (
-            !isempty(evaluator.function_evaluators) ||
-            !isempty(evaluator.interaction_evaluators)
-        )
-        
-        if has_complex_operations
-            error("Step 2 only supports constants, continuous, and categorical variables. Found functions/interactions.")
-        end
-        
-        # Analyze all three operation types
-        constant_data, constant_op = analyze_constant_operations(evaluator)
-        continuous_data, continuous_op = analyze_continuous_operations(evaluator)
-        categorical_data, categorical_op = analyze_categorical_operations(evaluator)
-        
-        # Combine into enhanced formula data
-        formula_data = EnhancedFormulaData(constant_data, continuous_data, categorical_data)
-        formula_op = EnhancedFormulaOp(constant_op, continuous_op, categorical_op)
-        
-        return formula_data, formula_op
-        
-    else
-        error("Step 2 only supports CombinedEvaluator with constants, continuous, and categorical operations")
-    end
-end
-
 ###############################################################################
 # CATEGORICAL EXECUTION FUNCTIONS
 ###############################################################################
@@ -138,7 +105,7 @@ end
     execute_operation!(data::CategoricalData, op::CategoricalOp, 
                       output, input_data, row_idx)
 
-Execute categorical variable operations with zero allocations.
+Execute categorical variable operations.
 """
 function execute_operation!(data::CategoricalData, op::CategoricalOp, 
                            output, input_data, row_idx)
@@ -161,7 +128,7 @@ end
 """
     execute_categorical_operations!(categorical_data::Vector{CategoricalData}, output, input_data, row_idx)
 
-Execute multiple categorical variables with zero allocations.
+Execute multiple categorical variables.
 """
 function execute_categorical_operations!(categorical_data::Vector{CategoricalData}, output, input_data, row_idx)
     # Handle empty case
@@ -203,40 +170,6 @@ function execute_operation!(data::EnhancedFormulaData{ConstData, ContData, CatDa
     execute_categorical_operations!(data.categorical, output, input_data, row_idx)
     
     return nothing
-end
-
-###############################################################################
-# ENHANCED COMPILATION FUNCTIONS
-###############################################################################
-
-"""
-    create_specialized_formula_enhanced(compiled_formula::CompiledFormula) -> SpecializedFormula
-
-Convert a CompiledFormula to a SpecializedFormula (Step 2: includes categorical).
-"""
-function create_specialized_formula_enhanced(compiled_formula::CompiledFormula)
-    # Analyze the evaluator tree with enhanced support
-    data_tuple, op_tuple = analyze_evaluator_enhanced(compiled_formula.root_evaluator)
-    
-    # Create specialized formula
-    return SpecializedFormula{typeof(data_tuple), typeof(op_tuple)}(
-        data_tuple,
-        op_tuple,
-        compiled_formula.output_width
-    )
-end
-
-"""
-    compile_formula_specialized_enhanced(model, data::NamedTuple) -> SpecializedFormula
-
-Direct compilation to specialized formula (Step 2: includes categorical).
-"""
-function compile_formula_specialized_enhanced(model, data::NamedTuple)
-    # Use existing compilation logic to build evaluator tree
-    compiled = compile_formula(model, data)
-    
-    # Convert to enhanced specialized form
-    return create_specialized_formula_enhanced(compiled)
 end
 
 ###############################################################################

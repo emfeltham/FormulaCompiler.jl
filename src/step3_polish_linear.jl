@@ -1,5 +1,5 @@
 # step3_polish_linear.jl
-# Linear function execution for zero-allocation function evaluation
+# Linear function execution for efficient function evaluation
 
 ###############################################################################
 # LINEAR FUNCTION EXECUTION TYPES
@@ -218,42 +218,6 @@ function analyze_function_operations_linear(evaluator::CombinedEvaluator)
     return function_data, LinearFunctionOp()
 end
 
-"""
-    analyze_evaluator_linear_comprehensive(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
-
-Comprehensive analysis using linear function execution.
-"""
-function analyze_evaluator_linear_comprehensive(evaluator::AbstractEvaluator)
-    if evaluator isa CombinedEvaluator
-        # Check that this only has simple operation types (no interactions yet)
-        has_interactions = !isempty(evaluator.interaction_evaluators)
-        
-        if has_interactions
-            error("Step 3 Polish only supports constants, continuous, categorical, and functions. Found interactions.")
-        end
-        
-        # Analyze all four operation types
-        constant_data, constant_op = analyze_constant_operations(evaluator)
-        continuous_data, continuous_op = analyze_continuous_operations(evaluator)
-        categorical_data, categorical_op = analyze_categorical_operations(evaluator)
-        function_data, function_op = analyze_function_operations_linear(evaluator)
-        
-        # Calculate maximum scratch space needed for functions
-        max_function_scratch = isempty(function_data) ? 0 : maximum(f.scratch_size for f in function_data)
-        
-        # Combine into linear comprehensive formula data
-        formula_data = LinearComprehensiveFormulaData(
-            constant_data, continuous_data, categorical_data, function_data, max_function_scratch
-        )
-        formula_op = LinearComprehensiveFormulaOp(constant_op, continuous_op, categorical_op, function_op)
-        
-        return formula_data, formula_op
-        
-    else
-        error("Step 3 Polish only supports CombinedEvaluator with constants, continuous, categorical, and function operations")
-    end
-end
-
 ###############################################################################
 # LINEAR FUNCTION EXECUTION
 ###############################################################################
@@ -402,7 +366,7 @@ end
                       op::LinearComprehensiveFormulaOp{ConstOp, ContOp, CatOp, FuncOp}, 
                       output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, ConstOp, ContOp, CatOp, FuncOp}
 
-Execute linear comprehensive formulas with zero-allocation function evaluation.
+Execute linear comprehensive formulas with efficient function evaluation.
 """
 function execute_operation!(data::LinearComprehensiveFormulaData{ConstData, ContData, CatData, FuncData}, 
                            op::LinearComprehensiveFormulaOp{ConstOp, ContOp, CatOp, FuncOp}, 
@@ -424,40 +388,6 @@ function execute_operation!(data::LinearComprehensiveFormulaData{ConstData, Cont
     execute_linear_function_operations!(data.functions, function_scratch, output, input_data, row_idx)
     
     return nothing
-end
-
-###############################################################################
-# LINEAR COMPREHENSIVE COMPILATION FUNCTIONS
-###############################################################################
-
-"""
-    create_specialized_formula_linear_comprehensive(compiled_formula::CompiledFormula) -> SpecializedFormula
-
-Convert a CompiledFormula to a SpecializedFormula using linear function execution.
-"""
-function create_specialized_formula_linear_comprehensive(compiled_formula::CompiledFormula)
-    # Analyze the evaluator tree with linear comprehensive support
-    data_tuple, op_tuple = analyze_evaluator_linear_comprehensive(compiled_formula.root_evaluator)
-    
-    # Create specialized formula
-    return SpecializedFormula{typeof(data_tuple), typeof(op_tuple)}(
-        data_tuple,
-        op_tuple,
-        compiled_formula.output_width
-    )
-end
-
-"""
-    compile_formula_specialized_linear_comprehensive(model, data::NamedTuple) -> SpecializedFormula
-
-Direct compilation to specialized formula using linear function execution.
-"""
-function compile_formula_specialized_linear_comprehensive(model, data::NamedTuple)
-    # Use existing compilation logic to build evaluator tree
-    compiled = compile_formula(model, data)
-    
-    # Convert to linear comprehensive specialized form
-    return create_specialized_formula_linear_comprehensive(compiled)
 end
 
 ###############################################################################

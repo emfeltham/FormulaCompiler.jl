@@ -1,10 +1,6 @@
 # step1_specialized_core.jl
 # Core foundation for specialized formula execution with continuous variables only
 
-using FormulaCompiler: 
-    CompiledFormula, CombinedEvaluator, ContinuousEvaluator, PrecomputedContinuousOp,
-    compile_formula
-
 ###############################################################################
 # CORE SPECIALIZED TYPES
 ###############################################################################
@@ -21,10 +17,11 @@ struct SpecializedFormula{DataTuple, OpTuple}
     output_width::Int
 end
 
-# Core call operator for zero-allocation execution
-function (sf::SpecializedFormula{D, O})(output::AbstractVector{Float64}, 
-                                        data::NamedTuple, 
-                                        row_idx::Int) where {D, O}
+# Core call operator for execution
+function (sf::SpecializedFormula{D, O})(
+    output::AbstractVector{Float64}, 
+    data::NamedTuple, 
+    row_idx::Int) where {D, O}
     execute_specialized!(sf.data, sf.operations, output, data, row_idx)
     return output
 end
@@ -172,39 +169,6 @@ function analyze_continuous_operations(evaluator::CombinedEvaluator)
     return continuous_data, operation
 end
 
-"""
-    analyze_evaluator_simple(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
-
-Simple analysis for constants and continuous variables only.
-"""
-function analyze_evaluator_simple(evaluator::AbstractEvaluator)
-    if evaluator isa CombinedEvaluator
-        # Check that this only has constants and continuous variables
-        has_complex_operations = (
-            !isempty(evaluator.categorical_evaluators) ||
-            !isempty(evaluator.function_evaluators) ||
-            !isempty(evaluator.interaction_evaluators)
-        )
-        
-        if has_complex_operations
-            error("Step 1 only supports constants and continuous variables. Found other operation types.")
-        end
-        
-        # Analyze both constants and continuous operations
-        constant_data, constant_op = analyze_constant_operations(evaluator)
-        continuous_data, continuous_op = analyze_continuous_operations(evaluator)
-        
-        # Combine into simple formula data
-        formula_data = SimpleFormulaData(constant_data, continuous_data)
-        formula_op = SimpleFormulaOp(constant_op, continuous_op)
-        
-        return formula_data, formula_op
-        
-    else
-        error("Step 1 only supports CombinedEvaluator with constants and continuous operations")
-    end
-end
-
 ###############################################################################
 # EXECUTION FUNCTIONS
 ###############################################################################
@@ -222,7 +186,7 @@ end
     execute_operation!(data::ContinuousData{N, Cols}, op::ContinuousOp{N, Cols}, 
                       output, input_data, row_idx) where {N, Cols}
 
-Execute continuous variable operations with zero allocations.
+Execute continuous variable operations.
 """
 function execute_operation!(data::ContinuousData{N, Cols}, op::ContinuousOp{N, Cols}, 
                            output, input_data, row_idx) where {N, Cols}
@@ -241,7 +205,7 @@ end
     execute_operation!(data::ConstantData{N}, op::ConstantOp{N}, 
                       output, input_data, row_idx) where N
 
-Execute constant operations with zero allocations.
+Execute constant operations.
 """
 function execute_operation!(data::ConstantData{N}, op::ConstantOp{N}, 
                            output, input_data, row_idx) where N
@@ -298,40 +262,6 @@ Type-stable data access for continuous variables. Optimized for common column na
         # Fallback for any other column
         return data[column][row_idx]
     end
-end
-
-###############################################################################
-# COMPILATION FUNCTIONS
-###############################################################################
-
-"""
-    create_specialized_formula(compiled_formula::CompiledFormula) -> SpecializedFormula
-
-Convert a CompiledFormula to a SpecializedFormula (Step 1: continuous only).
-"""
-function create_specialized_formula(compiled_formula::CompiledFormula)
-    # Analyze the evaluator tree
-    data_tuple, op_tuple = analyze_evaluator_simple(compiled_formula.root_evaluator)
-    
-    # Create specialized formula
-    return SpecializedFormula{typeof(data_tuple), typeof(op_tuple)}(
-        data_tuple,
-        op_tuple,
-        compiled_formula.output_width
-    )
-end
-
-"""
-    compile_formula_specialized(model, data::NamedTuple) -> SpecializedFormula
-
-Direct compilation to specialized formula (Step 1: continuous only).
-"""
-function compile_formula_specialized(model, data::NamedTuple)
-    # Use existing compilation logic to build evaluator tree
-    compiled = compile_formula(model, data)
-    
-    # Convert to specialized form
-    return create_specialized_formula(compiled)
 end
 
 ###############################################################################
