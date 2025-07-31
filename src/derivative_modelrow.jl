@@ -68,7 +68,7 @@ end
 """
     modelrow!(matrix, compiled_derivative, data, row_indices)
 
-Zero-allocation multi-row derivative evaluation.
+Multi-row derivative evaluation.
 
 This function efficiently evaluates derivatives for multiple observations,
 filling a pre-allocated matrix with derivative vectors. Each row of the matrix

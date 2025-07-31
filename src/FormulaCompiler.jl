@@ -12,7 +12,6 @@ using Dates: now
 
 # true deps
 using Statistics
-using ForwardDiff
 using StatsModels, GLM, CategoricalArrays, Tables, DataFrames, Random
 
 import MixedModels
@@ -20,6 +19,9 @@ using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
 
 # Support for StandardizedPredictors.jl
 using StandardizedPredictors: ZScoredTerm
+
+using LinearAlgebra: dot
+using ForwardDiff
 
 # useful for booleans in formulas
 not(x::Bool) = !x
@@ -41,15 +43,11 @@ export FunctionEvaluator, InteractionEvaluator, ZScoreEvaluator, CombinedEvaluat
 export ScaledEvaluator, ProductEvaluator
 export output_width, evaluate!, compile_term, extract_all_columns
 
-# include("assign_names.jl")
-
-# include("execution.jl") # OLD
 include("execute_self_contained.jl")
 include("execute_to_scratch.jl")
 include("compile_term.jl")
 export test_self_contained_evaluators, compile_term, execute_self_contained!
 export create_execution_plan, generate_blocks!
-
 
 # Main compilation interface
 include("CompiledFormula.jl") # Clean execution plan system
@@ -87,6 +85,8 @@ export show_execution_plan, benchmark_execution, is_zero_allocation
 # export ChainRuleEvaluator, ProductRuleEvaluator, ForwardDiffEvaluator
 # export get_standard_derivative_function, is_zero_derivative, validate_derivative_evaluator
 
+################################# Core system #################################
+
 include("step1_specialized_core.jl")
 include("step2_categorical_support.jl")
 include("step3_function_support.jl")
@@ -95,11 +95,20 @@ include("step4_interactions.jl")
 include("modelrow.jl")
 export ModelRowEvaluator, modelrow!, modelrow
 
+################################## Overrides ##################################
+
 include("override_1.jl")
 export OverrideVector, create_categorical_override
 export DataScenario, create_scenario, create_override_data, create_override_vector
 include("override_2.jl")
 include("override_4.jl")
 
+############################## Derivative system ##############################
+
+include("derivative_step1_foundation.jl")
+export compile_derivative_formula
+include("derivative_step2_functions.jl")
+
+export modelrow!, modelrow
 
 end # end module
