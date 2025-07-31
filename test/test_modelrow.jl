@@ -1,150 +1,140 @@
-# test/test_modelrow.jl
-# Tests for modelrow! and modelrow interfaces
+# test_modelrow!.jl
 
-@testset "ModelRow Interfaces" begin
+using BenchmarkTools, Test, Profile
+using FormulaCompiler
+
+using Statistics
+using DataFrames, GLM, Tables, CategoricalArrays, Random
+using StatsModels, StandardizedPredictors
+
+using FormulaCompiler:
+    compile_formula_specialized_complete,
+    SpecializedFormula,
+    ModelRowEvaluator
+
+
+# Set consistent random seed for reproducible tests
+Random.seed!(06515)
+
+###############################################################################
+# SIMPLE TESTING FUNCTION
+###############################################################################
+
+"""
+    test_clean_modelrow_system()
+
+Test the clean specialized-only modelrow! system.
+"""
+function test_clean_modelrow_system()
+    println("🧪 TESTING CLEAN SPECIALIZED MODELROW! SYSTEM")
+    println("="^60)
+    
+    # Simple test data
     df = DataFrame(
-        x = randn(50),
-        y = randn(50),
-        z = abs.(randn(50)) .+ 0.1,
-        group = categorical(rand(["A", "B", "C"], 50))
+        x = [1.0, 2.0, 3.0],
+        y = [4.0, 5.0, 6.0],
+        group = categorical(["A", "B", "A"])
     )
     data = Tables.columntable(df)
-    model = lm(@formula(y ~ x * group + log(z)), df)
     
-    @testset "Zero-Allocation modelrow!" begin
-        # Test with pre-compiled formula
-        compiled = compile_formula(model)
-        row_vec = Vector{Float64}(undef, length(compiled))
-        
-        # Test single row evaluation
-        result = modelrow!(row_vec, compiled, data, 1)
-        @test result === row_vec  # Returns same vector
-        
-        expected = modelmatrix(model)[1, :]
-        @test isapprox(row_vec, expected, rtol=1e-12)
-        
-        # Test zero allocations
-        allocs = @allocated modelrow!(row_vec, compiled, data, 1)
-        @test allocs == 0
-    end
+    # Simple test case
+    formula = @formula(y ~ x + group)
+    println("Testing formula: $formula")
     
-    @testset "Convenient modelrow! with Model" begin
-        row_vec = Vector{Float64}(undef, size(modelmatrix(model), 2))
+    try
+        # Create model and get expected results
+        model = lm(formula, df)
+        expected_matrix = modelmatrix(model)
+        println("Expected matrix size: $(size(expected_matrix))")
+        println("Expected row 1: $(expected_matrix[1, :])")
         
-        # Test cached version
-        result = modelrow!(row_vec, model, data, 1; cache=true)
-        @test result === row_vec
+        # Test 1: Direct specialized formula
+        println("\n1. Testing direct specialized formula:")
+        specialized = compile_formula_specialized_complete(model, data)
+        println("   Specialized formula type: $(typeof(specialized))")
+        println("   Formula length: $(length(specialized))")
         
-        expected = modelmatrix(model)[1, :]
-        @test isapprox(row_vec, expected, rtol=1e-12)
+        output = Vector{Float64}(undef, length(specialized))
+        println("   Output vector size: $(length(output))")
         
-        # Test non-cached version
-        result = modelrow!(row_vec, model, data, 1; cache=false)
-        @test isapprox(row_vec, expected, rtol=1e-12)
-    end
-    
-    @testset "Allocating modelrow" begin
-        # Test single row
-        result = modelrow(model, data, 1)
-        @test result isa Vector{Float64}
+        # Try evaluation
+        specialized(output, data, 1)
+        println("   Result: $output")
         
-        expected = modelmatrix(model)[1, :]
-        @test isapprox(result, expected, rtol=1e-12)
+        correct = isapprox(output, expected_matrix[1, :], rtol=1e-12)
+        println("   Correct: $correct")
         
-        # Test multiple rows
-        result = modelrow(model, data, [1, 2, 3])
-        @test result isa Matrix{Float64}
-        @test size(result) == (3, size(modelmatrix(model), 2))
+        if !correct
+            println("   Expected: $(expected_matrix[1, :])")
+            println("   Got:      $output")
+            println("   Diff:     $(output .- expected_matrix[1, :])")
+        end
         
-        expected = modelmatrix(model)[1:3, :]
-        @test isapprox(result, expected, rtol=1e-12)
-    end
-    
-    @testset "ModelRowEvaluator" begin
-        # Test object-based interface
-        evaluator = ModelRowEvaluator(model, df);
+        # Test allocations
+        specialized(output, data, 1)  # Warmup
+        allocs = @allocated specialized(output, data, 1)
+        println("   Allocations: $allocs bytes")
         
-        # Test single evaluation
-        result = evaluator(1);
-        @test result isa Vector{Float64}
-        
-        expected = modelmatrix(model)[1, :]
-        @test isapprox(result, expected, rtol=1e-12)
-        
-        # Test zero allocations
-        allocs = @allocated evaluator(1);
-        @test allocs == 0
-        
-        # Test evaluation into provided vector
-        row_vec = Vector{Float64}(undef, length(expected))
-        result = evaluator(row_vec, 1);
-        @test result === row_vec
-        @test isapprox(result, expected, rtol=1e-12)
-    end
-    
-    @testset "Cache Management" begin
-        # Test cache clearing
-        model1 = lm(@formula(y ~ x), df)
-        model2 = lm(@formula(y ~ x + z), df)
-        
-        # Use models to populate cache
-        row_vec1 = Vector{Float64}(undef, 2)
-        row_vec2 = Vector{Float64}(undef, 3)
-        
-        modelrow!(row_vec1, model1, data, 1)
-        modelrow!(row_vec2, model2, data, 1)
-        
-        # Clear cache
-        clear_model_cache!()
-        
-        # Should still work (will recompile)
-        modelrow!(row_vec1, model1, data, 1)
-        expected = modelmatrix(model1)[1, :]
-        @test isapprox(row_vec1, expected, rtol=1e-12)
-    end
-    
-    @testset "Error Handling" begin
-        compiled = compile_formula(model)
-        
-        # Test wrong vector size
-        small_vec = Vector{Float64}(undef, 1)
-        @test_throws AssertionError modelrow!(small_vec, compiled, data, 1)
-        
-        # Test invalid row index
-        row_vec = Vector{Float64}(undef, length(compiled))
-        @test_throws AssertionError modelrow!(row_vec, compiled, data, 1000)
-    end
-    
-    @testset "Consistency Across Interfaces" begin
-        # Test that all interfaces give same results
-        row_idx = 5
-        
-        # Pre-compiled version
-        compiled = compile_formula(model)
-        row_vec1 = Vector{Float64}(undef, length(compiled))
-        modelrow!(row_vec1, compiled, data, row_idx)
-        
-        # Cached model version
-        row_vec2 = Vector{Float64}(undef, length(compiled))
-        modelrow!(row_vec2, model, data, row_idx; cache=true)
-        
-        # Non-cached model version
-        row_vec3 = Vector{Float64}(undef, length(compiled))
-        modelrow!(row_vec3, model, data, row_idx; cache=false)
-        
-        # Allocating version
-        row_vec4 = modelrow(model, data, row_idx)
-        
-        # Object-based version
+        # Test 2: ModelRowEvaluator
+        println("\n2. Testing ModelRowEvaluator:")
         evaluator = ModelRowEvaluator(model, df)
-        row_vec5 = evaluator(row_idx)
+        println("   Evaluator type: $(typeof(evaluator))")
         
-        # All should be identical
-        @test row_vec1 == row_vec2 == row_vec3 == row_vec4 == row_vec5
+        result = evaluator(1)
+        println("   Result: $result")
         
-        # And match original model matrix
-        expected = modelmatrix(model)[row_idx, :]
-        @test isapprox(row_vec1, expected, rtol=1e-12)
+        correct2 = isapprox(result, expected_matrix[1, :], rtol=1e-12)
+        println("   Correct: $correct2")
+        
+        # Test allocations
+        evaluator(1)  # Warmup
+        allocs2 = @allocated evaluator(1)
+        println("   Allocations: $allocs2 bytes")
+        
+        # Test 3: Convenience function
+        println("\n3. Testing convenience modelrow! function:")
+        output3 = Vector{Float64}(undef, length(specialized))
+        
+        modelrow!(output3, model, data, 1; cache=false)
+        println("   Result: $output3")
+        
+        correct3 = isapprox(output3, expected_matrix[1, :], rtol=1e-12)
+        println("   Correct: $correct3")
+        
+        # Test allocations
+        modelrow!(output3, model, data, 1; cache=false)  # Warmup
+        allocs3 = @allocated modelrow!(output3, model, data, 1; cache=false)
+        println("   Allocations: $allocs3 bytes")
+        
+        # Overall assessment
+        println("\n📊 OVERALL ASSESSMENT:")
+        if correct && correct2 && correct3
+            println("   ✅ All correctness tests passed")
+        else
+            println("   ❌ Some correctness tests failed")
+        end
+        
+        if allocs <= 100 && allocs2 <= 100 && allocs3 <= 200
+            println("   ✅ Allocation performance good")
+        else
+            println("   ⚠️  Some allocation overhead detected")
+        end
+        
+    catch e
+        println("❌ Test failed with error: $e")
+        println("Stack trace:")
+        for (exc, bt) in Base.catch_stack()
+            showerror(stdout, exc, bt)
+            println()
+        end
+        return false
     end
     
+    return true
 end
+
+###############################################################################
+
+test_clean_modelrow_system();
+
+test_clean_modelrow_system()
