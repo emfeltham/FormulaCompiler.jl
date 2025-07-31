@@ -149,11 +149,11 @@ end
 ###############################################################################
 
 """
-    analyze_interaction_operations_comprehensive(evaluator::CombinedEvaluator) -> (Vector{InteractionData}, InteractionOp)
+    analyze_interaction_operations(evaluator::CombinedEvaluator) -> (Vector{InteractionData}, InteractionOp)
 
 Extract and convert all interaction evaluators using Step 1-3 optimizations.
 """
-function analyze_interaction_operations_comprehensive(evaluator::CombinedEvaluator)
+function analyze_interaction_operations(evaluator::CombinedEvaluator)
     interaction_evaluators = evaluator.interaction_evaluators
     n_interactions = length(interaction_evaluators)
     
@@ -251,11 +251,11 @@ end
 ###############################################################################
 
 """
-    analyze_evaluator_complete(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
+    analyze_evaluator(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
 
 Complete analysis for all operation types including interactions using Step 1-3 optimizations.
 """
-function analyze_evaluator_complete(evaluator::AbstractEvaluator)
+function analyze_evaluator(evaluator::AbstractEvaluator)
     if evaluator isa CombinedEvaluator
         # Analyze all operation types (Steps 1-3 unchanged)
         constant_data, constant_op = analyze_constant_operations(evaluator)
@@ -264,7 +264,7 @@ function analyze_evaluator_complete(evaluator::AbstractEvaluator)
         function_data, function_op = analyze_function_operations_linear(evaluator)
         
         # Use OPTIMIZED interaction analysis
-        interaction_data, interaction_op = analyze_interaction_operations_comprehensive(evaluator)
+        interaction_data, interaction_op = analyze_interaction_operations(evaluator)
         
         max_function_scratch = isempty(function_data) ? 0 : maximum(f.scratch_size for f in function_data)
         max_interaction_scratch = isempty(interaction_data) ? 0 : maximum(i.total_scratch_needed for i in interaction_data)
@@ -450,7 +450,6 @@ end
                                    data::NamedTuple,
                                    row_idx::Int)
 
-OVERWRITES EXISTING: Zero-allocation interaction execution.
 """
 function execute_interaction_operations!(interaction_data::Vector{InteractionData},
                                         scratch::Vector{Float64},
@@ -462,7 +461,7 @@ function execute_interaction_operations!(interaction_data::Vector{InteractionDat
         return nothing
     end
     
-    # Process all interactions with zero allocations
+    # Process all interactions
     @inbounds for interaction in interaction_data
         execute_interaction_operation!(interaction, scratch, output, data, row_idx)
     end
@@ -536,13 +535,13 @@ end
 ###############################################################################
 
 """
-    create_specialized_formula_complete(compiled_formula::CompiledFormula) -> SpecializedFormula
+    create_specialized_formula(compiled_formula::CompiledFormula) -> SpecializedFormula
 
 Convert a CompiledFormula to a SpecializedFormula with complete interaction support using Step 1-3 optimizations.
 """
-function create_specialized_formula_complete(compiled_formula::CompiledFormula)
+function create_specialized_formula(compiled_formula::CompiledFormula)
     # Analyze the evaluator tree with complete support using Step 1-3 optimizations
-    data_tuple, op_tuple = analyze_evaluator_complete(compiled_formula.root_evaluator)
+    data_tuple, op_tuple = analyze_evaluator(compiled_formula.root_evaluator)
     
     # Create specialized formula
     return SpecializedFormula{typeof(data_tuple), typeof(op_tuple)}(
@@ -553,16 +552,15 @@ function create_specialized_formula_complete(compiled_formula::CompiledFormula)
 end
 
 """
-    compile_formula_specialized_complete(model, data::NamedTuple) -> SpecializedFormula
+    compile_formula_specialized(model, data::NamedTuple) -> SpecializedFormula
 
 Direct compilation to specialized formula with complete interaction support using Step 1-3 optimizations.
 """
-function compile_formula_specialized_complete(model, data::NamedTuple)
+function compile_formula_specialized(model, data::NamedTuple)
     # Use existing compilation logic to build evaluator tree
     compiled = compile_formula(model, data)
-    
     # Convert to complete specialized form with optimizations
-    return create_specialized_formula_complete(compiled)
+    return create_specialized_formula(compiled)
 end
 
 ###############################################################################
@@ -598,7 +596,7 @@ end
                                           data::NamedTuple,
                                           row_idx::Int)
 
-NEW FUNCTION: Execute function component with zero allocations using direct scratch space.
+Execute function component using direct scratch space.
 """
 function execute_function_component_in_scratch!(func_data::LinearFunctionData,
                                                scratch::Vector{Float64},

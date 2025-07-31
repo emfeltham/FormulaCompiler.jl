@@ -129,37 +129,6 @@ function analyze_function_argument(evaluator::AbstractEvaluator)
     end
 end
 
-"""
-    analyze_evaluator_comprehensive(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
-
-Comprehensive analysis for constants, continuous, categorical, and function variables.
-"""
-function analyze_evaluator_comprehensive(evaluator::AbstractEvaluator)
-    if evaluator isa CombinedEvaluator
-        # Check that this only has simple operation types (no interactions yet)
-        has_interactions = !isempty(evaluator.interaction_evaluators)
-        
-        if has_interactions
-            error("Step 3 only supports constants, continuous, categorical, and functions. Found interactions.")
-        end
-        
-        # Analyze all four operation types
-        constant_data, constant_op = analyze_constant_operations(evaluator)
-        continuous_data, continuous_op = analyze_continuous_operations(evaluator)
-        categorical_data, categorical_op = analyze_categorical_operations(evaluator)
-        function_data, function_op = analyze_function_operations(evaluator)
-        
-        # Combine into comprehensive formula data
-        formula_data = ComprehensiveFormulaData(constant_data, continuous_data, categorical_data, function_data)
-        formula_op = ComprehensiveFormulaOp(constant_op, continuous_op, categorical_op, function_op)
-        
-        return formula_data, formula_op
-        
-    else
-        error("Step 3 only supports CombinedEvaluator with constants, continuous, categorical, and function operations")
-    end
-end
-
 ###############################################################################
 # FUNCTION EXECUTION FUNCTIONS
 ###############################################################################
@@ -167,7 +136,7 @@ end
 """
     execute_function_operations!(function_data::Vector{FunctionData}, output, input_data, row_idx)
 
-Execute multiple function operations with zero allocations.
+Execute multiple function operations.
 """
 function execute_function_operations!(function_data::Vector{FunctionData}, output, input_data, row_idx)
     # Handle empty case
@@ -313,40 +282,6 @@ function execute_operation!(data::ComprehensiveFormulaData{ConstData, ContData, 
     execute_function_operations!(data.functions, output, input_data, row_idx)
     
     return nothing
-end
-
-###############################################################################
-# COMPREHENSIVE COMPILATION FUNCTIONS
-###############################################################################
-
-"""
-    create_specialized_formula_comprehensive(compiled_formula::CompiledFormula) -> SpecializedFormula
-
-Convert a CompiledFormula to a SpecializedFormula (Step 3: includes functions).
-"""
-function create_specialized_formula_comprehensive(compiled_formula::CompiledFormula)
-    # Analyze the evaluator tree with comprehensive support
-    data_tuple, op_tuple = analyze_evaluator_comprehensive(compiled_formula.root_evaluator)
-    
-    # Create specialized formula
-    return SpecializedFormula{typeof(data_tuple), typeof(op_tuple)}(
-        data_tuple,
-        op_tuple,
-        compiled_formula.output_width
-    )
-end
-
-"""
-    compile_formula_specialized_comprehensive(model, data::NamedTuple) -> SpecializedFormula
-
-Direct compilation to specialized formula (Step 3: includes functions).
-"""
-function compile_formula_specialized_comprehensive(model, data::NamedTuple)
-    # Use existing compilation logic to build evaluator tree
-    compiled = compile_formula(model, data)
-    
-    # Convert to comprehensive specialized form
-    return create_specialized_formula_comprehensive(compiled)
 end
 
 ###############################################################################
