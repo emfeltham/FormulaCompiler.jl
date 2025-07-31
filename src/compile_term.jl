@@ -160,7 +160,7 @@ function compile_term(
         
         total_width = current_pos - start_position
         
-        # FIXED: Create precomputed operations instead of storing evaluators
+        # Create precomputed operations instead of storing evaluators
         constant_ops = PrecomputedConstantOp[]
         continuous_ops = PrecomputedContinuousOp[]
         categorical_evals = CategoricalEvaluator[]
@@ -242,12 +242,12 @@ function compile_function_term(term::FunctionTerm, start_position::Int,
     arg_scratch_map = UnitRange{Int}[]
     
     for arg in term.args
-        # FIXED: Allocate scratch space first, then compile with those positions
+        # Allocate scratch space first, then compile with those positions
         # arg_width = width(arg)  # Use StatsModels width() before compilation
         arg_width = 1 # ALWAYS = 1?
         arg_scratch = allocate_scratch!(scratch_allocator, arg_width)
         
-        # FIXED: Compile argument with its actual scratch positions
+        # Compile argument with its actual scratch positions
         arg_start_pos = first(arg_scratch)  # Start of its scratch space
         arg_eval = compile_term(arg, arg_start_pos, scratch_allocator, categorical_levels)
         
@@ -288,12 +288,12 @@ function compile_interaction_term(term::InteractionTerm, start_position::Int,
     component_widths = Int[]
     
     for comp in term.terms
-        # FIXED: Allocate scratch space first, then compile with those positions
+        # Allocate scratch space first, then compile with those positions
         comp_width = width(comp)  # Use StatsModels width() before compilation
         push!(component_widths, comp_width)
         comp_scratch = allocate_scratch!(scratch_allocator, comp_width)
         
-        # FIXED: Compile component with its actual scratch positions
+        # Compile component with its actual scratch positions
         comp_start_pos = first(comp_scratch)  # Start of its scratch space
         comp_eval = compile_term(comp, comp_start_pos, scratch_allocator)
         
@@ -339,11 +339,11 @@ Compile Z-score term with underlying scratch space allocation.
 function compile_zscore_term(term::ZScoredTerm, start_position::Int,
                             scratch_allocator::ScratchAllocator)
     
-    # FIXED: Allocate scratch space first, then compile with those positions
+    # Allocate scratch space first, then compile with those positions
     underlying_width = width(term.term)  # Use StatsModels width()
     underlying_scratch = allocate_scratch!(scratch_allocator, underlying_width)
     
-    # FIXED: Compile underlying term with its actual scratch positions
+    # Compile underlying term with its actual scratch positions
     underlying_start_pos = first(underlying_scratch)
     underlying_eval = compile_term(term.term, underlying_start_pos, scratch_allocator)
     
@@ -395,7 +395,7 @@ function compile_matrix_term(
     
     total_width = current_pos - start_position
     
-    # FIXED: Create precomputed operations
+    # Create precomputed operations
     constant_ops = PrecomputedConstantOp[]
     continuous_ops = PrecomputedContinuousOp[]
     categorical_evals = CategoricalEvaluator[]
