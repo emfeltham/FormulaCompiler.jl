@@ -16,7 +16,7 @@ const SPECIALIZED_MODEL_CACHE = Dict{Any, Any}()
 """
     modelrow!(row_vec, specialized_formula, data, row_idx)
 
-Zero-allocation model row evaluation using specialized formulas.
+Model row evaluation using specialized formulas.
 """
 function modelrow!(
     row_vec::AbstractVector{Float64}, 
@@ -48,7 +48,7 @@ function modelrow!(
     if cache
         specialized_formula = get_or_compile_specialized_formula(model, data)
     else
-        specialized_formula = compile_formula_specialized_complete(model, data)
+        specialized_formula = compile_formula_specialized(model, data)
     end
     
     specialized_formula(row_vec, data, row_idx)
@@ -71,7 +71,7 @@ struct ModelRowEvaluator{D, O}
     
     function ModelRowEvaluator(model, df::DataFrame)
         data = Tables.columntable(df)
-        specialized = compile_formula_specialized_complete(model, data)
+        specialized = compile_formula_specialized(model, data)
         row_vec = Vector{Float64}(undef, length(specialized))
         
         D = typeof(specialized.data)
@@ -116,7 +116,7 @@ function get_or_compile_specialized_formula(model, data)
     if haskey(SPECIALIZED_MODEL_CACHE, cache_key)
         return SPECIALIZED_MODEL_CACHE[cache_key]
     else
-        specialized = compile_formula_specialized_complete(model, data)
+        specialized = compile_formula_specialized(model, data)
         SPECIALIZED_MODEL_CACHE[cache_key] = specialized
         return specialized
     end
@@ -163,7 +163,7 @@ function modelrow_batch!(
     if cache
         specialized_formula = get_or_compile_specialized_formula(model, data)
     else
-        specialized_formula = compile_formula_specialized_complete(model, data)
+        specialized_formula = compile_formula_specialized(model, data)
     end
     
     return modelrow_batch!(matrix, specialized_formula, data, row_indices)
@@ -230,7 +230,7 @@ Evaluate a single row with pre-compiled specialized formula.
 
 # Example
 ```julia
-specialized = compile_formula_specialized_complete(model, data)
+specialized = compile_formula_specialized(model, data)
 row_values = modelrow(specialized, data, 1)  # Returns Vector{Float64}
 ```
 """
@@ -251,7 +251,7 @@ Evaluate multiple rows with pre-compiled specialized formula.
 
 # Example
 ```julia
-specialized = compile_formula_specialized_complete(model, data)
+specialized = compile_formula_specialized(model, data)
 matrix = modelrow(specialized, data, [1, 5, 10])  # Returns Matrix{Float64}
 ```
 """
