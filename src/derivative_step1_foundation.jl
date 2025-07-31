@@ -8,7 +8,7 @@
 """
     DerivativeFormula{DerivativeDataTuple, DerivativeOpTuple}
 
-Specialized formula for zero-allocation derivative evaluation.
+Specialized formula for derivative evaluation.
 Extends the SpecializedFormula pattern to derivatives.
 """
 struct DerivativeFormula{DerivativeDataTuple, DerivativeOpTuple}
@@ -18,7 +18,7 @@ struct DerivativeFormula{DerivativeDataTuple, DerivativeOpTuple}
     focal_variable::Symbol
 end
 
-# Core call operator for zero-allocation derivative execution
+# Core call operator for efficient derivative execution
 function (df::DerivativeFormula{D, O})(
     output::AbstractVector{Float64}, 
     data::NamedTuple, 
@@ -236,7 +236,7 @@ end
                                   op::ContinuousDerivativeOp{N, Cols}, 
                                   output, input_data, row_idx) where {N, Cols}
 
-Execute continuous variable derivatives with zero allocations.
+Execute continuous variable derivatives.
 """
 function execute_derivative_operation!(data::ContinuousDerivativeData{N, Cols}, 
                                       op::ContinuousDerivativeOp{N, Cols}, 
@@ -256,7 +256,7 @@ end
                                   op::ConstantDerivativeOp{N}, 
                                   output, input_data, row_idx) where {N}
 
-Execute constant derivatives (always zero) with zero allocations.
+Execute constant derivatives (always zero).
 """
 function execute_derivative_operation!(data::ConstantDerivativeData{N}, 
                                       op::ConstantDerivativeOp{N}, 
@@ -556,7 +556,7 @@ end
 """
     modelrow!(row_vec, derivative_formula::DerivativeFormula, data, row_idx)
 
-Evaluate derivative model row using derivative formula (zero allocations).
+Evaluate derivative model row using derivative formula.
 """
 function modelrow!(
     row_vec::AbstractVector{Float64}, 
