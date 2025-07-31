@@ -20,12 +20,12 @@ Random.seed!(06515)
     # Core functionality tests
     
     # these are dignostic rather than formal tests
+    # include("test_position_mapping.jl")
     # include("test_step1_specialized_core.jl")
     # include("test_step2_categorical_support.jl")
     # include("test_step3_function_support.jl")
     # include("test_step4_interactions.jl")
 
-    # include("test_position_mapping.jl")
     # include("step4_run_profiling.jl")
     # include("test_modelrow.jl")
     
