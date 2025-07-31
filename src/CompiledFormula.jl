@@ -9,8 +9,7 @@
 """
     CompiledFormula
 
-A compiled formula that uses zero-allocation execution plans for evaluation.
-Requires explicit data for compilation and validation.
+A compiled formula. Requires explicit data for compilation and validation.
 
 # Fields
 - `execution_plan::ExecutionPlan`: Pre-validated execution plan
@@ -27,7 +26,7 @@ compiled = compile_formula(model, data)
 
 output = Vector{Float64}(undef, length(compiled))
 for i in 1:nrow(df)
-    compiled(output, data, i)  # Zero allocations!
+    compiled(output, data, i)
 end
 ```
 """
@@ -80,7 +79,7 @@ end
 """
         (cf::CompiledFormula)(output::AbstractVector{Float64}, data::NamedTuple, row_idx::Int)
 
-Zero-allocation evaluation of compiled formula.
+Efficient evaluation of compiled formula.
 
 # Arguments
 - `output`: Pre-allocated output vector (must have length `length(cf)`)
@@ -95,8 +94,8 @@ Zero-allocation evaluation of compiled formula.
 compiled = compile_formula(model, data)
 output = Vector{Float64}(undef, length(compiled))
 
-compiled(output, data, 1)  # Evaluate row 1 - zero allocations!
-compiled(output, data, 2)  # Evaluate row 2 - zero allocations!
+compiled(output, data, 1)  # Evaluate row 1
+compiled(output, data, 2)  # Evaluate row 2
 ```
 """
 function (cf::CompiledFormula)(output::AbstractVector{Float64}, data::NamedTuple, row_idx::Int)
@@ -241,4 +240,3 @@ function benchmark_execution(cf::CompiledFormula, data::NamedTuple, n_iterations
     
     return (time_ns = avg_time_ns, allocations = avg_allocs, zero_allocation = is_zero)
 end
-
