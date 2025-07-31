@@ -77,6 +77,7 @@ struct FunctionEvaluator <: AbstractEvaluator
     arg_scratch_map::Vector{UnitRange{Int}} # Where each argument's result goes in scratch
 end
 
+# NOTE: is this used?
 struct ParametricFunctionEvaluator{F,N} <: AbstractEvaluator
     func::F
     arg_evaluators::NTuple{N,AbstractEvaluator}

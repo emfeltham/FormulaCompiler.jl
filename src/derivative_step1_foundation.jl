@@ -314,9 +314,11 @@ function execute_derivative_operation!(data::SimpleDerivativeFormulaData{ConstDa
 end
 
 """
-    execute_derivative_operation!(data::CompleteDerivativeFormulaData{ConstData, ContData, CatData}, 
-                                  op::CompleteDerivativeFormulaOp{ConstOp, ContOp, CatOp}, 
-                                  output, input_data, row_idx) where {ConstData, ContData, CatData, ConstOp, ContOp, CatOp}
+    execute_derivative_operation!(
+        data::CompleteDerivativeFormulaData{ConstData, ContData, CatData}, 
+        op::CompleteDerivativeFormulaOp{ConstOp, ContOp, CatOp}, 
+        output, input_data, row_idx) where {ConstData, ContData, CatData, ConstOp, ContOp, CatOp}
+    )
 
 Execute complete derivative formulas.
 
