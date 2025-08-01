@@ -77,19 +77,6 @@ end
 ###############################################################################
 
 """
-    LinearComprehensiveFormulaData{ConstData, ContData, CatData, FuncData}
-
-Combined data using linear function execution.
-"""
-struct LinearComprehensiveFormulaData{ConstData, ContData, CatData, FuncData}
-    constants::ConstData
-    continuous::ContData
-    categorical::CatData
-    functions::FuncData                   # Vector{LinearFunctionData}
-    max_function_scratch::Int             # Maximum scratch space needed for functions
-end
-
-"""
     LinearComprehensiveFormulaOp{ConstOp, ContOp, CatOp, FuncOp}
 
 Combined operation encoding for linear comprehensive formulas.
@@ -306,61 +293,4 @@ function execute_linear_function_operations!(function_data::Vector{LinearFunctio
     end
     
     return nothing
-end
-
-"""
-    execute_operation!(data::LinearComprehensiveFormulaData{ConstData, ContData, CatData, FuncData}, 
-                      op::LinearComprehensiveFormulaOp{ConstOp, ContOp, CatOp, FuncOp}, 
-                      output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, ConstOp, ContOp, CatOp, FuncOp}
-
-Execute linear comprehensive formulas with efficient function evaluation.
-"""
-function execute_operation!(data::LinearComprehensiveFormulaData{ConstData, ContData, CatData, FuncData}, 
-                           op::LinearComprehensiveFormulaOp{ConstOp, ContOp, CatOp, FuncOp}, 
-                           output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, ConstOp, ContOp, CatOp, FuncOp}
-    
-    # Pre-allocate scratch space for functions (if needed)
-    function_scratch = data.max_function_scratch > 0 ? Vector{Float64}(undef, data.max_function_scratch) : Float64[]
-    
-    # Execute constants
-    execute_operation!(data.constants, op.constants, output, input_data, row_idx)
-    
-    # Execute continuous variables
-    execute_operation!(data.continuous, op.continuous, output, input_data, row_idx)
-    
-    # Execute categorical variables
-    execute_categorical_operations!(data.categorical, output, input_data, row_idx)
-    
-    # Execute functions (linear execution)
-    execute_linear_function_operations!(data.functions, function_scratch, output, input_data, row_idx)
-    
-    return nothing
-end
-
-###############################################################################
-# LINEAR COMPREHENSIVE UTILITY FUNCTIONS
-###############################################################################
-
-"""
-    show_linear_function_plan(linear_data::LinearFunctionData)
-
-Display the linear execution plan for a function.
-"""
-function show_linear_function_plan(linear_data::LinearFunctionData)
-    println("Linear Function Execution Plan:")
-    println("  Output position: $(linear_data.output_position)")
-    println("  Scratch size needed: $(linear_data.scratch_size)")
-    println("  Execution steps:")
-    
-    for (i, step) in enumerate(linear_data.execution_steps)
-        if step.operation === :load_constant
-            println("    $i. Load constant $(step.constant_value) → scratch[$(step.output_position)]")
-        elseif step.operation === :load_continuous  
-            println("    $i. Load $(step.column_symbol) → scratch[$(step.output_position)]")
-        elseif step.operation === :call_unary
-            println("    $i. $(step.func)(scratch[$(step.input_positions[1])]) → scratch[$(step.output_position)]")
-        elseif step.operation === :call_binary
-            println("    $i. $(step.func)(scratch[$(step.input_positions[1])], scratch[$(step.input_positions[2])]) → scratch[$(step.output_position)]")
-        end
-    end
 end

@@ -33,8 +33,6 @@ export not
 include("fixed_helpers.jl") # No dependencies
 include("evaluators.jl")
 include("kronecker.jl")
-include("execute_self_contained.jl")
-include("execute_to_scratch.jl")
 include("compile_term.jl")
 
 # Main compilation interface
