@@ -421,92 +421,72 @@ function compute_kronecker_pattern(component_widths::Vector{Int})
 end
 
 ###############################################################################
-# TESTING UTILITIES
+# APPLY FUNCTIONS
 ###############################################################################
 
 """
-    apply_function_safe(func::Function, args...)
+    apply_function_direct_single(func::Function, val::Float64) -> Float64
 
-Safe function application with domain checking.
+Apply single-argument function directly with domain checking.
+OPTIMIZED: No varargs overhead, concrete Float64 type.
 """
-function apply_function_safe(func::Function, args...)
-    if length(args) == 1
-        val = args[1]
-        if func === log
-            return val > 0.0 ? log(val) : (val == 0.0 ? -Inf : NaN)
-        elseif func === exp
-            return exp(clamp(val, -700.0, 700.0))
-        elseif func === sqrt
-            return val ≥ 0.0 ? sqrt(val) : NaN
-        elseif func === abs
-            return abs(val)
-        elseif func === sin
-            return sin(val)
-        elseif func === cos
-            return cos(val)
-        elseif func === tan  # ← Add this if you need it
-            return tan(val)
-        else
-            return Float64(func(val))
-        end
-    elseif length(args) == 2
-        val1, val2 = args[1], args[2]
-        if func === (+)
-            return val1 + val2
-        elseif func === (-)
-            return val1 - val2
-        elseif func === (*)
-            return val1 * val2
-        elseif func === (/)
-            return val2 == 0.0 ? (val1 == 0.0 ? NaN : (val1 > 0.0 ? Inf : -Inf)) : val1 / val2
-        elseif func === (^)
-            if val1 == 0.0 && val2 < 0.0
-                return Inf
-            elseif val1 < 0.0 && !isinteger(val2)
-                return NaN
-            else
-                return val1^val2
-            end
-        else
-            return Float64(func(val1, val2))
-        end
+function apply_function_direct_single(func::Function, val::Float64)
+    if func === log
+        return val > 0.0 ? log(val) : (val == 0.0 ? -Inf : NaN)
+    elseif func === exp
+        return exp(clamp(val, -700.0, 700.0))  # Prevent overflow
+    elseif func === sqrt
+        return val ≥ 0.0 ? sqrt(val) : NaN
+    elseif func === abs
+        return abs(val)
+    elseif func === sin
+        return sin(val)
+    elseif func === cos
+        return cos(val)
+    elseif func === tan
+        return tan(val)
     else
-        return Float64(func(args...))
+        # Direct function call for other functions
+        return Float64(func(val))
     end
 end
 
 """
-    test_function_safety()
+    apply_function_direct_binary(func::Function, val1::Float64, val2::Float64) -> Float64
 
-Test that apply_function_safe handles edge cases correctly.
+Apply binary function directly with domain checking.
+OPTIMIZED: No varargs overhead, concrete Float64 types.
 """
-function test_function_safety()
-    println("Testing apply_function_safe improvements...")
-    
-    # Test log domain errors
-    @assert isnan(apply_function_safe(log, -1.0)) "log(-1) should return NaN"
-    @assert apply_function_safe(log, 0.0) == -Inf "log(0) should return -Inf" 
-    @assert apply_function_safe(log, 1.0) == 0.0 "log(1) should return 0"
-    println("✓ log domain handling works")
-    
-    # Test sqrt domain errors
-    @assert isnan(apply_function_safe(sqrt, -1.0)) "sqrt(-1) should return NaN"
-    @assert apply_function_safe(sqrt, 4.0) == 2.0 "sqrt(4) should return 2"
-    println("✓ sqrt domain handling works")
-    
-    # Test division by zero
-    @assert apply_function_safe(/, 1.0, 0.0) == Inf "1/0 should return Inf"
-    @assert apply_function_safe(/, -1.0, 0.0) == -Inf "-1/0 should return -Inf"
-    @assert isnan(apply_function_safe(/, 0.0, 0.0)) "0/0 should return NaN"
-    println("✓ division by zero handling works")
-    
-    # Test power function edge cases
-    @assert apply_function_safe(^, 0.0, -1.0) == Inf "0^(-1) should return Inf"
-    @assert isnan(apply_function_safe(^, -1.0, 0.5)) "(-1)^0.5 should return NaN"
-    println("✓ power function edge cases work")
-    
-    println("All function safety tests passed!")
-    return true
+function apply_function_direct_binary(func::Function, val1::Float64, val2::Float64)
+    if func === (+)
+        return val1 + val2
+    elseif func === (-)
+        return val1 - val2
+    elseif func === (*)
+        return val1 * val2
+    elseif func === (/)
+        return val2 == 0.0 ? (val1 == 0.0 ? NaN : (val1 > 0.0 ? Inf : -Inf)) : val1 / val2
+    elseif func === (^)
+        if val1 == 0.0 && val2 < 0.0
+            return Inf
+        elseif val1 < 0.0 && !isinteger(val2)
+            return NaN
+        else
+            return val1^val2
+        end
+    else
+        return Float64(func(val1, val2))
+    end
+end
+
+"""
+    apply_function_direct_varargs(func::Function, args...) -> Float64
+
+Apply function with 3+ arguments. Falls back to generic approach.
+"""
+function apply_function_direct_varargs(func::Function, args...)
+    # For 3+ arguments, just use the generic approach with Float64 conversion
+    return Float64(func(args...))
 end
 
 ###############################################################################

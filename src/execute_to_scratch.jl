@@ -12,7 +12,7 @@
 4. **Functions**: recursively compute all argument values (using `execute_to_scratch!`
    for any nested evaluators) into their assigned subranges, then call
    `apply_function_safe(func, args...)` and write the scalar result at
-   `scratch_start`.
+   `scratch_start`. (NO LONGER TRUE)
 5. **Interactions**: first recurse on each component, writing into their
    individual scratch subranges; then invoke
    `apply_kronecker_to_scratch_range!` to build all cross-terms.
@@ -206,6 +206,7 @@ end
     execute_to_scratch!(ev::FunctionEvaluator, scratch, s0, s1, data, row_idx)
 
 Compute all argument evaluators, then apply a user-defined function.
+SIMPLIFIED: Uses execute_to_scratch! for all arguments consistently.
 
 # Arguments
 - `ev::FunctionEvaluator`: Fields:
@@ -227,20 +228,65 @@ function execute_to_scratch!(
     row_idx::Int
 )
     n_args = length(ev.arg_evaluators)
-    vals = ntuple(i -> begin
-        arg = ev.arg_evaluators[i]
-        if arg isa ConstantEvaluator
+    
+    if n_args == 1
+        # Single argument - most common case, avoid ntuple
+        arg = ev.arg_evaluators[1]
+        arg_val = if arg isa ConstantEvaluator
             arg.value
         elseif arg isa ContinuousEvaluator
             Float64(get_data_value_specialized(data, arg.column, row_idx))
         else
-            r = ev.arg_scratch_map[i]
+            r = ev.arg_scratch_map[1]
             execute_to_scratch!(arg, scratch, first(r), last(r), data, row_idx)
             scratch[first(r)]
         end
-    end, n_args)
+        @inbounds scratch[s0] = apply_function_direct_single(ev.func, arg_val)
+        
+    elseif n_args == 2
+        # Binary function - avoid ntuple
+        arg1 = ev.arg_evaluators[1]
+        arg1_val = if arg1 isa ConstantEvaluator
+            arg1.value
+        elseif arg1 isa ContinuousEvaluator
+            Float64(get_data_value_specialized(data, arg1.column, row_idx))
+        else
+            r = ev.arg_scratch_map[1]
+            execute_to_scratch!(arg1, scratch, first(r), last(r), data, row_idx)
+            scratch[first(r)]
+        end
+        
+        arg2 = ev.arg_evaluators[2]
+        arg2_val = if arg2 isa ConstantEvaluator
+            arg2.value
+        elseif arg2 isa ContinuousEvaluator
+            Float64(get_data_value_specialized(data, arg2.column, row_idx))
+        else
+            r = ev.arg_scratch_map[2]
+            execute_to_scratch!(arg2, scratch, first(r), last(r), data, row_idx)
+            scratch[first(r)]
+        end
+        
+        @inbounds scratch[s0] = apply_function_direct_binary(ev.func, arg1_val, arg2_val)
+        
+    else
+        # 3+ arguments - fall back to ntuple but use direct varargs
+        vals = ntuple(i -> begin
+            arg = ev.arg_evaluators[i]
+            if arg isa ConstantEvaluator
+                arg.value
+            elseif arg isa ContinuousEvaluator
+                Float64(get_data_value_specialized(data, arg.column, row_idx))
+            else
+                r = ev.arg_scratch_map[i]
+                execute_to_scratch!(arg, scratch, first(r), last(r), data, row_idx)
+                scratch[first(r)]
+            end
+        end, n_args)
 
-    @inbounds scratch[s0] = apply_function_safe(ev.func, vals...)
+        @inbounds scratch[s0] = apply_function_direct_varargs(ev.func, vals...)
+    end
+    
     return nothing
 end
 
