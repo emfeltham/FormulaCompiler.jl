@@ -164,25 +164,25 @@ function evaluate_function_direct(func_data::FunctionData, input_data, row_idx)
     if n_args == 1
         # Single argument - most common case
         arg_val = evaluate_argument(func_data.arg_data[1], input_data, row_idx)
-        return apply_function_direct(func_data.func, arg_val)
+        return apply_function_direct_single(func_data.func, arg_val)
     elseif n_args == 2
         # Two arguments
         arg1_val = evaluate_argument(func_data.arg_data[1], input_data, row_idx)
         arg2_val = evaluate_argument(func_data.arg_data[2], input_data, row_idx)
-        return apply_function_direct(func_data.func, arg1_val, arg2_val)
+        return apply_function_direct_binary(func_data.func, arg1_val, arg2_val)
     elseif n_args == 3
-        # Three arguments
+        # Three arguments (SEEMS TO BE SAME AS N>#)
         arg1_val = evaluate_argument(func_data.arg_data[1], input_data, row_idx)
         arg2_val = evaluate_argument(func_data.arg_data[2], input_data, row_idx)
         arg3_val = evaluate_argument(func_data.arg_data[3], input_data, row_idx)
-        return apply_function_direct(func_data.func, arg1_val, arg2_val, arg3_val)
+        return apply_function_direct_varargs(func_data.func, arg1_val, arg2_val, arg3_val)
     else
         # General case for more arguments
         arg_values = Vector{Float64}(undef, n_args)
         for i in 1:n_args
             arg_values[i] = evaluate_argument(func_data.arg_data[i], input_data, row_idx)
         end
-        return apply_function_direct(func_data.func, arg_values...)
+        return apply_function_direct_varargs(func_data.func, arg_values...)
     end
 end
 
@@ -202,59 +202,6 @@ function evaluate_argument(arg_data::ArgumentData, input_data, row_idx)
         return evaluate_function_direct(nested_func_data, input_data, row_idx)
     else
         error("Unknown argument type: $(arg_data.arg_type)")
-    end
-end
-
-"""
-    apply_function_direct(func::Function, args...) -> Float64
-
-Apply function directly with domain checking, replacing apply_function_safe.
-"""
-function apply_function_direct(func::Function, args...)
-    if length(args) == 1
-        val = args[1]
-        if func === log
-            return val > 0.0 ? log(val) : (val == 0.0 ? -Inf : NaN)
-        elseif func === exp
-            return exp(clamp(val, -700.0, 700.0))  # Prevent overflow
-        elseif func === sqrt
-            return val ≥ 0.0 ? sqrt(val) : NaN
-        elseif func === abs
-            return abs(val)
-        elseif func === sin
-            return sin(val)
-        elseif func === cos
-            return cos(val)
-        elseif func === tan
-            return tan(val)
-        else
-            # Direct function call for other functions
-            return Float64(func(val))
-        end
-    elseif length(args) == 2
-        val1, val2 = args[1], args[2]
-        if func === (+)
-            return val1 + val2
-        elseif func === (-)
-            return val1 - val2
-        elseif func === (*)
-            return val1 * val2
-        elseif func === (/)
-            return val2 == 0.0 ? (val1 == 0.0 ? NaN : (val1 > 0.0 ? Inf : -Inf)) : val1 / val2
-        elseif func === (^)
-            if val1 == 0.0 && val2 < 0.0
-                return Inf
-            elseif val1 < 0.0 && !isinteger(val2)
-                return NaN
-            else
-                return val1^val2
-            end
-        else
-            return Float64(func(val1, val2))
-        end
-    else
-        # General case
-        return Float64(func(args...))
     end
 end
 

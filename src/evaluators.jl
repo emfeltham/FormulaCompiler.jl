@@ -428,7 +428,7 @@ end
     apply_function_direct_single(func::Function, val::Float64) -> Float64
 
 Apply single-argument function directly with domain checking.
-OPTIMIZED: No varargs overhead, concrete Float64 type.
+No varargs overhead, concrete Float64 type.
 """
 function apply_function_direct_single(func::Function, val::Float64)
     if func === log
@@ -455,7 +455,7 @@ end
     apply_function_direct_binary(func::Function, val1::Float64, val2::Float64) -> Float64
 
 Apply binary function directly with domain checking.
-OPTIMIZED: No varargs overhead, concrete Float64 types.
+No varargs overhead, concrete Float64 types.
 """
 function apply_function_direct_binary(func::Function, val1::Float64, val2::Float64)
     if func === (+)
@@ -482,7 +482,8 @@ end
 """
     apply_function_direct_varargs(func::Function, args...) -> Float64
 
-Apply function with 3+ arguments. Falls back to generic approach.
+Apply function with 3+ arguments.
+Generic approach for rarer cases (with some overhead).
 """
 function apply_function_direct_varargs(func::Function, args...)
     # For 3+ arguments, just use the generic approach with Float64 conversion
@@ -494,11 +495,13 @@ end
 ###############################################################################
 
 """
-    apply_kronecker_pattern_to_positions!(pattern::Vector{NTuple{N,Int}},
-                                         component_scratch_map::Vector{UnitRange{Int}},
-                                         scratch::Vector{Float64},
-                                         output::AbstractVector{Float64},
-                                         output_positions::Vector{Int}) where N
+    apply_kronecker_pattern_to_positions!(
+        pattern::Vector{NTuple{N,Int}},
+        component_scratch_map::Vector{UnitRange{Int}},
+        scratch::Vector{Float64},
+        output::AbstractVector{Float64},
+        output_positions::Vector{Int}
+    ) where N
 
 UPDATED: Apply Kronecker pattern to specific positions without enumerate().
 Overwrites old method.
