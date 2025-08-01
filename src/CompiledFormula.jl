@@ -46,7 +46,6 @@ end
     compile_formula(model, data::NamedTuple) -> CompiledFormula
 
 Compile formula using self-contained evaluators.
-Updated to remove ExecutionPlan dependency.
 """
 function compile_formula(model, data::NamedTuple)
     rhs = fixed_effects_form(model).rhs
@@ -102,23 +101,6 @@ function (cf::CompiledFormula)(output::AbstractVector{Float64}, data::NamedTuple
     # Direct execution using self-contained evaluator
     execute_self_contained!(cf.root_evaluator, cf.scratch_space, output, data, row_idx)
     return output
-end
-
-function make_function_evaluator(
-    func::F,
-    arg_evals::Vector{AbstractEvaluator},
-    arg_maps::Vector{UnitRange{Int}}
-) where F
-    n = length(arg_evals)
-    if n <= 3
-        # use the existing hand‐rolled evaluator for 1–3 args
-        return FunctionEvaluator(func, arg_evals, arg_maps)
-    else
-        # pack into NTuple for the parametric evaluator
-        ev_tuple  = tuple(arg_evals...)
-        map_tuple = tuple(arg_maps...)
-        return ParametricFunctionEvaluator{F,n}(func, ev_tuple, map_tuple)
-    end
 end
 
 ###############################################################################

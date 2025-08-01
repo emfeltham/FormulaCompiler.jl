@@ -179,6 +179,8 @@ end
         row_idx::Int
     ) -> Nothing
 
+This conceptually overlaps with the nested evaluate_to_scrach, but is
+more direct for this non-nested context.
 """
 @inline function execute_categorical_self_contained!(
     evaluator::CategoricalEvaluator,
