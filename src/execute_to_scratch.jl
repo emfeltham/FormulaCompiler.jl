@@ -40,6 +40,9 @@ The element `data[column][row_idx]`, with fast-paths for common symbols.
 ```julia
 val = get_data_value_specialized(data, :x, 5)  # equivalent to data.x[5]
 ```
+
+NOTE: this is a very, very stupid function. But, there may be a better solution
+for no-allocation indexing??
 """
 @inline function get_data_value_specialized(
     data::NamedTuple,

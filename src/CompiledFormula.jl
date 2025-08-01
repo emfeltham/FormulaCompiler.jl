@@ -12,11 +12,11 @@
 A compiled formula. Requires explicit data for compilation and validation.
 
 # Fields
-- `execution_plan::ExecutionPlan`: Pre-validated execution plan
+- `root_evaluator::AbstractEvaluator`: Evaluator tree
 - `scratch_space::Vector{Float64}`: Pre-allocated scratch space
 - `output_width::Int`: Number of output columns
 - `column_names::Vector{Symbol}`: Names of all columns referenced
-- `root_evaluator::AbstractEvaluator`: Original evaluator tree (for derivatives)
+- `categorical_levels::Dict{Symbol, Vector{Int}}`: Pre-extracted levels
 
 # Example
 ```julia
