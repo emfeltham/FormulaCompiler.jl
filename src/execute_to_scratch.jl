@@ -15,7 +15,7 @@
    `scratch_start`. (NO LONGER TRUE)
 5. **Interactions**: first recurse on each component, writing into their
    individual scratch subranges; then invoke
-   `apply_kronecker_to_scratch_range!` to build all cross-terms.
+   `apply_kronecker_to_scratch!` to build all cross-terms.
 
 Mutating, returns `nothing`.
 Designed for efficient, type-stable inner loops.
@@ -172,7 +172,7 @@ SIMPLIFIED: Uses execute_to_scratch! for all arguments consistently.
 
 # Behavior
 1. Recursively evaluates each argument into its scratch region.
-2. Gathers scalars and calls `apply_function_safe(func, args...)`.
+2. Gathers scalars and calls `apply_function(func, args...)`.
 3. Writes the result at `scratch[s0]`.
 """
 function execute_to_scratch!(
@@ -259,7 +259,7 @@ Compute component evaluators, then produce N-way interactions via Kronecker prod
 
 # Behavior
 1. Recursively evaluate each component into its scratch range.
-2. Call `apply_kronecker_to_scratch_range!` to fill `scratch[s0:s1]`.
+2. Call `apply_kronecker_to_scratch!` to fill `scratch[s0:s1]`.
 """
 function execute_to_scratch!(
     ev::InteractionEvaluator,
@@ -273,7 +273,7 @@ function execute_to_scratch!(
         r = ev.component_scratch_map[i]
         execute_to_scratch!(comp, scratch, first(r), last(r), data, row_idx)
     end
-    apply_kronecker_to_scratch_range!(
+    apply_kronecker_to_scratch!(
         ev.kronecker_pattern,
         ev.component_scratch_map,
         scratch,
