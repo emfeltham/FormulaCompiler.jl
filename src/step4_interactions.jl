@@ -25,11 +25,11 @@ end
 Complete interaction data with pre-computed Kronecker patterns.
 """
 struct InteractionData
-    components::Vector{InteractionComponentData}  # Now wraps optimized data
-    component_widths::Vector{Int}                 # Width of each component  
-    kronecker_pattern::Vector{Vector{Int}}        # Pre-computed, always
-    output_positions::Vector{Int}                 # Where results go in model matrix
-    total_scratch_needed::Int                     # Scratch space for components
+    components::Vector{InteractionComponentData}     # Now wraps optimized data
+    component_widths::Vector{Int}                    # Width of each component  
+    kronecker_pattern::Vector{NTuple{N,Int}} where N # Pre-computed, always
+    output_positions::Vector{Int}                    # Where results go in model matrix
+    total_scratch_needed::Int                        # Scratch space for components
 end
 
 ###############################################################################
@@ -148,7 +148,7 @@ function analyze_interaction_operations(evaluator::CombinedEvaluator)
         total_scratch_needed = current_scratch_pos - 1
         
         # Precompute the full Kronecker pattern (no limits!)
-        kronecker_pattern = compute_generalized_kronecker_pattern(component_widths)
+        kronecker_pattern = compute_kronecker_pattern(component_widths)
         
         # Create interaction data with optimized components
         interaction_data[i] = InteractionData(

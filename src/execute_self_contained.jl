@@ -97,7 +97,7 @@ terms directly into `output` using a Kronecker pattern.
 
 # Behavior
 1. Recursively `execute_to_scratch!` each component into its scratch range.
-2. Call `apply_kronecker_pattern_to_positions!` to multiply and scatter into `output`.
+2. Call `apply_kronecker_to_output!` to multiply and scatter into `output`.
 
 Returns `nothing`.
 """
@@ -112,7 +112,7 @@ Returns `nothing`.
         r = ev.component_scratch_map[i]
         execute_to_scratch!(ev.components[i], scratch, first(r), last(r), data, row_idx)
     end
-    apply_kronecker_pattern_to_positions!(
+    apply_kronecker_to_output!(
         ev.kronecker_pattern,
         ev.component_scratch_map,
         scratch,
