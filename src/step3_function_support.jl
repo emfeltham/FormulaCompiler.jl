@@ -36,18 +36,6 @@ struct FunctionOp end
 ###############################################################################
 
 """
-    ComprehensiveFormulaData{ConstData, ContData, CatData, FuncData}
-
-Combined data for formulas with constants, continuous, categorical, and function variables.
-"""
-struct ComprehensiveFormulaData{ConstData, ContData, CatData, FuncData}
-    constants::ConstData
-    continuous::ContData
-    categorical::CatData
-    functions::FuncData                   # Vector{FunctionData}
-end
-
-"""
     ComprehensiveFormulaOp{ConstOp, ContOp, CatOp, FuncOp}
 
 Combined operation encoding for comprehensive formulas.
@@ -202,74 +190,5 @@ function evaluate_argument(arg_data::ArgumentData, input_data, row_idx)
         return evaluate_function_direct(nested_func_data, input_data, row_idx)
     else
         error("Unknown argument type: $(arg_data.arg_type)")
-    end
-end
-
-"""
-    execute_operation!(data::ComprehensiveFormulaData{ConstData, ContData, CatData, FuncData}, 
-                      op::ComprehensiveFormulaOp{ConstOp, ContOp, CatOp, FuncOp}, 
-                      output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, ConstOp, ContOp, CatOp, FuncOp}
-
-Execute comprehensive formulas with constants, continuous, categorical, and function variables.
-"""
-function execute_operation!(data::ComprehensiveFormulaData{ConstData, ContData, CatData, FuncData}, 
-                           op::ComprehensiveFormulaOp{ConstOp, ContOp, CatOp, FuncOp}, 
-                           output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, ConstOp, ContOp, CatOp, FuncOp}
-    
-    # Execute constants
-    execute_operation!(data.constants, op.constants, output, input_data, row_idx)
-    
-    # Execute continuous variables
-    execute_operation!(data.continuous, op.continuous, output, input_data, row_idx)
-    
-    # Execute categorical variables
-    execute_categorical_operations!(data.categorical, output, input_data, row_idx)
-    
-    # Execute functions
-    execute_function_operations!(data.functions, output, input_data, row_idx)
-    
-    return nothing
-end
-
-###############################################################################
-# COMPREHENSIVE UTILITY FUNCTIONS
-###############################################################################
-
-"""
-    show_comprehensive_specialized_info(sf::SpecializedFormula)
-
-Display detailed information about a comprehensive specialized formula.
-"""
-function show_comprehensive_specialized_info(sf::SpecializedFormula{D, O}) where {D, O}
-    println("Comprehensive SpecializedFormula Information:")
-    println("  Data type: $D")
-    println("  Operation type: $O") 
-    println("  Output width: $(sf.output_width)")
-    
-    if sf.data isa ComprehensiveFormulaData
-        println("  Constants: $(sf.data.constants.values)")
-        println("  Continuous variables: $(sf.data.continuous.columns)")
-        
-        if !isempty(sf.data.categorical)
-            println("  Categorical variables:")
-            for (i, cat_data) in enumerate(sf.data.categorical)
-                n_levels = cat_data.n_levels
-                n_contrasts = cat_data.n_contrasts
-                println("    Categorical $i: $n_levels levels, $n_contrasts contrasts")
-            end
-        else
-            println("  Categorical variables: none")
-        end
-        
-        if !isempty(sf.data.functions)
-            println("  Functions:")
-            for (i, func_data) in enumerate(sf.data.functions)
-                func_name = func_data.func
-                n_args = length(func_data.arg_data)
-                println("    Function $i: $func_name with $n_args arguments")
-            end
-        else
-            println("  Functions: none")
-        end
     end
 end

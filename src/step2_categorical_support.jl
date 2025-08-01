@@ -39,18 +39,6 @@ struct CategoricalOp end
 ###############################################################################
 
 """
-    EnhancedFormulaData{ConstData, ContData, CatData}
-
-Combined data for formulas with constants, continuous, and categorical variables.
-CatData is now Vector{CategoricalData} for homogeneous storage.
-"""
-struct EnhancedFormulaData{ConstData, ContData, CatData}
-    constants::ConstData
-    continuous::ContData
-    categorical::CatData  # This will be Vector{CategoricalData}
-end
-
-"""
     EnhancedFormulaOp{ConstOp, ContOp, CatOp}
 
 Combined operation encoding for enhanced formulas.
@@ -147,59 +135,4 @@ function execute_categorical_operations!(categorical_data::Vector{CategoricalDat
         end
     end
     return nothing
-end
-
-"""
-    execute_operation!(data::EnhancedFormulaData{ConstData, ContData, CatData}, 
-                      op::EnhancedFormulaOp{ConstOp, ContOp, CatOp}, 
-                      output, input_data, row_idx) where {ConstData, ContData, CatData, ConstOp, ContOp, CatOp}
-
-Execute enhanced formulas with constants, continuous, and categorical variables.
-"""
-function execute_operation!(data::EnhancedFormulaData{ConstData, ContData, CatData}, 
-                           op::EnhancedFormulaOp{ConstOp, ContOp, CatOp}, 
-                           output, input_data, row_idx) where {ConstData, ContData, CatData, ConstOp, ContOp, CatOp}
-    
-    # Execute constants
-    execute_operation!(data.constants, op.constants, output, input_data, row_idx)
-    
-    # Execute continuous variables
-    execute_operation!(data.continuous, op.continuous, output, input_data, row_idx)
-    
-    # Execute categorical variables
-    execute_categorical_operations!(data.categorical, output, input_data, row_idx)
-    
-    return nothing
-end
-
-###############################################################################
-# ENHANCED UTILITY FUNCTIONS
-###############################################################################
-
-"""
-    show_enhanced_specialized_info(sf::SpecializedFormula)
-
-Display detailed information about an enhanced specialized formula.
-"""
-function show_enhanced_specialized_info(sf::SpecializedFormula{D, O}) where {D, O}
-    println("Enhanced SpecializedFormula Information:")
-    println("  Data type: $D")
-    println("  Operation type: $O") 
-    println("  Output width: $(sf.output_width)")
-    
-    if sf.data isa EnhancedFormulaData
-        println("  Constants: $(sf.data.constants.values)")
-        println("  Continuous variables: $(sf.data.continuous.columns)")
-        
-        if !isempty(sf.data.categorical)
-            println("  Categorical variables:")
-            for (i, cat_data) in enumerate(sf.data.categorical)
-                n_levels = cat_data.n_levels
-                n_contrasts = cat_data.n_contrasts
-                println("    Categorical $i: $n_levels levels, $n_contrasts contrasts")
-            end
-        else
-            println("  Categorical variables: none")
-        end
-    end
 end

@@ -59,16 +59,6 @@ struct ConstantData{N}
     end
 end
 
-"""
-    SimpleFormulaData{ConstData, ContData}
-
-Combined data for simple formulas with constants and continuous variables.
-"""
-struct SimpleFormulaData{ConstData, ContData}
-    constants::ConstData
-    continuous::ContData
-end
-
 ###############################################################################
 # OPERATION TYPES FOR STEP 1
 ###############################################################################
@@ -219,26 +209,6 @@ function execute_operation!(data::ConstantData{N}, op::ConstantOp{N},
     return nothing
 end
 
-"""
-    execute_operation!(data::SimpleFormulaData{ConstData, ContData}, 
-                      op::SimpleFormulaOp{ConstOp, ContOp}, 
-                      output, input_data, row_idx) where {ConstData, ContData, ConstOp, ContOp}
-
-Execute simple formulas with constants and continuous variables.
-"""
-function execute_operation!(data::SimpleFormulaData{ConstData, ContData}, 
-                           op::SimpleFormulaOp{ConstOp, ContOp}, 
-                           output, input_data, row_idx) where {ConstData, ContData, ConstOp, ContOp}
-    
-    # Execute constants first
-    execute_operation!(data.constants, op.constants, output, input_data, row_idx)
-    
-    # Execute continuous variables
-    execute_operation!(data.continuous, op.continuous, output, input_data, row_idx)
-    
-    return nothing
-end
-
 ###############################################################################
 # UTILITY FUNCTIONS
 ###############################################################################
@@ -249,26 +219,3 @@ end
 Get the output width of a specialized formula.
 """
 Base.length(sf::SpecializedFormula) = sf.output_width
-
-"""
-    show_specialized_info(sf::SpecializedFormula)
-
-Display information about a specialized formula.
-"""
-function show_specialized_info(sf::SpecializedFormula{D, O}) where {D, O}
-    println("SpecializedFormula Information:")
-    println("  Data type: $D")
-    println("  Operation type: $O") 
-    println("  Output width: $(sf.output_width)")
-    
-    if sf.data isa ContinuousData
-        println("  Continuous variables: $(sf.data.columns)")
-        println("  Output positions: $(sf.data.positions)")
-    elseif sf.data isa ConstantData
-        println("  Constants: $(sf.data.values)")
-        println("  Output positions: $(sf.data.positions)")
-    elseif sf.data isa SimpleFormulaData
-        println("  Constants: $(sf.data.constants.values)")
-        println("  Continuous variables: $(sf.data.continuous.columns)")
-    end
-end

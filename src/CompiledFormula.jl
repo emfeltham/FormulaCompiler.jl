@@ -72,38 +72,6 @@ function compile_formula(model, data::NamedTuple)
 end
 
 ###############################################################################
-# CompiledFormula CALL OPERATOR
-###############################################################################
-
-"""
-        (cf::CompiledFormula)(output::AbstractVector{Float64}, data::NamedTuple, row_idx::Int)
-
-Efficient evaluation of compiled formula.
-
-# Arguments
-- `output`: Pre-allocated output vector (must have length `length(cf)`)
-- `data`: NamedTuple of data columns (same structure as used in compilation)
-- `row_idx`: Row index to evaluate (1-based)
-
-# Returns
-- `output`: The same output vector, filled with results
-
-# Example
-```julia
-compiled = compile_formula(model, data)
-output = Vector{Float64}(undef, length(compiled))
-
-compiled(output, data, 1)  # Evaluate row 1
-compiled(output, data, 2)  # Evaluate row 2
-```
-"""
-function (cf::CompiledFormula)(output::AbstractVector{Float64}, data::NamedTuple, row_idx::Int)
-    # Direct execution using self-contained evaluator
-    execute_self_contained!(cf.root_evaluator, cf.scratch_space, output, data, row_idx)
-    return output
-end
-
-###############################################################################
 # UTILITY FUNCTIONS
 ###############################################################################
 
