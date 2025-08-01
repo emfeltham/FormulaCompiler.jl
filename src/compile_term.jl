@@ -14,6 +14,7 @@ function compile_term(
     scratch_allocator::ScratchAllocator = ScratchAllocator(),
     categorical_levels::Union{Dict{Symbol, Vector{Int}}, Nothing} = nothing
 )
+
     # Use explicit levels if provided, fall back to global context
     levels = categorical_levels !== nothing ? categorical_levels : CATEGORICAL_LEVELS_CONTEXT[]
     
@@ -59,7 +60,7 @@ function compile_term(
         
         for arg in term.args
             arg_width = 1 # ALWAYS 1?
-            # arg_width   = width(arg)                                 # <- was 1
+            # arg_width   = width(arg) # <- was 1
             arg_scratch = allocate_scratch!(scratch_allocator, arg_width)
             arg_start_pos = first(arg_scratch)
             
@@ -140,8 +141,8 @@ function compile_term(
             collect(underlying_scratch),
             underlying_scratch
         )
-        
     elseif term isa MatrixTerm
+        # println("MATRIX") # called 2x
         sub_evaluators = AbstractEvaluator[]
         current_pos = start_position
         max_scratch = 0
@@ -200,7 +201,8 @@ function compile_term(
 end
 
 function compile_term(
-    term::CategoricalTerm, start_position::Int = 1, 
+    term::CategoricalTerm,
+    start_position::Int = 1, 
     scratch_allocator::ScratchAllocator = ScratchAllocator()
 )
 
@@ -226,7 +228,6 @@ function compile_term(
         level_codes
     )
 end
-
 
 """
     compile_function_term(term::FunctionTerm, start_position::Int,
