@@ -132,6 +132,7 @@ end
     ) -> Nothing
 
 Evaluate a custom function evaluator and store its result.
+Uses execute_to_scratch! for all arguments consistently.
 """
 @inline function execute_function_self_contained!(
     evaluator::FunctionEvaluator,
@@ -141,19 +142,33 @@ Evaluate a custom function evaluator and store its result.
     row_idx::Int
 )
     n_args = length(evaluator.arg_evaluators)
-    vals = ntuple(i -> begin
-        arg = evaluator.arg_evaluators[i]
-        if arg isa ConstantEvaluator
-            arg.value
-        elseif arg isa ContinuousEvaluator
-            Float64(get_data_value_specialized(data, arg.column, row_idx))
-        else
+    
+    # Evaluate all arguments into scratch using consistent approach
+    @inbounds for i in 1:n_args
+        r = evaluator.arg_scratch_map[i]
+        execute_to_scratch!(evaluator.arg_evaluators[i], scratch, first(r), last(r), data, row_idx)
+    end
+    
+    # Apply function using direct methods (no varargs)
+    if n_args == 1
+        r = evaluator.arg_scratch_map[1]
+        arg_val = scratch[first(r)]
+        @inbounds output[evaluator.position] = apply_function_direct_single(evaluator.func, arg_val)
+    elseif n_args == 2
+        r1 = evaluator.arg_scratch_map[1]
+        r2 = evaluator.arg_scratch_map[2]
+        arg1_val = scratch[first(r1)]
+        arg2_val = scratch[first(r2)]
+        @inbounds output[evaluator.position] = apply_function_direct_binary(evaluator.func, arg1_val, arg2_val)
+    else
+        # For 3+ arguments, fall back to varargs but with better error message
+        args = ntuple(n_args) do i
             r = evaluator.arg_scratch_map[i]
-            execute_to_scratch!(arg, scratch, first(r), last(r), data, row_idx)
             scratch[first(r)]
         end
-    end, n_args)
-    @inbounds output[evaluator.position] = apply_function_safe(evaluator.func, vals...)
+        @inbounds output[evaluator.position] = apply_function_direct_varargs(evaluator.func, args...)
+    end
+    
     return nothing
 end
 
