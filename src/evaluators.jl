@@ -1,27 +1,6 @@
 # evaluators.jl
 # Complete recursive implementation that handles all cases
 
-# Global context for categorical levels during compilation
-const CATEGORICAL_LEVELS_CONTEXT = Ref{Union{Dict{Symbol, Vector{Int}}, Nothing}}(nothing)
-
-"""
-    set_categorical_context!(levels::Dict{Symbol, Vector{Int}})
-    
-Set global categorical levels context for compilation.
-"""
-function set_categorical_context!(levels::Dict{Symbol, Vector{Int}})
-    CATEGORICAL_LEVELS_CONTEXT[] = levels
-end
-
-"""
-    clear_categorical_context!()
-    
-Clear global categorical levels context after compilation.
-"""
-function clear_categorical_context!()
-    CATEGORICAL_LEVELS_CONTEXT[] = nothing
-end
-
 """
     AbstractEvaluator
 
@@ -75,13 +54,6 @@ struct FunctionEvaluator <: AbstractEvaluator
     position::Int # Where output goes in model matrix
     scratch_positions::Vector{Int} # Scratch space for argument evaluation
     arg_scratch_map::Vector{UnitRange{Int}} # Where each argument's result goes in scratch
-end
-
-# NOTE: is this used?
-struct ParametricFunctionEvaluator{F,N} <: AbstractEvaluator
-    func::F
-    arg_evaluators::NTuple{N,AbstractEvaluator}
-    arg_scratch_map::NTuple{N,UnitRange{Int}}
 end
 
 """
@@ -311,18 +283,6 @@ function allocate_scratch!(allocator::ScratchAllocator, size::Int)
     return start_pos:end_pos
 end
 
-"""
-    Helper function to allocate scratch space for nested terms.
-"""
-function allocate_scratch_for_nested_term(term::AbstractTerm, scratch_allocator::ScratchAllocator)
-    term_width = width(term)
-    if term_width > 0
-        return allocate_scratch!(scratch_allocator, term_width)
-    else
-        return 1:0  # Empty range for zero-width terms
-    end
-end
-
 ################################################################################
 
 """
@@ -345,195 +305,6 @@ function output_width_structural(evaluator::AbstractEvaluator)
         return 1
     end
 end
-
-"""
-    compute_kronecker_pattern(component_widths::Vector{Int}) -> Vector{Tuple{Vararg{Int}}}
-
-Compute the Kronecker‑product index pattern for an interaction term of arbitrary arity.
-
-# Arguments
-
-- `component_widths::Vector{Int}`: A vector of positive integers, where each entry `w_i` is the number of columns contributed by the i‑th component (e.g., the number of basis functions, dummy columns, or features for that variable or transform).
-
-# Returns
-
-- `pattern::Vector{Tuple{Vararg{Int}}}`: A vector of tuples, each of length `n = length(component_widths)`. Each tuple `(i₁, i₂, …, iₙ)` represents one combination of column indices: take column `i₁` from component 1, `i₂` from component 2, …, `iₙ` from component n, and multiply them to form one column of the full interaction design.
-
-# Details
-
-- Preallocates a vector of length `prod(component_widths)` to hold all index combinations.
-- Uses `Iterators.product` to efficiently generate the Cartesian product of the ranges `1:w_i`.
-- Converts each `NTuple{n,Int}` returned by `product` into a plain `Tuple{Vararg{Int}}`.
-- Complexity: Time and memory are O(∏₁ⁿ w_i). Suitable for moderate‑sized interactions.
-- Throws an `ArgumentError` if any width is less than 1.
-
-# Examples
-
-```julia
-julia> compute_kronecker_pattern([2, 3])
-6-element Vector{Tuple{Vararg{Int}}}:
- (1, 1)
- (1, 2)
- (1, 3)
- (2, 1)
- (2, 2)
- (2, 3)
-
-julia> compute_kronecker_pattern([2, 3, 2])
-12-element Vector{Tuple{Vararg{Int}}}:
- (1, 1, 1)
- (1, 1, 2)
- (1, 2, 1)
- (1, 2, 2)
- (1, 3, 1)
- (1, 3, 2)
- (2, 1, 1)
- (2, 1, 2)
- (2, 2, 1)
- (2, 2, 2)
- (2, 3, 1)
- (2, 3, 2)
-```
-"""
-function compute_kronecker_pattern(component_widths::Vector{Int})
-    # Validate input
-    if any(w -> w < 1, component_widths)
-        throw(ArgumentError("All component widths must be positive integers. Received: $(component_widths)"))
-    end
-
-    N = length(component_widths)
-    
-    # Prepare ranges 1:w for each component - use ntuple for type stability
-    ranges = ntuple(i -> 1:component_widths[i], N)
-
-    # Preallocate output vector with parametric type
-    total = prod(component_widths)
-    pattern = Vector{NTuple{N,Int}}(undef, total)
-
-    # Fill with index tuples from Cartesian product
-    idx = 1
-    for combo in Iterators.product(ranges...)
-        pattern[idx] = combo  # combo is already NTuple{N,Int}
-        idx += 1
-    end
-
-    return pattern
-end
-
-###############################################################################
-# APPLY FUNCTIONS
-###############################################################################
-
-"""
-    apply_function_direct_single(func::Function, val::Float64) -> Float64
-
-Apply single-argument function directly with domain checking.
-No varargs overhead, concrete Float64 type.
-"""
-function apply_function_direct_single(func::Function, val::Float64)
-    if func === log
-        return val > 0.0 ? log(val) : (val == 0.0 ? -Inf : NaN)
-    elseif func === exp
-        return exp(clamp(val, -700.0, 700.0))  # Prevent overflow
-    elseif func === sqrt
-        return val ≥ 0.0 ? sqrt(val) : NaN
-    elseif func === abs
-        return abs(val)
-    elseif func === sin
-        return sin(val)
-    elseif func === cos
-        return cos(val)
-    elseif func === tan
-        return tan(val)
-    else
-        # Direct function call for other functions
-        return Float64(func(val))
-    end
-end
-
-"""
-    apply_function_direct_binary(func::Function, val1::Float64, val2::Float64) -> Float64
-
-Apply binary function directly with domain checking.
-No varargs overhead, concrete Float64 types.
-"""
-function apply_function_direct_binary(func::Function, val1::Float64, val2::Float64)
-    if func === (+)
-        return val1 + val2
-    elseif func === (-)
-        return val1 - val2
-    elseif func === (*)
-        return val1 * val2
-    elseif func === (/)
-        return val2 == 0.0 ? (val1 == 0.0 ? NaN : (val1 > 0.0 ? Inf : -Inf)) : val1 / val2
-    elseif func === (^)
-        if val1 == 0.0 && val2 < 0.0
-            return Inf
-        elseif val1 < 0.0 && !isinteger(val2)
-            return NaN
-        else
-            return val1^val2
-        end
-    else
-        return Float64(func(val1, val2))
-    end
-end
-
-"""
-    apply_function_direct_varargs(func::Function, args...) -> Float64
-
-Apply function with 3+ arguments.
-Generic approach for rarer cases (with some overhead).
-"""
-function apply_function_direct_varargs(func::Function, args...)
-    # For 3+ arguments, just use the generic approach with Float64 conversion
-    return Float64(func(args...))
-end
-
-###############################################################################
-# OPTIMIZED KRONECKER PATTERN APPLICATION
-###############################################################################
-
-"""
-    apply_kronecker_pattern_to_positions!(
-        pattern::Vector{NTuple{N,Int}},
-        component_scratch_map::Vector{UnitRange{Int}},
-        scratch::Vector{Float64},
-        output::AbstractVector{Float64},
-        output_positions::Vector{Int}
-    ) where N
-
-UPDATED: Apply Kronecker pattern to specific positions without enumerate().
-Overwrites old method.
-"""
-function apply_kronecker_pattern_to_positions!(
-    pattern::Vector{NTuple{N,Int}},
-    component_scratch_map::Vector{UnitRange{Int}},
-    scratch::Vector{Float64},
-    output::AbstractVector{Float64},
-    output_positions::Vector{Int}
-) where N
-    
-    pattern_length = length(pattern)
-    
-    @inbounds for idx in 1:pattern_length
-        if idx <= length(output_positions)
-            indices = pattern[idx]
-            
-            # Type-stable computation with compile-time known N
-            product = 1.0
-            for i in 1:N
-                scratch_pos = first(component_scratch_map[i]) + indices[i] - 1
-                product *= scratch[scratch_pos]
-            end
-            
-            output[output_positions[idx]] = product
-        end
-    end
-    
-    return nothing
-end
-
 
 ###############################################################################
 # 8. UTILITY FUNCTIONS
@@ -577,14 +348,4 @@ end
 
 function extract_columns_recursive!(columns::Vector{Symbol}, term::Union{InterceptTerm, ConstantTerm})
     # No columns
-end
-
-############
-
-function debug_categorical_evaluator(eval::CategoricalEvaluator)
-    println("CategoricalEvaluator Debug:")
-    println("  Column: $(eval.column)")
-    println("  Level codes: $(eval.level_codes)")
-    println("  Level codes length: $(length(eval.level_codes))")
-    println("  Is empty: $(isempty(eval.level_codes))")
 end

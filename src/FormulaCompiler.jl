@@ -32,6 +32,7 @@ export not
 # Include files in dependency order
 include("fixed_helpers.jl") # No dependencies
 include("evaluators.jl")
+include("kronecker.jl")
 include("execute_self_contained.jl")
 include("execute_to_scratch.jl")
 include("compile_term.jl")
@@ -41,6 +42,9 @@ include("CompiledFormula.jl") # Clean execution plan system
 export compile_formula
 
 ################################# Core system #################################
+
+include("apply_function.jl")
+include("get_data_value_specialized.jl")
 
 include("step1_specialized_core.jl")
 include("step2_categorical_support.jl")

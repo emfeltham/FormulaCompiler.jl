@@ -109,42 +109,6 @@ function convert_component_to_unified(component::AbstractEvaluator, scratch_star
 end
 
 ###############################################################################
-# KRONECKER PATTERN COMPUTATION
-###############################################################################
-
-"""
-    compute_generalized_kronecker_pattern(component_widths::Vector{Int}) -> Vector{Vector{Int}}
-
-Compute full Kronecker pattern for any N-way interaction. Always precomputes everything.
-"""
-function compute_generalized_kronecker_pattern(component_widths::Vector{Int})
-    N = length(component_widths)
-    
-    if N == 0
-        return Vector{Vector{Int}}[]
-    elseif N == 1
-        # Single component - trivial pattern
-        return [[i] for i in 1:component_widths[1]]
-    end
-    
-    total_terms = prod(component_widths)
-    
-    # Pre-allocate the full pattern
-    pattern = Vector{Vector{Int}}(undef, total_terms)
-    
-    # Generate all combinations using Cartesian indices
-    ranges = Tuple(1:w for w in component_widths)
-    
-    idx = 1
-    for combo in Iterators.product(ranges...)
-        pattern[idx] = collect(combo)  # Convert tuple to vector
-        idx += 1
-    end
-    
-    return pattern
-end
-
-###############################################################################
 # INTERACTION ANALYSIS
 ###############################################################################
 
@@ -184,7 +148,7 @@ function analyze_interaction_operations(evaluator::CombinedEvaluator)
         total_scratch_needed = current_scratch_pos - 1
         
         # Precompute the full Kronecker pattern (no limits!)
-        kronecker_pattern = compute_generalized_kronecker_pattern(component_widths)
+        kronecker_pattern = compute_kronecker_pattern(component_widths)
         
         # Create interaction data with optimized components
         interaction_data[i] = InteractionData(
@@ -257,13 +221,12 @@ Complete analysis for all operation types including interactions using Step 1-3 
 """
 function analyze_evaluator(evaluator::AbstractEvaluator)
     if evaluator isa CombinedEvaluator
-        # Analyze all operation types (Steps 1-3 unchanged)
+        # Analyze all operation types (Steps 1-3)
         constant_data, constant_op = analyze_constant_operations(evaluator)
         continuous_data, continuous_op = analyze_continuous_operations(evaluator)
         categorical_data, categorical_op = analyze_categorical_operations(evaluator)
         function_data, function_op = analyze_function_operations_linear(evaluator)
-        
-        # Use OPTIMIZED interaction analysis
+        # Analyze interaction types (Step 4)
         interaction_data, interaction_op = analyze_interaction_operations(evaluator)
         
         max_function_scratch = isempty(function_data) ? 0 : maximum(f.scratch_size for f in function_data)
@@ -305,10 +268,12 @@ end
 
 Use pre-computed position mappings, zero manual arithmetic.
 """
-function evaluate_unified_component!(component::InteractionComponentData,
-                                   scratch::Vector{Float64},
-                                   data::NamedTuple,
-                                   row_idx::Int)
+function evaluate_unified_component!(
+    component::InteractionComponentData,
+    scratch::Vector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+)
     
     if component.component_type === :constant
         # Position mapping: component.scratch_range tells us exactly where to write
