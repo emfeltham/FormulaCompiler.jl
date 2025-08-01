@@ -148,7 +148,7 @@ function analyze_interaction_operations(evaluator::CombinedEvaluator)
         total_scratch_needed = current_scratch_pos - 1
         
         # Precompute the full Kronecker pattern (no limits!)
-        kronecker_pattern = compute_kronecker_pattern(component_widths)
+        kronecker_pattern = compute_generalized_kronecker_pattern(component_widths)
         
         # Create interaction data with optimized components
         interaction_data[i] = InteractionData(
