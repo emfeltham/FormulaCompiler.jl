@@ -294,3 +294,52 @@ function execute_linear_function_operations!(function_data::Vector{LinearFunctio
     
     return nothing
 end
+
+"""
+    execute_function_via_position_mapping(func_data::LinearFunctionData, data::NamedTuple, row_idx::Int) -> Float64
+
+Execute function and return result - position mapping handles placement.
+"""
+function execute_function_via_position_mapping(func_data::LinearFunctionData, data::NamedTuple, row_idx::Int)
+    # Create minimal scratch space for function's internal execution
+    # This is the ONLY allocation, but it's minimal and isolated
+    if func_data.scratch_size > 0
+        internal_scratch = Vector{Float64}(undef, func_data.scratch_size)
+    else
+        internal_scratch = Float64[]
+    end
+    
+    # Execute function steps in internal scratch space (positions 1, 2, 3...)
+    @inbounds for step in func_data.execution_steps
+        if step.operation === :load_constant
+            internal_scratch[step.output_position] = step.constant_value
+            
+        elseif step.operation === :load_continuous
+            col = step.column_symbol
+            val = get_data_value_specialized(data, col, row_idx)
+            internal_scratch[step.output_position] = Float64(val)
+            
+        elseif step.operation === :call_unary
+            input_val = internal_scratch[step.input_positions[1]]
+            result = apply_function_direct_single(step.func, input_val)
+            internal_scratch[step.output_position] = result
+            
+        elseif step.operation === :call_binary
+            input_val1 = internal_scratch[step.input_positions[1]]
+            input_val2 = internal_scratch[step.input_positions[2]]
+            result = apply_function_direct_binary(step.func, input_val1, input_val2)
+            internal_scratch[step.output_position] = result
+            
+        else
+            error("Unknown operation type: $(step.operation)")
+        end
+    end
+    
+    # Return the final result (last step's output position)
+    if !isempty(func_data.execution_steps)
+        final_step = func_data.execution_steps[end]
+        return internal_scratch[final_step.output_position]
+    else
+        return 0.0
+    end
+end

@@ -92,38 +92,44 @@ function compile_term(
         
     elseif term isa InteractionTerm
         component_evaluators = AbstractEvaluator[]
-        component_scratch_map = UnitRange{Int}[]
         component_widths = Int[]
         
+        # Compile each component independently (don't allocate scratch yet)
         for comp in term.terms
-            comp_width = width(comp)
-            push!(component_widths, comp_width)
-            comp_scratch = allocate_scratch!(scratch_allocator, comp_width)
-            comp_start_pos = first(comp_scratch)
-            
-            # Pass categorical_levels through recursive call
-            comp_eval = compile_term(comp, comp_start_pos, scratch_allocator, categorical_levels)
+            # Use a temporary scratch allocator for component compilation
+            temp_allocator = ScratchAllocator()
+            comp_eval = compile_term(comp, 1, temp_allocator, categorical_levels)
             
             push!(component_evaluators, comp_eval)
-            push!(component_scratch_map, comp_scratch)
+            push!(component_widths, width(comp))
         end
         
+        # Plan complete scratch space for all components
+        component_output_ranges, component_internal_ranges, total_scratch_needed = 
+            plan_interaction_scratch_space(component_evaluators)
+        
+        # Allocate the total scratch space from the main allocator
+        if total_scratch_needed > 0
+            total_scratch_range = allocate_scratch!(scratch_allocator, total_scratch_needed)
+            all_scratch_positions = collect(total_scratch_range)
+        else
+            all_scratch_positions = Int[]
+        end
+        
+        # Calculate final output positions and pattern
         total_width = prod(component_widths)
         positions = collect(start_position:(start_position + total_width - 1))
         N = length(component_widths)
         pattern = compute_kronecker_pattern(component_widths)
-
-        all_scratch = Int[]
-        for range in component_scratch_map
-            append!(all_scratch, collect(range))
-        end
         
         return InteractionEvaluator{N}(
             component_evaluators,
             total_width,
             positions,
-            all_scratch,
-            component_scratch_map,
+            all_scratch_positions,
+            component_output_ranges,
+            component_internal_ranges,
+            total_scratch_needed,
             pattern
         )
         

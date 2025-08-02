@@ -59,15 +59,21 @@ end
 """
     InteractionEvaluator{N}
 
-Self-contained interaction evaluator with component scratch space.
+Self-contained interaction evaluator with complete recursive scratch planning.
 """
 struct InteractionEvaluator{N} <: AbstractEvaluator
     components::Vector{AbstractEvaluator}
     total_width::Int
-    positions::Vector{Int} # Where interaction terms go in model matrix
-    scratch_positions::Vector{Int} # Scratch space for component evaluation
-    component_scratch_map::Vector{UnitRange{Int}} # Where each component goes in scratch
-    kronecker_pattern::Vector{NTuple{N,Int}} # Pre-computed interaction pattern; N known at compile time!
+    positions::Vector{Int}                              # Where interaction terms go in model matrix
+    
+    # ENHANCED: Complete recursive scratch space planning
+    scratch_positions::Vector{Int}                      # ALL scratch positions needed
+    component_scratch_map::Vector{UnitRange{Int}}       # Where each component's outputs go
+    component_internal_scratch_map::Vector{UnitRange{Int}}  # Where each component's internals go  
+    total_scratch_needed::Int                           # Total scratch space required
+    
+    # Pre-computed interaction pattern
+    kronecker_pattern::Vector{NTuple{N,Int}}
 end
 
 """
@@ -250,6 +256,10 @@ function max_scratch_needed(evaluator::AbstractEvaluator)
     return isempty(scratch_positions) ? 0 : maximum(scratch_positions)
 end
 
+function max_scratch_needed(evaluator::InteractionEvaluator)
+    return evaluator.total_scratch_needed  # Use the new field
+end
+
 
 ###############################################################################
 # SELF-CONTAINED COMPILATION SYSTEM
@@ -349,3 +359,63 @@ end
 function extract_columns_recursive!(columns::Vector{Symbol}, term::Union{InterceptTerm, ConstantTerm})
     # No columns
 end
+
+###############################################################################
+# ADD TO evaluators.jl - NEW UTILITY FUNCTIONS
+###############################################################################
+
+"""
+    plan_interaction_scratch_space(components::Vector{AbstractEvaluator}) 
+    -> (Vector{UnitRange{Int}}, Vector{UnitRange{Int}}, Int)
+
+Plan complete scratch space for all components.
+ENHANCED: Added debugging output.
+"""
+function plan_interaction_scratch_space(components::Vector{AbstractEvaluator})
+    n_components = length(components)
+    component_output_ranges = Vector{UnitRange{Int}}(undef, n_components)
+    component_internal_ranges = Vector{UnitRange{Int}}(undef, n_components)
+    
+    current_scratch_pos = 1
+    
+    # DEBUG: Print planning info
+    # println("🔧 Planning scratch space for $(n_components) components")
+    
+    for (i, component) in enumerate(components)
+        # Calculate component's output width and internal scratch needs
+        output_width = output_width_structural(component)
+        internal_scratch_needed = calculate_component_scratch_recursive(component)
+        
+        # DEBUG: Print component info
+        # println("  Component $i ($(typeof(component).__name__)): output=$output_width, internal=$internal_scratch_needed")
+        
+        # Allocate output range
+        if output_width > 0
+            output_range = current_scratch_pos:(current_scratch_pos + output_width - 1)
+            current_scratch_pos += output_width
+        else
+            output_range = 1:0  # Empty range
+        end
+        component_output_ranges[i] = output_range
+        
+        # Allocate internal scratch range
+        if internal_scratch_needed > 0
+            internal_range = current_scratch_pos:(current_scratch_pos + internal_scratch_needed - 1)
+            current_scratch_pos += internal_scratch_needed
+        else
+            internal_range = 1:0  # Empty range
+        end
+        component_internal_ranges[i] = internal_range
+        
+        # DEBUG: Print assigned ranges
+        # println("    Assigned: output=$output_range, internal=$internal_range")
+    end
+    
+    total_scratch_needed = current_scratch_pos - 1
+    
+    # DEBUG: Print total
+    # println("  Total scratch needed: $total_scratch_needed")
+    
+    return component_output_ranges, component_internal_ranges, total_scratch_needed
+end
+
