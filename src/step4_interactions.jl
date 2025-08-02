@@ -77,15 +77,15 @@ end
     analyze_evaluator(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
 
 Complete analysis for all operation types including interactions using Step 1-3 optimizations.
+Enhanced formula data with specialized categorical tuple.
 """
 function analyze_evaluator(evaluator::AbstractEvaluator)
     if evaluator isa CombinedEvaluator
-        # Analyze all operation types (Steps 1-3)
+        # Analyze all operation types using NEW specialized categorical analysis
         constant_data, constant_op = analyze_constant_operations(evaluator)
         continuous_data, continuous_op = analyze_continuous_operations(evaluator)
-        categorical_data, categorical_op = analyze_categorical_operations(evaluator)
+        categorical_data, categorical_op = analyze_categorical_operations(evaluator)  # NEW VERSION
         function_data, function_op = analyze_function_operations_linear(evaluator)
-        # Analyze interaction types (Step 4)
         interaction_evaluators, interaction_op = analyze_interaction_operations(evaluator)
         
         max_function_scratch = isempty(function_data) ? 0 : maximum(f.scratch_size for f in function_data)
@@ -95,13 +95,13 @@ function analyze_evaluator(evaluator::AbstractEvaluator)
         function_scratch = max_function_scratch > 0 ? Vector{Float64}(undef, max_function_scratch) : Float64[]
         interaction_scratch = max_interaction_scratch > 0 ? Vector{Float64}(undef, max_interaction_scratch) : Float64[]
 
-        # Construct data with optimized interactions
+        # Construct data with SPECIALIZED categorical data (tuple, not vector)
         formula_data = CompleteFormulaData(
             constant_data,
             continuous_data,
-            categorical_data,
+            categorical_data,     # Now a tuple of SpecializedCategoricalData!
             function_data,
-            interaction_evaluators,  # Direct InteractionEvaluator objects
+            interaction_evaluators,
             max_function_scratch,
             max_interaction_scratch,
             function_scratch,
@@ -130,27 +130,39 @@ Execute interaction using recursive scratch planning (zero allocations).
 """
 function execute_interaction_operation!(
     interaction::InteractionEvaluator{N},
-    scratch::AbstractVector{Float64},  # <-- Changed to AbstractVector
-    output::AbstractVector{Float64},   # <-- Changed to AbstractVector
+    scratch::AbstractVector{Float64},
+    output::AbstractVector{Float64},
     data::NamedTuple,
     row_idx::Int
 ) where N
-    # Phase 1: Execute all components into their assigned scratch regions
-    @inbounds for (i, component) in enumerate(interaction.components)
+    
+    # Phase 1: Execute components with direct indexing (no enumerate)
+    @inbounds for i in 1:length(interaction.components)
+        component = interaction.components[i]
         output_range = interaction.component_scratch_map[i]
         internal_range = interaction.component_internal_scratch_map[i]
         
-        execute_component_in_assigned_scratch!(
-            component, output_range, internal_range, scratch, data, row_idx
-        )
+        # Inline continuous evaluator execution to avoid function call overhead
+        if component isa ContinuousEvaluator && !isempty(output_range)
+            val = get_data_value_specialized(data, component.column, row_idx)
+            scratch[first(output_range)] = Float64(val)
+        else
+            # Fall back to general case for other component types
+            execute_component_in_assigned_scratch!(
+                component, output_range, internal_range, scratch, data, row_idx
+            )
+        end
     end
     
-    # Phase 2: Apply Kronecker pattern using component outputs
-    @inbounds for (result_idx, pattern_indices) in enumerate(interaction.kronecker_pattern)
+    # Phase 2: Optimized Kronecker pattern application (no enumerate)
+    @inbounds for result_idx in 1:length(interaction.kronecker_pattern)
         if result_idx <= length(interaction.positions)
+            pattern_indices = interaction.kronecker_pattern[result_idx]
             product = 1.0
             
-            for (comp_idx, pattern_val) in enumerate(pattern_indices)
+            # Direct indexing instead of enumerate
+            for comp_idx in 1:length(pattern_indices)
+                pattern_val = pattern_indices[comp_idx]
                 comp_output_range = interaction.component_scratch_map[comp_idx]
                 value_pos = first(comp_output_range) + pattern_val - 1
                 product *= scratch[value_pos]
@@ -176,7 +188,7 @@ end
 Execute multiple interactions - simplified type signature.
 """
 function execute_interaction_operations!(
-    interaction_evaluators::Vector,  # Even more general - let Julia figure it out
+    interaction_evaluators::Vector,
     scratch::AbstractVector{Float64},
     output::AbstractVector{Float64},
     data::NamedTuple,
@@ -187,8 +199,9 @@ function execute_interaction_operations!(
         return nothing
     end
     
-    # Execute each interaction
-    @inbounds for interaction in interaction_evaluators
+    # Direct indexing instead of enumerate
+    @inbounds for i in 1:length(interaction_evaluators)
+        interaction = interaction_evaluators[i]
         if interaction isa InteractionEvaluator
             execute_interaction_operation!(interaction, scratch, output, data, row_idx)
         end
@@ -283,23 +296,23 @@ end
                       output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, IntData, ConstOp, ContOp, CatOp, FuncOp, IntOp}
 
 Execute complete formulas with all operation types including interactions using Step 1-3 optimizations.
-"""
-function execute_operation!(data::CompleteFormulaData{ConstData,ContData,CatData,FuncData,IntData},
-                            op::CompleteFormulaOp{ConstOp,ContOp,CatOp,FuncOp,IntOp},
-                            output, input_data, row_idx) where {ConstData,ContData,CatData,FuncData,IntData,ConstOp,ContOp,CatOp,FuncOp,IntOp}
-    # Reuse pre-allocated buffers
-    fs = data.function_scratch
-    is = data.interaction_scratch
 
-    # Execute constants, continuous, categorical as before (these were already optimized)
+Updated main execution that works with specialized categorical tuples.
+"""
+function execute_operation!(
+    data::CompleteFormulaData,
+    op::CompleteFormulaOp,
+    output, input_data, row_idx
+)
+    # Execute constants, continuous (already optimized)
     execute_complete_constant_operations!(data.constants, output, input_data, row_idx)
     execute_complete_continuous_operations!(data.continuous, output, input_data, row_idx)
-    execute_categorical_operations!(data.categorical, output, input_data, row_idx)
-
-    # Functions use optimized execution (Step 3 was already good)
-    execute_linear_function_operations!(data.functions, fs, output, input_data, row_idx)
     
-    # Interactions now use OPTIMIZED Step 1-3 component execution
+    # Execute categorical using NEW specialized tuple-based execution
+    execute_categorical_operations!(data.categorical, output, input_data, row_idx)
+    
+    # Functions and interactions (will be specialized in later phases)
+    execute_linear_function_operations!(data.functions, data.function_scratch, output, input_data, row_idx)
     execute_interaction_operations!(data.interactions, data.interaction_scratch, output, input_data, row_idx)
     
     return nothing
@@ -363,39 +376,82 @@ function execute_component_in_assigned_scratch!(
     component::AbstractEvaluator,
     output_range::UnitRange{Int},
     internal_range::UnitRange{Int},
-    scratch::AbstractVector{Float64},  # <-- Changed to AbstractVector
+    scratch::AbstractVector{Float64},
     data::NamedTuple,
     row_idx::Int
 )
     if component isa ConstantEvaluator
-        # Direct assignment to output position
         if !isempty(output_range)
             @inbounds scratch[first(output_range)] = component.value
         end
         
     elseif component isa ContinuousEvaluator
-        # Data lookup and assignment
         if !isempty(output_range)
             val = get_data_value_specialized(data, component.column, row_idx)
             @inbounds scratch[first(output_range)] = Float64(val)
         end
         
     elseif component isa CategoricalEvaluator
-        # Categorical contrast lookup
         if !isempty(output_range)
             level = component.level_codes[row_idx]
             level = clamp(level, 1, component.n_levels)
             
-            for (i, pos) in enumerate(output_range)
+            # Direct indexing instead of enumerate
+            for i in 1:length(output_range)
+                pos = output_range[i]
                 @inbounds scratch[pos] = component.contrast_matrix[level, i]
             end
         end
         
     elseif component isa FunctionEvaluator
-        # Execute function using internal scratch space
-        execute_function_in_assigned_scratch!(
-            component, output_range, internal_range, scratch, data, row_idx
-        )
+        # Fast path for single continuous argument (most common case)
+        if length(component.arg_evaluators) == 1 && 
+           component.arg_evaluators[1] isa ContinuousEvaluator &&
+           !isempty(output_range)
+            
+            arg_eval = component.arg_evaluators[1]
+            val = get_data_value_specialized(data, arg_eval.column, row_idx)
+            result = apply_function_direct_single(component.func, Float64(val))
+            @inbounds scratch[first(output_range)] = result
+            return nothing
+        end
+        
+        # General case with optimized argument processing
+        if !isempty(internal_range)
+            working_scratch = @view scratch[internal_range]
+            
+            # Execute arguments with direct indexing (no enumerate)
+            for i in 1:length(component.arg_evaluators)
+                if i <= length(working_scratch)
+                    arg_eval = component.arg_evaluators[i]
+                    if arg_eval isa ContinuousEvaluator
+                        val = get_data_value_specialized(data, arg_eval.column, row_idx)
+                        working_scratch[i] = Float64(val)
+                    elseif arg_eval isa ConstantEvaluator
+                        working_scratch[i] = arg_eval.value
+                    else
+                        execute_component_in_assigned_scratch!(
+                            arg_eval, i:i, 1:0, working_scratch, data, row_idx
+                        )
+                    end
+                end
+            end
+            
+            # Apply function
+            if !isempty(output_range)
+                if length(component.arg_evaluators) == 1 && length(working_scratch) >= 1
+                    result = apply_function_direct_single(component.func, working_scratch[1])
+                    @inbounds scratch[first(output_range)] = result
+                elseif length(component.arg_evaluators) == 2 && length(working_scratch) >= 2
+                    result = apply_function_direct_binary(component.func, working_scratch[1], working_scratch[2])
+                    @inbounds scratch[first(output_range)] = result
+                elseif length(working_scratch) >= length(component.arg_evaluators)
+                    arg_values = working_scratch[1:length(component.arg_evaluators)]
+                    result = apply_function_direct_varargs(component.func, arg_values...)
+                    @inbounds scratch[first(output_range)] = result
+                end
+            end
+        end
         
     else
         error("Unsupported component type in interaction: $(typeof(component))")
