@@ -395,19 +395,19 @@ function benchmark_kronecker_dispatch(component_widths::Vector{Int}, n_iteration
     end
     
     # Check for allocations
-    allocs = @allocated begin
+    alloc = @allocated begin
         for _ in 1:100
             apply_kronecker_to_output!(pattern, component_ranges, scratch, output, output_positions)
         end
     end
     
     avg_time_ns = (time_dispatch / n_iterations) * 1e9
-    avg_allocs = allocs / 100
+    avg_alloc = alloc / 100
     
     println("Results:")
     println("  Average time: $(round(avg_time_ns, digits=1)) ns")
-    println("  Average allocations: $(avg_allocs) bytes")
-    println("  Zero allocation: $(avg_allocs == 0 ? "✅ YES" : "❌ NO")")
+    println("  Average allocations: $(avg_alloc) bytes")
+    println("  Zero allocation: $(avg_alloc == 0 ? "✅ YES" : "❌ NO")")
     
     # Show which method was dispatched
     if info.optimization_level == :binary
@@ -420,7 +420,7 @@ function benchmark_kronecker_dispatch(component_widths::Vector{Int}, n_iteration
     
     return (
         time_ns = avg_time_ns,
-        allocations = avg_allocs,
+        allocations = avg_alloc,
         optimization_level = info.optimization_level
     )
 end

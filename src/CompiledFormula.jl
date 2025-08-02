@@ -172,7 +172,7 @@ function benchmark_execution(cf::CompiledFormula, data::NamedTuple, n_iterations
     end
     
     # Check allocations
-    allocs = @allocated begin
+    alloc = @allocated begin
         for i in 1:100
             row_idx = ((i - 1) % data_length) + 1
             cf(output, data, row_idx)
@@ -180,13 +180,13 @@ function benchmark_execution(cf::CompiledFormula, data::NamedTuple, n_iterations
     end
     
     avg_time_ns = (elapsed / n_iterations) * 1e9
-    avg_allocs = allocs / 100
-    is_zero = avg_allocs == 0
+    avg_alloc = alloc / 100
+    is_zero = avg_alloc == 0
     
     println("Self-Contained Evaluator Performance:")
     println("  Average time: $(round(avg_time_ns, digits=1)) ns")
-    println("  Average allocations: $(avg_allocs) bytes")
+    println("  Average allocations: $(avg_alloc) bytes")
     println("  Zero allocation: $(is_zero ? "✅ YES" : "❌ NO")")
     
-    return (time_ns = avg_time_ns, allocations = avg_allocs, zero_allocation = is_zero)
+    return (time_ns = avg_time_ns, allocations = avg_alloc, zero_allocation = is_zero)
 end
