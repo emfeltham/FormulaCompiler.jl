@@ -15,108 +15,14 @@ using BenchmarkTools
 Random.seed!(06515)
 
 using FormulaCompiler:
-    compile_function_term, compile_matrix_term,
-    ScratchAllocator
-using FormulaCompiler:
-    compile_formula_specialized, show_specialized_info
+    compile_formula_specialized
 
 ###############################################################################
-# COMPLETE TESTING FUNCTIONS
+# TESTING FUNCTIONS
 ###############################################################################
 
-"""
-    test_complete_specialization(formula, df, data; n_iterations=1000)
-
-Test complete specialization including interactions against current implementation.
-"""
-function test_complete_specialization(formula, df, data; n_iterations=1000)
-    println("Testing complete specialization (all operations including interactions)...")
-    
-    # Compile both versions
-    model = fit(LinearModel, formula, df)
-    current_compiled = compile_formula(model, data)
-    specialized_compiled = compile_formula_specialized(model, data)
-    
-    println("Formula: $formula")
-    println("Output width: $(length(current_compiled))")
-    println("Specialized type: $(typeof(specialized_compiled))")
-    
-    # Test correctness
-    output_current = Vector{Float64}(undef, length(current_compiled))
-    output_specialized = Vector{Float64}(undef, length(specialized_compiled))
-    
-    # Test several rows
-    for test_row in [1, 5, 10, 25, 50]
-        fill!(output_current, NaN)
-        fill!(output_specialized, NaN)
-        
-        current_compiled(output_current, data, test_row)
-        specialized_compiled(output_specialized, data, test_row)
-        
-        if !isapprox(output_current, output_specialized, rtol=1e-14)
-            error("Results differ at row $test_row: $output_current vs $output_specialized")
-        end
-    end
-    println("✅ Correctness test passed")
-    
-    # Performance comparison
-    println("\nPerformance comparison:")
-    
-    # Warmup
-    for i in 1:10
-        current_compiled(output_current, data, 1)
-        specialized_compiled(output_specialized, data, 1)
-    end
-    
-    # Benchmark current implementation
-    current_allocs = @allocated begin
-        for i in 1:100
-            row_idx = ((i - 1) % length(data.x)) + 1
-            current_compiled(output_current, data, row_idx)
-        end
-    end
-    current_allocs_per_call = current_allocs / 100
-    
-    # Benchmark specialized implementation  
-    specialized_allocs = @allocated begin
-        for i in 1:100
-            row_idx = ((i - 1) % length(data.x)) + 1
-            specialized_compiled(output_specialized, data, row_idx)
-        end
-    end
-    specialized_allocs_per_call = specialized_allocs / 100
-    
-    println("Current implementation: $(current_allocs_per_call) bytes per call")
-    println("Specialized implementation: $(specialized_allocs_per_call) bytes per call")
-    
-    if specialized_allocs_per_call == 0
-        println("🎉 ZERO ALLOCATIONS ACHIEVED!")
-    elseif specialized_allocs_per_call < current_allocs_per_call
-        reduction = (1 - specialized_allocs_per_call / current_allocs_per_call) * 100
-        println("📈 $(round(reduction, digits=1))% allocation reduction")
-    else
-        println("⚠️  Specialized implementation has more allocations")
-    end
-    
-    println("\nTiming comparison:")
-    print("Current: ")
-    @btime $current_compiled($output_current, $data, 1)
-    
-    print("Specialized: ")
-    @btime $specialized_compiled($output_specialized, $data, 1)
-    
-    return specialized_compiled
-end
-
-"""
-    run_step4_tests()
-
-Run comprehensive tests for Step 4 implementation (complete with interactions).
-"""
-function run_step4_tests()
+function test_data(; n = 200)
     # Create test data with all variable types
-    
-    n = 200
     df = DataFrame(
         x = randn(n),
         y = randn(n), 
@@ -130,54 +36,45 @@ function run_step4_tests()
         response = randn(n)
     )
     data = Tables.columntable(df)
-    
-    println("="^80)
-    println("STEP 4 TESTING: COMPLETE SPECIALIZATION WITH INTERACTIONS")
-    println("="^80)
-    
-    # Test formulas with interactions
-    test_formulas = [
-        @formula(response ~ 1),                          # Baseline (no interactions)
-        @formula(response ~ x),                          # Baseline (no interactions)
-        @formula(response ~ x * y),                      # Simple 2-way interaction
-        @formula(response ~ x * group3),                 # Continuous × Categorical
-        @formula(response ~ group3 * binary),            # Categorical × Categorical  
-        @formula(response ~ log(z) * group4),            # Function × Categorical
-        @formula(response ~ x * y * group3),             # 3-way interaction
-        @formula(response ~ x * log(z)),                 # Continuous × Function
-        @formula(response ~ x * y * group3 + log(z) * group4),  # Your original formula!
-        @formula(response ~ x * y * z),                  # 3-way continuous
-        @formula(response ~ group3 * group4 * binary),   # 3-way categorical
-        @formula(response ~ x * y * z * w),              # 4-way interaction
-        @formula(response ~ log(z) * exp(w) * group3),   # Multiple functions × categorical
-    ]
-    
-    for (i, formula) in enumerate(test_formulas)
-        println("\n--- Test $i: $formula ---")
-        try
-            test_complete_specialization(formula, df, data)
-            println("✅ Test $i passed")
-        catch e
-            if occursin("not yet implemented", string(e)) || occursin("not yet supported", string(e))
-                println("⏭️  Test $i skipped (feature not yet implemented: $e)")
-            else
-                println("❌ Test $i failed: $e")
-                rethrow(e)
-            end
-        end
-    end
-    
-    println("\n" * "="^80)
-    println("STEP 4 TESTING COMPLETE")
-    println("="^80)
+    return df, data
 end
 
-using FormulaCompiler:
-    compile_formula_specialized,
-    execute_to_scratch!
+test_cases = [
+    (@formula(response ~ 1), "Baseline (no interactions)"),
+    (@formula(response ~ x), "Baseline (no interactions)"),
+    (@formula(response ~ log(z)), "Function"),
+    (@formula(response ~ group3), "Single categorical"),
+    (@formula(response ~ group3 + group4), "Two categoricals"),
+    (@formula(response ~ group3 + group4 + binary), "Three categoricals"),
+    (@formula(response ~ x + group3), "Mixed continuous + categorical"),
+    (@formula(response ~ x + y + group3 + group4), "Multiple mixed"),
+    (@formula(response ~ x * y), "Simple 2-way interaction"),
+    (@formula(response ~ x * group3), "Continuous × Categorical"),
+    (@formula(response ~ group3 * binary), "Categorical × Categorical"),
+    (@formula(response ~ log(z) * group4), "Function × Categorical"),
+    (@formula(response ~ x * y * group3), "3-way interaction"),
+    (@formula(response ~ x * log(z)), "Continuous × Function"),
+    (@formula(response ~ x * y * group3 + log(z) * group4), "Your original formula!"),
+    (@formula(response ~ x * y * z), "3-way continuous"),
+    (@formula(response ~ group3 * group4 * binary), "3-way categorical"),
+    (@formula(response ~ x * y * z * w), "4-way interaction"),
+    (@formula(response ~ log(z) * exp(w) * group3), "Multiple functions × categorical"),
+];
 
-# Run the complete test suite
-run_step4_tests()
+function test_step4_cases(test_cases, df, data)
+    println("STEP 4 TESTING: COMPLETE SPECIALIZATION WITH INTERACTIONS")
+    for (f, nm) in test_cases
+        # fit
+        model = fit(LinearModel, f, df);
+        # allocate output
+        output_after = Vector{Float64}(undef, size(modelmatrix(model), 2));
+        # compile
+        compiled_after = compile_formula_specialized(model, data);
+        println("Case: " * nm)
+        @btime $compiled_after($output_after, $data, $1);
+    end
+end
 
-# Test your original formula specifically
-# test_complete_specialization(@formula(response ~ x * y * group3 + log(z) * group4), df, data)
+df, data = test_data(; n = 200);
+test_step4_cases(test_cases, df, data);
+

@@ -150,14 +150,67 @@ function execute_operation!(data::CategoricalData, op::CategoricalOp,
 end
 
 ###############################################################################
-# NEW: Specialized Execution Functions for Tuples
+# RECURSIVE TUPLE PROCESSING FOR CATEGORICAL EXECUTION
 ###############################################################################
 
 """
-    execute_categorical_operations!(categorical_data::Tuple, output, input_data, row_idx)
+    execute_categorical_recursive!(categorical_data::Tuple{}, output, input_data, row_idx)
 
-Specialized execution for compile-time tuple of categorical data.
-Loop bounds are compile-time constants enabling full optimization.
+Base case: empty tuple - nothing to process.
+"""
+function execute_categorical_recursive!(
+    categorical_data::Tuple{}, 
+    output, 
+    input_data, 
+    row_idx
+)
+    # Base case: no categoricals to process
+    return nothing
+end
+
+"""
+    execute_categorical_recursive!(categorical_data::Tuple, output, input_data, row_idx)
+
+Recursive case: process first categorical, then recursively process the rest.
+Fixed to avoid TypeVar iteration issues during precompilation.
+"""
+function execute_categorical_recursive!(
+    categorical_data::Tuple, 
+    output, 
+    input_data, 
+    row_idx
+)
+    # Handle empty tuple (should be caught by specialized method above)
+    if length(categorical_data) == 0
+        return nothing
+    end
+    
+    # Process the first categorical variable
+    cat_data = categorical_data[1]  # First element
+    
+    # Get level for this row
+    level = cat_data.level_codes[row_idx]
+    level = clamp(level, 1, cat_data.n_levels)
+    
+    # Execute this categorical using existing specialized function
+    execute_single_categorical!(cat_data, level, output)
+    
+    # Recursively process the remaining categoricals
+    if length(categorical_data) > 1
+        remaining_data = Base.tail(categorical_data)  # Get tail
+        execute_categorical_recursive!(remaining_data, output, input_data, row_idx)
+    end
+    
+    return nothing
+end
+
+###############################################################################
+# OVERWRITE: Main categorical execution function
+###############################################################################
+
+"""
+Overwrite the main categorical execution to use recursive tuple processing.
+This replaces the loop-based approach with allocation-free recursion.
 """
 function execute_categorical_operations!(
     categorical_data::Tuple, 
@@ -165,31 +218,18 @@ function execute_categorical_operations!(
     input_data, 
     row_idx
 )
-    # Handle empty tuple case
-    if length(categorical_data) == 0
-        return nothing
-    end
-    
-    # Loop over compile-time known number of categorical variables
-    # Julia knows the exact count at compile time!
-    @inbounds for i in 1:length(categorical_data)
-        cat_data = categorical_data[i]
-        
-        # Get level for this row (pre-extracted during compilation)
-        level = cat_data.level_codes[row_idx]
-        level = clamp(level, 1, cat_data.n_levels)
-        
-        # Execute contrast assignment with compile-time known positions
-        execute_single_categorical!(cat_data, level, output)
-    end
-    
+    # Use recursive processing instead of loops
+    execute_categorical_recursive!(categorical_data, output, input_data, row_idx)
     return nothing
 end
 
-"""
-    execute_single_categorical!(cat_data::SpecializedCategoricalData{N, Positions}, level::Int, output) where {N, Positions}
+###############################################################################
+# KEEP: Existing single categorical execution (unchanged)
+###############################################################################
 
-Execute single categorical variable with fully compile-time specialized positions.
+"""
+Keep the existing single categorical execution function.
+The recursive approach calls this for each categorical variable.
 """
 function execute_single_categorical!(
     cat_data::SpecializedCategoricalData{N, Positions}, 
@@ -207,129 +247,151 @@ function execute_single_categorical!(
 end
 
 ###############################################################################
-# SPECIALIZED METHODS for Common Cases
-###############################################################################
-
-"""
-Specialized method for empty categorical case (very common).
-"""
-function execute_categorical_operations!(
-    categorical_data::Tuple{}, 
-    output, 
-    input_data, 
-    row_idx
-)
-    # No-op for empty case - Julia can optimize this away completely
-    return nothing
-end
-
-"""
-Specialized method for single categorical variable (very common).
-"""
-function execute_categorical_operations!(
-    categorical_data::Tuple{SpecializedCategoricalData{N, Positions}}, 
-    output, 
-    input_data, 
-    row_idx
-) where {N, Positions}
-    
-    cat_data = categorical_data[1]
-    level = cat_data.level_codes[row_idx]
-    level = clamp(level, 1, cat_data.n_levels)
-    
-    # Fully unrolled execution for single categorical
-    execute_single_categorical!(cat_data, level, output)
-    
-    return nothing
-end
-
-"""
-Specialized method for two categorical variables (common).
-"""
-function execute_categorical_operations!(
-    categorical_data::Tuple{
-        SpecializedCategoricalData{N1, P1}, 
-        SpecializedCategoricalData{N2, P2}
-    }, 
-    output, 
-    input_data, 
-    row_idx
-) where {N1, P1, N2, P2}
-    
-    # First categorical
-    cat_data1 = categorical_data[1]
-    level1 = cat_data1.level_codes[row_idx]
-    level1 = clamp(level1, 1, cat_data1.n_levels)
-    execute_single_categorical!(cat_data1, level1, output)
-    
-    # Second categorical  
-    cat_data2 = categorical_data[2]
-    level2 = cat_data2.level_codes[row_idx]
-    level2 = clamp(level2, 1, cat_data2.n_levels)
-    execute_single_categorical!(cat_data2, level2, output)
-    
-    return nothing
-end
-
-###############################################################################
 # DEBUGGING AND VALIDATION
 ###############################################################################
 
 """
-    show_categorical_specialization_info(categorical_data)
+    trace_recursive_execution(categorical_data::Tuple, description="")
 
-Display information about categorical specialization for debugging.
+Debug function to trace how the recursive execution unfolds.
 """
-function show_categorical_specialization_info(categorical_data)
-    println("Categorical Specialization Info:")
-    println("  Type: $(typeof(categorical_data))")
-    println("  Count: $(length(categorical_data))")
+function trace_recursive_execution(categorical_data::Tuple, description="")
+    println("Tracing recursive execution: $description")
+    println("  Input tuple type: $(typeof(categorical_data))")
+    println("  Tuple length: $(length(categorical_data))")
     
-    if length(categorical_data) > 0
-        for (i, cat_data) in enumerate(categorical_data)
-            println("  Categorical $i:")
-            println("    Type: $(typeof(cat_data))")
-            println("    Contrast columns: $(cat_data.n_contrasts)")
-            println("    Levels: $(cat_data.n_levels)")
-            println("    Positions: $(cat_data.positions)")
-            println("    Position type: $(typeof(cat_data.positions))")
+    if length(categorical_data) == 0
+        println("  → Base case: empty tuple")
+    else
+        println("  → Recursive case:")
+        println("    First element type: $(typeof(categorical_data[1]))")
+        if length(categorical_data) > 1
+            println("    Remaining elements: $(typeof(Base.tail(categorical_data)))")
+        else
+            println("    Remaining elements: (none - will hit base case)")
         end
     end
+    
+    return nothing
 end
 
 """
-    validate_categorical_specialization(formula, df, data)
+    benchmark_recursive_categorical(formula, df, data; n_iterations=1000)
 
-Validate that categorical specialization produces correct results.
+Benchmark the recursive categorical execution approach.
 """
-function validate_categorical_specialization(formula, df, data)
-    println("Validating categorical specialization for: $formula")
+function benchmark_recursive_categorical(formula, df, data; n_iterations=1000)
+    println("Benchmarking recursive categorical execution...")
+    println("Formula: $formula")
     
-    # Compile with new specialization
+    # Compile the formula
     model = fit(LinearModel, formula, df)
     compiled = compile_formula_specialized(model, data)
-    
-    println("Compiled type: $(typeof(compiled))")
-    show_categorical_specialization_info(compiled.data.categorical)
-    
-    # Test execution
     output = Vector{Float64}(undef, length(compiled))
-    compiled(output, data, 1)
     
-    println("Execution successful: $(output)")
+    println("Compiled type: $(typeof(compiled.data.categorical))")
     
-    # Test allocation performance
-    for _ in 1:10
+    # Trace the recursion structure
+    trace_recursive_execution(compiled.data.categorical, "Compiled formula")
+    
+    # Warmup
+    for _ in 1:20
         compiled(output, data, 1)
     end
     
-    allocs = @allocated begin
-        for i in 1:100
-            compiled(output, data, i)
+    # Benchmark allocation
+    alloc = @allocated begin
+        for i in 1:n_iterations
+            row_idx = ((i - 1) % length(data.x)) + 1
+            compiled(output, data, row_idx)
         end
     end
     
-    println("Allocations: $(allocs / 100) bytes per call")
+    avg_alloc = alloc / n_iterations
     
-    return allocs / 100
+    println("Performance results:")
+    println("  Iterations: $n_iterations")
+    println("  Total allocations: $alloc bytes")
+    println("  Average per call: $avg_alloc bytes")
+    
+    if avg_alloc == 0
+        println("  🎯 PERFECT: Zero allocations achieved!")
+    elseif avg_alloc <= 32
+        println("  ✅ EXCELLENT: ≤32 bytes per call")
+    elseif avg_alloc <= 64
+        println("  ✅ GOOD: ≤64 bytes per call")
+    else
+        println("  ⚠️  NEEDS WORK: >64 bytes per call")
+    end
+    
+    # Test correctness
+    test_output1 = Vector{Float64}(undef, length(compiled))
+    test_output2 = Vector{Float64}(undef, length(compiled))
+    
+    compiled(test_output1, data, 1)
+    compiled(test_output2, data, 5)
+    
+    println("  Sample outputs look reasonable: $(all(isfinite, test_output1) && all(isfinite, test_output2))")
+    
+    return avg_alloc
+end
+
+"""
+    test_recursive_approach()
+
+Test the recursive approach on various categorical configurations.
+"""
+function test_recursive_approach()
+    println("="^60)
+    println("TESTING RECURSIVE CATEGORICAL EXECUTION")
+    println("="^60)
+    
+    # Create test data
+    n = 100
+    df = DataFrame(
+        x = randn(n),
+        group3 = categorical(rand(["A", "B", "C"], n)),           
+        group4 = categorical(rand(["W", "X", "Y", "Z"], n)),      
+        binary = categorical(rand(["Yes", "No"], n)),             
+        response = randn(n)
+    )
+    data = Tables.columntable(df)
+    
+    # Test cases
+    test_cases = [
+        (@formula(response ~ 1), "No categoricals"),
+        (@formula(response ~ group3), "1 categorical"),
+        (@formula(response ~ group3 + group4), "2 categoricals"),
+        (@formula(response ~ group3 + group4 + binary), "3 categoricals"),
+        (@formula(response ~ x + group3 + group4 + binary), "3 categoricals + continuous"),
+    ]
+    
+    results = []
+    for (formula, description) in test_cases
+        println("\n" * "-"^40)
+        result = benchmark_recursive_categorical(formula, df, data, n_iterations=100)
+        push!(results, (description, result))
+    end
+    
+    # Summary
+    println("\n" * "="^40)
+    println("RECURSIVE APPROACH SUMMARY")
+    println("="^40)
+    
+    for (description, result) in results
+        status = result == 0 ? "🎯" : result <= 32 ? "✅" : "⚠️"
+        println("$status $description: $result bytes per call")
+    end
+    
+    # Check if the 3-categorical problem is solved
+    three_cat_result = results[findfirst(r -> r[1] == "3 categoricals", results)][2]
+    if three_cat_result == 0
+        println("\n🎉 SUCCESS: 3-categorical allocation problem solved!")
+    elseif three_cat_result < 100
+        println("\n✅ MAJOR IMPROVEMENT: 3-categorical allocations greatly reduced")
+    else
+        println("\n⚠️  PARTIAL: 3-categorical allocations reduced but not eliminated")
+    end
+    
+    return results
 end
