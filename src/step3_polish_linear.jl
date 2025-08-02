@@ -264,31 +264,27 @@ end
 ###############################################################################
 
 """
-    execute_linear_function_operations!(function_data::Vector{LinearFunctionData}, 
-                                       scratch::Vector{Float64},
-                                       output::Vector{Float64}, 
-                                       data::NamedTuple, 
-                                       row_idx::Int)
-
-Standalone functions also use position mappings.
+Fixed version that uses pre-allocated scratch space properly
 """
-function execute_linear_function_operations!(function_data::Vector{LinearFunctionData}, 
-                                           scratch::Vector{Float64},
-                                           output::Vector{Float64}, 
-                                           data::NamedTuple, 
-                                           row_idx::Int)
+function execute_linear_function_operations!(
+    function_data::Vector{FormulaCompiler.LinearFunctionData}, 
+    scratch::Vector{Float64},
+    output::Vector{Float64}, 
+    data::NamedTuple, 
+    row_idx::Int
+)
     # Handle empty case
     if isempty(function_data)
         return nothing
     end
     
-    # Execute each function using position mappings
+    # Execute each function using the SHARED pre-allocated scratch space
     @inbounds for func_data in function_data
-        # Get result via position mapping approach
-        result = execute_function_via_position_mapping(func_data, data, row_idx)
+        # Use the pre-allocated scratch space, not a new allocation!
+        result = execute_function_in_preallocated_scratch(func_data, scratch, data, row_idx)
         
-        # Position mapping: func_data.output_position tells us where to write
-        output_pos = func_data.output_position  # Position map!
+        # Write result to output
+        output_pos = func_data.output_position
         output[output_pos] = result
     end
     
@@ -296,50 +292,126 @@ function execute_linear_function_operations!(function_data::Vector{LinearFunctio
 end
 
 """
-    execute_function_via_position_mapping(func_data::LinearFunctionData, data::NamedTuple, row_idx::Int) -> Float64
+    execute_function_in_preallocated_scratch(func_data::LinearFunctionData, scratch::Vector{Float64}, data::NamedTuple, row_idx::Int) -> Float64
 
-Execute function and return result - position mapping handles placement.
+Execute function using pre-allocated scratch space - NO NEW ALLOCATIONS.
+Handles arbitrary nesting through the linear execution plan.
 """
-function execute_function_via_position_mapping(func_data::LinearFunctionData, data::NamedTuple, row_idx::Int)
-    # Create minimal scratch space for function's internal execution
-    # This is the ONLY allocation, but it's minimal and isolated
-    if func_data.scratch_size > 0
-        internal_scratch = Vector{Float64}(undef, func_data.scratch_size)
-    else
-        internal_scratch = Float64[]
+function execute_function_in_preallocated_scratch(
+    func_data::FormulaCompiler.LinearFunctionData, 
+    scratch::Vector{Float64}, 
+    data::NamedTuple, 
+    row_idx::Int
+)
+    # Ensure we have enough scratch space
+    if length(scratch) < func_data.scratch_size
+        error("Insufficient scratch space: need $(func_data.scratch_size), have $(length(scratch))")
     end
     
-    # Execute function steps in internal scratch space (positions 1, 2, 3...)
+    # Execute the linear plan using the pre-allocated scratch space
+    # The scratch space layout is: [pos1, pos2, pos3, ...] where each position
+    # corresponds to intermediate results in the execution plan
+    
     @inbounds for step in func_data.execution_steps
         if step.operation === :load_constant
-            internal_scratch[step.output_position] = step.constant_value
+            scratch[step.output_position] = step.constant_value
             
         elseif step.operation === :load_continuous
             col = step.column_symbol
-            val = get_data_value_specialized(data, col, row_idx)
-            internal_scratch[step.output_position] = Float64(val)
+            val = FormulaCompiler.get_data_value_specialized(data, col, row_idx)
+            scratch[step.output_position] = Float64(val)
             
         elseif step.operation === :call_unary
-            input_val = internal_scratch[step.input_positions[1]]
-            result = apply_function_direct_single(step.func, input_val)
-            internal_scratch[step.output_position] = result
+            input_val = scratch[step.input_positions[1]]
+            result = FormulaCompiler.apply_function_direct_single(step.func, input_val)
+            scratch[step.output_position] = result
             
         elseif step.operation === :call_binary
-            input_val1 = internal_scratch[step.input_positions[1]]
-            input_val2 = internal_scratch[step.input_positions[2]]
-            result = apply_function_direct_binary(step.func, input_val1, input_val2)
-            internal_scratch[step.output_position] = result
+            input_val1 = scratch[step.input_positions[1]]
+            input_val2 = scratch[step.input_positions[2]]
+            result = FormulaCompiler.apply_function_direct_binary(step.func, input_val1, input_val2)
+            scratch[step.output_position] = result
             
         else
             error("Unknown operation type: $(step.operation)")
         end
     end
     
-    # Return the final result (last step's output position)
+    # Return the final result (from the last step's output position)
     if !isempty(func_data.execution_steps)
         final_step = func_data.execution_steps[end]
-        return internal_scratch[final_step.output_position]
+        return scratch[final_step.output_position]
     else
+        return 0.0
+    end
+end
+
+
+"""
+    debug_function_execution(func_data::LinearFunctionData, scratch::Vector{Float64}, data::NamedTuple, row_idx::Int)
+
+Debug function execution to see the linear plan in action.
+"""
+function debug_function_execution(
+    func_data::FormulaCompiler.LinearFunctionData, 
+    scratch::Vector{Float64}, 
+    data::NamedTuple, 
+    row_idx::Int
+)
+    println("Debugging function execution:")
+    println("  Scratch size needed: $(func_data.scratch_size)")
+    println("  Scratch size available: $(length(scratch))")
+    println("  Output position: $(func_data.output_position)")
+    println("  Execution steps: $(length(func_data.execution_steps))")
+    
+    for (i, step) in enumerate(func_data.execution_steps)
+        println("  Step $i: $(step.operation)")
+        if step.operation === :load_constant
+            println("    Load constant $(step.constant_value) → pos $(step.output_position)")
+        elseif step.operation === :load_continuous
+            println("    Load $(step.column_symbol) → pos $(step.output_position)")
+        elseif step.operation === :call_unary
+            println("    Call $(step.func) on pos $(step.input_positions[1]) → pos $(step.output_position)")
+        elseif step.operation === :call_binary
+            println("    Call $(step.func) on pos $(step.input_positions) → pos $(step.output_position)")
+        end
+    end
+    
+    # Execute and show intermediate results
+    println("  Execution trace:")
+    @inbounds for step in func_data.execution_steps
+        if step.operation === :load_constant
+            scratch[step.output_position] = step.constant_value
+            println("    pos $(step.output_position) = $(scratch[step.output_position])")
+            
+        elseif step.operation === :load_continuous
+            col = step.column_symbol
+            val = FormulaCompiler.get_data_value_specialized(data, col, row_idx)
+            scratch[step.output_position] = Float64(val)
+            println("    pos $(step.output_position) = $(scratch[step.output_position]) (from $col)")
+            
+        elseif step.operation === :call_unary
+            input_val = scratch[step.input_positions[1]]
+            result = FormulaCompiler.apply_function_direct_single(step.func, input_val)
+            scratch[step.output_position] = result
+            println("    pos $(step.output_position) = $(result) = $(step.func)($(input_val))")
+            
+        elseif step.operation === :call_binary
+            input_val1 = scratch[step.input_positions[1]]
+            input_val2 = scratch[step.input_positions[2]]
+            result = FormulaCompiler.apply_function_direct_binary(step.func, input_val1, input_val2)
+            scratch[step.output_position] = result
+            println("    pos $(step.output_position) = $(result) = $(step.func)($(input_val1), $(input_val2))")
+        end
+    end
+    
+    if !isempty(func_data.execution_steps)
+        final_step = func_data.execution_steps[end]
+        final_result = scratch[final_step.output_position]
+        println("  Final result: $(final_result)")
+        return final_result
+    else
+        println("  No steps - returning 0.0")
         return 0.0
     end
 end
