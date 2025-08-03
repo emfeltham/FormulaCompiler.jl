@@ -1,68 +1,63 @@
-# step3_clean.jl
-# Clean, unified function execution system with Phase 2 specialization
+# step3_type_stable.jl
+# Type-stable function execution mirroring categorical success pattern
 
 ###############################################################################
-# CORE FUNCTION DATA TYPES
+# SIMPLE TYPE-STABLE FUNCTION DATA - MIRROR CATEGORICAL PATTERN
 ###############################################################################
 
 """
-    FunctionExecutionStep
+    SimpleFunctionOperation
 
-A single step in linear function execution.
+Simple operation data with compile-time known structure.
+Mirrors SpecializedCategoricalData pattern - no Union types, no complexity.
 """
-struct FunctionExecutionStep
-    operation::Symbol                    # :load_constant, :load_continuous, :call_unary, :call_binary
-    func::Union{Function, Nothing}       # Function to call (nothing for load operations)
-    input_positions::Vector{Int}         # Scratch positions to read from
-    output_position::Int                 # Scratch position to write to
-    constant_value::Union{Float64, Nothing}  # For load_constant operations
-    column_symbol::Union{Symbol, Nothing}    # For load_continuous operations
-end
-
-# Constructors for different operation types
-function FunctionExecutionStep(operation::Symbol, output_pos::Int, constant_val::Float64)
-    @assert operation === :load_constant
-    FunctionExecutionStep(operation, nothing, Int[], output_pos, constant_val, nothing)
-end
-
-function FunctionExecutionStep(operation::Symbol, output_pos::Int, col::Symbol)
-    @assert operation === :load_continuous
-    FunctionExecutionStep(operation, nothing, Int[], output_pos, nothing, col)
-end
-
-function FunctionExecutionStep(operation::Symbol, func::Function, input_pos::Int, output_pos::Int)
-    @assert operation === :call_unary
-    FunctionExecutionStep(operation, func, [input_pos], output_pos, nothing, nothing)
-end
-
-function FunctionExecutionStep(operation::Symbol, func::Function, input_pos1::Int, input_pos2::Int, output_pos::Int)
-    @assert operation === :call_binary
-    FunctionExecutionStep(operation, func, [input_pos1, input_pos2], output_pos, nothing, nothing)
-end
-
-"""
-    SpecializedLinearFunctionData{StepCount, ScratchSize, OutputPos}
-
-Fully compile-time specialized function data with embedded metadata.
-"""
-struct SpecializedLinearFunctionData{StepCount, ScratchSize, OutputPos}
-    execution_steps::NTuple{StepCount, FunctionExecutionStep}
-    output_position::Int
-    scratch_size::Int
+struct SimpleFunctionOperation
+    operation_type::Int                 # 1=load_constant, 2=load_continuous, 3=call_unary, 4=call_binary
+    input_pos1::Int                     # First input position (0 if not used)
+    input_pos2::Int                     # Second input position (0 if not used)  
+    output_pos::Int                     # Output scratch position
+    func::Union{Function, Nothing}      # Function to call (nothing for loads)
+    constant_value::Float64             # Constant value (NaN if not used)
+    column_symbol::Symbol               # Column symbol (:none if not used)
     
-    function SpecializedLinearFunctionData{StepCount, ScratchSize, OutputPos}(
-        step_tuple::NTuple{StepCount, FunctionExecutionStep},
-        output_position::Int,
-        scratch_size::Int
-    ) where {StepCount, ScratchSize, OutputPos}
-        new{StepCount, ScratchSize, OutputPos}(step_tuple, output_position, scratch_size)
+    # Constructors for different operation types
+    function SimpleFunctionOperation(::Val{:load_constant}, output_pos::Int, value::Float64)
+        new(1, 0, 0, output_pos, nothing, value, :none)
+    end
+    
+    function SimpleFunctionOperation(::Val{:load_continuous}, output_pos::Int, col::Symbol)
+        new(2, 0, 0, output_pos, nothing, NaN, col)
+    end
+    
+    function SimpleFunctionOperation(::Val{:call_unary}, input_pos::Int, output_pos::Int, func::Function)
+        new(3, input_pos, 0, output_pos, func, NaN, :none)
+    end
+    
+    function SimpleFunctionOperation(::Val{:call_binary}, input_pos1::Int, input_pos2::Int, output_pos::Int, func::Function)
+        new(4, input_pos1, input_pos2, output_pos, func, NaN, :none)
+    end
+end
+
+"""
+    SimpleFunctionData{N, Operations}
+
+Simple function data mirroring categorical success pattern.
+N = number of operations, Operations = NTuple{N, SimpleFunctionOperation}
+"""
+struct SimpleFunctionData{N, Operations}
+    operations::Operations              # NTuple{N, SimpleFunctionOperation}
+    output_position::Int                # Final output position
+    scratch_size::Int                   # Scratch space needed
+    
+    function SimpleFunctionData(operations::NTuple{N, SimpleFunctionOperation}, output_position::Int, scratch_size::Int) where N
+        new{N, typeof(operations)}(operations, output_position, scratch_size)
     end
 end
 
 """
     LinearFunctionOp{N}
 
-Compile-time encoding of function operations with known count.
+Simple operation encoding.
 """
 struct LinearFunctionOp{N}
     function LinearFunctionOp(n::Int)
@@ -73,7 +68,7 @@ end
 """
     FunctionScratchAllocator
 
-Helper for allocating scratch positions during function flattening.
+Simple scratch allocator.
 """
 mutable struct FunctionScratchAllocator
     next_position::Int
@@ -87,100 +82,80 @@ function allocate_scratch_position!(allocator::FunctionScratchAllocator)
 end
 
 ###############################################################################
-# FUNCTION FLATTENING ALGORITHM
+# SIMPLE ANALYSIS - MIRROR CATEGORICAL ANALYSIS PATTERN
 ###############################################################################
 
 """
-    flatten_function_to_specialized_data(func_eval::FunctionEvaluator, output_position::Int) -> SpecializedLinearFunctionData
+    analyze_function_to_simple_data(func_eval, output_position) -> SimpleFunctionData
 
-Convert a function evaluator tree DIRECTLY into specialized data with tuples - NO ALLOCATIONS.
+Simple analysis that creates type-stable data directly.
+Mirrors the categorical analysis pattern exactly.
 """
-function flatten_function_to_specialized_data(func_eval::FunctionEvaluator, output_position::Int)
+function analyze_function_to_simple_data(func_eval::FunctionEvaluator, output_position::Int)
     allocator = FunctionScratchAllocator()
     
-    # Collect steps without vector allocation
-    steps_collector = Tuple{Symbol, Any, Vector{Int}, Int, Union{Float64, Nothing}, Union{Symbol, Nothing}}[]
+    # Collect operations in a simple Vector first (like categoricals do)
+    operations_vec = SimpleFunctionOperation[]
     
-    # Flatten the function tree into step tuples
-    result_position = flatten_function_recursive_specialized!(steps_collector, allocator, func_eval)
-    
-    # Create tuple directly from collected steps
-    step_count = length(steps_collector)
-    step_tuple = ntuple(step_count) do i
-        step_data = steps_collector[i]
-        FunctionExecutionStep(step_data[1], step_data[2], step_data[3], step_data[4], step_data[5], step_data[6])
+    function analyze_recursive(evaluator)
+        if evaluator isa ConstantEvaluator
+            scratch_pos = allocate_scratch_position!(allocator)
+            push!(operations_vec, SimpleFunctionOperation(Val(:load_constant), scratch_pos, evaluator.value))
+            return scratch_pos
+            
+        elseif evaluator isa ContinuousEvaluator
+            scratch_pos = allocate_scratch_position!(allocator)
+            push!(operations_vec, SimpleFunctionOperation(Val(:load_continuous), scratch_pos, evaluator.column))
+            return scratch_pos
+            
+        elseif evaluator isa FunctionEvaluator
+            arg_evaluators = evaluator.arg_evaluators
+            n_args = length(arg_evaluators)
+            
+            if n_args == 1
+                arg_pos = analyze_recursive(arg_evaluators[1])
+                result_pos = allocate_scratch_position!(allocator)
+                push!(operations_vec, SimpleFunctionOperation(Val(:call_unary), arg_pos, result_pos, evaluator.func))
+                return result_pos
+                
+            elseif n_args == 2
+                arg1_pos = analyze_recursive(arg_evaluators[1])
+                arg2_pos = analyze_recursive(arg_evaluators[2])
+                result_pos = allocate_scratch_position!(allocator)
+                push!(operations_vec, SimpleFunctionOperation(Val(:call_binary), arg1_pos, arg2_pos, result_pos, evaluator.func))
+                return result_pos
+                
+            else
+                error("Functions with $(n_args) arguments not supported")
+            end
+            
+        else
+            error("Unsupported evaluator type: $(typeof(evaluator))")
+        end
     end
+    
+    # Analyze the function
+    final_pos = analyze_recursive(func_eval)
+    
+    # Convert to compile-time tuple (mirrors categorical pattern)
+    n_ops = length(operations_vec)
+    operations_tuple = ntuple(i -> operations_vec[i], n_ops)
     
     scratch_size = allocator.next_position - 1
     
-    # Create specialized data directly
-    return SpecializedLinearFunctionData{step_count, scratch_size, output_position}(
-        step_tuple,
-        output_position,
-        scratch_size
-    )
-end
-
-"""
-    flatten_function_recursive_specialized!(steps_collector, allocator, evaluator) -> Int
-
-Recursively flatten a function/evaluator directly into tuples - NO VECTOR ALLOCATIONS.
-"""
-function flatten_function_recursive_specialized!(
-    steps_collector::Vector,
-    allocator::FunctionScratchAllocator,
-    evaluator::AbstractEvaluator
-)
-    if evaluator isa ConstantEvaluator
-        scratch_pos = allocate_scratch_position!(allocator)
-        push!(steps_collector, (:load_constant, nothing, Int[], scratch_pos, evaluator.value, nothing))
-        return scratch_pos
-        
-    elseif evaluator isa ContinuousEvaluator
-        scratch_pos = allocate_scratch_position!(allocator)
-        push!(steps_collector, (:load_continuous, nothing, Int[], scratch_pos, nothing, evaluator.column))
-        return scratch_pos
-        
-    elseif evaluator isa FunctionEvaluator
-        func = evaluator.func
-        arg_evaluators = evaluator.arg_evaluators
-        n_args = length(arg_evaluators)
-        
-        if n_args == 1
-            arg_pos = flatten_function_recursive_specialized!(steps_collector, allocator, arg_evaluators[1])
-            result_pos = allocate_scratch_position!(allocator)
-            push!(steps_collector, (:call_unary, func, [arg_pos], result_pos, nothing, nothing))
-            return result_pos
-            
-        elseif n_args == 2
-            arg1_pos = flatten_function_recursive_specialized!(steps_collector, allocator, arg_evaluators[1])
-            arg2_pos = flatten_function_recursive_specialized!(steps_collector, allocator, arg_evaluators[2])
-            result_pos = allocate_scratch_position!(allocator)
-            push!(steps_collector, (:call_binary, func, [arg1_pos, arg2_pos], result_pos, nothing, nothing))
-            return result_pos
-            
-        else
-            error("Functions with $(n_args) arguments not yet supported in linear flattening")
-        end
-        
-    else
-        error("Unsupported evaluator type in function flattening: $(typeof(evaluator))")
-    end
+    return SimpleFunctionData(operations_tuple, output_position, scratch_size)
 end
 
 ###############################################################################
-# ANALYSIS FUNCTION - PHASE 2 SPECIALIZATION
+# OVERWRITE: Main Analysis Function
 ###############################################################################
 
 """
     analyze_function_operations_linear(evaluator::CombinedEvaluator)
 
-Phase 2: Allocation-free analysis that creates specialized tuples directly.
+OVERWRITE: Simple analysis mirroring categorical success pattern.
 """
 function analyze_function_operations_linear(evaluator::CombinedEvaluator)
-
-    println("USED: new analyze")
-
     function_evaluators = evaluator.function_evaluators
     n_funcs = length(function_evaluators)
     
@@ -188,95 +163,104 @@ function analyze_function_operations_linear(evaluator::CombinedEvaluator)
         return (), LinearFunctionOp(0)
     end
     
-    # Create tuple of specialized function data directly - NO CONVERSION
+    # Create tuple of simple function data (mirrors categorical pattern)
     function_data = ntuple(n_funcs) do i
         func_eval = function_evaluators[i]
-        # Create specialized data directly - no intermediate LinearFunctionData
-        flatten_function_to_specialized_data(func_eval, func_eval.position)
+        analyze_function_to_simple_data(func_eval, func_eval.position)
     end
     
     return function_data, LinearFunctionOp(n_funcs)
 end
 
 ###############################################################################
-# EXECUTION FUNCTIONS - PHASE 2 ALLOCATION-FREE
+# SIMPLE TYPE-STABLE EXECUTION - MIRROR CATEGORICAL EXECUTION
 ###############################################################################
 
 """
-    execute_function_in_preallocated_scratch!(
-        func_data::SpecializedLinearFunctionData,
-        scratch::AbstractVector{Float64},
-        output::AbstractVector{Float64},
-        data::NamedTuple,
-        row_idx::Int,
-        scratch_offset::Int = 0
-    )
+    execute_simple_operation!(op::SimpleFunctionOperation, scratch, output, data, row_idx, scratch_offset)
 
-Execute function using pre-allocated scratch space - NO ALLOCATIONS.
+Execute single operation - type-stable like categorical execution.
 """
-function execute_function_in_preallocated_scratch!(
-    func_data::SpecializedLinearFunctionData{StepCount, ScratchSize, OutputPos},
+function execute_simple_operation!(
+    op::SimpleFunctionOperation,
     scratch::AbstractVector{Float64},
     output::AbstractVector{Float64},
     data::NamedTuple,
     row_idx::Int,
     scratch_offset::Int = 0
-) where {StepCount, ScratchSize, OutputPos}
-    
-    # Execute the linear plan using pre-allocated scratch space with offset
-    @inbounds for step_idx in 1:StepCount
-        step = func_data.execution_steps[step_idx]
+)
+    if op.operation_type == 1  # load_constant
+        scratch_pos = scratch_offset + op.output_pos
+        scratch[scratch_pos] = op.constant_value
         
-        if step.operation === :load_constant
-            scratch_pos = scratch_offset + step.output_position
-            scratch[scratch_pos] = step.constant_value
-            
-        elseif step.operation === :load_continuous
-            scratch_pos = scratch_offset + step.output_position
-            col = step.column_symbol
-            val = get_data_value_specialized(data, col, row_idx)
-            scratch[scratch_pos] = Float64(val)
-            
-        elseif step.operation === :call_unary
-            input_pos = scratch_offset + step.input_positions[1]
-            output_pos = scratch_offset + step.output_position
-            input_val = scratch[input_pos]
-            result = apply_function_direct_single(step.func, input_val)
-            scratch[output_pos] = result
-            
-        elseif step.operation === :call_binary
-            input_pos1 = scratch_offset + step.input_positions[1]
-            input_pos2 = scratch_offset + step.input_positions[2]
-            output_pos = scratch_offset + step.output_position
-            input_val1 = scratch[input_pos1]
-            input_val2 = scratch[input_pos2]
-            result = apply_function_direct_binary(step.func, input_val1, input_val2)
-            scratch[output_pos] = result
-            
-        else
-            error("Unknown operation type: $(step.operation)")
-        end
-    end
-    
-    # Write final result to output array
-    if StepCount > 0
-        final_step = func_data.execution_steps[StepCount]
-        final_scratch_pos = scratch_offset + final_step.output_position
-        output[OutputPos] = scratch[final_scratch_pos]
+    elseif op.operation_type == 2  # load_continuous
+        scratch_pos = scratch_offset + op.output_pos
+        val = get_data_value_specialized(data, op.column_symbol, row_idx)
+        scratch[scratch_pos] = Float64(val)
+        
+    elseif op.operation_type == 3  # call_unary
+        input_pos = scratch_offset + op.input_pos1
+        output_pos = scratch_offset + op.output_pos
+        input_val = scratch[input_pos]
+        result = apply_function_direct_single(op.func, input_val)
+        scratch[output_pos] = result
+        
+    elseif op.operation_type == 4  # call_binary
+        input_pos1 = scratch_offset + op.input_pos1
+        input_pos2 = scratch_offset + op.input_pos2
+        output_pos = scratch_offset + op.output_pos
+        input_val1 = scratch[input_pos1]
+        input_val2 = scratch[input_pos2]
+        result = apply_function_direct_binary(op.func, input_val1, input_val2)
+        scratch[output_pos] = result
+        
+    else
+        error("Unknown operation type: $(op.operation_type)")
     end
     
     return nothing
 end
 
 """
-    execute_function_operations_recursive!(
-        function_data::Tuple{},
-        scratch, output, data, row_idx, scratch_offset
-    )
+    execute_simple_function!(func_data::SimpleFunctionData{N}, scratch, output, data, row_idx, scratch_offset) where N
 
-Base case: empty tuple - no functions to process.
+Execute simple function - mirrors categorical execution pattern exactly.
 """
-function execute_function_operations_recursive!(
+function execute_simple_function!(
+    func_data::SimpleFunctionData{N},
+    scratch::AbstractVector{Float64},
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int,
+    scratch_offset::Int = 0
+) where N
+    
+    # Execute all operations (mirrors categorical loop pattern)
+    @inbounds for i in 1:N  # N is compile-time constant!
+        op = func_data.operations[i]  # Direct tuple access, known type
+        execute_simple_operation!(op, scratch, output, data, row_idx, scratch_offset)
+    end
+    
+    # Write final result to output
+    if N > 0
+        final_op = func_data.operations[N]
+        final_scratch_pos = scratch_offset + final_op.output_pos
+        output[func_data.output_position] = scratch[final_scratch_pos]
+    end
+    
+    return nothing
+end
+
+###############################################################################
+# RECURSIVE EXECUTION - MIRROR CATEGORICAL RECURSIVE PATTERN
+###############################################################################
+
+"""
+    execute_simple_functions_recursive!(function_data::Tuple{}, ...) 
+
+Base case: empty tuple.
+"""
+function execute_simple_functions_recursive!(
     function_data::Tuple{},
     scratch::AbstractVector{Float64},
     output::AbstractVector{Float64},
@@ -288,14 +272,11 @@ function execute_function_operations_recursive!(
 end
 
 """
-    execute_function_operations_recursive!(
-        function_data::Tuple,
-        scratch, output, data, row_idx, scratch_offset
-    )
+    execute_simple_functions_recursive!(function_data::Tuple, ...)
 
-Recursive case: process first function, then recurse on rest.
+Recursive case - mirrors categorical recursive pattern exactly.
 """
-function execute_function_operations_recursive!(
+function execute_simple_functions_recursive!(
     function_data::Tuple,
     scratch::AbstractVector{Float64},
     output::AbstractVector{Float64},
@@ -307,19 +288,17 @@ function execute_function_operations_recursive!(
         return nothing
     end
     
-    # Process the first function
+    # Process first function
     func_data = function_data[1]
-    execute_function_in_preallocated_scratch!(
-        func_data, scratch, output, data, row_idx, scratch_offset
-    )
+    execute_simple_function!(func_data, scratch, output, data, row_idx, scratch_offset)
     
-    # Calculate scratch offset for next function
+    # Calculate next scratch offset
     next_scratch_offset = scratch_offset + func_data.scratch_size
     
-    # Recursively process remaining functions
+    # Recurse on remaining functions
     if length(function_data) > 1
         remaining_data = Base.tail(function_data)
-        execute_function_operations_recursive!(
+        execute_simple_functions_recursive!(
             remaining_data, scratch, output, data, row_idx, next_scratch_offset
         )
     end
@@ -328,19 +307,13 @@ function execute_function_operations_recursive!(
 end
 
 ###############################################################################
-# MAIN EXECUTION FUNCTION - CLEAN VERSION
+# OVERWRITE: Main Execution Function
 ###############################################################################
 
 """
-    execute_linear_function_operations!(
-        function_data::Tuple,
-        scratch::Vector{Float64},
-        output::Vector{Float64},
-        data::NamedTuple,
-        row_idx::Int
-    )
+    execute_linear_function_operations!(function_data::Tuple, scratch, output, data, row_idx)
 
-CLEAN: Main function execution using Phase 2 tuple-based approach.
+OVERWRITE: Simple execution mirroring categorical success.
 """
 function execute_linear_function_operations!(
     function_data::Tuple,
@@ -349,16 +322,7 @@ function execute_linear_function_operations!(
     data::NamedTuple,
     row_idx::Int
 )
-    # Use recursive processing - allocation-free
-    execute_function_operations_recursive!(function_data, scratch, output, data, row_idx, 0)
+    # Use simple recursive execution (mirrors categorical pattern)
+    execute_simple_functions_recursive!(function_data, scratch, output, data, row_idx, 0)
     return nothing
 end
-
-###############################################################################
-# REMOVE OLD/LEGACY FUNCTIONS
-###############################################################################
-
-# Remove all old allocating functions to avoid confusion:
-# - execute_function_via_position_mapping (replaced)
-# - Vector{LinearFunctionData} methods (replaced) 
-# - Any other legacy function execution

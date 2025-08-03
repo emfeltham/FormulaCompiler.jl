@@ -78,29 +78,37 @@ end
 
 Complete analysis for all operation types including interactions using Step 1-3 optimizations.
 Enhanced formula data with specialized categorical tuple.
+Updated analyze_evaluator to use specialized function analysis.
 """
 function analyze_evaluator(evaluator::AbstractEvaluator)
     if evaluator isa CombinedEvaluator
-        # Analyze all operation types using NEW specialized categorical analysis
+        # Analyze all operation types using NEW specialized function analysis
         constant_data, constant_op = analyze_constant_operations(evaluator)
         continuous_data, continuous_op = analyze_continuous_operations(evaluator)
-        categorical_data, categorical_op = analyze_categorical_operations(evaluator)  # NEW VERSION
-        function_data, function_op = analyze_function_operations_linear(evaluator)
+        categorical_data, categorical_op = analyze_categorical_operations(evaluator)
+        function_data, function_op = analyze_function_operations_linear(evaluator)  # NEW VERSION
         interaction_evaluators, interaction_op = analyze_interaction_operations(evaluator)
         
-        max_function_scratch = isempty(function_data) ? 0 : maximum(f.scratch_size for f in function_data)
+        # Calculate scratch space requirements
+        max_function_scratch = if isempty(function_data)
+            0
+        else
+            # Calculate total scratch needed by summing all function scratch sizes
+            sum(f.scratch_size for f in function_data)
+        end
+        
         max_interaction_scratch = isempty(interaction_evaluators) ? 0 : maximum(i.total_scratch_needed for i in interaction_evaluators)
 
         # Pre-allocate once
         function_scratch = max_function_scratch > 0 ? Vector{Float64}(undef, max_function_scratch) : Float64[]
         interaction_scratch = max_interaction_scratch > 0 ? Vector{Float64}(undef, max_interaction_scratch) : Float64[]
 
-        # Construct data with SPECIALIZED categorical data (tuple, not vector)
+        # Construct data with SPECIALIZED function data (tuple, not vector)
         formula_data = CompleteFormulaData(
             constant_data,
             continuous_data,
-            categorical_data,     # Now a tuple of SpecializedCategoricalData!
-            function_data,
+            categorical_data,
+            function_data,        # Now a tuple of SpecializedLinearFunctionData!
             interaction_evaluators,
             max_function_scratch,
             max_interaction_scratch,
