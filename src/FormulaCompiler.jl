@@ -46,25 +46,26 @@ include("get_data_value_specialized.jl")
 
 include("step1_specialized_core.jl")
 include("step2_categorical_support.jl")
-include("step3_function_support.jl")
-include("step3_polish_linear.jl")
+
+include("step3_functions.jl")
+
 include("step4_interactions.jl")
 include("modelrow.jl")
 export ModelRowEvaluator, modelrow!, modelrow
 
 ################################## Overrides ##################################
 
-include("override_1.jl")
+# include("override_1.jl")
 export OverrideVector, create_categorical_override
 export DataScenario, create_scenario, create_override_data, create_override_vector
-include("override_2.jl")
-include("override_4.jl")
+# include("override_2.jl")
+# include("override_4.jl")
 
 ############################## Derivative system ##############################
 
-include("derivative_step1_foundation.jl")
-export compile_derivative_formula
-include("derivative_step2_functions.jl")
+# include("derivative_step1_foundation.jl")
+# export compile_derivative_formula
+# include("derivative_step2_functions.jl")
 
 export modelrow!, modelrow
 
