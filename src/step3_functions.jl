@@ -1,159 +1,437 @@
-# step3_type_stable.jl
-# Type-stable function execution mirroring categorical success pattern
+# step3_functions.jl
+# Universal function execution with compile-time specialized sequences
 
 ###############################################################################
-# SIMPLE TYPE-STABLE FUNCTION DATA - MIRROR CATEGORICAL PATTERN
-###############################################################################
-
-"""
-    SimpleFunctionOperation
-
-Simple operation data with compile-time known structure.
-Mirrors SpecializedCategoricalData pattern - no Union types, no complexity.
-"""
-struct SimpleFunctionOperation
-    operation_type::Int                 # 1=load_constant, 2=load_continuous, 3=call_unary, 4=call_binary
-    input_pos1::Int                     # First input position (0 if not used)
-    input_pos2::Int                     # Second input position (0 if not used)  
-    output_pos::Int                     # Output scratch position
-    func::Union{Function, Nothing}      # Function to call (nothing for loads)
-    constant_value::Float64             # Constant value (NaN if not used)
-    column_symbol::Symbol               # Column symbol (:none if not used)
-    
-    # Constructors for different operation types
-    function SimpleFunctionOperation(::Val{:load_constant}, output_pos::Int, value::Float64)
-        new(1, 0, 0, output_pos, nothing, value, :none)
-    end
-    
-    function SimpleFunctionOperation(::Val{:load_continuous}, output_pos::Int, col::Symbol)
-        new(2, 0, 0, output_pos, nothing, NaN, col)
-    end
-    
-    function SimpleFunctionOperation(::Val{:call_unary}, input_pos::Int, output_pos::Int, func::Function)
-        new(3, input_pos, 0, output_pos, func, NaN, :none)
-    end
-    
-    function SimpleFunctionOperation(::Val{:call_binary}, input_pos1::Int, input_pos2::Int, output_pos::Int, func::Function)
-        new(4, input_pos1, input_pos2, output_pos, func, NaN, :none)
-    end
-end
-
-"""
-    SimpleFunctionData{N, Operations}
-
-Simple function data mirroring categorical success pattern.
-N = number of operations, Operations = NTuple{N, SimpleFunctionOperation}
-"""
-struct SimpleFunctionData{N, Operations}
-    operations::Operations              # NTuple{N, SimpleFunctionOperation}
-    output_position::Int                # Final output position
-    scratch_size::Int                   # Scratch space needed
-    
-    function SimpleFunctionData(operations::NTuple{N, SimpleFunctionOperation}, output_position::Int, scratch_size::Int) where N
-        new{N, typeof(operations)}(operations, output_position, scratch_size)
-    end
-end
-
-"""
-    LinearFunctionOp{N}
-
-Simple operation encoding.
-"""
-struct LinearFunctionOp{N}
-    function LinearFunctionOp(n::Int)
-        new{n}()
-    end
-end
-
-"""
-    FunctionScratchAllocator
-
-Simple scratch allocator.
-"""
-mutable struct FunctionScratchAllocator
-    next_position::Int
-    FunctionScratchAllocator() = new(1)
-end
-
-function allocate_scratch_position!(allocator::FunctionScratchAllocator)
-    pos = allocator.next_position
-    allocator.next_position += 1
-    return pos
-end
-
-###############################################################################
-# SIMPLE ANALYSIS - MIRROR CATEGORICAL ANALYSIS PATTERN
+# UNIVERSAL FUNCTION SEQUENCE TYPE
 ###############################################################################
 
 """
-    analyze_function_to_simple_data(func_eval, output_position) -> SimpleFunctionData
+    UniversalFunctionSequence{N, Operations, Functions, Columns}
 
-Simple analysis that creates type-stable data directly.
-Mirrors the categorical analysis pattern exactly.
+Universal pre-extracted execution sequence for any function structure.
+All complexity pre-extracted during compilation, simple indexing during execution.
 """
-function analyze_function_to_simple_data(func_eval::FunctionEvaluator, output_position::Int)
-    allocator = FunctionScratchAllocator()
+struct UniversalFunctionSequence{N, Operations, Functions, Columns}
+    operations::Operations      # NTuple{N, Int} - operation type codes
+    functions::Functions        # NTuple{M, Function} - all functions used
+    columns::Columns           # NTuple{P, Symbol} - all columns used
+    constants::NTuple{16, Float64}  # Fixed-size constant storage (expand as needed)
+    n_constants::Int            # Number of constants actually used
+    output_position::Int
+    scratch_size::Int
     
-    # Collect operations in a simple Vector first (like categoricals do)
-    operations_vec = SimpleFunctionOperation[]
+    function UniversalFunctionSequence(operations::NTuple{N, Int}, functions::NTuple{M, Function}, columns::NTuple{P, Symbol}, constants::Vector{Float64}, output_position::Int, scratch_size::Int) where {N, M, P}
+        # Pad constants to fixed size
+        padded_constants = ntuple(16) do i
+            i <= length(constants) ? constants[i] : 0.0
+        end
+        new{N, typeof(operations), typeof(functions), typeof(columns)}(operations, functions, columns, padded_constants, length(constants), output_position, scratch_size)
+    end
+end
+
+###############################################################################
+# OPERATION TYPE CODES
+###############################################################################
+
+const LOAD_CONTINUOUS = 1
+const LOAD_CONSTANT = 2
+const CALL_UNARY = 3
+const CALL_BINARY = 4
+
+###############################################################################
+# UNIVERSAL FUNCTION EXTRACTION
+###############################################################################
+
+function extract_universal_function_sequence(func_eval::FunctionEvaluator, output_position::Int)
+    # Collect all components
+    operations = Int[]
+    functions = Function[]
+    columns = Symbol[]
+    constants = Float64[]
     
-    function analyze_recursive(evaluator)
-        if evaluator isa ConstantEvaluator
-            scratch_pos = allocate_scratch_position!(allocator)
-            push!(operations_vec, SimpleFunctionOperation(Val(:load_constant), scratch_pos, evaluator.value))
-            return scratch_pos
-            
-        elseif evaluator isa ContinuousEvaluator
-            scratch_pos = allocate_scratch_position!(allocator)
-            push!(operations_vec, SimpleFunctionOperation(Val(:load_continuous), scratch_pos, evaluator.column))
-            return scratch_pos
-            
-        elseif evaluator isa FunctionEvaluator
-            arg_evaluators = evaluator.arg_evaluators
-            n_args = length(arg_evaluators)
-            
-            if n_args == 1
-                arg_pos = analyze_recursive(arg_evaluators[1])
-                result_pos = allocate_scratch_position!(allocator)
-                push!(operations_vec, SimpleFunctionOperation(Val(:call_unary), arg_pos, result_pos, evaluator.func))
-                return result_pos
-                
-            elseif n_args == 2
-                arg1_pos = analyze_recursive(arg_evaluators[1])
-                arg2_pos = analyze_recursive(arg_evaluators[2])
-                result_pos = allocate_scratch_position!(allocator)
-                push!(operations_vec, SimpleFunctionOperation(Val(:call_binary), arg1_pos, arg2_pos, result_pos, evaluator.func))
-                return result_pos
-                
-            else
-                error("Functions with $(n_args) arguments not supported")
-            end
-            
+    # Extract the complete tree
+    extract_evaluator_recursive!(operations, functions, columns, constants, func_eval)
+    
+    # Convert to compile-time tuples
+    operations_tuple = ntuple(i -> operations[i], length(operations))
+    functions_tuple = ntuple(i -> functions[i], length(functions))
+    columns_tuple = ntuple(i -> columns[i], length(columns))
+    
+    return UniversalFunctionSequence(operations_tuple, functions_tuple, columns_tuple, constants, output_position, 0)
+end
+
+"""
+    extract_evaluator_recursive!(operations, functions, columns, constants, evaluator)
+
+Recursively extract ALL components from evaluator tree into flat sequences.
+"""
+function extract_evaluator_recursive!(operations::Vector{Int}, functions::Vector{Function}, columns::Vector{Symbol}, constants::Vector{Float64}, evaluator::AbstractEvaluator)
+    
+    if evaluator isa ContinuousEvaluator
+        push!(operations, LOAD_CONTINUOUS)
+        # FIX: Always add column (don't check duplicates yet)
+        push!(columns, evaluator.column)
+        
+    elseif evaluator isa ConstantEvaluator
+        push!(operations, LOAD_CONSTANT)
+        # FIX: Always add constant (don't check duplicates yet)
+        push!(constants, evaluator.value)
+        
+    elseif evaluator isa FunctionEvaluator
+        # First, process all arguments recursively
+        for arg_eval in evaluator.arg_evaluators
+            extract_evaluator_recursive!(operations, functions, columns, constants, arg_eval)
+        end
+        
+        # Then add the function call operation
+        n_args = length(evaluator.arg_evaluators)
+        if n_args == 1
+            push!(operations, CALL_UNARY)
+        elseif n_args == 2
+            push!(operations, CALL_BINARY)
         else
-            error("Unsupported evaluator type: $(typeof(evaluator))")
+            error("Functions with $(n_args) arguments not supported yet")
+        end
+        
+        # FIX: Always add function (don't check duplicates yet)
+        push!(functions, evaluator.func)
+        
+    else
+        error("Unsupported evaluator type: $(typeof(evaluator))")
+    end
+end
+
+"""
+    execute_double_nested_with_constant_pattern!(sequence, output, data, row_idx)
+
+Specialized execution for f(g(h(x)), c) pattern like log(abs(z))^2 - zero allocations.
+"""
+function execute_double_nested_with_constant_pattern!(
+    sequence::UniversalFunctionSequence,
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+)
+    # Pattern: LOAD_CONTINUOUS, CALL_UNARY, CALL_UNARY, LOAD_CONSTANT, CALL_BINARY
+    # This means: x → h(x) → g(h(x)) → f(g(h(x)), c)
+    
+    if length(sequence.columns) < 1 || length(sequence.functions) < 3 || sequence.n_constants < 1
+        error("Invalid double nested with constant pattern: insufficient data")
+    end
+    
+    column = sequence.columns[1]        # z
+    func1 = sequence.functions[1]       # abs (h)
+    func2 = sequence.functions[2]       # log (g)  
+    func3 = sequence.functions[3]       # ^ (f)
+    constant = sequence.constants[1]    # 2.0 (c)
+    
+    # Execute: z → abs(z) → log(abs(z)) → log(abs(z))^2
+    val = get_data_value_specialized(data, column, row_idx)
+    result1 = apply_function_direct_single(func1, Float64(val))  # abs(z)
+    result2 = apply_function_direct_single(func2, result1)        # log(abs(z))
+    final_result = apply_function_direct_binary(func3, result2, constant)  # log(abs(z))^2
+    output[sequence.output_position] = final_result
+end
+
+###############################################################################
+# UNIVERSAL SEQUENCE EXECUTION
+###############################################################################
+
+"""
+    execute_universal_sequence!(
+        sequence::UniversalFunctionSequence{N, Operations, Functions, Columns},
+        scratch, output, data, row_idx
+    ) where {N, Operations, Functions, Columns}
+
+Execute universal sequence using compile-time specialized dispatch.
+"""
+function execute_universal_sequence!(
+    sequence::UniversalFunctionSequence{N, Operations, Functions, Columns},
+    scratch::AbstractVector{Float64},
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+) where {N, Operations, Functions, Columns}
+    
+    # Execute based on compile-time known pattern
+    # THIS IS NOT GENERAL REALLY, NEED TO CONSIDER
+    if N == 2 && sequence.operations == (LOAD_CONTINUOUS, CALL_UNARY)
+        # Pattern: f(x) - unary continuous
+        execute_unary_continuous_pattern!(sequence, output, data, row_idx)
+        
+    elseif N == 3 && sequence.operations == (LOAD_CONTINUOUS, LOAD_CONTINUOUS, CALL_BINARY)
+        # Pattern: f(x, y) - binary continuous
+        execute_binary_continuous_pattern!(sequence, output, data, row_idx)
+        
+    elseif N == 2 && sequence.operations == (LOAD_CONSTANT, CALL_UNARY)
+        # Pattern: f(c) - unary constant
+        execute_unary_constant_pattern!(sequence, output, data, row_idx)
+    elseif N == 4 && sequence.operations == (LOAD_CONTINUOUS, CALL_UNARY, CALL_UNARY, CALL_UNARY)
+        # Pattern: f(g(h(x))) - triple nested
+        execute_triple_nested_pattern!(sequence, output, data, row_idx)
+        
+    elseif N == 3 && sequence.operations == (LOAD_CONTINUOUS, CALL_UNARY, CALL_UNARY)
+        # Pattern: f(g(x)) - double nested
+        execute_double_nested_pattern!(sequence, output, data, row_idx)
+    elseif N == 4 && sequence.operations == (LOAD_CONTINUOUS, CALL_UNARY, LOAD_CONSTANT, CALL_BINARY)
+        # Pattern: f(g(x), c) - nested function with constant
+        execute_nested_with_constant_pattern!(sequence, output, data, row_idx)
+    elseif N == 5 && sequence.operations == (LOAD_CONTINUOUS, CALL_UNARY, CALL_UNARY, LOAD_CONSTANT, CALL_BINARY)
+        # Pattern: f(g(h(x)), c) - double nested with constant like log(abs(z))^2
+        execute_double_nested_with_constant_pattern!(sequence, output, data, row_idx)
+    elseif N == 5 && sequence.operations == (LOAD_CONTINUOUS, LOAD_CONTINUOUS, CALL_BINARY, LOAD_CONSTANT, CALL_BINARY)
+        # Pattern: f(g(x, y), c) - binary function with constant like (z + y)^2
+        execute_binary_with_constant_pattern!(sequence, output, data, row_idx)
+    else
+        # General execution for any pattern
+        execute_general_pattern!(sequence, scratch, output, data, row_idx)
+    end
+    
+    return nothing
+end
+
+###############################################################################
+# SPECIALIZED PATTERN EXECUTION METHODS
+###############################################################################
+
+"""
+    execute_unary_continuous_pattern!(sequence, output, data, row_idx)
+
+Specialized execution for f(x) pattern - zero allocations.
+"""
+function execute_unary_continuous_pattern!(
+    sequence::UniversalFunctionSequence,
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+)
+    # Add bounds checking
+    if length(sequence.columns) < 1 || length(sequence.functions) < 1
+        error("Invalid unary continuous pattern: insufficient columns or functions")
+    end
+    
+    column = sequence.columns[1]
+    func = sequence.functions[1]
+    
+    val = get_data_value_specialized(data, column, row_idx)
+    result = apply_function_direct_single(func, Float64(val))
+    output[sequence.output_position] = result
+end
+
+"""
+    execute_binary_continuous_pattern!(sequence, output, data, row_idx)
+
+Specialized execution for f(x, y) pattern - zero allocations.
+"""
+function execute_binary_continuous_pattern!(
+    sequence::UniversalFunctionSequence,
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+)
+    col1 = sequence.columns[1]
+    col2 = sequence.columns[2]
+    func = sequence.functions[1]
+    
+    val1 = get_data_value_specialized(data, col1, row_idx)
+    val2 = get_data_value_specialized(data, col2, row_idx)
+    result = apply_function_direct_binary(func, Float64(val1), Float64(val2))
+    output[sequence.output_position] = result
+end
+
+"""
+    execute_unary_constant_pattern!(sequence, output, data, row_idx)
+
+Specialized execution for f(c) pattern - zero allocations.
+"""
+function execute_unary_constant_pattern!(
+    sequence::UniversalFunctionSequence,
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+)
+    # Add bounds checking
+    if sequence.n_constants < 1 || length(sequence.functions) < 1
+        error("Invalid unary constant pattern: insufficient constants or functions")
+    end
+    
+    constant = sequence.constants[1]
+    func = sequence.functions[1]
+    
+    result = apply_function_direct_single(func, constant)
+    output[sequence.output_position] = result
+end
+
+"""
+    execute_double_nested_pattern!(sequence, output, data, row_idx)
+
+Specialized execution for f(g(x)) pattern - zero allocations.
+"""
+function execute_double_nested_pattern!(
+    sequence::UniversalFunctionSequence,
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+)
+    column = sequence.columns[1]
+    inner_func = sequence.functions[1]  # g
+    outer_func = sequence.functions[2]  # f
+    
+    val = get_data_value_specialized(data, column, row_idx)
+    inner_result = apply_function_direct_single(inner_func, Float64(val))
+    final_result = apply_function_direct_single(outer_func, inner_result)
+    output[sequence.output_position] = final_result
+end
+
+"""
+    execute_triple_nested_pattern!(sequence, output, data, row_idx)
+
+Specialized execution for f(g(h(x))) pattern - zero allocations.
+"""
+function execute_triple_nested_pattern!(
+    sequence::UniversalFunctionSequence,
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+)
+    column = sequence.columns[1]
+    func1 = sequence.functions[1]  # h
+    func2 = sequence.functions[2]  # g  
+    func3 = sequence.functions[3]  # f
+    
+    val = get_data_value_specialized(data, column, row_idx)
+    result1 = apply_function_direct_single(func1, Float64(val))
+    result2 = apply_function_direct_single(func2, result1)
+    final_result = apply_function_direct_single(func3, result2)
+    output[sequence.output_position] = final_result
+end
+
+"""
+    execute_nested_with_constant_pattern!(sequence, output, data, row_idx)
+
+Specialized execution for f(g(x), c) pattern like log(abs(z))^2 - zero allocations.
+"""
+function execute_nested_with_constant_pattern!(
+    sequence::UniversalFunctionSequence,
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+)
+    # Pattern: LOAD_CONTINUOUS, CALL_UNARY, LOAD_CONSTANT, CALL_BINARY
+    # This means: g(x), then f(g(x), c)
+    
+    if length(sequence.columns) < 1 || length(sequence.functions) < 2 || sequence.n_constants < 1
+        error("Invalid nested with constant pattern: insufficient data")
+    end
+    
+    column = sequence.columns[1]        # x
+    inner_func = sequence.functions[1]  # g (like abs)  
+    outer_func = sequence.functions[2]  # f (like ^)
+    constant = sequence.constants[1]    # c (like 2)
+    
+    # Execute: x → g(x) → f(g(x), c)
+    val = get_data_value_specialized(data, column, row_idx)
+    inner_result = apply_function_direct_single(inner_func, Float64(val))
+    final_result = apply_function_direct_binary(outer_func, inner_result, constant)
+    output[sequence.output_position] = final_result
+end
+
+"""
+    execute_binary_with_constant_pattern!(sequence, output, data, row_idx)
+
+Specialized execution for f(g(x, y), c) pattern like (z + y)^2 - zero allocations.
+"""
+function execute_binary_with_constant_pattern!(
+    sequence::UniversalFunctionSequence,
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+)
+    # Pattern: LOAD_CONTINUOUS, LOAD_CONTINUOUS, CALL_BINARY, LOAD_CONSTANT, CALL_BINARY
+    # This means: x, y → g(x, y) → f(g(x, y), c)
+    
+    if length(sequence.columns) < 2 || length(sequence.functions) < 2 || sequence.n_constants < 1
+        error("Invalid binary with constant pattern: insufficient data")
+    end
+    
+    col1 = sequence.columns[1]          # z
+    col2 = sequence.columns[2]          # y
+    inner_func = sequence.functions[1]  # + (g)
+    outer_func = sequence.functions[2]  # ^ (f)
+    constant = sequence.constants[1]    # 2.0 (c)
+    
+    # Execute: z, y → z + y → (z + y)^2
+    val1 = get_data_value_specialized(data, col1, row_idx)
+    val2 = get_data_value_specialized(data, col2, row_idx)
+    inner_result = apply_function_direct_binary(inner_func, Float64(val1), Float64(val2))  # z + y
+    final_result = apply_function_direct_binary(outer_func, inner_result, constant)        # (z + y)^2
+    output[sequence.output_position] = final_result
+end
+
+"""
+    execute_general_pattern!(sequence, scratch, output, data, row_idx)
+
+General execution for complex patterns using scratch space.
+"""
+function execute_general_pattern!(
+    sequence::UniversalFunctionSequence{N},
+    scratch::AbstractVector{Float64},
+    output::AbstractVector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+) where N
+    
+    scratch_pos = 1
+    col_idx = 1
+    const_idx = 1
+    func_idx = 1
+    
+    @inbounds for i in 1:N
+        op = sequence.operations[i]
+        
+        if op == LOAD_CONTINUOUS
+            column = sequence.columns[col_idx]
+            val = get_data_value_specialized(data, column, row_idx)
+            scratch[scratch_pos] = Float64(val)
+            scratch_pos += 1
+            col_idx += 1
+            
+        elseif op == LOAD_CONSTANT
+            constant = sequence.constants[const_idx]
+            scratch[scratch_pos] = constant
+            scratch_pos += 1
+            const_idx += 1
+            
+        elseif op == CALL_UNARY
+            func = sequence.functions[func_idx]
+            input_val = scratch[scratch_pos - 1]
+            result = apply_function_direct_single(func, input_val)
+            scratch[scratch_pos - 1] = result  # Overwrite input
+            func_idx += 1
+            
+        elseif op == CALL_BINARY
+            func = sequence.functions[func_idx]
+            val1 = scratch[scratch_pos - 2]
+            val2 = scratch[scratch_pos - 1]
+            result = apply_function_direct_binary(func, val1, val2)
+            scratch[scratch_pos - 2] = result  # Overwrite first input
+            scratch_pos -= 1  # One less value on stack
+            func_idx += 1
         end
     end
     
-    # Analyze the function
-    final_pos = analyze_recursive(func_eval)
-    
-    # Convert to compile-time tuple (mirrors categorical pattern)
-    n_ops = length(operations_vec)
-    operations_tuple = ntuple(i -> operations_vec[i], n_ops)
-    
-    scratch_size = allocator.next_position - 1
-    
-    return SimpleFunctionData(operations_tuple, output_position, scratch_size)
+    # Final result is at top of scratch stack
+    output[sequence.output_position] = scratch[scratch_pos - 1]
 end
 
 ###############################################################################
-# OVERWRITE: Main Analysis Function
+# MAIN ANALYSIS AND EXECUTION FUNCTIONS
 ###############################################################################
 
 """
     analyze_function_operations_linear(evaluator::CombinedEvaluator)
 
-OVERWRITE: Simple analysis mirroring categorical success pattern.
+Main analysis function - creates universal sequences for ALL functions.
 """
 function analyze_function_operations_linear(evaluator::CombinedEvaluator)
     function_evaluators = evaluator.function_evaluators
@@ -163,157 +441,19 @@ function analyze_function_operations_linear(evaluator::CombinedEvaluator)
         return (), LinearFunctionOp(0)
     end
     
-    # Create tuple of simple function data (mirrors categorical pattern)
+    # Create tuple of universal function sequences
     function_data = ntuple(n_funcs) do i
         func_eval = function_evaluators[i]
-        analyze_function_to_simple_data(func_eval, func_eval.position)
+        extract_universal_function_sequence(func_eval, func_eval.position)
     end
     
     return function_data, LinearFunctionOp(n_funcs)
 end
 
-###############################################################################
-# SIMPLE TYPE-STABLE EXECUTION - MIRROR CATEGORICAL EXECUTION
-###############################################################################
-
-"""
-    execute_simple_operation!(op::SimpleFunctionOperation, scratch, output, data, row_idx, scratch_offset)
-
-Execute single operation - type-stable like categorical execution.
-"""
-function execute_simple_operation!(
-    op::SimpleFunctionOperation,
-    scratch::AbstractVector{Float64},
-    output::AbstractVector{Float64},
-    data::NamedTuple,
-    row_idx::Int,
-    scratch_offset::Int = 0
-)
-    if op.operation_type == 1  # load_constant
-        scratch_pos = scratch_offset + op.output_pos
-        scratch[scratch_pos] = op.constant_value
-        
-    elseif op.operation_type == 2  # load_continuous
-        scratch_pos = scratch_offset + op.output_pos
-        val = get_data_value_specialized(data, op.column_symbol, row_idx)
-        scratch[scratch_pos] = Float64(val)
-        
-    elseif op.operation_type == 3  # call_unary
-        input_pos = scratch_offset + op.input_pos1
-        output_pos = scratch_offset + op.output_pos
-        input_val = scratch[input_pos]
-        result = apply_function_direct_single(op.func, input_val)
-        scratch[output_pos] = result
-        
-    elseif op.operation_type == 4  # call_binary
-        input_pos1 = scratch_offset + op.input_pos1
-        input_pos2 = scratch_offset + op.input_pos2
-        output_pos = scratch_offset + op.output_pos
-        input_val1 = scratch[input_pos1]
-        input_val2 = scratch[input_pos2]
-        result = apply_function_direct_binary(op.func, input_val1, input_val2)
-        scratch[output_pos] = result
-        
-    else
-        error("Unknown operation type: $(op.operation_type)")
-    end
-    
-    return nothing
-end
-
-"""
-    execute_simple_function!(func_data::SimpleFunctionData{N}, scratch, output, data, row_idx, scratch_offset) where N
-
-Execute simple function - mirrors categorical execution pattern exactly.
-"""
-function execute_simple_function!(
-    func_data::SimpleFunctionData{N},
-    scratch::AbstractVector{Float64},
-    output::AbstractVector{Float64},
-    data::NamedTuple,
-    row_idx::Int,
-    scratch_offset::Int = 0
-) where N
-    
-    # Execute all operations (mirrors categorical loop pattern)
-    @inbounds for i in 1:N  # N is compile-time constant!
-        op = func_data.operations[i]  # Direct tuple access, known type
-        execute_simple_operation!(op, scratch, output, data, row_idx, scratch_offset)
-    end
-    
-    # Write final result to output
-    if N > 0
-        final_op = func_data.operations[N]
-        final_scratch_pos = scratch_offset + final_op.output_pos
-        output[func_data.output_position] = scratch[final_scratch_pos]
-    end
-    
-    return nothing
-end
-
-###############################################################################
-# RECURSIVE EXECUTION - MIRROR CATEGORICAL RECURSIVE PATTERN
-###############################################################################
-
-"""
-    execute_simple_functions_recursive!(function_data::Tuple{}, ...) 
-
-Base case: empty tuple.
-"""
-function execute_simple_functions_recursive!(
-    function_data::Tuple{},
-    scratch::AbstractVector{Float64},
-    output::AbstractVector{Float64},
-    data::NamedTuple,
-    row_idx::Int,
-    scratch_offset::Int = 0
-)
-    return nothing
-end
-
-"""
-    execute_simple_functions_recursive!(function_data::Tuple, ...)
-
-Recursive case - mirrors categorical recursive pattern exactly.
-"""
-function execute_simple_functions_recursive!(
-    function_data::Tuple,
-    scratch::AbstractVector{Float64},
-    output::AbstractVector{Float64},
-    data::NamedTuple,
-    row_idx::Int,
-    scratch_offset::Int = 0
-)
-    if length(function_data) == 0
-        return nothing
-    end
-    
-    # Process first function
-    func_data = function_data[1]
-    execute_simple_function!(func_data, scratch, output, data, row_idx, scratch_offset)
-    
-    # Calculate next scratch offset
-    next_scratch_offset = scratch_offset + func_data.scratch_size
-    
-    # Recurse on remaining functions
-    if length(function_data) > 1
-        remaining_data = Base.tail(function_data)
-        execute_simple_functions_recursive!(
-            remaining_data, scratch, output, data, row_idx, next_scratch_offset
-        )
-    end
-    
-    return nothing
-end
-
-###############################################################################
-# OVERWRITE: Main Execution Function
-###############################################################################
-
 """
     execute_linear_function_operations!(function_data::Tuple, scratch, output, data, row_idx)
 
-OVERWRITE: Simple execution mirroring categorical success.
+Execute ALL function sequences using universal execution.
 """
 function execute_linear_function_operations!(
     function_data::Tuple,
@@ -322,7 +462,17 @@ function execute_linear_function_operations!(
     data::NamedTuple,
     row_idx::Int
 )
-    # Use simple recursive execution (mirrors categorical pattern)
-    execute_simple_functions_recursive!(function_data, scratch, output, data, row_idx, 0)
+    # Execute each function sequence
+    for func_data in function_data
+        execute_universal_sequence!(func_data, scratch, output, data, row_idx)
+    end
     return nothing
 end
+
+# Operation encoding (unchanged interface)
+struct LinearFunctionOp{N}
+    function LinearFunctionOp(n::Int)
+        new{n}()
+    end
+end
+
