@@ -11,7 +11,5 @@ for no-allocation indexing?
     column::Symbol,
     row_idx::Int
 )
- 
-    # Fallback for any other column
     return data[column][row_idx]
 end

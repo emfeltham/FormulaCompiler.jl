@@ -57,23 +57,20 @@ struct FunctionEvaluator <: AbstractEvaluator
 end
 
 """
-    InteractionEvaluator{N}
+    InteractionEvaluator{N, ComponentTuple, WidthTuple}
 
-Self-contained interaction evaluator with complete recursive scratch planning.
+Fully typed interaction evaluator with recursive tuple-based execution.
+Achieves zero allocations through compile-time type specialization.
 """
-struct InteractionEvaluator{N} <: AbstractEvaluator
-    components::Vector{AbstractEvaluator}
-    total_width::Int
-    positions::Vector{Int}                              # Where interaction terms go in model matrix
-    
-    # ENHANCED: Complete recursive scratch space planning
-    scratch_positions::Vector{Int}                      # ALL scratch positions needed
-    component_scratch_map::Vector{UnitRange{Int}}       # Where each component's outputs go
-    component_internal_scratch_map::Vector{UnitRange{Int}}  # Where each component's internals go  
-    total_scratch_needed::Int                           # Total scratch space required
-    
-    # Pre-computed interaction pattern
-    kronecker_pattern::Vector{NTuple{N,Int}}
+struct InteractionEvaluator{N, ComponentTuple, WidthTuple} <: AbstractEvaluator where {
+    ComponentTuple <: NTuple{N, AbstractEvaluator},
+    WidthTuple <: NTuple{N, Int}
+}
+    components::ComponentTuple           # NTuple{N, AbstractEvaluator} - compile-time
+    component_widths::WidthTuple         # NTuple{N, Int} - compile-time
+    positions::Vector{Int}               # Output positions
+    start_position::Int                  # Base output position
+    total_width::Int                     # Total output width
 end
 
 """
@@ -104,7 +101,7 @@ end
 """
     CombinedEvaluator
 
-Container with precomputed operations for execution.
+Updated container with enhanced interaction support.
 """
 struct CombinedEvaluator <: AbstractEvaluator
     # Pre-computed operations to eliminate field access
@@ -114,7 +111,7 @@ struct CombinedEvaluator <: AbstractEvaluator
     # Keep evaluator objects for complex operations that need field access
     categorical_evaluators::Vector{CategoricalEvaluator}
     function_evaluators::Vector{FunctionEvaluator}
-    interaction_evaluators::Vector{InteractionEvaluator}
+    interaction_evaluators::Vector{InteractionEvaluator}  # Now enhanced with mixed-type support
     
     total_width::Int
     max_scratch_needed::Int
@@ -146,6 +143,47 @@ struct ProductEvaluator <: AbstractEvaluator
 end
 
 ###############################################################################
+# COMPONENT TYPE ANALYSIS
+###############################################################################
+
+"""
+    get_component_output_width(evaluator::AbstractEvaluator) -> Int
+
+Get the output width for interaction planning (may differ from structural width).
+"""
+function get_component_output_width(evaluator::AbstractEvaluator)
+    if evaluator isa ConstantEvaluator || evaluator isa ContinuousEvaluator
+        return 1  # Scalar output
+    elseif evaluator isa CategoricalEvaluator
+        return size(evaluator.contrast_matrix, 2)  # Number of contrasts
+    elseif evaluator isa FunctionEvaluator
+        return 1  # Functions produce scalar output
+    elseif evaluator isa InteractionEvaluator
+        return length(evaluator.positions)
+    else
+        return output_width_structural(evaluator)  # Fallback
+    end
+end
+
+"""
+    requires_scratch_space(evaluator::AbstractEvaluator) -> Bool
+
+Determine if component needs scratch space for intermediate computation.
+"""
+function requires_scratch_space(evaluator::AbstractEvaluator)
+    if evaluator isa ConstantEvaluator || evaluator isa ContinuousEvaluator
+        return false  # Direct values, no intermediate computation
+    elseif evaluator isa CategoricalEvaluator
+        return false  # Uses pre-computed contrast lookup
+    elseif evaluator isa FunctionEvaluator
+        # Functions in interactions need scratch (can't write to final position)
+        return true
+    else
+        return true  # Conservative default for complex evaluators
+    end
+end
+
+###############################################################################
 # EVALUATOR ANALYSIS FUNCTIONS
 ###############################################################################
 
@@ -158,7 +196,6 @@ output_width(eval::ConstantEvaluator) = 1
 output_width(eval::ContinuousEvaluator) = 1
 output_width(eval::CategoricalEvaluator) = length(eval.positions)
 output_width(eval::FunctionEvaluator) = 1
-output_width(eval::InteractionEvaluator) = length(eval.positions)
 output_width(eval::ZScoreEvaluator) = length(eval.positions)
 output_width(eval::CombinedEvaluator) = eval.total_width
 output_width(eval::ScaledEvaluator) = length(eval.positions)
@@ -173,7 +210,6 @@ get_positions(eval::ConstantEvaluator) = [eval.position]
 get_positions(eval::ContinuousEvaluator) = [eval.position]
 get_positions(eval::CategoricalEvaluator) = eval.positions
 get_positions(eval::FunctionEvaluator) = [eval.position]
-get_positions(eval::InteractionEvaluator) = eval.positions
 get_positions(eval::ZScoreEvaluator) = eval.positions
 get_positions(eval::ScaledEvaluator) = eval.positions
 get_positions(eval::ProductEvaluator) = [eval.position]
@@ -221,7 +257,7 @@ function get_scratch_positions(eval::FunctionEvaluator)
     end
     return positions
 end
-get_scratch_positions(eval::InteractionEvaluator) = eval.scratch_positions
+
 get_scratch_positions(eval::ZScoreEvaluator) = eval.scratch_positions
 get_scratch_positions(eval::ScaledEvaluator) = eval.scratch_positions
 get_scratch_positions(eval::ProductEvaluator) = eval.scratch_positions
@@ -256,9 +292,35 @@ function max_scratch_needed(evaluator::AbstractEvaluator)
     return isempty(scratch_positions) ? 0 : maximum(scratch_positions)
 end
 
+"""
+    get_scratch_positions(eval::InteractionEvaluator) -> Vector{Int}
+
+Interactions require zero scratch positions.
+"""
+get_scratch_positions(eval::InteractionEvaluator) = Int[]
+
+"""
+    max_scratch_needed(evaluator::InteractionEvaluator) -> Int
+
+Interactions require zero scratch space.
+"""
 function max_scratch_needed(evaluator::InteractionEvaluator)
-    return evaluator.total_scratch_needed  # Use the new field
+    return 0
 end
+
+"""
+    output_width(eval::InteractionEvaluator) -> Int
+
+Get output width from total_width field.
+"""
+output_width(eval::InteractionEvaluator) = eval.total_width
+
+"""
+    get_positions(eval::InteractionEvaluator) -> Vector{Int}
+
+Get model matrix positions.
+"""
+get_positions(eval::InteractionEvaluator) = eval.positions
 
 
 ###############################################################################
@@ -359,63 +421,3 @@ end
 function extract_columns_recursive!(columns::Vector{Symbol}, term::Union{InterceptTerm, ConstantTerm})
     # No columns
 end
-
-###############################################################################
-# ADD TO evaluators.jl - NEW UTILITY FUNCTIONS
-###############################################################################
-
-"""
-    plan_interaction_scratch_space(components::Vector{AbstractEvaluator}) 
-    -> (Vector{UnitRange{Int}}, Vector{UnitRange{Int}}, Int)
-
-Plan complete scratch space for all components.
-ENHANCED: Added debugging output.
-"""
-function plan_interaction_scratch_space(components::Vector{AbstractEvaluator})
-    n_components = length(components)
-    component_output_ranges = Vector{UnitRange{Int}}(undef, n_components)
-    component_internal_ranges = Vector{UnitRange{Int}}(undef, n_components)
-    
-    current_scratch_pos = 1
-    
-    # DEBUG: Print planning info
-    # println("🔧 Planning scratch space for $(n_components) components")
-    
-    for (i, component) in enumerate(components)
-        # Calculate component's output width and internal scratch needs
-        output_width = output_width_structural(component)
-        internal_scratch_needed = calculate_component_scratch_recursive(component)
-        
-        # DEBUG: Print component info
-        # println("  Component $i ($(typeof(component).__name__)): output=$output_width, internal=$internal_scratch_needed")
-        
-        # Allocate output range
-        if output_width > 0
-            output_range = current_scratch_pos:(current_scratch_pos + output_width - 1)
-            current_scratch_pos += output_width
-        else
-            output_range = 1:0  # Empty range
-        end
-        component_output_ranges[i] = output_range
-        
-        # Allocate internal scratch range
-        if internal_scratch_needed > 0
-            internal_range = current_scratch_pos:(current_scratch_pos + internal_scratch_needed - 1)
-            current_scratch_pos += internal_scratch_needed
-        else
-            internal_range = 1:0  # Empty range
-        end
-        component_internal_ranges[i] = internal_range
-        
-        # DEBUG: Print assigned ranges
-        # println("    Assigned: output=$output_range, internal=$internal_range")
-    end
-    
-    total_scratch_needed = current_scratch_pos - 1
-    
-    # DEBUG: Print total
-    # println("  Total scratch needed: $total_scratch_needed")
-    
-    return component_output_ranges, component_internal_ranges, total_scratch_needed
-end
-
