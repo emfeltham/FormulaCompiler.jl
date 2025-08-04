@@ -1,11 +1,6 @@
 # step4_interactions.jl
-# Complete interaction support with full precomputation - OPTIMIZED VERSION
-# This is a COMPLETE REPLACEMENT for the original step4_interactions.jl
-
-###############################################################################
-# COMPONENT CONVERSION FUNCTIONS - USE STEP 1-3 OPTIMIZATIONS
-###############################################################################
-
+# 1. Interaction support with full precomputation
+# 2. Capstone functions on the pipeline
 
 ###############################################################################
 # INTERACTION ANALYSIS
@@ -14,7 +9,7 @@
 """
     analyze_interaction_operations(evaluator::CombinedEvaluator) -> (Vector{InteractionEvaluator}, InteractionOp)
 
-VERIFIED: Returns InteractionEvaluator objects directly, not InteractionData.
+Returns InteractionEvaluator objects directly, not InteractionData.
 """
 function analyze_interaction_operations(evaluator::CombinedEvaluator)
     interaction_evaluators = evaluator.interaction_evaluators
@@ -23,8 +18,6 @@ function analyze_interaction_operations(evaluator::CombinedEvaluator)
         return InteractionEvaluator[], InteractionOp()
     end
     
-    # CRITICAL: Return the InteractionEvaluator objects directly
-    # Do NOT convert them to InteractionData or any other format
     return interaction_evaluators, InteractionOp()
 end
 
@@ -76,9 +69,7 @@ end
 """
     analyze_evaluator(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
 
-Complete analysis for all operation types including interactions using Step 1-3 optimizations.
-Enhanced formula data with specialized categorical tuple.
-Updated analyze_evaluator to use specialized function analysis.
+Complete analysis for all operation types including interactions.
 """
 function analyze_evaluator(evaluator::AbstractEvaluator)
     if evaluator isa CombinedEvaluator
@@ -89,14 +80,7 @@ function analyze_evaluator(evaluator::AbstractEvaluator)
         function_data, function_op = analyze_function_operations_linear(evaluator)  # NEW VERSION
         interaction_evaluators, interaction_op = analyze_interaction_operations(evaluator)
         
-        # Calculate scratch space requirements
-        # max_function_scratch = if isempty(function_data)
-        #     0
-        # else
-        #     # Calculate total scratch needed by summing all function scratch sizes
-        #     sum(f.scratch_size for f in function_data)
-        # end
-        
+        # PLACE HOLDER: NOT REALLY NEEDED
         max_function_scratch = 0
         max_interaction_scratch = isempty(interaction_evaluators) ? 0 : maximum(i.total_scratch_needed for i in interaction_evaluators)
 
@@ -109,7 +93,7 @@ function analyze_evaluator(evaluator::AbstractEvaluator)
             constant_data,
             continuous_data,
             categorical_data,
-            function_data,        # Now a tuple of SpecializedLinearFunctionData!
+            function_data, # Now a tuple of SpecializedLinearFunctionData!
             interaction_evaluators,
             max_function_scratch,
             max_interaction_scratch,
@@ -125,7 +109,7 @@ function analyze_evaluator(evaluator::AbstractEvaluator)
 end
 
 ###############################################################################
-# INTERACTION EXECUTION FUNCTIONS - USE STEP 1-3 OPTIMIZATIONS
+# INTERACTION EXECUTION
 ###############################################################################
 
 """
@@ -223,7 +207,6 @@ end
     calculate_component_scratch_recursive(component::AbstractEvaluator) -> Int
 
 Calculate total scratch space needed by a component, including all internal computation.
-ENHANCED: Better handling of FunctionEvaluator scratch needs.
 """
 function calculate_component_scratch_recursive(component::AbstractEvaluator)
     if component isa ConstantEvaluator
@@ -267,7 +250,7 @@ function calculate_component_scratch_recursive(component::AbstractEvaluator)
 end
 
 ###############################################################################
-# COMPLETE EXECUTION - FIXED TO AVOID RECURSION
+# COMPLETE EXECUTION
 ###############################################################################
 
 """
@@ -313,22 +296,23 @@ function execute_operation!(
     op::CompleteFormulaOp,
     output, input_data, row_idx
 )
-    # Execute constants, continuous (already optimized)
+    # Execute constants, continuous
     execute_complete_constant_operations!(data.constants, output, input_data, row_idx)
     execute_complete_continuous_operations!(data.continuous, output, input_data, row_idx)
     
-    # Execute categorical using NEW specialized tuple-based execution
+    # Execute categorical using specialized tuple-based execution
     execute_categorical_operations!(data.categorical, output, input_data, row_idx)
     
-    # Functions and interactions (will be specialized in later phases)
+    # Functions
     execute_linear_function_operations!(data.functions, data.function_scratch, output, input_data, row_idx)
+    # Interactions (under development)
     execute_interaction_operations!(data.interactions, data.interaction_scratch, output, input_data, row_idx)
     
     return nothing
 end
 
 ###############################################################################
-# COMPLETE COMPILATION FUNCTIONS
+# COMPLETE COMPILATION
 ###############################################################################
 
 """
@@ -361,11 +345,7 @@ function compile_formula_specialized(model, data::NamedTuple)
 end
 
 ###############################################################################
-# COMPLETE UTILITY FUNCTIONS
-###############################################################################
-
-###############################################################################
-# ADD TO step4_interactions.jl - NEW EXECUTION FUNCTIONS
+# EXECUTION
 ###############################################################################
 
 """
@@ -479,8 +459,7 @@ end
         row_idx::Int
     )
 
-SIMPLIFIED: Execute function evaluator using assigned scratch space.
-Avoids complex fallback paths that might allocate.
+Execute function evaluator using assigned scratch space.
 """
 function execute_function_in_assigned_scratch!(
     func_eval::FunctionEvaluator,
@@ -549,7 +528,7 @@ function execute_function_in_assigned_scratch!(
 end
 
 ###############################################################################
-# ADD TO step4_interactions.jl - DEBUGGING UTILITIES
+# DEBUGGING UTILITIES
 ###############################################################################
 
 """
