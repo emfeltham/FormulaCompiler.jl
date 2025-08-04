@@ -94,9 +94,8 @@ function compile_term(
         component_evaluators = AbstractEvaluator[]
         component_widths = Int[]
         
-        # Compile each component independently (don't allocate scratch yet)
+        # Compile each component independently
         for comp in term.terms
-            # Use a temporary scratch allocator for component compilation
             temp_allocator = ScratchAllocator()
             comp_eval = compile_term(comp, 1, temp_allocator, categorical_levels)
             
@@ -104,35 +103,23 @@ function compile_term(
             push!(component_widths, width(comp))
         end
         
-        # Plan complete scratch space for all components
-        component_output_ranges, component_internal_ranges, total_scratch_needed = 
-            plan_interaction_scratch_space(component_evaluators)
+        # Convert to compile-time tuples
+        N = length(component_evaluators)
+        components_tuple = ntuple(i -> component_evaluators[i], N)
+        widths_tuple = ntuple(i -> component_widths[i], N)
         
-        # Allocate the total scratch space from the main allocator
-        if total_scratch_needed > 0
-            total_scratch_range = allocate_scratch!(scratch_allocator, total_scratch_needed)
-            all_scratch_positions = collect(total_scratch_range)
-        else
-            all_scratch_positions = Int[]
-        end
-        
-        # Calculate final output positions and pattern
+        # Calculate output setup
         total_width = prod(component_widths)
         positions = collect(start_position:(start_position + total_width - 1))
-        N = length(component_widths)
-        pattern = compute_kronecker_pattern(component_widths)
         
-        return InteractionEvaluator{N}(
-            component_evaluators,
-            total_width,
+        # Create fully typed InteractionEvaluator
+        return InteractionEvaluator{N, typeof(components_tuple), typeof(widths_tuple)}(
+            components_tuple,      # NTuple{N, AbstractEvaluator}
+            widths_tuple,          # NTuple{N, Int}
             positions,
-            all_scratch_positions,
-            component_output_ranges,
-            component_internal_ranges,
-            total_scratch_needed,
-            pattern
+            start_position,
+            total_width
         )
-        
     elseif term isa ZScoredTerm
         underlying_width = width(term.term)
         underlying_scratch = allocate_scratch!(scratch_allocator, underlying_width)

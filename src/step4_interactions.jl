@@ -1,53 +1,305 @@
-# step4_interactions.jl
-# 1. Interaction support with full precomputation
-# 2. Capstone functions on the pipeline
+# step4_interactions.jl - COMPLETE REPLACEMENT
+# Replace the old interaction system entirely with the new binary system
 
 ###############################################################################
-# INTERACTION ANALYSIS
+# IMPORT BINARY INTERACTION SYSTEM
+###############################################################################
+
+# All the binary interaction types and functions from phase1_binary_interactions.jl
+# (Copy the entire contents here or include the file)
+
+###############################################################################
+# CORE BINARY INTERACTION DATA TYPES
 ###############################################################################
 
 """
-    analyze_interaction_operations(evaluator::CombinedEvaluator) -> (Vector{InteractionEvaluator}, InteractionOp)
+    BinaryInteractionData{Comp1Type, Comp2Type, Pattern}
 
-Returns InteractionEvaluator objects directly, not InteractionData.
+Compile-time specialized binary interaction with known component types.
+"""
+struct BinaryInteractionData{Comp1Type, Comp2Type, Pattern}
+    component1::Comp1Type                    
+    component2::Comp2Type                    
+    width1::Int                              
+    width2::Int                              
+    index_pattern::Pattern                   
+    output_positions::Vector{Int}            
+    
+    function BinaryInteractionData(
+        comp1::C1, comp2::C2, w1::Int, w2::Int, 
+        pattern::P, positions::Vector{Int}
+    ) where {C1, C2, P}
+        new{C1, C2, P}(comp1, comp2, w1, w2, pattern, positions)
+    end
+end
+
+"""
+    SpecializedInteractionData{BinaryTuple}
+
+Compile-time specialized interaction data with tuple of binary interactions.
+"""
+struct SpecializedInteractionData{BinaryTuple}
+    binary_interactions::BinaryTuple         
+    
+    function SpecializedInteractionData(binary_tuple::T) where T
+        new{T}(binary_tuple)
+    end
+end
+
+"""
+    InteractionOp{M}
+
+Compile-time encoding of interaction operations.
+"""
+struct InteractionOp{M}
+    function InteractionOp(n_binary::Int)
+        new{n_binary}()
+    end
+end
+
+# Backward compatibility
+InteractionOp() = InteractionOp(0)
+
+###############################################################################
+# COMPONENT VALUE ACCESS
+###############################################################################
+
+###############################################################################
+# COMPONENT VALUE ACCESS (UPDATED WITH CONSISTENT SIGNATURES)
+###############################################################################
+
+@inline function get_component_value(
+    component::ConstantEvaluator, 
+    index::Int, 
+    data::NamedTuple, 
+    row_idx::Int,
+    output::Vector{Float64}  # Unused but consistent signature
+)
+    return component.value
+end
+
+@inline function get_component_value(
+    component::ContinuousEvaluator, 
+    index::Int, 
+    data::NamedTuple, 
+    row_idx::Int,
+    output::Vector{Float64}  # Unused but consistent signature
+)
+    return Float64(get_data_value_specialized(data, component.column, row_idx))
+end
+
+@inline function get_component_value(
+    component::CategoricalEvaluator, 
+    index::Int, 
+    data::NamedTuple, 
+    row_idx::Int,
+    output::Vector{Float64}  # Unused but consistent signature
+)
+    level = component.level_codes[row_idx]
+    level = clamp(level, 1, component.n_levels)
+    return component.contrast_matrix[level, index]
+end
+
+@inline function get_component_value(
+    component::FunctionEvaluator, 
+    index::Int, 
+    data::NamedTuple, 
+    row_idx::Int,
+    output::Vector{Float64}  # NOW USED: Read pre-computed function result
+)
+    # FIXED: Read pre-computed function result from Phase 2 execution
+    # No inline computation, no allocations!
+    return output[component.position]
+end
+
+###############################################################################
+# BINARY INTERACTION PATTERN GENERATION
+###############################################################################
+
+function compute_binary_interaction_pattern(width1::Int, width2::Int)
+    pattern = Tuple{Int, Int}[]
+    sizehint!(pattern, width1 * width2)
+    
+    for i in 1:width1
+        for j in 1:width2
+            push!(pattern, (i, j))
+        end
+    end
+    
+    return pattern
+end
+
+function create_binary_interaction_data(
+    comp1::AbstractEvaluator, 
+    comp2::AbstractEvaluator, 
+    output_positions::Vector{Int}
+)
+    width1 = get_component_output_width(comp1)
+    width2 = get_component_output_width(comp2)
+    
+    expected_width = width1 * width2
+    if length(output_positions) != expected_width
+        error("Output positions length $(length(output_positions)) != expected width $expected_width")
+    end
+    
+    pattern = compute_binary_interaction_pattern(width1, width2)
+    
+    return BinaryInteractionData(comp1, comp2, width1, width2, pattern, output_positions)
+end
+
+###############################################################################
+# BINARY INTERACTION EXECUTION
+###############################################################################
+
+function execute_operation!(
+    data::BinaryInteractionData{C1, C2, P},
+    output::AbstractVector{Float64},
+    input_data::NamedTuple,
+    row_idx::Int
+) where {C1, C2, P}
+    
+    @inbounds for output_idx in 1:length(data.index_pattern)
+        i, j = data.index_pattern[output_idx]
+        
+        # UPDATED: Pass output array to component value access
+        val1 = get_component_value(data.component1, i, input_data, row_idx, output)
+        val2 = get_component_value(data.component2, j, input_data, row_idx, output)
+        
+        product = val1 * val2
+        
+        output_pos = data.output_positions[output_idx]
+        output[output_pos] = product
+    end
+    
+    return nothing
+end
+
+###############################################################################
+# RECURSIVE EXECUTION
+###############################################################################
+
+function execute_binary_interactions_recursive!(
+    binary_tuple::Tuple{},
+    output::AbstractVector{Float64},
+    input_data::NamedTuple,
+    row_idx::Int
+)
+    return nothing
+end
+
+function execute_binary_interactions_recursive!(
+    binary_tuple::Tuple,
+    output::AbstractVector{Float64},
+    input_data::NamedTuple,
+    row_idx::Int
+)
+    if length(binary_tuple) > 0
+        execute_operation!(binary_tuple[1], output, input_data, row_idx)
+        
+        if length(binary_tuple) > 1
+            remaining = Base.tail(binary_tuple)
+            execute_binary_interactions_recursive!(remaining, output, input_data, row_idx)
+        end
+    end
+    return nothing
+end
+
+function execute_operation!(
+    data::SpecializedInteractionData{BT},
+    op::InteractionOp{M},
+    output::AbstractVector{Float64},
+    input_data::NamedTuple,
+    row_idx::Int
+) where {BT, M}
+    
+    execute_binary_interactions_recursive!(data.binary_interactions, output, input_data, row_idx)
+    return nothing
+end
+
+###############################################################################
+# NEW ANALYSIS FUNCTION (Replaces old analyze_interaction_operations)
+###############################################################################
+
+"""
+    analyze_interaction_operations(evaluator::CombinedEvaluator) -> (SpecializedInteractionData, InteractionOp)
+
+NEW: Analyze interaction evaluators and create specialized binary interaction data.
+Completely replaces the old function that returned Vector{InteractionEvaluator}.
 """
 function analyze_interaction_operations(evaluator::CombinedEvaluator)
     interaction_evaluators = evaluator.interaction_evaluators
+    n_interactions = length(interaction_evaluators)
     
-    if isempty(interaction_evaluators)
-        return InteractionEvaluator[], InteractionOp()
+    if n_interactions == 0
+        empty_data = SpecializedInteractionData(())
+        return empty_data, InteractionOp(0)
     end
     
-    return interaction_evaluators, InteractionOp()
+    # Convert InteractionEvaluators to BinaryInteractionData
+    binary_interactions = BinaryInteractionData[]
+    
+    for interaction_eval in interaction_evaluators
+        if length(interaction_eval.components) == 2
+            # Convert 2-way InteractionEvaluator to BinaryInteractionData
+            comp1, comp2 = interaction_eval.components
+            binary_data = create_binary_interaction_data(comp1, comp2, interaction_eval.positions)
+            push!(binary_interactions, binary_data)
+        else
+            @warn "Phase 1: Skipping non-binary interaction with $(length(interaction_eval.components)) components"
+        end
+    end
+    
+    n_binary = length(binary_interactions)
+    
+    if n_binary == 0
+        empty_data = SpecializedInteractionData(())
+        return empty_data, InteractionOp(0)
+    end
+    
+    # Create compile-time tuple
+    binary_tuple = ntuple(n_binary) do i
+        binary_interactions[i]
+    end
+    
+    specialized_data = SpecializedInteractionData(binary_tuple)
+    interaction_op = InteractionOp(n_binary)
+    
+    return specialized_data, interaction_op
 end
 
-"""
-    InteractionOp
-
-Operation encoding for interactions.
-"""
-struct InteractionOp end
-
 ###############################################################################
-# COMPLETE FORMULA DATA TYPES
+# NEW EXECUTION FUNCTION (Replaces old execute_interaction_operations!)
 ###############################################################################
 
 """
-    CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}
+    execute_interaction_operations!(
+        interaction_data::SpecializedInteractionData,
+        scratch::Vector{Float64},
+        output::Vector{Float64},
+        data::NamedTuple,
+        row_idx::Int
+    )
 
-Complete formula data including interactions.
+NEW: Execute binary interactions using the new system.
+Completely replaces the old function that took Vector{InteractionEvaluator}.
 """
-struct CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}
-    constants::ConstData
-    continuous::ContData
-    categorical::CatData
-    functions::FuncData
-    interactions::IntData               # Vector{InteractionData}
-    max_function_scratch::Int
-    max_interaction_scratch::Int
-    function_scratch::Vector{Float64}   # Pre-allocated function scratch
-    interaction_scratch::Vector{Float64}# Pre-allocated interaction scratch
+function execute_interaction_operations!(
+    interaction_data::SpecializedInteractionData,
+    scratch::Vector{Float64},  # Maintained for interface compatibility
+    output::Vector{Float64},
+    data::NamedTuple,
+    row_idx::Int
+)
+    n_binary = length(interaction_data.binary_interactions)
+    op = InteractionOp(n_binary)
+    
+    execute_operation!(interaction_data, op, output, data, row_idx)
+    return nothing
 end
+
+###############################################################################
+# UPDATED COMPLETE FORMULA DATA TYPES
+###############################################################################
 
 """
     CompleteFormulaOp{ConstOp, ContOp, CatOp, FuncOp, IntOp}
@@ -62,44 +314,60 @@ struct CompleteFormulaOp{ConstOp, ContOp, CatOp, FuncOp, IntOp}
     interactions::IntOp
 end
 
+"""
+    CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}
+
+Updated to use SpecializedInteractionData instead of Vector{InteractionEvaluator}.
+"""
+struct CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}
+    constants::ConstData
+    continuous::ContData
+    categorical::CatData
+    functions::FuncData
+    interactions::IntData               # Now SpecializedInteractionData{BinaryTuple}
+    max_function_scratch::Int
+    max_interaction_scratch::Int
+    function_scratch::Vector{Float64}
+    interaction_scratch::Vector{Float64}
+end
+
 ###############################################################################
-# COMPLETE ANALYSIS FUNCTION
+# UPDATED ANALYZE_EVALUATOR
 ###############################################################################
 
 """
     analyze_evaluator(evaluator::AbstractEvaluator) -> (DataTuple, OpTuple)
 
-Complete analysis for all operation types including interactions.
+Updated to use new binary interaction system.
 """
 function analyze_evaluator(evaluator::AbstractEvaluator)
     if evaluator isa CombinedEvaluator
-        # Analyze all operation types using NEW specialized function analysis
         constant_data, constant_op = analyze_constant_operations(evaluator)
         continuous_data, continuous_op = analyze_continuous_operations(evaluator)
         categorical_data, categorical_op = analyze_categorical_operations(evaluator)
-        function_data, function_op = analyze_function_operations_linear(evaluator)  # NEW VERSION
-        interaction_evaluators, interaction_op = analyze_interaction_operations(evaluator)
+        function_data, function_op = analyze_function_operations_linear(evaluator)
         
-        # PLACE HOLDER: NOT REALLY NEEDED
+        # Use NEW binary interaction analysis
+        interaction_data, interaction_op = analyze_interaction_operations(evaluator)
+        
         max_function_scratch = 0
-        max_interaction_scratch = isempty(interaction_evaluators) ? 0 : maximum(i.total_scratch_needed for i in interaction_evaluators)
-
-        # Pre-allocate once
-        function_scratch = max_function_scratch > 0 ? Vector{Float64}(undef, max_function_scratch) : Float64[]
-        interaction_scratch = max_interaction_scratch > 0 ? Vector{Float64}(undef, max_interaction_scratch) : Float64[]
-
-        # Construct data with SPECIALIZED function data (tuple, not vector)
+        max_interaction_scratch = 0
+        
+        function_scratch = Float64[]
+        interaction_scratch = Float64[]
+        
         formula_data = CompleteFormulaData(
             constant_data,
             continuous_data,
             categorical_data,
-            function_data, # Now a tuple of SpecializedLinearFunctionData!
-            interaction_evaluators,
+            function_data,
+            interaction_data,  # Now SpecializedInteractionData
             max_function_scratch,
             max_interaction_scratch,
             function_scratch,
             interaction_scratch
         )
+        
         formula_op = CompleteFormulaOp(constant_op, continuous_op, categorical_op, function_op, interaction_op)
         return formula_data, formula_op
         
@@ -109,148 +377,70 @@ function analyze_evaluator(evaluator::AbstractEvaluator)
 end
 
 ###############################################################################
-# INTERACTION EXECUTION
+# UPDATED EXECUTION ORDER
 ###############################################################################
 
 """
-    execute_interaction_operation!(interaction::InteractionEvaluator{N},
-                                  scratch::AbstractVector{Float64},  # <-- Changed
-                                  output::AbstractVector{Float64},   # <-- Changed  
-                                  data::NamedTuple,
-                                  row_idx::Int) where N
+    execute_operation!(data::CompleteFormulaData, op::CompleteFormulaOp, output, input_data, row_idx)
 
-Execute interaction using recursive scratch planning (zero allocations).
+Updated execution with new binary interaction system.
 """
-function execute_interaction_operation!(
-    interaction::InteractionEvaluator{N},
-    scratch::AbstractVector{Float64},
-    output::AbstractVector{Float64},
-    data::NamedTuple,
-    row_idx::Int
-) where N
-    
-    # Phase 1: Execute components with direct indexing (no enumerate)
-    @inbounds for i in 1:length(interaction.components)
-        component = interaction.components[i]
-        output_range = interaction.component_scratch_map[i]
-        internal_range = interaction.component_internal_scratch_map[i]
-        
-        # Inline continuous evaluator execution to avoid function call overhead
-        if component isa ContinuousEvaluator && !isempty(output_range)
-            val = get_data_value_specialized(data, component.column, row_idx)
-            scratch[first(output_range)] = Float64(val)
-        else
-            # Fall back to general case for other component types
-            execute_component_in_assigned_scratch!(
-                component, output_range, internal_range, scratch, data, row_idx
-            )
-        end
-    end
-    
-    # Phase 2: Optimized Kronecker pattern application (no enumerate)
-    @inbounds for result_idx in 1:length(interaction.kronecker_pattern)
-        if result_idx <= length(interaction.positions)
-            pattern_indices = interaction.kronecker_pattern[result_idx]
-            product = 1.0
-            
-            # Direct indexing instead of enumerate
-            for comp_idx in 1:length(pattern_indices)
-                pattern_val = pattern_indices[comp_idx]
-                comp_output_range = interaction.component_scratch_map[comp_idx]
-                value_pos = first(comp_output_range) + pattern_val - 1
-                product *= scratch[value_pos]
-            end
-            
-            output_pos = interaction.positions[result_idx]
-            output[output_pos] = product
-        end
-    end
-    
-    return nothing
-end
-
-"""
-    execute_interaction_operations!(
-        interaction_evaluators::Vector{InteractionEvaluator},  # More specific type
-        scratch::AbstractVector{Float64},
-        output::AbstractVector{Float64},
-        data::NamedTuple,
-        row_idx::Int
-    )
-
-Execute multiple interactions - simplified type signature.
-"""
-function execute_interaction_operations!(
-    interaction_evaluators::Vector,
-    scratch::AbstractVector{Float64},
-    output::AbstractVector{Float64},
-    data::NamedTuple,
-    row_idx::Int
+function execute_operation!(
+    data::CompleteFormulaData,
+    op::CompleteFormulaOp,
+    output, input_data, row_idx
 )
-    # Handle empty case
-    if isempty(interaction_evaluators)
-        return nothing
-    end
+    # Phase 1: Constants and Continuous
+    execute_complete_constant_operations!(data.constants, output, input_data, row_idx)
+    execute_complete_continuous_operations!(data.continuous, output, input_data, row_idx)
     
-    # Direct indexing instead of enumerate
-    @inbounds for i in 1:length(interaction_evaluators)
-        interaction = interaction_evaluators[i]
-        if interaction isa InteractionEvaluator
-            execute_interaction_operation!(interaction, scratch, output, data, row_idx)
-        end
-    end
+    # Phase 2: Functions 
+    execute_linear_function_operations!(data.functions, data.function_scratch, output, input_data, row_idx)
+    
+    # Phase 3: Categoricals
+    execute_categorical_operations!(data.categorical, output, input_data, row_idx)
+    
+    # Phase 4: Binary Interactions (NEW)
+    execute_interaction_operations!(data.interactions, data.interaction_scratch, output, input_data, row_idx)
     
     return nothing
 end
 
-"""
-    calculate_component_scratch_recursive(component::AbstractEvaluator) -> Int
+###############################################################################
+# COMPILATION FUNCTIONS
+###############################################################################
 
-Calculate total scratch space needed by a component, including all internal computation.
 """
-function calculate_component_scratch_recursive(component::AbstractEvaluator)
-    if component isa ConstantEvaluator
-        return 0  # No scratch needed
-    elseif component isa ContinuousEvaluator
-        return 0  # No scratch needed
-    elseif component isa CategoricalEvaluator
-        return 0  # No scratch needed (uses pre-computed lookup)
-    elseif component isa FunctionEvaluator
-        # For FunctionEvaluator, we need scratch for:
-        # 1. All argument evaluations
-        # 2. The function computation itself
-        
-        total_scratch = 0
-        
-        # Add scratch needed by all arguments
-        for arg_eval in component.arg_evaluators
-            arg_scratch = calculate_component_scratch_recursive(arg_eval)
-            total_scratch += arg_scratch
-        end
-        
-        # Add scratch for the function's own computation
-        # This should be at least the length of scratch_positions if available
-        function_own_scratch = if !isempty(component.scratch_positions)
-            maximum(component.scratch_positions)
-        else
-            # Fallback: minimum scratch for argument storage + result
-            length(component.arg_evaluators) + 1
-        end
-        
-        total_scratch = max(total_scratch, function_own_scratch)
-        return total_scratch
-        
-    elseif component isa InteractionEvaluator
-        return component.total_scratch_needed
-    elseif component isa ZScoreEvaluator
-        return max_scratch_needed(component.underlying)
-    else
-        return max_scratch_needed(component)
-    end
+    create_specialized_formula(compiled_formula::CompiledFormula) -> SpecializedFormula
+
+Updated to work with enhanced interaction system.
+"""
+function create_specialized_formula(compiled_formula::CompiledFormula)
+    # Analyze the evaluator tree with complete support including enhanced interactions
+    data_tuple, op_tuple = analyze_evaluator(compiled_formula.root_evaluator)
+    
+    # Create specialized formula
+    return SpecializedFormula{typeof(data_tuple), typeof(op_tuple)}(
+        data_tuple,
+        op_tuple,
+        compiled_formula.output_width
+    )
+end
+
+"""
+    compile_formula_specialized(model, data::NamedTuple) -> SpecializedFormula
+
+Updated direct compilation to specialized formula with enhanced interaction support.
+"""
+function compile_formula_specialized(model, data::NamedTuple)
+    # Use existing compilation logic to build evaluator tree
+    compiled = compile_formula(model, data)
+    # Convert to complete specialized form with enhanced interactions
+    return create_specialized_formula(compiled)
 end
 
 ###############################################################################
-# COMPLETE EXECUTION
+# EXECUTION FUNCTIONS FOR CONSTANTS AND CONTINUOUS
 ###############################################################################
 
 """
@@ -282,311 +472,26 @@ function execute_complete_continuous_operations!(continuous_data::ContinuousData
     return nothing
 end
 
-"""
-    execute_operation!(data::CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}, 
-                      op::CompleteFormulaOp{ConstOp, ContOp, CatOp, FuncOp, IntOp}, 
-                      output, input_data, row_idx) where {ConstData, ContData, CatData, FuncData, IntData, ConstOp, ContOp, CatOp, FuncOp, IntOp}
+# Fallback for empty constant data
+function execute_complete_constant_operations!(constant_data::ConstantData{0}, output, input_data, row_idx)
+    return nothing
+end
 
-Execute complete formulas with all operation types including interactions using Step 1-3 optimizations.
-
-Updated main execution that works with specialized categorical tuples.
-"""
-function execute_operation!(
-    data::CompleteFormulaData,
-    op::CompleteFormulaOp,
-    output, input_data, row_idx
-)
-    # Execute constants, continuous
-    execute_complete_constant_operations!(data.constants, output, input_data, row_idx)
-    execute_complete_continuous_operations!(data.continuous, output, input_data, row_idx)
-    
-    # Execute categorical using specialized tuple-based execution
-    execute_categorical_operations!(data.categorical, output, input_data, row_idx)
-    
-    # Functions
-    execute_linear_function_operations!(data.functions, data.function_scratch, output, input_data, row_idx)
-    # Interactions (under development)
-    execute_interaction_operations!(data.interactions, data.interaction_scratch, output, input_data, row_idx)
-    
+# Fallback for empty continuous data  
+function execute_complete_continuous_operations!(continuous_data::ContinuousData{0, Tuple{}}, output, input_data, row_idx)
     return nothing
 end
 
 ###############################################################################
-# COMPLETE COMPILATION
+# INTERFACE METHODS
 ###############################################################################
 
-"""
-    create_specialized_formula(compiled_formula::CompiledFormula) -> SpecializedFormula
+Base.isempty(data::SpecializedInteractionData) = length(data.binary_interactions) == 0
+Base.length(data::SpecializedInteractionData) = length(data.binary_interactions)
 
-Convert a CompiledFormula to a SpecializedFormula with complete interaction support using Step 1-3 optimizations.
-"""
-function create_specialized_formula(compiled_formula::CompiledFormula)
-    # Analyze the evaluator tree with complete support using Step 1-3 optimizations
-    data_tuple, op_tuple = analyze_evaluator(compiled_formula.root_evaluator)
-    
-    # Create specialized formula
-    return SpecializedFormula{typeof(data_tuple), typeof(op_tuple)}(
-        data_tuple,
-        op_tuple,
-        compiled_formula.output_width
-    )
-end
-
-"""
-    compile_formula_specialized(model, data::NamedTuple) -> SpecializedFormula
-
-Direct compilation to specialized formula with complete interaction support using Step 1-3 optimizations.
-"""
-function compile_formula_specialized(model, data::NamedTuple)
-    # Use existing compilation logic to build evaluator tree
-    compiled = compile_formula(model, data)
-    # Convert to complete specialized form with optimizations
-    return create_specialized_formula(compiled)
-end
-
-###############################################################################
-# EXECUTION
-###############################################################################
-
-"""
-    execute_component_in_assigned_scratch!(
-        component::AbstractEvaluator,
-        output_range::UnitRange{Int},
-        internal_range::UnitRange{Int},
-        scratch::AbstractVector{Float64},  # <-- Changed to AbstractVector
-        data::NamedTuple,
-        row_idx::Int
-    )
-
-Execute component using pre-assigned scratch space regions.
-Accepts both Vector{Float64} and SubArray (views).
-"""
-function execute_component_in_assigned_scratch!(
-    component::AbstractEvaluator,
-    output_range::UnitRange{Int},
-    internal_range::UnitRange{Int},
-    scratch::AbstractVector{Float64},
-    data::NamedTuple,
-    row_idx::Int
-)
-    if component isa ConstantEvaluator
-        if !isempty(output_range)
-            @inbounds scratch[first(output_range)] = component.value
-        end
-        
-    elseif component isa ContinuousEvaluator
-        if !isempty(output_range)
-            val = get_data_value_specialized(data, component.column, row_idx)
-            @inbounds scratch[first(output_range)] = Float64(val)
-        end
-        
-    elseif component isa CategoricalEvaluator
-        if !isempty(output_range)
-            level = component.level_codes[row_idx]
-            level = clamp(level, 1, component.n_levels)
-            
-            # Direct indexing instead of enumerate
-            for i in 1:length(output_range)
-                pos = output_range[i]
-                @inbounds scratch[pos] = component.contrast_matrix[level, i]
-            end
-        end
-        
-    elseif component isa FunctionEvaluator
-        # Fast path for single continuous argument (most common case)
-        if length(component.arg_evaluators) == 1 && 
-           component.arg_evaluators[1] isa ContinuousEvaluator &&
-           !isempty(output_range)
-            
-            arg_eval = component.arg_evaluators[1]
-            val = get_data_value_specialized(data, arg_eval.column, row_idx)
-            result = apply_function_direct_single(component.func, Float64(val))
-            @inbounds scratch[first(output_range)] = result
-            return nothing
-        end
-        
-        # General case with optimized argument processing
-        if !isempty(internal_range)
-            working_scratch = @view scratch[internal_range]
-            
-            # Execute arguments with direct indexing (no enumerate)
-            for i in 1:length(component.arg_evaluators)
-                if i <= length(working_scratch)
-                    arg_eval = component.arg_evaluators[i]
-                    if arg_eval isa ContinuousEvaluator
-                        val = get_data_value_specialized(data, arg_eval.column, row_idx)
-                        working_scratch[i] = Float64(val)
-                    elseif arg_eval isa ConstantEvaluator
-                        working_scratch[i] = arg_eval.value
-                    else
-                        execute_component_in_assigned_scratch!(
-                            arg_eval, i:i, 1:0, working_scratch, data, row_idx
-                        )
-                    end
-                end
-            end
-            
-            # Apply function
-            if !isempty(output_range)
-                if length(component.arg_evaluators) == 1 && length(working_scratch) >= 1
-                    result = apply_function_direct_single(component.func, working_scratch[1])
-                    @inbounds scratch[first(output_range)] = result
-                elseif length(component.arg_evaluators) == 2 && length(working_scratch) >= 2
-                    result = apply_function_direct_binary(component.func, working_scratch[1], working_scratch[2])
-                    @inbounds scratch[first(output_range)] = result
-                elseif length(working_scratch) >= length(component.arg_evaluators)
-                    arg_values = working_scratch[1:length(component.arg_evaluators)]
-                    result = apply_function_direct_varargs(component.func, arg_values...)
-                    @inbounds scratch[first(output_range)] = result
-                end
-            end
-        end
-        
-    else
-        error("Unsupported component type in interaction: $(typeof(component))")
-    end
-    
-    return nothing
-end
-
-"""
-    execute_function_in_assigned_scratch!(
-        func_eval::FunctionEvaluator,
-        output_range::UnitRange{Int},
-        internal_range::UnitRange{Int},
-        scratch::AbstractVector{Float64},
-        data::NamedTuple,
-        row_idx::Int
-    )
-
-Execute function evaluator using assigned scratch space.
-"""
-function execute_function_in_assigned_scratch!(
-    func_eval::FunctionEvaluator,
-    output_range::UnitRange{Int},
-    internal_range::UnitRange{Int},
-    scratch::AbstractVector{Float64},
-    data::NamedTuple,
-    row_idx::Int
-)
-    # For simple functions with one continuous argument (most common case)
-    if length(func_eval.arg_evaluators) == 1 && 
-       func_eval.arg_evaluators[1] isa ContinuousEvaluator &&
-       !isempty(output_range)
-        
-        # Direct path: load data -> apply function -> store result
-        arg_eval = func_eval.arg_evaluators[1]
-        val = get_data_value_specialized(data, arg_eval.column, row_idx)
-        result = apply_function_direct_single(func_eval.func, Float64(val))
-        @inbounds scratch[first(output_range)] = result
+function Base.iterate(data::SpecializedInteractionData, state=1)
+    if state > length(data.binary_interactions)
         return nothing
     end
-    
-    # For more complex functions, use internal scratch space
-    if !isempty(internal_range)
-        # Use the internal range as working space
-        working_scratch = @view scratch[internal_range]
-        
-        # Execute arguments into working scratch
-        for (i, arg_eval) in enumerate(func_eval.arg_evaluators)
-            if i <= length(working_scratch)
-                execute_component_in_assigned_scratch!(
-                    arg_eval, i:i, 1:0, working_scratch, data, row_idx
-                )
-            end
-        end
-        
-        # Apply function using working scratch values
-        if !isempty(output_range)
-            if length(func_eval.arg_evaluators) == 1 && length(working_scratch) >= 1
-                result = apply_function_direct_single(func_eval.func, working_scratch[1])
-                @inbounds scratch[first(output_range)] = result
-            elseif length(func_eval.arg_evaluators) == 2 && length(working_scratch) >= 2
-                result = apply_function_direct_binary(func_eval.func, working_scratch[1], working_scratch[2])
-                @inbounds scratch[first(output_range)] = result
-            elseif length(working_scratch) >= length(func_eval.arg_evaluators)
-                arg_values = working_scratch[1:length(func_eval.arg_evaluators)]
-                result = apply_function_direct_varargs(func_eval.func, arg_values...)
-                @inbounds scratch[first(output_range)] = result
-            end
-        end
-    else
-        # If no internal scratch available, fall back to direct computation
-        # This should only happen for very simple cases
-        if length(func_eval.arg_evaluators) == 1 && 
-           func_eval.arg_evaluators[1] isa ContinuousEvaluator &&
-           !isempty(output_range)
-            
-            arg_eval = func_eval.arg_evaluators[1]
-            val = get_data_value_specialized(data, arg_eval.column, row_idx)
-            result = apply_function_direct_single(func_eval.func, Float64(val))
-            @inbounds scratch[first(output_range)] = result
-        end
-    end
-    
-    return nothing
-end
-
-###############################################################################
-# DEBUGGING UTILITIES
-###############################################################################
-
-"""
-    show_scratch_planning_info(interaction::InteractionEvaluator)
-
-Display scratch space planning information for debugging.
-"""
-function show_scratch_planning_info(interaction::InteractionEvaluator)
-    println("Interaction Scratch Planning:")
-    println("  Total scratch needed: $(interaction.total_scratch_needed)")
-    println("  Components: $(length(interaction.components))")
-    
-    for (i, component) in enumerate(interaction.components)
-        comp_type = typeof(component).__name__
-        output_range = interaction.component_scratch_map[i]
-        internal_range = interaction.component_internal_scratch_map[i]
-        
-        println("    Component $i ($comp_type):")
-        println("      Output range: $output_range")
-        println("      Internal range: $internal_range")
-    end
-end
-
-"""
-    validate_scratch_planning(interaction::InteractionEvaluator) -> Bool
-
-Validate that scratch space planning is consistent and non-overlapping.
-"""
-function validate_scratch_planning(interaction::InteractionEvaluator)
-    all_positions = Set{Int}()
-    
-    # Check that all scratch positions are unique
-    for range in interaction.component_scratch_map
-        for pos in range
-            if pos in all_positions
-                @warn "Overlapping scratch positions detected: $pos"
-                return false
-            end
-            push!(all_positions, pos)
-        end
-    end
-    
-    for range in interaction.component_internal_scratch_map
-        for pos in range
-            if pos in all_positions
-                @warn "Overlapping scratch positions detected: $pos"
-                return false
-            end
-            push!(all_positions, pos)
-        end
-    end
-    
-    # Check that total scratch needed matches allocated positions
-    expected_max = isempty(all_positions) ? 0 : maximum(all_positions)
-    if expected_max != interaction.total_scratch_needed
-        @warn "Scratch planning mismatch: expected $expected_max, got $(interaction.total_scratch_needed)"
-        return false
-    end
-    
-    return true
+    return (data.binary_interactions[state], state + 1)
 end
