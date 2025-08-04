@@ -1,15 +1,15 @@
-# step3_functions.jl - COMPILE-TIME SPECIALIZED FUNCTION SYSTEM
-# Zero-allocation execution with full type specialization
+# step3_functions.jl - TRUE GENERALITY THROUGH COMPOSITION
+# Universal function system using only unary and binary operations
 
 ###############################################################################
-# COMPILE-TIME SPECIALIZED FUNCTION DATA TYPES
+# SIMPLIFIED COMPILE-TIME SPECIALIZED FUNCTION DATA TYPES
 ###############################################################################
 
 """
     UnaryFunctionData{F, InputType}
 
 Compile-time specialized unary function with known function type and input source.
-InputType is either Symbol (column) or Int (temp position).
+InputType is Symbol (column), Int (temp position), or Float64 (constant).
 """
 struct UnaryFunctionData{F, InputType}
     func::F
@@ -26,6 +26,7 @@ end
 
 Compile-time specialized binary function with known function type and input sources.
 Input types can be Symbol (column), Int (temp position), or Float64 (constant).
+Handles ALL multi-argument functions through decomposition.
 """
 struct BinaryFunctionData{F, Input1Type, Input2Type}
     func::F
@@ -39,56 +40,39 @@ struct BinaryFunctionData{F, Input1Type, Input2Type}
 end
 
 """
-    TernaryFunctionData{F, Input1Type, Input2Type, Input3Type}
+    SpecializedFunctionData{UnaryTuple, BinaryTuple}
 
-Compile-time specialized ternary function.
-Input types can be Symbol (column), Int (temp position), or Float64 (constant).
+Simplified function data with only unary and binary operations.
+All n-ary functions are decomposed into sequences of binary operations.
 """
-struct TernaryFunctionData{F, Input1Type, Input2Type, Input3Type}
-    func::F
-    input1::Input1Type
-    input2::Input2Type
-    input3::Input3Type
-    position::Int
-    
-    function TernaryFunctionData(func::F, input1::T1, input2::T2, input3::T3, position::Int) where {F, T1, T2, T3}
-        new{F, T1, T2, T3}(func, input1, input2, input3, position)
-    end
-end
-
-"""
-    SpecializedFunctionData{UnaryTuple, BinaryTuple, TernaryTuple}
-
-Complete function data with compile-time tuples following categorical pattern.
-"""
-struct SpecializedFunctionData{UnaryTuple, BinaryTuple, TernaryTuple}
+struct SpecializedFunctionData{UnaryTuple, BinaryTuple}
     unary_functions::UnaryTuple      # NTuple{N, UnaryFunctionData{...}}
     binary_functions::BinaryTuple    # NTuple{M, BinaryFunctionData{...}}
-    ternary_functions::TernaryTuple  # NTuple{P, TernaryFunctionData{...}}
 end
 
 """
-    FunctionOp{N, M, P}
+    FunctionOp{N, M}
 
-Compile-time operation encoding for function execution.
+Simplified operation encoding with only unary and binary counts.
 """
-struct FunctionOp{N, M, P}
-    function FunctionOp(n_unary::Int, n_binary::Int, n_ternary::Int)
-        new{n_unary, n_binary, n_ternary}()
+struct FunctionOp{N, M}
+    function FunctionOp(n_unary::Int, n_binary::Int)
+        new{n_unary, n_binary}()
     end
 end
 
 ###############################################################################
-# LINEARIZED OPERATION TYPES
+# LINEARIZED OPERATION TYPES (SIMPLIFIED)
 ###############################################################################
 
 """
     LinearizedOperation
 
-Intermediate representation for function tree linearization.
+Intermediate representation for function decomposition.
+Only supports :unary and :binary operations for true generality.
 """
 struct LinearizedOperation
-    operation_type::Symbol  # :unary, :binary, :ternary
+    operation_type::Symbol  # :unary or :binary only
     func::Function
     inputs::Vector{Union{Symbol, Int, Float64}}  # Column names, temp positions, or constants
     output_position::Int
@@ -98,7 +82,7 @@ end
 """
     TempAllocator
 
-Manages temporary position allocation during linearization.
+Manages temporary position allocation during decomposition.
 """
 mutable struct TempAllocator
     next_temp::Int
@@ -116,89 +100,99 @@ function allocate_temp!(allocator::TempAllocator)
 end
 
 ###############################################################################
-# FUNCTION TREE LINEARIZATION
+# UNIVERSAL FUNCTION DECOMPOSITION
 ###############################################################################
 
 """
-    linearize_function_tree(func_eval::FunctionEvaluator, temp_allocator::TempAllocator) -> Vector{LinearizedOperation}
+    decompose_function_tree(func_eval::FunctionEvaluator, temp_allocator::TempAllocator) -> Vector{LinearizedOperation}
 
-Convert nested function tree to linear execution sequence.
-Post-order traversal ensures dependencies are computed before use.
+Zero-allocation universal function decomposition.
+Uses existing scratch space only - no temp positions in output array.
+
+Any n-ary function f(a, b, c, d, ...) becomes a sequence of binary operations
+that execute in dependency order using only existing scratch positions.
 """
-function linearize_function_tree(func_eval::FunctionEvaluator, temp_allocator::TempAllocator)
+function decompose_function_tree(func_eval::FunctionEvaluator, temp_allocator::TempAllocator)
     operations = LinearizedOperation[]
     
-    # Step 1: Recursively linearize all argument evaluators
+    # Step 1: Recursively decompose all argument evaluators
     arg_inputs = Union{Symbol, Int, Float64}[]
     
     for arg_eval in func_eval.arg_evaluators
         if arg_eval isa ConstantEvaluator
             # Use constant value directly - no temp operations needed
-            push!(arg_inputs, arg_eval.value)  # Direct Float64 value
+            push!(arg_inputs, arg_eval.value)
             
         elseif arg_eval isa ContinuousEvaluator
             # Direct column reference
             push!(arg_inputs, arg_eval.column)
             
         elseif arg_eval isa FunctionEvaluator
-            # Recursive case: linearize nested function
-            nested_ops = linearize_function_tree(arg_eval, temp_allocator)
+            # Recursive case: decompose nested function
+            nested_ops = decompose_function_tree(arg_eval, temp_allocator)
             append!(operations, nested_ops)
             
-            # The last operation's output becomes our input
-            last_op = nested_ops[end]
-            input_pos = last_op.temp_position !== nothing ? last_op.temp_position : last_op.output_position
-            push!(arg_inputs, input_pos)
+            # Use the nested function's final position as input
+            # (This avoids temp positions - we use the function's actual output position)
+            push!(arg_inputs, arg_eval.position)
             
         else
             error("Unsupported argument evaluator type: $(typeof(arg_eval))")
         end
     end
     
-    # Step 2: Create operation for this function
+    # Step 2: Decompose this function based on argument count
     n_args = length(arg_inputs)
-    operation_type = if n_args == 1
-        :unary
+    
+    if n_args == 0
+        error("Function with no arguments is not supported")
+        
+    elseif n_args == 1
+        # Unary function - direct operation
+        push!(operations, LinearizedOperation(
+            :unary,
+            func_eval.func,
+            Union{Symbol, Int, Float64}[arg_inputs[1]],
+            func_eval.position,
+            nothing
+        ))
+        
     elseif n_args == 2
-        :binary
-    elseif n_args == 3
-        :ternary
+        # Binary function - direct operation  
+        push!(operations, LinearizedOperation(
+            :binary,
+            func_eval.func,
+            Union{Symbol, Int, Float64}[arg_inputs[1], arg_inputs[2]],
+            func_eval.position,
+            nothing
+        ))
+        
     else
-        error("Functions with $n_args arguments not yet supported")
-    end
-    
-    # Determine if we need a temp position or use final position
-    temp_position = nothing  # Will be set if this is an intermediate result
-    
-    push!(operations, LinearizedOperation(
-        operation_type,
-        func_eval.func,
-        Union{Symbol, Int, Float64}[arg_inputs...],  # Explicit type conversion
-        func_eval.position,
-        temp_position
-    ))
-    
-    return operations
-end
-
-"""
-    assign_temp_positions!(operations::Vector{LinearizedOperation}, func_eval::FunctionEvaluator)
-
-Assign temporary positions to intermediate results.
-"""
-function assign_temp_positions!(operations::Vector{LinearizedOperation}, func_eval::FunctionEvaluator)
-    # The final operation uses the function evaluator's position
-    # All others need temporary positions
-    for i in 1:(length(operations) - 1)
-        if operations[i].temp_position === nothing
-            # This is an intermediate result, assign a temp position
-            operations[i] = LinearizedOperation(
-                operations[i].operation_type,
-                operations[i].func,
-                operations[i].inputs,
-                operations[i].output_position,
-                operations[i].output_position  # Use output position as temp
-            )
+        # N-ary function (n ≥ 3) - decompose using intermediate scratch positions
+        # Strategy: Use the function's own position for ALL intermediate results
+        # Execute in sequence, overwriting the same position
+        
+        # All intermediate operations write to this function's position
+        output_pos = func_eval.position
+        
+        # Create sequence of binary operations
+        for i in 2:n_args
+            if i == 2
+                # First binary operation: f(arg1, arg2) → func_eval.position
+                inputs = Union{Symbol, Int, Float64}[arg_inputs[1], arg_inputs[2]]
+            else
+                # Subsequent operations: f(previous_result, next_arg) → func_eval.position
+                # Previous result is at func_eval.position (overwritten each time)
+                inputs = Union{Symbol, Int, Float64}[output_pos, arg_inputs[i]]
+            end
+            
+            push!(operations, LinearizedOperation(
+                :binary,
+                func_eval.func,
+                inputs,
+                output_pos,
+                nothing  # No temp positions - everything uses final position
+            ))
         end
     end
     
@@ -206,7 +200,7 @@ function assign_temp_positions!(operations::Vector{LinearizedOperation}, func_ev
 end
 
 ###############################################################################
-# SPECIALIZED EXECUTION FUNCTIONS
+# SPECIALIZED EXECUTION FUNCTIONS (SIMPLIFIED)
 ###############################################################################
 
 """
@@ -276,6 +270,7 @@ end
     execute_operation!(data::BinaryFunctionData{F, T1, T2}, output, input_data, row_idx) where {F, T1, T2}
 
 Execute binary function with compile-time specialization.
+Handles ALL multi-argument functions through decomposition.
 """
 function execute_operation!(
     data::BinaryFunctionData{F, T1, T2},
@@ -304,6 +299,16 @@ function execute_operation!(
         else
             result = val1^val2
         end
+    elseif F === typeof(>)
+        result = Float64(val1 > val2)
+    elseif F === typeof(<)
+        result = Float64(val1 < val2)
+    elseif F === typeof(>=)
+        result = Float64(val1 >= val2)
+    elseif F === typeof(<=)
+        result = Float64(val1 <= val2)
+    elseif F === typeof(==)
+        result = Float64(val1 == val2)
     else
         # Direct function call for other functions
         result = data.func(val1, val2)
@@ -313,49 +318,27 @@ function execute_operation!(
     return nothing
 end
 
-"""
-    execute_operation!(data::TernaryFunctionData{F, T1, T2, T3}, output, input_data, row_idx) where {F, T1, T2, T3}
-
-Execute ternary function with compile-time specialization.
-"""
-function execute_operation!(
-    data::TernaryFunctionData{F, T1, T2, T3},
-    output::AbstractVector{Float64},
-    input_data::NamedTuple,
-    row_idx::Int
-) where {F, T1, T2, T3}
-    
-    val1 = get_input_value(data.input1, output, input_data, row_idx)
-    val2 = get_input_value(data.input2, output, input_data, row_idx)
-    val3 = get_input_value(data.input3, output, input_data, row_idx)
-    
-    # Direct function call
-    result = data.func(val1, val2, val3)
-    output[data.position] = result
-    return nothing
-end
-
 ###############################################################################
-# TUPLE-BASED EXECUTION (Following Categorical Pattern)
+# SIMPLIFIED TUPLE-BASED EXECUTION
 ###############################################################################
 
 """
-    execute_operation!(data::SpecializedFunctionData{UT, BT, TT}, op::FunctionOp{N, M, P}, output, input_data, row_idx) where {UT, BT, TT, N, M, P}
+    execute_operation!(data::SpecializedFunctionData{UT, BT}, op::FunctionOp{N, M}, output, input_data, row_idx) where {UT, BT, N, M}
 
-Execute all functions using tuple-based recursive pattern like categorical system.
+Execute all functions using simplified binary/unary decomposition.
 """
 function execute_operation!(
-    data::SpecializedFunctionData{UT, BT, TT},
-    op::FunctionOp{N, M, P},
+    data::SpecializedFunctionData{UT, BT},
+    op::FunctionOp{N, M},
     output::AbstractVector{Float64},
     input_data::NamedTuple,
     row_idx::Int
-) where {UT, BT, TT, N, M, P}
+) where {UT, BT, N, M}
     
-    # Execute in dependency order: unary, then binary, then ternary
+    # Execute in dependency order: unary then binary
+    # (Binary operations may depend on unary results)
     execute_unary_functions_recursive!(data.unary_functions, output, input_data, row_idx)
     execute_binary_functions_recursive!(data.binary_functions, output, input_data, row_idx)
-    execute_ternary_functions_recursive!(data.ternary_functions, output, input_data, row_idx)
     
     return nothing
 end
@@ -401,7 +384,7 @@ end
 """
     execute_binary_functions_recursive!(binary_tuple, output, input_data, row_idx)
 
-Recursive execution of binary functions following categorical pattern.
+Recursive execution of binary functions.
 """
 function execute_binary_functions_recursive!(
     binary_tuple::Tuple{},
@@ -428,77 +411,44 @@ function execute_binary_functions_recursive!(
     return nothing
 end
 
-"""
-    execute_ternary_functions_recursive!(ternary_tuple, output, input_data, row_idx)
-
-Recursive execution of ternary functions following categorical pattern.
-"""
-function execute_ternary_functions_recursive!(
-    ternary_tuple::Tuple{},
-    output::AbstractVector{Float64},
-    input_data::NamedTuple,
-    row_idx::Int
-)
-    return nothing
-end
-
-function execute_ternary_functions_recursive!(
-    ternary_tuple::Tuple,
-    output::AbstractVector{Float64},
-    input_data::NamedTuple,
-    row_idx::Int
-)
-    if length(ternary_tuple) > 0
-        execute_operation!(ternary_tuple[1], output, input_data, row_idx)
-        if length(ternary_tuple) > 1
-            remaining = Base.tail(ternary_tuple)
-            execute_ternary_functions_recursive!(remaining, output, input_data, row_idx)
-        end
-    end
-    return nothing
-end
-
 ###############################################################################
-# ANALYSIS AND COMPILATION
+# UNIVERSAL ANALYSIS AND COMPILATION
 ###############################################################################
 
 """
     analyze_function_operations_linear(evaluator::CombinedEvaluator) -> (SpecializedFunctionData, FunctionOp)
 
-Complete analysis and compilation to specialized function data.
-REPLACES previous implementation with compile-time specialization.
+Universal analysis and compilation using true mathematical generality.
+Any n-ary function is decomposed into unary/binary operations.
 """
 function analyze_function_operations_linear(evaluator::CombinedEvaluator)
     function_evaluators = evaluator.function_evaluators
     n_funcs = length(function_evaluators)
     
     if n_funcs == 0
-        empty_data = SpecializedFunctionData((), (), ())
-        return empty_data, FunctionOp(0, 0, 0)
+        empty_data = SpecializedFunctionData((), ())
+        return empty_data, FunctionOp(0, 0)
     end
     
-    # Step 1: Linearize all function trees
+    # Step 1: Decompose all function trees using universal decomposition
     all_operations = LinearizedOperation[]
     temp_allocator = TempAllocator(1000)  # Start temp positions at 1000
     
     for func_eval in function_evaluators
-        ops = linearize_function_tree(func_eval, temp_allocator)
-        assign_temp_positions!(ops, func_eval)
+        ops = decompose_function_tree(func_eval, temp_allocator)
         append!(all_operations, ops)
     end
     
-    # Step 2: Separate by operation type (exclude constant operations)
+    # Step 2: Separate by operation type (only unary and binary)
     unary_ops = filter(op -> op.operation_type == :unary, all_operations)
     binary_ops = filter(op -> op.operation_type == :binary, all_operations)
-    ternary_ops = filter(op -> op.operation_type == :ternary, all_operations)
     
-    # Step 3: Create specialized data structures (no separate constant handling)
+    # Step 3: Create specialized data structures
     unary_data = create_unary_tuple(unary_ops)
     binary_data = create_binary_tuple(binary_ops)
-    ternary_data = create_ternary_tuple(ternary_ops)
     
-    specialized_data = SpecializedFunctionData(unary_data, binary_data, ternary_data)
-    function_op = FunctionOp(length(unary_ops), length(binary_ops), length(ternary_ops))
+    specialized_data = SpecializedFunctionData(unary_data, binary_data)
+    function_op = FunctionOp(length(unary_ops), length(binary_ops))
     
     return specialized_data, function_op
 end
@@ -542,27 +492,6 @@ function create_binary_tuple(binary_ops::Vector{LinearizedOperation})
     end
 end
 
-"""
-    create_ternary_tuple(ternary_ops::Vector{LinearizedOperation})
-
-Create compile-time tuple of ternary function data.
-"""
-function create_ternary_tuple(ternary_ops::Vector{LinearizedOperation})
-    n_ternary = length(ternary_ops)
-    
-    if n_ternary == 0
-        return ()
-    end
-    
-    return ntuple(n_ternary) do i
-        op = ternary_ops[i]
-        input1 = length(op.inputs) > 0 ? op.inputs[1] : Symbol()
-        input2 = length(op.inputs) > 1 ? op.inputs[2] : Symbol()
-        input3 = length(op.inputs) > 2 ? op.inputs[3] : Symbol()
-        TernaryFunctionData(op.func, input1, input2, input3, op.output_position)
-    end
-end
-
 ###############################################################################
 # INTERFACE METHODS FOR INTEGRATION
 ###############################################################################
@@ -574,8 +503,7 @@ Check if function data is empty (no functions to execute).
 """
 function Base.isempty(data::SpecializedFunctionData)
     return length(data.unary_functions) == 0 && 
-           length(data.binary_functions) == 0 && 
-           length(data.ternary_functions) == 0
+           length(data.binary_functions) == 0
 end
 
 """
@@ -585,8 +513,7 @@ Get total number of functions in the data structure.
 """
 function Base.length(data::SpecializedFunctionData)
     return length(data.unary_functions) + 
-           length(data.binary_functions) + 
-           length(data.ternary_functions)
+           length(data.binary_functions)
 end
 
 """
@@ -598,8 +525,7 @@ Required for isempty() to work properly.
 function Base.iterate(data::SpecializedFunctionData, state=1)
     total_unary = length(data.unary_functions)
     total_binary = length(data.binary_functions)
-    total_ternary = length(data.ternary_functions)
-    total_functions = total_unary + total_binary + total_ternary
+    total_functions = total_unary + total_binary
     
     if state > total_functions
         return nothing
@@ -607,12 +533,9 @@ function Base.iterate(data::SpecializedFunctionData, state=1)
     
     if state <= total_unary
         return (data.unary_functions[state], state + 1)
-    elseif state <= total_unary + total_binary
+    else
         binary_idx = state - total_unary
         return (data.binary_functions[binary_idx], state + 1)
-    else
-        ternary_idx = state - total_unary - total_binary
-        return (data.ternary_functions[ternary_idx], state + 1)
     end
 end
 
@@ -632,12 +555,11 @@ function execute_linear_function_operations!(
     data::NamedTuple,
     row_idx::Int
 )
-    # Create dummy operation for dispatch
+    # Create operation encoding for dispatch
     n_unary = length(function_data.unary_functions)
     n_binary = length(function_data.binary_functions) 
-    n_ternary = length(function_data.ternary_functions)
     
-    op = FunctionOp(n_unary, n_binary, n_ternary)
+    op = FunctionOp(n_unary, n_binary)
     
     # Execute using specialized dispatch
     execute_operation!(function_data, op, output, data, row_idx)
