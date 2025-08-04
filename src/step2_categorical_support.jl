@@ -17,10 +17,12 @@ struct CategoricalData
     n_levels::Int                     # Number of categorical levels
     n_contrasts::Int                  # Number of contrast columns
     
-    function CategoricalData(contrast_matrix::Matrix{Float64}, 
-                            level_codes::Vector{Int}, 
-                            positions::Vector{Int}, 
-                            n_levels::Int)
+    function CategoricalData(
+        contrast_matrix::Matrix{Float64}, 
+        level_codes::Vector{Int}, 
+        positions::Vector{Int}, 
+        n_levels::Int
+    )
         n_contrasts = size(contrast_matrix, 2)
         @assert length(positions) == n_contrasts "Positions length must match contrast columns"
         new(contrast_matrix, level_codes, positions, n_levels, n_contrasts)

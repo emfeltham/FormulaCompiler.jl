@@ -90,13 +90,14 @@ function analyze_evaluator(evaluator::AbstractEvaluator)
         interaction_evaluators, interaction_op = analyze_interaction_operations(evaluator)
         
         # Calculate scratch space requirements
-        max_function_scratch = if isempty(function_data)
-            0
-        else
-            # Calculate total scratch needed by summing all function scratch sizes
-            sum(f.scratch_size for f in function_data)
-        end
+        # max_function_scratch = if isempty(function_data)
+        #     0
+        # else
+        #     # Calculate total scratch needed by summing all function scratch sizes
+        #     sum(f.scratch_size for f in function_data)
+        # end
         
+        max_function_scratch = 0
         max_interaction_scratch = isempty(interaction_evaluators) ? 0 : maximum(i.total_scratch_needed for i in interaction_evaluators)
 
         # Pre-allocate once
