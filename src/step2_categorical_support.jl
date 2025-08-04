@@ -207,12 +207,11 @@ function execute_categorical_recursive!(
 end
 
 ###############################################################################
-# OVERWRITE: Main categorical execution function
+# Main categorical execution function
 ###############################################################################
 
 """
-Overwrite the main categorical execution to use recursive tuple processing.
-This replaces the loop-based approach with allocation-free recursion.
+Use recursive tuple processing.
 """
 function execute_categorical_operations!(
     categorical_data::Tuple, 
@@ -220,18 +219,13 @@ function execute_categorical_operations!(
     input_data, 
     row_idx
 )
-    # Use recursive processing instead of loops
+    # Use recursive processing
     execute_categorical_recursive!(categorical_data, output, input_data, row_idx)
     return nothing
 end
 
-###############################################################################
-# KEEP: Existing single categorical execution (unchanged)
-###############################################################################
-
 """
-Keep the existing single categorical execution function.
-The recursive approach calls this for each categorical variable.
+Recursive approach calls this for each categorical variable.
 """
 function execute_single_categorical!(
     cat_data::SpecializedCategoricalData{N, Positions}, 
