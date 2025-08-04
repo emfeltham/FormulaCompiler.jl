@@ -65,6 +65,145 @@ InteractionOp() = InteractionOp(0)
 ###############################################################################
 
 ###############################################################################
+# TEMP RESULT EVALUATOR FOR N-WAY DECOMPOSITION
+###############################################################################
+
+"""
+    TempResultEvaluator <: AbstractEvaluator
+
+Represents intermediate results in N-way interaction decomposition.
+"""
+struct TempResultEvaluator <: AbstractEvaluator
+    positions::Vector{Int}    
+    width::Int               
+    
+    function TempResultEvaluator(positions::Vector{Int})
+        new(positions, length(positions))
+    end
+end
+
+# Interface methods for TempResultEvaluator
+output_width(eval::TempResultEvaluator) = eval.width
+get_positions(eval::TempResultEvaluator) = eval.positions
+get_scratch_positions(eval::TempResultEvaluator) = Int[]
+max_scratch_needed(eval::TempResultEvaluator) = 0
+get_component_output_width(eval::TempResultEvaluator) = eval.width
+
+@inline function get_component_value(
+    component::TempResultEvaluator,
+    index::Int,
+    data::NamedTuple,
+    row_idx::Int,
+    output::Vector{Float64}
+)
+    return output[component.positions[index]]
+end
+
+###############################################################################
+# TEMPORARY POSITION ALLOCATION
+###############################################################################
+
+mutable struct TempPositionAllocator
+    next_position::Int
+    TempPositionAllocator(start_position::Int) = new(start_position)
+end
+
+function allocate_temp_positions!(allocator::TempPositionAllocator, width::Int)
+    positions = collect(allocator.next_position:(allocator.next_position + width - 1))
+    allocator.next_position += width
+    return positions
+end
+
+###############################################################################
+# N-WAY DECOMPOSITION FUNCTIONS
+###############################################################################
+
+function decompose_nway_to_binary(
+    interaction_eval::InteractionEvaluator{N},
+    temp_allocator::TempPositionAllocator
+) where N
+    
+    println("    DECOMPOSE_NWAY_TO_BINARY DEBUG:")
+    println("      N = $N")
+    println("      Final positions: $(interaction_eval.positions)")
+    
+    if N < 2
+        error("Cannot decompose interaction with < 2 components")
+    elseif N == 2
+        comp1, comp2 = interaction_eval.components
+        return [create_binary_interaction_data(comp1, comp2, interaction_eval.positions)]
+    end
+    
+    components = interaction_eval.components
+    final_positions = interaction_eval.positions
+    
+    # Debug component widths
+    for (i, comp) in enumerate(components)
+        width = get_component_output_width(comp)
+        println("      Component $i: $(typeof(comp)), width = $width")
+    end
+    
+    binary_ops = BinaryInteractionData[]
+    current_component = components[1]
+    
+    for i in 2:N
+        next_component = components[i]
+        
+        current_width = get_component_output_width(current_component)
+        next_width = get_component_output_width(next_component)
+        
+        println("      Step $(i-1): $(current_width) × $(next_width)")
+        
+        if i == N
+            output_positions = final_positions
+            println("        FINAL → positions $output_positions")
+        else
+            temp_width = current_width * next_width
+            println("        Allocating $temp_width temp positions starting at $(temp_allocator.next_position)")
+            output_positions = allocate_temp_positions!(temp_allocator, temp_width)
+            println("        TEMP → positions $output_positions")
+        end
+        
+        binary_data = create_binary_interaction_data(
+            current_component, 
+            next_component, 
+            output_positions
+        )
+        push!(binary_ops, binary_data)
+        
+        if i < N
+            current_component = TempResultEvaluator(output_positions)
+            println("        Next iteration: TempResultEvaluator with positions $output_positions")
+        end
+    end
+    
+    println("      Created $(length(binary_ops)) binary operations")
+    return binary_ops
+end
+
+function calculate_total_temp_positions(interaction_evaluators::Vector{InteractionEvaluator})
+    total_temp = 0
+    
+    for interaction_eval in interaction_evaluators
+        N = length(interaction_eval.components)
+        
+        if N > 2
+            components = interaction_eval.components
+            current_width = get_component_output_width(components[1])
+            
+            for i in 2:(N-1)
+                next_width = get_component_output_width(components[i])
+                temp_width = current_width * next_width
+                total_temp += temp_width
+                current_width = temp_width
+            end
+        end
+    end
+    
+    return total_temp
+end
+
+###############################################################################
 # COMPONENT VALUE ACCESS (UPDATED WITH CONSISTENT SIGNATURES)
 ###############################################################################
 
@@ -217,39 +356,96 @@ function execute_operation!(
 end
 
 ###############################################################################
-# NEW ANALYSIS FUNCTION (Replaces old analyze_interaction_operations)
+# UPDATED ANALYSIS FUNCTION (NOW HANDLES N-WAY INTERACTIONS)
 ###############################################################################
 
 """
     analyze_interaction_operations(evaluator::CombinedEvaluator) -> (SpecializedInteractionData, InteractionOp)
 
-NEW: Analyze interaction evaluators and create specialized binary interaction data.
-Completely replaces the old function that returned Vector{InteractionEvaluator}.
+UPDATED: Now handles N-way interactions by decomposing them into binary sequences.
+DEBUGGING: Added extensive logging to trace bounds error.
 """
 function analyze_interaction_operations(evaluator::CombinedEvaluator)
     interaction_evaluators = evaluator.interaction_evaluators
     n_interactions = length(interaction_evaluators)
+    
+    println("ANALYZE_INTERACTION_OPERATIONS DEBUG:")
+    println("  Number of interactions: $n_interactions")
     
     if n_interactions == 0
         empty_data = SpecializedInteractionData(())
         return empty_data, InteractionOp(0)
     end
     
-    # Convert InteractionEvaluators to BinaryInteractionData
-    binary_interactions = BinaryInteractionData[]
+    # Calculate temporary position requirements
+    total_temp_positions = calculate_total_temp_positions(interaction_evaluators)
+    println("  Total temp positions needed: $total_temp_positions")
     
+    # Find maximum final position to determine where temps start
+    max_final_position = 0
     for interaction_eval in interaction_evaluators
-        if length(interaction_eval.components) == 2
-            # Convert 2-way InteractionEvaluator to BinaryInteractionData
-            comp1, comp2 = interaction_eval.components
-            binary_data = create_binary_interaction_data(comp1, comp2, interaction_eval.positions)
-            push!(binary_interactions, binary_data)
-        else
-            @warn "Phase 1: Skipping non-binary interaction with $(length(interaction_eval.components)) components"
+        if !isempty(interaction_eval.positions)
+            max_pos = maximum(interaction_eval.positions)
+            max_final_position = max(max_final_position, max_pos)
+            println("  Interaction positions: $(interaction_eval.positions), max: $max_pos")
         end
     end
     
-    n_binary = length(binary_interactions)
+    # ALSO check other evaluators to find the true maximum position
+    # Get the total output width of the evaluator (before temp extension)
+    original_output_width = output_width(evaluator)
+    println("  Max final position: $max_final_position")
+    println("  Original output width: $original_output_width")
+    
+    # Start temps after the original output width, not after max interaction position
+    temp_start_position = max(max_final_position + 1, original_output_width + 1)
+    temp_allocator = TempPositionAllocator(temp_start_position)
+    println("  Temp start position: $temp_start_position")
+    
+    # Convert all interactions (both 2-way and N-way) to binary operations
+    all_binary_interactions = BinaryInteractionData[]
+    
+    for (idx, interaction_eval) in enumerate(interaction_evaluators)
+        N = length(interaction_eval.components)
+        println("  Processing interaction $idx: $(N)-way")
+        
+        if N == 2
+            # Direct binary conversion (existing path)
+            comp1, comp2 = interaction_eval.components
+            binary_data = create_binary_interaction_data(comp1, comp2, interaction_eval.positions)
+            push!(all_binary_interactions, binary_data)
+            println("    Binary: positions $(interaction_eval.positions)")
+            
+        elseif N > 2
+            # NEW: Decompose N-way into binary sequence
+            println("    Decomposing $(N)-way interaction...")
+            binary_sequence = decompose_nway_to_binary(interaction_eval, temp_allocator)
+            append!(all_binary_interactions, binary_sequence)
+            println("    Created $(length(binary_sequence)) binary operations")
+            
+            # Log the positions used
+            for (i, binary_op) in enumerate(binary_sequence)
+                max_pos = maximum(binary_op.output_positions)
+                println("      Binary op $i: positions $(binary_op.output_positions), max: $max_pos")
+            end
+            
+        else
+            @warn "Skipping interaction with $(N) components (< 2)"
+        end
+    end
+    
+    # Check final position usage
+    max_position_used = 0
+    for binary_op in all_binary_interactions
+        if !isempty(binary_op.output_positions)
+            max_pos = maximum(binary_op.output_positions)
+            max_position_used = max(max_position_used, max_pos)
+        end
+    end
+    
+    println("  Maximum position used across all binary ops: $max_position_used")
+    
+    n_binary = length(all_binary_interactions)
     
     if n_binary == 0
         empty_data = SpecializedInteractionData(())
@@ -258,7 +454,7 @@ function analyze_interaction_operations(evaluator::CombinedEvaluator)
     
     # Create compile-time tuple
     binary_tuple = ntuple(n_binary) do i
-        binary_interactions[i]
+        all_binary_interactions[i]
     end
     
     specialized_data = SpecializedInteractionData(binary_tuple)
@@ -407,23 +603,66 @@ function execute_operation!(
 end
 
 ###############################################################################
+# OUTPUT WIDTH CALCULATION FOR N-WAY INTERACTIONS
+###############################################################################
+
+"""
+    calculate_extended_output_width(evaluator::CombinedEvaluator) -> Int
+
+Calculate total output width including temporary positions for N-way decomposition.
+DEBUGGING: Added logging to track calculation.
+"""
+function calculate_extended_output_width(evaluator::CombinedEvaluator)
+    original_width = output_width(evaluator)
+    temp_positions = calculate_total_temp_positions(evaluator.interaction_evaluators)
+    extended = original_width + temp_positions
+    
+    println("CALCULATE_EXTENDED_OUTPUT_WIDTH DEBUG:")
+    println("  Original width: $original_width")
+    println("  Temp positions: $temp_positions") 
+    println("  Extended width: $extended")
+    
+    return extended
+end
+
+"""
+    update_output_width_for_nway(compiled_formula::CompiledFormula) -> Int
+
+Update output width calculation to include temporary positions.
+"""
+function update_output_width_for_nway(compiled_formula::CompiledFormula)
+    if compiled_formula.root_evaluator isa CombinedEvaluator
+        return calculate_extended_output_width(compiled_formula.root_evaluator)
+    else
+        return compiled_formula.output_width
+    end
+end
+
+###############################################################################
 # COMPILATION FUNCTIONS
 ###############################################################################
 
 """
     create_specialized_formula(compiled_formula::CompiledFormula) -> SpecializedFormula
 
-Updated to work with enhanced interaction system.
+Updated to work with N-way interaction system including temporary positions.
+DEBUGGING: Added logging to track output width calculation.
 """
 function create_specialized_formula(compiled_formula::CompiledFormula)
-    # Analyze the evaluator tree with complete support including enhanced interactions
     data_tuple, op_tuple = analyze_evaluator(compiled_formula.root_evaluator)
     
-    # Create specialized formula
+    # Use extended output width for N-way interactions
+    original_width = compiled_formula.output_width
+    extended_width = update_output_width_for_nway(compiled_formula)
+    
+    println("CREATE_SPECIALIZED_FORMULA DEBUG:")
+    println("  Original width: $original_width")
+    println("  Extended width: $extended_width")
+    
     return SpecializedFormula{typeof(data_tuple), typeof(op_tuple)}(
         data_tuple,
         op_tuple,
-        compiled_formula.output_width
+        extended_width
     )
 end
 
@@ -495,3 +734,15 @@ function Base.iterate(data::SpecializedInteractionData, state=1)
     end
     return (data.binary_interactions[state], state + 1)
 end
+
+###############################################################################
+# REMOVE ALL OLD FUNCTIONS
+###############################################################################
+
+# Delete these functions entirely:
+# - Old execute_interaction_operation! for InteractionEvaluator
+# - execute_interaction_recursive 
+# - compute_interaction_product
+# - All the old recursive tuple processing
+
+# The new binary interaction system replaces all of this
