@@ -39,9 +39,15 @@ function test_data(; n = 200)
     return df, data
 end
 
+###############################################################################
+# MODEL SCENARIOS
+###############################################################################
+
 basic = [
     (@formula(response ~ 1), "Baseline (no interactions)"),
-    (@formula(response ~ x), "Baseline (no interactions)")
+    (@formula(response ~ x), "Baseline (no interactions)"),
+    (@formula(response ~ x + y), "Multiple continuous"),
+    (@formula(response ~ x + y + z + w + t),  "Many continuous variables"),
 ];
 
 categoricals = [
@@ -125,6 +131,10 @@ function test_correctness(cases, df, data)
         end
     end
 end
+
+###############################################################################
+# RUN TESTS
+###############################################################################
 
 df, data = test_data(; n = 200);
 x = functions
