@@ -1,4 +1,4 @@
-# test_step4_interactions.jl
+# test_cases.jl
 
 using Revise
 using Test
@@ -44,6 +44,14 @@ basic = [
     (@formula(response ~ x), "Baseline (no interactions)")
 ];
 
+categoricals = [
+    (@formula(response ~ group3), "Single categorical"),
+    (@formula(response ~ group3 + group4), "Two categoricals"),
+    (@formula(response ~ group3 + group4 + binary), "Three categoricals"),
+    (@formula(response ~ x + group3), "Mixed continuous + categorical"),
+    (@formula(response ~ x + y + group3 + group4), "Multiple mixed"),
+];
+
 functions = [
     (@formula(response ~ log(z)), "Function 1"),
     (@formula(response ~ z > 0), "Comparison 1"),
@@ -57,14 +65,6 @@ functions = [
     (@formula(response ~ abs(z + y + x)), "3-Function 1"),
     (@formula(response ~ (z + y + x)^2), "3-Function 2"),
     (@formula(response ~ abs(z + y + x + w)), "3-Function 1")
-];
-
-categoricals = [
-    (@formula(response ~ group3), "Single categorical"),
-    (@formula(response ~ group3 + group4), "Two categoricals"),
-    (@formula(response ~ group3 + group4 + binary), "Three categoricals"),
-    (@formula(response ~ x + group3), "Mixed continuous + categorical"),
-    (@formula(response ~ x + y + group3 + group4), "Multiple mixed"),
 ];
 
 interactions = [
@@ -103,10 +103,6 @@ function test_cases(cases, df, data)
     end
 end
 
-df, data = test_data(; n = 200);
-x = [basic..., functions..., interactions...];
-# test_cases(x, df, data);
-
 function test_correctness(cases, df, data)
     # normalize to a Vector
     cases = isa(cases, Tuple) ? [cases] : collect(cases)
@@ -129,5 +125,10 @@ function test_correctness(cases, df, data)
         end
     end
 end
+
+df, data = test_data(; n = 200);
+x = functions
+# x = interactions;
+test_cases(x, df, data);
 
 test_correctness(x, df, data)
