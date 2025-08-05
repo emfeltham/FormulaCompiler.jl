@@ -149,19 +149,23 @@ end
 """
     get_component_output_width(evaluator::AbstractEvaluator) -> Int
 
-Get the output width for interaction planning (may differ from structural width).
+Get the output width for interaction planning.
+FIXED: Ensure correct width for all component types.
 """
 function get_component_output_width(evaluator::AbstractEvaluator)
     if evaluator isa ConstantEvaluator || evaluator isa ContinuousEvaluator
         return 1  # Scalar output
     elseif evaluator isa CategoricalEvaluator
-        return size(evaluator.contrast_matrix, 2)  # Number of contrasts
+        # CRITICAL: Use the actual contrast matrix dimensions
+        return size(evaluator.contrast_matrix, 2)
     elseif evaluator isa FunctionEvaluator
         return 1  # Functions produce scalar output
+    elseif evaluator isa InteractionScratchReference
+        return evaluator.width
     elseif evaluator isa InteractionEvaluator
-        return length(evaluator.positions)
+        return evaluator.total_width
     else
-        return output_width_structural(evaluator)  # Fallback
+        error("Unknown evaluator type: $(typeof(evaluator))")
     end
 end
 

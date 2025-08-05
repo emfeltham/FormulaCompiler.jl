@@ -16,7 +16,7 @@ using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
 
 using StandardizedPredictors: ZScoredTerm
 
-using LinearAlgebra: dot
+using LinearAlgebra: dot, I
 using ForwardDiff
 
 using Base.Iterators: product # -> compute_kronecker_pattern
@@ -49,7 +49,17 @@ include("step2_categorical_support.jl")
 
 include("step3_functions.jl")
 
+# step 4
+
+# include("phase1_interaction_positions.jl")
+# include("phase2_interaction_allocator.jl")
+# include("phase3_interaction_execution.jl")
+# include("phase4_interaction_analysis.jl")
+# include("phase5_7_integration_validation_testin.jl")
 include("step4_interactions.jl")
+
+export test_new_interaction_system
+
 include("modelrow.jl")
 export ModelRowEvaluator, modelrow!, modelrow
 
