@@ -1,4 +1,4 @@
-# step4_interactions.jl - CLEAN FINAL VERSION
+# step4_interactions.jl - CLEAN FINAL VERSION - INTERACTIONS ONLY
 # N-way interaction decomposition integrated with existing scratch system
 
 ###############################################################################
@@ -182,10 +182,6 @@ function decompose_nway_with_scratch(
     scratch_allocator::InteractionScratchAllocator
 ) where N
     
-    # println("    DECOMPOSE_NWAY_WITH_SCRATCH DEBUG:")
-    # println("      N = $N")
-    # println("      Final positions: $(interaction_eval.positions)")
-    
     if N == 2
         comp1, comp2 = interaction_eval.components
         return [create_binary_interaction_data(comp1, comp2, interaction_eval.positions)]
@@ -203,16 +199,12 @@ function decompose_nway_with_scratch(
         current_width = get_component_output_width(current_component)
         next_width = get_component_output_width(next_component)
         
-        # println("      Step $(i-1): $(current_width) × $(next_width)")
-        
         if i == N
             output_positions = final_positions
-            # println("        FINAL → output positions $output_positions")
         else
             scratch_size = current_width * next_width
             scratch_positions = allocate_interaction_scratch!(scratch_allocator, scratch_size)
             output_positions = scratch_positions
-            # println("        INTERMEDIATE → scratch positions $output_positions")
         end
         
         binary_data = create_binary_interaction_data(
@@ -224,11 +216,9 @@ function decompose_nway_with_scratch(
         
         if i < N
             current_component = InteractionScratchEvaluator(output_positions)
-            # println("        Next iteration: InteractionScratchEvaluator with scratch positions $output_positions")
         end
     end
     
-    # println("      Created $(length(binary_ops)) binary operations")
     return binary_ops
 end
 
@@ -339,9 +329,6 @@ function analyze_interaction_operations(evaluator::CombinedEvaluator)
     interaction_evaluators = evaluator.interaction_evaluators
     n_interactions = length(interaction_evaluators)
     
-    # println("ANALYZE_INTERACTION_OPERATIONS WITH SCRATCH DEBUG:")
-    # println("  Number of interactions: $n_interactions")
-    
     if n_interactions == 0
         empty_data = SpecializedInteractionData(())
         return empty_data, InteractionOp(0)
@@ -352,25 +339,18 @@ function analyze_interaction_operations(evaluator::CombinedEvaluator)
     
     for (idx, interaction_eval) in enumerate(interaction_evaluators)
         N = length(interaction_eval.components)
-        # println("  Processing interaction $idx: $(N)-way")
         
         if N == 2
             comp1, comp2 = interaction_eval.components
             binary_data = create_binary_interaction_data(comp1, comp2, interaction_eval.positions)
             push!(all_binary_interactions, binary_data)
-            # println("    Binary: positions $(interaction_eval.positions)")
         elseif N > 2
-            # println("    Decomposing $(N)-way interaction using scratch...")
             binary_sequence = decompose_nway_with_scratch(interaction_eval, scratch_allocator)
             append!(all_binary_interactions, binary_sequence)
-            # println("    Created $(length(binary_sequence)) binary operations")
         else
             @warn "Skipping interaction with $(N) components (< 2)"
         end
     end
-    
-    max_scratch_needed = isempty(scratch_allocator.allocated_positions) ? 0 : maximum(scratch_allocator.allocated_positions)
-    # println("  Maximum scratch position needed: $max_scratch_needed")
     
     n_binary = length(all_binary_interactions)
     
@@ -464,7 +444,7 @@ struct CompleteFormulaData{ConstData, ContData, CatData, FuncData, IntData}
 end
 
 ###############################################################################
-# UPDATED ANALYZE_EVALUATOR WITH SCRATCH CALCULATION
+# UPDATED ANALYZE_EVALUATOR WITH FUNCTION SCRATCH CALCULATION
 ###############################################################################
 
 function analyze_evaluator(evaluator::AbstractEvaluator)
@@ -476,15 +456,16 @@ function analyze_evaluator(evaluator::AbstractEvaluator)
         
         interaction_data, interaction_op = analyze_interaction_operations(evaluator)
         
-        max_function_scratch = 0
+        # FIXED: Use the corrected function scratch calculation
+        max_function_scratch = calculate_max_function_scratch_needed(evaluator)
         max_interaction_scratch = calculate_max_interaction_scratch_needed(evaluator)
         
-        function_scratch = Vector{Float64}(undef, max_function_scratch)
-        interaction_scratch = Vector{Float64}(undef, max_interaction_scratch)
+        # Ensure scratch vectors are large enough
+        function_scratch = Vector{Float64}(undef, max(max_function_scratch, 1))
+        interaction_scratch = Vector{Float64}(undef, max(max_interaction_scratch, 1))
         
-        # println("ANALYZE_EVALUATOR SCRATCH DEBUG:")
-        # println("  Function scratch needed: $max_function_scratch")
-        # println("  Interaction scratch needed: $max_interaction_scratch")
+        # println("DEBUG: Created function scratch with size: $(length(function_scratch))")
+        # println("DEBUG: Created interaction scratch with size: $(length(interaction_scratch))")
         
         formula_data = CompleteFormulaData(
             constant_data,
@@ -519,13 +500,13 @@ function execute_operation!(
     execute_complete_constant_operations!(data.constants, output, input_data, row_idx)
     execute_complete_continuous_operations!(data.continuous, output, input_data, row_idx)
     
-    # Phase 2: Functions (use function scratch)
+    # Phase 2: Functions (use function scratch - CALLS step3_functions.jl)
     execute_linear_function_operations!(data.functions, data.function_scratch, output, input_data, row_idx)
     
     # Phase 3: Categoricals (no scratch needed)
     execute_categorical_operations!(data.categorical, output, input_data, row_idx)
     
-    # Phase 4: Interactions (use interaction scratch - FOLLOWS function pattern)
+    # Phase 4: Interactions (use interaction scratch)
     execute_interaction_operations!(data.interactions, data.interaction_scratch, output, input_data, row_idx)
     
     return nothing
@@ -595,7 +576,3 @@ function Base.iterate(data::SpecializedInteractionData, state=1)
     end
     return (data.binary_interactions[state], state + 1)
 end
-
-###############################################################################
-# REST OF EXISTING FUNCTIONS (unchanged)
-###############################################################################
