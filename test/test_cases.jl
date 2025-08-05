@@ -29,10 +29,11 @@ function test_data(; n = 200)
         z = abs.(randn(n)) .+ 0.01,  # Positive for log
         w = randn(n),
         t = randn(n),
-        group3 = categorical(rand(["A", "B", "C"], n)),           
-        group4 = categorical(rand(["W", "X", "Y", "Z"], n)),      
-        binary = categorical(rand(["Yes", "No"], n)),             
-        group5 = categorical(rand(["P", "Q", "R", "S", "T"], n)), 
+        group2 = categorical(rand(["Z", "M", "L"], n)),
+        group3 = categorical(rand(["A", "B", "C"], n)),
+        group4 = categorical(rand(["W", "X", "Y", "Z"], n)),
+        binary = categorical(rand(["Yes", "No"], n)),
+        group5 = categorical(rand(["P", "Q", "R", "S", "T"], n)),
         response = randn(n)
     )
     data = Tables.columntable(df)
@@ -79,14 +80,16 @@ interactions = [
     (@formula(response ~ group3 * binary), "Categorical × Categorical"),
     (@formula(response ~ log(z) * group4), "Function × Categorical"),
     (@formula(response ~ x * log(z)), "Continuous × Function"),
+    (@formula(response ~ log(abs(x) + 2) * (y - 3.5)), "2-way Complex Function 1"),
 
     (@formula(response ~ x * y * z), "3-way continuous"),
     (@formula(response ~ x * y * group3), "3-way interaction"),
-    (@formula(response ~ group3 * group4 * binary), "3-way categorical"),
+    (@formula(response ~ group3 * group4 * binary), "3-way categorical, binary"),
+    (@formula(response ~ group3 * group4 * group5), "3-way categorical"),
     
     (@formula(response ~ x * y * z * w), "4-way interaction"),
+    (@formula(response ~ group2 * group3 * group4 * group5), "4-way categorical"),
     (@formula(response ~ log(z) * exp(w) * group3), "Multiple functions × categorical"),
-    (@formula(response ~ log(abs(x) + 2) * (y - 3.5)), "Complex Function 1"),
     (@formula(response ~ x * y * group3 + log(z) * group4), "Your original formula!"),
 ];
 
@@ -109,7 +112,7 @@ function test_cases(cases, df, data)
     end
 end
 
-function test_correctness(cases, df, data)
+function test_correctness(cases, df, data; i = 1)
     # normalize to a Vector
     cases = isa(cases, Tuple) ? [cases] : collect(cases)
 
@@ -118,15 +121,17 @@ function test_correctness(cases, df, data)
             @testset "$nm" begin
                 # fit the model
                 model = fit(LinearModel, f, df)
-                mm    = modelmatrix(model)
+                mm = modelmatrix(model);
+                mr = mm[i, :]
                 # prepare your “after” vector
                 output_after = Vector{Float64}(undef, size(mm, 2))
                 # compile
                 compiled_after = compile_formula_specialized(model, data)
+                
                 # run it
-                compiled_after(output_after, data, 1)
+                compiled_after(output_after, data, i)
                 # now the actual test
-                @test isapprox(mm[1, :], output_after; atol = 1e-5)
+                @test isapprox(mr, output_after; atol = 1e-5)
             end
         end
     end
@@ -137,8 +142,35 @@ end
 ###############################################################################
 
 df, data = test_data(; n = 200);
-x = functions
-# x = interactions;
-test_cases(x, df, data);
 
-test_correctness(x, df, data)
+# cases = functions
+# test_cases(cases, df, data);
+
+cases = [basic..., categoricals..., functions..., interactions...];
+
+test_correctness(cases, df, data);
+
+# manually check a particular ouput
+cases = interactions;
+
+let j = 13
+    i = 1
+    f, nm = cases[j]
+    model = fit(LinearModel, f, df)
+    mm    = modelmatrix(model);
+    mr = mm[i, :]
+    # prepare your “after” vector
+    output_after = Vector{Float64}(undef, size(mm, 2))
+    # compile
+    compiled_after = compile_formula_specialized(model, data);
+    # run it
+    compiled_after(output_after, data, i)
+    # now the actual test
+    @show hcat(coefnames(model), mr, output_after)
+    @test isapprox(mr, output_after; atol = 1e-5)
+end
+
+# ix = findall(.!(mm[1, :] .== output_after))
+# coefnames(model)[ix]
+
+# hcat(mm[1, :], output_after)
