@@ -75,8 +75,10 @@ functions = [
 ];
 
 interactions = [
-    (@formula(response ~ x * y), "Simple 2-way interaction"),
-    (@formula(response ~ x * group3), "Continuous × Categorical"),
+    (@formula(response ~ x * y), "Simple 2-way interaction 1"),
+    (@formula(response ~ x + x & y), "Simple 2-way interaction 2"),
+    (@formula(response ~ x * group3), "Continuous × Categorical 1"),
+    (@formula(response ~ x & group3 + x), "Continuous × Categorical 2"),
     (@formula(response ~ group3 * binary), "Categorical × Categorical"),
     (@formula(response ~ log(z) * group4), "Function × Categorical"),
     (@formula(response ~ x * log(z)), "Continuous × Function"),
@@ -143,32 +145,36 @@ end
 
 df, data = test_data(; n = 200);
 
-# cases = functions
-# test_cases(cases, df, data);
-
 cases = [basic..., categoricals..., functions..., interactions...];
+
+# cases = functions
+test_cases(cases, df, data);
+
+println("___________________________________________________________")
 
 test_correctness(cases, df, data);
 
 # manually check a particular ouput
-cases = interactions;
+# cases = interactions;
 
-let j = 13
-    i = 1
-    f, nm = cases[j]
-    model = fit(LinearModel, f, df)
-    mm    = modelmatrix(model);
-    mr = mm[i, :]
-    # prepare your “after” vector
-    output_after = Vector{Float64}(undef, size(mm, 2))
-    # compile
-    compiled_after = compile_formula_specialized(model, data);
-    # run it
-    compiled_after(output_after, data, i)
-    # now the actual test
-    @show hcat(coefnames(model), mr, output_after)
-    @test isapprox(mr, output_after; atol = 1e-5)
-end
+# let j = 13
+#     i = 1
+    
+#     f, nm = cases[j]
+#     f, nm = (@formula(response ~ x & group3 + x), "Continuous × Categorical 2")
+#     model = fit(LinearModel, f, df)
+#     mm = modelmatrix(model);
+#     mr = mm[i, :]
+#     # prepare your “after” vector
+#     output_after = Vector{Float64}(undef, size(mm, 2))
+#     # compile
+#     compiled_after = compile_formula_specialized(model, data);
+#     # run it
+#     compiled_after(output_after, data, i)
+#     # now the actual test
+#     @show hcat(coefnames(model), mr, output_after)
+#     @test isapprox(mr, output_after; atol = 1e-5)
+# end
 
 # ix = findall(.!(mm[1, :] .== output_after))
 # coefnames(model)[ix]

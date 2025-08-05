@@ -58,15 +58,3 @@ function apply_function_direct_binary(func::Function, val1::Float64, val2::Float
         return Float64(func(val1, val2))
     end
 end
-
-"""
-    apply_function_direct_varargs(func::Function, args...) -> Float64
-
-Apply function with 3+ arguments.
-Generic approach for rarer cases (with some overhead).
-"""
-function apply_function_direct_varargs(func::Function, args...)
-    println("GENERIC FALLBACK to apply_function_direct_varargs")
-    # For 3+ arguments, just use the generic approach with Float64 conversion
-    return Float64(func(args...))
-end

@@ -32,7 +32,6 @@ export not
 # Include files in dependency order
 include("fixed_helpers.jl") # No dependencies
 include("evaluators.jl")
-include("kronecker.jl")
 include("compile_term.jl")
 
 # Main compilation interface
