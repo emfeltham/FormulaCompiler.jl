@@ -6,10 +6,12 @@
     FunctionPreEvalOperation
 
 Operation to pre-evaluate a function to scratch before using in interaction.
+Now stores compiled function data from step3 instead of raw evaluator.
 """
 struct FunctionPreEvalOperation
-    func_eval::FunctionEvaluator
-    target_scratch_position::Int
+    function_data::SpecializedFunctionData  # The compiled function from step3
+    function_op::FunctionOp                 # The operation descriptor from step3
+    target_scratch_position::Int            # Where to start writing in scratch
 end
 
 ###############################################################################
@@ -621,21 +623,69 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
         
         if comp isa FunctionEvaluator
             # Functions need pre-evaluation to scratch
-            # # println("DEBUG: Component $i is FunctionEvaluator - needs pre-evaluation")
+            # Allocate position for this function's final result
+            func_result_pos = allocate_temp!(temp_allocator)
             
-            # Allocate scratch for function result
-            func_scratch_pos = allocate_temp!(temp_allocator)
+            # Create a temp allocator for the function's internal operations
+            # It starts at the CURRENT next position (after the result position)
+            func_internal_allocator = TempAllocator(temp_allocator.next_temp)
             
-            # Create pre-evaluation operation
-            push!(function_pre_evals, FunctionPreEvalOperation(comp, func_scratch_pos))
+            # Decompose the function using step3's system
+            # It will write its final result to func_result_pos
+            # and use func_internal_allocator for any intermediate operations
+            func_operations = decompose_function_tree_as_intermediate(
+                comp, 
+                func_result_pos, 
+                func_internal_allocator
+            )
+            
+            # Update the main allocator to account for ALL positions used by the function
+            # (including any intermediate positions allocated by func_internal_allocator)
+            temp_allocator.next_temp = func_internal_allocator.next_temp
+            
+            # Separate operations by type (these are LinearizedOperation from step3)
+            intermediate_ops = filter(op -> op.operation_type == :intermediate_binary, func_operations)
+            final_ops = filter(op -> op.operation_type == :final_binary, func_operations)
+            
+            # Create tuples of specialized data inline (avoiding missing function imports)
+            intermediate_tuple = if length(intermediate_ops) == 0
+                ()
+            else
+                ntuple(length(intermediate_ops)) do j
+                    op = intermediate_ops[j]
+                    input1 = length(op.inputs) > 0 ? op.inputs[1] : Symbol()
+                    input2 = length(op.inputs) > 1 ? op.inputs[2] : Symbol()
+                    IntermediateBinaryFunctionData(op.func, input1, input2, op.scratch_position)
+                end
+            end
+            
+            final_tuple = if length(final_ops) == 0
+                ()
+            else
+                ntuple(length(final_ops)) do j
+                    op = final_ops[j]
+                    input1 = length(op.inputs) > 0 ? op.inputs[1] : Symbol()
+                    input2 = length(op.inputs) > 1 ? op.inputs[2] : Symbol()
+                    FinalBinaryFunctionData(op.func, input1, input2, op.output_position)
+                end
+            end
+            
+            # Create the compiled function data
+            function_data = SpecializedFunctionData((), intermediate_tuple, final_tuple)
+            function_op = FunctionOp(0, length(intermediate_ops), length(final_ops))
+            
+            # Create the pre-eval operation with compiled function data
+            pre_eval = FunctionPreEvalOperation(function_data, function_op, func_result_pos)
+            
+            # Store in the function_pre_evals vector
+            push!(function_pre_evals, pre_eval)
             
             # Create scratch reference for the function's output
-            func_scratch_ref = InteractionScratchReference([func_scratch_pos])
+            # The interaction will read from func_result_pos
+            func_scratch_ref = InteractionScratchReference([func_result_pos])
             push!(processed_components, func_scratch_ref)
-            push!(processed_input_sources, InteractionScratchPosition(func_scratch_pos))
+            push!(processed_input_sources, InteractionScratchPosition(func_result_pos))
             push!(processed_widths, 1)  # Functions are scalar
-            
-            # # println("DEBUG:   Function will pre-evaluate to scratch[$func_scratch_pos]")
             
         else
             # Regular component (categorical, continuous, etc.)
@@ -875,33 +925,17 @@ function execute_operation!(
     row_idx::Int
 ) where {C1, C2, T1, T2}
 
-    # Execute function pre-evaluations FIRST
+    # Execute function pre-evaluations using step3's execution system
     for pre_eval in data.function_pre_evals
-        func_eval = pre_eval.func_eval
-        target_pos = pre_eval.target_scratch_position
-        
-        # Evaluate the function's arguments
-        arg_values = Float64[]
-        for arg_eval in func_eval.arg_evaluators
-            if arg_eval isa ContinuousEvaluator
-                val = Float64(get_data_value_specialized(input_data, arg_eval.column, row_idx))
-                push!(arg_values, val)
-            elseif arg_eval isa ConstantEvaluator
-                push!(arg_values, arg_eval.value)
-            else
-                error("Unsupported argument type: $(typeof(arg_eval))")
-            end
-        end
-        
-        # Apply the function
-        result = if length(arg_values) == 1
-            Float64(func_eval.func(arg_values[1]))
-        else
-            Float64(func_eval.func(arg_values...))
-        end
-        
-        # Write to scratch
-        scratch[target_pos] = result
+        # Use step3's execute_operation! directly
+        execute_operation!(
+            pre_eval.function_data,
+            pre_eval.function_op,
+            scratch,  # Use interaction's scratch space
+            output,
+            input_data,
+            row_idx
+        )
     end
 
     # Validation
@@ -909,12 +943,12 @@ function execute_operation!(
     
     # Debug for 2x2 categorical interactions
     if length(data.index_pattern) == 4 && data.component1 isa CategoricalEvaluator && data.component2 isa CategoricalEvaluator
-        println("DEBUG: Computing 2×2 categorical intermediate at scratch[$(data.scratch_position)]")
+        # println("DEBUG: Computing 2×2 categorical intermediate at scratch[$(data.scratch_position)]")
         
         # What are the actual levels for this row?
         level1 = data.component1.level_codes[row_idx]
         level2 = data.component2.level_codes[row_idx]
-        println("  Row $row_idx: group2 level=$level1, group3 level=$level2")
+        # println("  Row $row_idx: group2 level=$level1, group3 level=$level2")
     end
     
     @inbounds for pattern_idx in 1:length(data.index_pattern)
@@ -929,8 +963,8 @@ function execute_operation!(
         # Debug the intermediate values
         if length(data.index_pattern) == 4 && pattern_idx <= 4
             contrast_names = ["M&B", "Z&B", "M&C", "Z&C"]
-            println("  scratch[$scratch_pos] = $product (should be $(contrast_names[pattern_idx]))")
-            println("    val1 (i=$i): $val1, val2 (j=$j): $val2")
+            # println("  scratch[$scratch_pos] = $product (should be $(contrast_names[pattern_idx]))")
+            # println("    val1 (i=$i): $val1, val2 (j=$j): $val2")
         end
         
         scratch[scratch_pos] = product
@@ -947,33 +981,17 @@ function execute_operation!(
     row_idx::Int
 ) where {C1, C2, T1, T2}
     
-    # Execute function pre-evaluations FIRST
+    # Execute function pre-evaluations using step3's execution system
     for pre_eval in data.function_pre_evals
-        func_eval = pre_eval.func_eval
-        target_pos = pre_eval.target_scratch_position
-        
-        # Evaluate the function's arguments
-        arg_values = Float64[]
-        for arg_eval in func_eval.arg_evaluators
-            if arg_eval isa ContinuousEvaluator
-                val = Float64(get_data_value_specialized(input_data, arg_eval.column, row_idx))
-                push!(arg_values, val)
-            elseif arg_eval isa ConstantEvaluator
-                push!(arg_values, arg_eval.value)
-            else
-                error("Unsupported argument type: $(typeof(arg_eval))")
-            end
-        end
-        
-        # Apply the function
-        result = if length(arg_values) == 1
-            Float64(func_eval.func(arg_values[1]))
-        else
-            Float64(func_eval.func(arg_values...))
-        end
-        
-        # Write to scratch
-        scratch[target_pos] = result
+        # Use step3's execute_operation! directly
+        execute_operation!(
+            pre_eval.function_data,
+            pre_eval.function_op,
+            scratch,  # Use interaction's scratch space
+            output,
+            input_data,
+            row_idx
+        )
     end
     
     # Validation
@@ -987,7 +1005,7 @@ function execute_operation!(
         
         # DEBUG: Add this for log(z) & group4 interaction
         if data.component1 isa InteractionScratchReference && data.output_position >= 14 && data.output_position <= 16
-            println("DEBUG: log(z) & group4 pattern_idx=$pattern_idx: val1=$val1, val2=$val2, product=$(val1*val2)")
+            # println("DEBUG: log(z) & group4 pattern_idx=$pattern_idx: val1=$val1, val2=$val2, product=$(val1*val2)")
         end
         
         product = val1 * val2
