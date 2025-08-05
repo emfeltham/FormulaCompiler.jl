@@ -45,22 +45,53 @@ end
 """
     compile_formula(model, data::NamedTuple) -> CompiledFormula
 
-Compile formula using self-contained evaluators.
+Compile formula using schema-based categorical extraction.
+UPDATED: Now uses fitted model's schema for categorical contrasts.
 """
 function compile_formula(model, data::NamedTuple)
     rhs = fixed_effects_form(model).rhs
     column_names = extract_all_columns(rhs)
     
-    # Pre-extract categorical level codes
-    categorical_levels = prepare_categorical_levels(data, column_names)
+    # println("DEBUG: compile_formula called")
+    # println("DEBUG: Columns referenced: $column_names")
     
-    # Pass levels explicitly instead of using global context
-    root_evaluator = compile_term(rhs, 1, ScratchAllocator(), categorical_levels)
+    # Use the updated schema extraction
+    categorical_schema = extract_complete_categorical_schema(model)
     
-    out_width = output_width(root_evaluator)
+    # Populate schema with actual data level codes
+    populate_level_codes_from_data!(categorical_schema, data)
+    
+    # Determine which variables have main effects vs interaction-only
+    determine_main_effect_contrasts!(categorical_schema, model)
+    
+    # Validate the extracted schema
+    validate_categorical_schema(categorical_schema)
+    
+    # println("DEBUG: Schema extraction complete, $(length(categorical_schema)) categorical variables")
+    
+    # Continue with normal compilation...
+    root_evaluator = compile_term(rhs, 1, ScratchAllocator(), categorical_schema)
+
+# println("DEBUG: root_evaluator type: $(typeof(root_evaluator))")
+# println("DEBUG: root_evaluator is nothing: $(root_evaluator === nothing)")
+
+if root_evaluator === nothing
+    error("compile_term returned nothing - check compilation logic")
+end
+
+out_width = output_width(root_evaluator)
+    
     scratch_size = max_scratch_needed(root_evaluator)
     
     validate_data_columns!(data, column_names)
+    
+    # Extract level codes for backward compatibility
+    categorical_levels = Dict{Symbol, Vector{Int}}()
+    for (col_name, schema_info) in categorical_schema
+        categorical_levels[col_name] = schema_info.level_codes
+    end
+    
+    # println("DEBUG: Compilation complete - output_width: $out_width, scratch_size: $scratch_size")
     
     return CompiledFormula(
         root_evaluator,
@@ -74,25 +105,6 @@ end
 ###############################################################################
 # UTILITY FUNCTIONS
 ###############################################################################
-
-"""
-    prepare_categorical_levels(data::NamedTuple, column_names::Vector{Symbol}) -> Dict{Symbol, Vector{Int}}
-    
-Pre-extract all categorical level codes to avoid runtime levelcode() allocations.
-"""
-function prepare_categorical_levels(data::NamedTuple, column_names::Vector{Symbol})
-    level_maps = Dict{Symbol, Vector{Int}}()
-    
-    for col_name in column_names
-        col_data = data[col_name]
-        if col_data isa CategoricalVector
-            # Pre-extract all level codes - allocate once during compilation
-            level_maps[col_name] = [levelcode(val) for val in col_data]
-        end
-    end
-    
-    return level_maps
-end
 
 """
     validate_data_columns!(data::NamedTuple, required_columns::Vector{Symbol})
@@ -189,4 +201,45 @@ function benchmark_execution(cf::CompiledFormula, data::NamedTuple, n_iterations
     println("  Zero allocation: $(is_zero ? "✅ YES" : "❌ NO")")
     
     return (time_ns = avg_time_ns, allocations = avg_alloc, zero_allocation = is_zero)
+end
+
+
+"""
+    prepare_categorical_levels(data::NamedTuple, column_names::Vector{Symbol}) -> Dict{Symbol, Vector{Int}}
+    
+DEPRECATED: Use extract_complete_categorical_schema instead.
+Kept for backward compatibility during transition.
+"""
+function prepare_categorical_levels(data::NamedTuple, column_names::Vector{Symbol})
+    @warn "prepare_categorical_levels is deprecated - schema extraction should handle this"
+    
+    level_maps = Dict{Symbol, Vector{Int}}()
+    
+    for col_name in column_names
+        if haskey(data, col_name)
+            col_data = data[col_name]
+            if col_data isa CategoricalVector
+                # Pre-extract all level codes - allocate once during compilation
+                level_maps[col_name] = [levelcode(val) for val in col_data]
+            end
+        end
+    end
+    
+    return level_maps
+end
+
+"""
+    extract_level_codes_from_schema(categorical_schema::Dict{Symbol, CategoricalSchemaInfo}, data::NamedTuple) -> Dict{Symbol, Vector{Int}}
+
+NEW: Extract level codes from schema information.
+Replaces prepare_categorical_levels in the new architecture.
+"""
+function extract_level_codes_from_schema(categorical_schema::Dict{Symbol, CategoricalSchemaInfo}, data::NamedTuple)
+    level_maps = Dict{Symbol, Vector{Int}}()
+    
+    for (col_name, schema_info) in categorical_schema
+        level_maps[col_name] = schema_info.level_codes
+    end
+    
+    return level_maps
 end
