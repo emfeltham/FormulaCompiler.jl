@@ -1,4 +1,5 @@
-# modelrow.jl - Updated with override compatibility fixes
+# modelrow.jl
+# includes override (data scenario) versions
 
 ###############################################################################
 # CACHE FOR SPECIALIZED FORMULAS ONLY
@@ -10,7 +11,7 @@ Cache for specialized formulas using model+data structure as key.
 const SPECIALIZED_MODEL_CACHE = Dict{Any, Any}()
 
 ###############################################################################
-# CORE MODELROW! FUNCTION - SPECIALIZED ONLY
+# CORE MODELROW! FUNCTION
 ###############################################################################
 
 """
@@ -48,7 +49,7 @@ function modelrow!(
     if cache
         specialized_formula = get_or_compile_specialized_formula(model, data)
     else
-        specialized_formula = compile_formula_specialized(model, data)
+        specialized_formula = compile_formula(model, data)
     end
     
     specialized_formula(row_vec, data, row_idx)
@@ -71,7 +72,7 @@ struct ModelRowEvaluator{D, O}
     
     function ModelRowEvaluator(model, df::DataFrame)
         data = Tables.columntable(df)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         row_vec = Vector{Float64}(undef, length(specialized))
         
         D = typeof(specialized.data)
@@ -81,7 +82,7 @@ struct ModelRowEvaluator{D, O}
     end
     
     function ModelRowEvaluator(model, data::NamedTuple)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         row_vec = Vector{Float64}(undef, length(specialized))
         
         D = typeof(specialized.data)
@@ -152,7 +153,7 @@ function modelrow_batch!(
     if cache
         specialized_formula = get_or_compile_specialized_formula(model, data)
     else
-        specialized_formula = compile_formula_specialized(model, data)
+        specialized_formula = compile_formula(model, data)
     end
     
     return modelrow_batch!(matrix, specialized_formula, data, row_indices)
@@ -181,7 +182,7 @@ function modelrow_scenarios!(
     first_specialized = if cache
         get_or_compile_specialized_formula(model, scenarios[1].data)
     else
-        compile_formula_specialized(model, scenarios[1].data)
+        compile_formula(model, scenarios[1].data)
     end
     
     output_width = length(first_specialized)
@@ -198,7 +199,7 @@ function modelrow_scenarios!(
         specialized = if cache
             get_or_compile_specialized_formula(model, scenario.data)
         else
-            compile_formula_specialized(model, scenario.data)
+            compile_formula(model, scenario.data)
         end
         
         row_view = view(matrix, i+1, 1:output_width)
@@ -332,7 +333,7 @@ Evaluate a single row with pre-compiled specialized formula.
 
 # Example
 ```julia
-specialized = compile_formula_specialized(model, data)
+specialized = compile_formula(model, data)
 row_values = modelrow(specialized, data, 1)  # Returns Vector{Float64}
 ```
 """
@@ -353,7 +354,7 @@ Evaluate multiple rows with pre-compiled specialized formula.
 
 # Example
 ```julia
-specialized = compile_formula_specialized(model, data)
+specialized = compile_formula(model, data)
 matrix = modelrow(specialized, data, [1, 5, 10])  # Returns Matrix{Float64}
 ```
 """

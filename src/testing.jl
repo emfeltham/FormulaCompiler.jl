@@ -15,7 +15,7 @@ function test_cases(cases, df, data)
         # allocate output
         output_after = Vector{Float64}(undef, size(modelmatrix(model), 2));
         # compile
-        compiled_after = compile_formula_specialized(model, data);
+        compiled_after = compile_formula(model, data);
         compiled_after(output_after, data, 1);
 
         println("Case: " * nm)
@@ -37,7 +37,7 @@ function test_correctness(cases, df, data; i = 1)
                 # prepare your “after” vector
                 output_after = Vector{Float64}(undef, size(mm, 2))
                 # compile
-                compiled_after = compile_formula_specialized(model, data)
+                compiled_after = compile_formula(model, data)
                 
                 # run it
                 compiled_after(output_after, data, i)

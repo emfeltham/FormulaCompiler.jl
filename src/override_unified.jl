@@ -814,7 +814,7 @@ function get_or_compile_specialized_formula(model, data)
     if haskey(SPECIALIZED_MODEL_CACHE, cache_key)
         return SPECIALIZED_MODEL_CACHE[cache_key]
     else
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         SPECIALIZED_MODEL_CACHE[cache_key] = specialized
         return specialized
     end
@@ -856,7 +856,7 @@ function test_override_compatibility()
     data = Tables.columntable(df)
     
     scenario = create_scenario("group_B", data; group = "B")
-    compiled = compile_formula_specialized(model, scenario.data)
+    compiled = compile_formula(model, scenario.data)
     
     # Test execution
     output = Vector{Float64}(undef, length(compiled))
@@ -868,7 +868,7 @@ function test_override_compatibility()
     println("\nTest 2: Mixed interaction with overrides")
     model2 = lm(@formula(y ~ x * group), df)
     scenario2 = create_scenario("fixed_values", data; x = 2.0, group = "A")
-    compiled2 = compile_formula_specialized(model2, scenario2.data)
+    compiled2 = compile_formula(model2, scenario2.data)
     
     output2 = Vector{Float64}(undef, length(compiled2))
     compiled2(output2, scenario2.data, 1)
@@ -908,7 +908,7 @@ function test_override_compatibility()
     s4c = create_scenario("index", data; group = 2)  # "B" is the 2nd level
     
     for (name, scenario) in [("string", s4a), ("symbol", s4b), ("index", s4c)]
-        compiled = compile_formula_specialized(model, scenario.data)
+        compiled = compile_formula(model, scenario.data)
         output = Vector{Float64}(undef, length(compiled))
         compiled(output, scenario.data, 1)
         println("  ✅ Override with $name works")
@@ -923,7 +923,7 @@ function test_override_compatibility()
     
     println("  Created $(length(collection)) scenarios")
     for scenario in collection
-        compiled = compile_formula_specialized(model, scenario.data)
+        compiled = compile_formula(model, scenario.data)
         output = Vector{Float64}(undef, length(compiled))
         compiled(output, scenario.data, 1)
     end
@@ -932,7 +932,7 @@ function test_override_compatibility()
     # Test 6: Verify constant output for override
     println("\nTest 6: Verify constant output for categorical override")
     scenario6 = create_scenario("constant_B", data; group = "B")
-    compiled6 = compile_formula_specialized(model, scenario6.data)
+    compiled6 = compile_formula(model, scenario6.data)
     
     # All rows should produce same group effect since override is constant
     outputs = []

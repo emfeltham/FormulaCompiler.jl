@@ -38,7 +38,7 @@ function benchmark_recursive_categorical(formula, df, data; n_iterations=1000)
     
     # Compile the formula
     model = fit(LinearModel, formula, df)
-    compiled = compile_formula_specialized(model, data)
+    compiled = compile_formula(model, data)
     output = Vector{Float64}(undef, length(compiled))
     
     println("Compiled type: $(typeof(compiled.data.categorical))")
