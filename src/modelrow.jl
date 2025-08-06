@@ -1,4 +1,4 @@
-# modelrow!.jl - Clean specialized-only implementation
+# modelrow.jl - Updated with override compatibility fixes
 
 ###############################################################################
 # CACHE FOR SPECIALIZED FORMULAS ONLY
@@ -36,7 +36,7 @@ end
 
 Convenient modelrow! with automatic compilation to specialized formulas.
 
-N.B., this allocates alot more when cache=false.
+N.B., this allocates more when cache=false.
 """
 function modelrow!(
     row_vec::AbstractVector{Float64}, 
@@ -56,7 +56,7 @@ function modelrow!(
 end
 
 ###############################################################################
-# SPECIALIZED MODEL ROW EVALUATOR - CLEAN VERSION
+# SPECIALIZED MODEL ROW EVALUATOR
 ###############################################################################
 
 """
@@ -71,6 +71,16 @@ struct ModelRowEvaluator{D, O}
     
     function ModelRowEvaluator(model, df::DataFrame)
         data = Tables.columntable(df)
+        specialized = compile_formula_specialized(model, data)
+        row_vec = Vector{Float64}(undef, length(specialized))
+        
+        D = typeof(specialized.data)
+        O = typeof(specialized.operations)
+        
+        new{D, O}(specialized, data, row_vec)
+    end
+    
+    function ModelRowEvaluator(model, data::NamedTuple)
         specialized = compile_formula_specialized(model, data)
         row_vec = Vector{Float64}(undef, length(specialized))
         
@@ -99,27 +109,6 @@ Evaluate model row into provided vector.
 function (evaluator::ModelRowEvaluator{D, O})(row_vec::AbstractVector{Float64}, row_idx::Int) where {D, O}
     evaluator.specialized(row_vec, evaluator.data, row_idx)
     return row_vec
-end
-
-###############################################################################
-# CACHING SYSTEM - SPECIALIZED ONLY
-###############################################################################
-
-"""
-    get_or_compile_specialized_formula(model, data)
-
-Get cached specialized formula or compile new one.
-"""
-function get_or_compile_specialized_formula(model, data)
-    cache_key = (model, hash(keys(data)))
-    
-    if haskey(SPECIALIZED_MODEL_CACHE, cache_key)
-        return SPECIALIZED_MODEL_CACHE[cache_key]
-    else
-        specialized = compile_formula_specialized(model, data)
-        SPECIALIZED_MODEL_CACHE[cache_key] = specialized
-        return specialized
-    end
 end
 
 ###############################################################################
@@ -170,6 +159,80 @@ function modelrow_batch!(
 end
 
 ###############################################################################
+# SCENARIO-AWARE BATCH EVALUATION
+###############################################################################
+
+"""
+    modelrow_scenarios!(matrix, model, scenarios, row_idx; cache=true)
+
+Evaluate model row across multiple scenarios.
+Each scenario gets its own properly cached specialized formula.
+"""
+function modelrow_scenarios!(
+    matrix::AbstractMatrix{Float64},
+    model::Union{LinearModel, GeneralizedLinearModel, LinearMixedModel, GeneralizedLinearMixedModel, StatsModels.TableRegressionModel},
+    scenarios::Vector{DataScenario},
+    row_idx::Int;
+    cache::Bool=true
+)
+    n_scenarios = length(scenarios)
+    
+    # Get first scenario to determine output width
+    first_specialized = if cache
+        get_or_compile_specialized_formula(model, scenarios[1].data)
+    else
+        compile_formula_specialized(model, scenarios[1].data)
+    end
+    
+    output_width = length(first_specialized)
+    
+    @assert size(matrix, 1) >= n_scenarios "Matrix height insufficient for scenarios"
+    @assert size(matrix, 2) >= output_width "Matrix width insufficient for formula output"
+    
+    # Evaluate first scenario (already compiled)
+    row_view = view(matrix, 1, 1:output_width)
+    first_specialized(row_view, scenarios[1].data, row_idx)
+    
+    # Evaluate remaining scenarios
+    for (i, scenario) in enumerate(scenarios[2:end])
+        specialized = if cache
+            get_or_compile_specialized_formula(model, scenario.data)
+        else
+            compile_formula_specialized(model, scenario.data)
+        end
+        
+        row_view = view(matrix, i+1, 1:output_width)
+        specialized(row_view, scenario.data, row_idx)
+    end
+    
+    return matrix
+end
+
+"""
+    modelrow_scenarios!(matrix, specialized::SpecializedFormula, scenarios, row_idx)
+
+Evaluate specialized formula across multiple scenarios.
+Note: Same specialized formula used for all scenarios - may not be appropriate if formula 
+depends on data structure.
+"""
+function modelrow_scenarios!(
+    matrix::AbstractMatrix{Float64},
+    specialized::SpecializedFormula{D, O},
+    scenarios::Vector{DataScenario},
+    row_idx::Int
+) where {D, O}
+    @assert size(matrix, 1) >= length(scenarios) "Matrix height insufficient for scenarios"
+    @assert size(matrix, 2) == length(specialized) "Matrix width mismatch"
+    
+    for (i, scenario) in enumerate(scenarios)
+        row_view = view(matrix, i, :)
+        specialized(row_view, scenario.data, row_idx)
+    end
+    
+    return matrix
+end
+
+###############################################################################
 # CACHE MANAGEMENT
 ###############################################################################
 
@@ -181,6 +244,45 @@ Clear the specialized model cache.
 function clear_model_cache!()
     empty!(SPECIALIZED_MODEL_CACHE)
     println("Specialized model cache cleared.")
+end
+
+"""
+    cache_size()
+
+Get the current size of the model cache.
+"""
+function cache_size()
+    return length(SPECIALIZED_MODEL_CACHE)
+end
+
+"""
+    cache_info()
+
+Get detailed information about the cache contents.
+"""
+function cache_info()
+    println("Model Cache Information")
+    println("=" ^ 40)
+    println("Total entries: $(length(SPECIALIZED_MODEL_CACHE))")
+    
+    # Analyze cache keys
+    has_overrides = 0
+    no_overrides = 0
+    
+    for (key, _) in SPECIALIZED_MODEL_CACHE
+        if length(key) == 3  # Has override info
+            has_overrides += 1
+        else
+            no_overrides += 1
+        end
+    end
+    
+    println("Entries without overrides: $no_overrides")
+    println("Entries with overrides: $has_overrides")
+    
+    return (total=length(SPECIALIZED_MODEL_CACHE), 
+            with_overrides=has_overrides, 
+            without_overrides=no_overrides)
 end
 
 ###############################################################################
@@ -263,4 +365,27 @@ function modelrow(
     matrix = Matrix{Float64}(undef, length(row_indices), length(specialized))
     modelrow_batch!(matrix, specialized, data, row_indices)
     return matrix
+end
+
+"""
+    modelrow(model, scenario::DataScenario, row_idx) -> Vector{Float64}
+
+Evaluate model row using a data scenario (allocating version).
+"""
+function modelrow(model, scenario::DataScenario, row_idx::Int)
+    specialized = get_or_compile_specialized_formula(model, scenario.data)
+    row_vec = Vector{Float64}(undef, length(specialized))
+    specialized(row_vec, scenario.data, row_idx)
+    return row_vec
+end
+
+"""
+    modelrow(specialized::SpecializedFormula, scenario::DataScenario, row_idx) -> Vector{Float64}
+
+Evaluate model row using a data scenario with SpecializedFormula (allocating version).
+"""
+function modelrow(specialized::SpecializedFormula{D, O}, scenario::DataScenario, row_idx::Int) where {D, O}
+    row_vec = Vector{Float64}(undef, length(specialized))
+    specialized(row_vec, scenario.data, row_idx)
+    return row_vec
 end

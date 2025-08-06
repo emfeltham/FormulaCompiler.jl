@@ -150,7 +150,7 @@ end
     get_component_output_width(evaluator::AbstractEvaluator) -> Int
 
 Get the output width for interaction planning.
-FIXED: Ensure correct width for all component types.
+Ensure correct width for all component types.
 """
 function get_component_output_width(evaluator::AbstractEvaluator)
     if evaluator isa ConstantEvaluator || evaluator isa ContinuousEvaluator
@@ -380,48 +380,4 @@ function output_width_structural(evaluator::AbstractEvaluator)
     else
         return 1
     end
-end
-
-###############################################################################
-# 8. UTILITY FUNCTIONS
-###############################################################################
-
-function extract_all_columns(term::AbstractTerm)
-    columns = Symbol[]
-    extract_columns_recursive!(columns, term)
-    return unique(columns)
-end
-
-function extract_columns_recursive!(columns::Vector{Symbol}, term::Union{ContinuousTerm, Term})
-    push!(columns, term.sym)
-end
-
-function extract_columns_recursive!(columns::Vector{Symbol}, term::CategoricalTerm)
-    push!(columns, term.sym)
-end
-
-function extract_columns_recursive!(columns::Vector{Symbol}, term::FunctionTerm)
-    for arg in term.args
-        extract_columns_recursive!(columns, arg)
-    end
-end
-
-function extract_columns_recursive!(columns::Vector{Symbol}, term::InteractionTerm)
-    for comp in term.terms
-        extract_columns_recursive!(columns, comp)
-    end
-end
-
-function extract_columns_recursive!(columns::Vector{Symbol}, term::ZScoredTerm)
-    extract_columns_recursive!(columns, term.term)
-end
-
-function extract_columns_recursive!(columns::Vector{Symbol}, term::MatrixTerm)
-    for sub_term in term.terms
-        extract_columns_recursive!(columns, sub_term)
-    end
-end
-
-function extract_columns_recursive!(columns::Vector{Symbol}, term::Union{InterceptTerm, ConstantTerm})
-    # No columns
 end

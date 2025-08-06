@@ -907,7 +907,7 @@ function Base.iterate(data::SpecializedFunctionData, state=1)
 end
 
 ###############################################################################
-# FUNCTION SCRATCH CALCULATION (PHASE A FIX)
+# FUNCTION SCRATCH CALCULATION
 ###############################################################################
 
 """
