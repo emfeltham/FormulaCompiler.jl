@@ -50,7 +50,7 @@ function test_clean_modelrow_system()
         
         # Test 1: Direct specialized formula
         println("\n1. Testing direct specialized formula:")
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         println("   Specialized formula type: $(typeof(specialized))")
         println("   Formula length: $(length(specialized))")
         

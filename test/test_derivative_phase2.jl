@@ -42,7 +42,7 @@ end
         
         # Test model with log function: response ~ log(x)
         model = lm(@formula(response ~ log(x)), df)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         
         # Compile Phase 2 derivative
         dx_deriv = compile_derivative_formula_phase2(specialized, :x)
@@ -77,7 +77,7 @@ end
         
         # Test model with multiple functions: response ~ log(x) + exp(y) + sqrt(z)
         model = lm(@formula(response ~ log(x) + exp(y) + sqrt(z)), df)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         
         # Compile derivatives for each variable
         dx_deriv = compile_derivative_formula_phase2(specialized, :x)
@@ -133,7 +133,7 @@ end
         coefficients = coef(model)
         
         # Compile derivatives
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         dx_deriv = compile_derivative_formula_phase2(specialized, :x)
         dz_deriv = compile_derivative_formula_phase2(specialized, :z)
         
@@ -189,7 +189,7 @@ end
         
         # Test simple function: response ~ log(x)
         model = lm(@formula(response ~ log(x)), df)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         dx_deriv = compile_derivative_formula_phase2(specialized, :x)
         
         # Test at a few observations
@@ -246,7 +246,7 @@ end
         
         # Test model mixing functions and continuous: response ~ x + log(z) + y
         model = lm(@formula(response ~ x + log(z) + y), df)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         
         println("Testing mixed model: response ~ x + log(z) + y")
         
@@ -297,7 +297,7 @@ end
         
         # Test function model
         model = lm(@formula(response ~ log(x) + sqrt(z)), df)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         dx_deriv = compile_derivative_formula_phase2(specialized, :x)
         
         # Pre-allocate output vector

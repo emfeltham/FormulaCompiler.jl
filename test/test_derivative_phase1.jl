@@ -41,7 +41,7 @@ end
         model = lm(@formula(response ~ x + z), df)
         
         # Compile to specialized formula
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         
         # Compile derivatives
         dx_deriv = compile_derivative_formula(specialized, :x)
@@ -87,7 +87,7 @@ end
         coefficients = coef(model)
         
         # Compile specialized formula and derivatives
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         dx_deriv = compile_derivative_formula(specialized, :x)
         dz_deriv = compile_derivative_formula(specialized, :z)
         
@@ -122,7 +122,7 @@ end
         
         # Test model
         model = lm(@formula(response ~ x + z), df)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         dx_deriv = compile_derivative_formula(specialized, :x)
         
         # Pre-allocate output vector
@@ -169,7 +169,7 @@ end
         
         # Test simple model: y ~ x + z
         model = lm(@formula(response ~ x + z), df)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         dx_deriv = compile_derivative_formula(specialized, :x)
         
         # Test at a few observations
@@ -224,7 +224,7 @@ end
         
         # Test model with multiple variables: y ~ x + y + z + w
         model = lm(@formula(response ~ x + y + z + w), df)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         
         variables = [:x, :y, :z, :w]
         derivative_formulas = [compile_derivative_formula(specialized, var) for var in variables]
@@ -270,7 +270,7 @@ end
         
         # Test model with categorical: response ~ x + y + group
         model = lm(@formula(response ~ x + y + group), df)
-        specialized = compile_formula_specialized(model, data)
+        specialized = compile_formula(model, data)
         
         # Compile derivatives
         dx_deriv = compile_derivative_formula(specialized, :x)
