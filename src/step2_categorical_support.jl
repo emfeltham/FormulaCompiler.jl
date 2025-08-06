@@ -36,25 +36,25 @@ end
 """
     SpecializedCategoricalData{N, Positions}
 
-Fully compile-time specialized categorical data with tuple-based positions.
-N = number of contrast columns, Positions = NTuple{N, Int} of output positions.
+FIXED: Remove pre-computed level_codes, extract them dynamically during execution
+while maintaining zero allocations.
 """
 struct SpecializedCategoricalData{N, Positions}
     contrast_matrix::Matrix{Float64}
-    level_codes::Vector{Int}
     positions::Positions                  # NTuple{N, Int}
     n_levels::Int
     n_contrasts::Int
+    column::Symbol                        # ADDED: Need to know which column to read from
     
     function SpecializedCategoricalData(
         contrast_matrix::Matrix{Float64}, 
-        level_codes::Vector{Int}, 
         positions::NTuple{N, Int}, 
-        n_levels::Int
+        n_levels::Int,
+        column::Symbol
     ) where N
         n_contrasts = size(contrast_matrix, 2)
         @assert N == n_contrasts "Position tuple length must match contrast columns"
-        new{N, typeof(positions)}(contrast_matrix, level_codes, positions, n_levels, n_contrasts)
+        new{N, typeof(positions)}(contrast_matrix, positions, n_levels, n_contrasts, column)
     end
 end
 
@@ -89,17 +89,15 @@ end
 ###############################################################################
 
 """
-    analyze_categorical_operations(evaluator::CombinedEvaluator) -> (Vector{CategoricalData}, CategoricalOp)
+    analyze_categorical_operations(evaluator::CombinedEvaluator) -> (Tuple, CategoricalOp)
 
-Extract categorical data from a CombinedEvaluator's categorical evaluators.
-Fully specialized analysis that returns compile-time tuples.
+FIXED: Don't pre-extract level codes during compilation.
 """
 function analyze_categorical_operations(evaluator::CombinedEvaluator)
     categorical_evaluators = evaluator.categorical_evaluators
     n_cats = length(categorical_evaluators)
     
     if n_cats == 0
-        # No categorical operations - return empty tuple
         return (), CategoricalOp(0)
     end
     
@@ -112,15 +110,35 @@ function analyze_categorical_operations(evaluator::CombinedEvaluator)
             cat_eval.positions[j]
         end
         
+        # FIXED: Pass column symbol for dynamic lookup, not pre-computed level codes
         SpecializedCategoricalData(
             cat_eval.contrast_matrix,
-            cat_eval.level_codes,
-            position_tuple,  # Now a compile-time tuple!
-            cat_eval.n_levels
+            position_tuple,
+            cat_eval.n_levels,
+            cat_eval.column  # Column name for dynamic lookup
         )
     end
     
     return categorical_data, CategoricalOp(n_cats)
+end
+
+"""
+    extract_level_code_zero_alloc(column_data, row_idx::Int) -> Int
+
+Extract level code with zero allocations using type-stable dispatch.
+"""
+@inline function extract_level_code_zero_alloc(column_data::CategoricalVector, row_idx::Int)
+    return Int(levelcode(column_data[row_idx]))
+end
+
+@inline function extract_level_code_zero_alloc(column_data::OverrideVector{CategoricalValue{T,R}}, row_idx::Int) where {T,R}
+    # For OverrideVector, all rows have the same value - extract once, no allocation
+    return Int(levelcode(column_data.override_value))
+end
+
+@inline function extract_level_code_zero_alloc(column_data, row_idx::Int)
+    # Fallback for other types
+    error("Cannot extract level code from $(typeof(column_data))")
 end
 
 ###############################################################################
@@ -173,8 +191,8 @@ end
 """
     execute_categorical_recursive!(categorical_data::Tuple, output, input_data, row_idx)
 
-Recursive case: process first categorical, then recursively process the rest.
-Fixed to avoid TypeVar iteration issues during precompilation.
+FIXED: Extract level codes dynamically with zero allocations.
+This REPLACES the existing function completely.
 """
 function execute_categorical_recursive!(
     categorical_data::Tuple, 
@@ -182,24 +200,24 @@ function execute_categorical_recursive!(
     input_data, 
     row_idx
 )
-    # Handle empty tuple (should be caught by specialized method above)
+    # Base case: empty tuple
     if length(categorical_data) == 0
         return nothing
     end
     
     # Process the first categorical variable
-    cat_data = categorical_data[1]  # First element
+    cat_data = categorical_data[1]
     
-    # Get level for this row
-    level = cat_data.level_codes[row_idx]
-    level = clamp(level, 1, cat_data.n_levels)
+    # FIXED: Extract level dynamically with zero allocations
+    column_data = getproperty(input_data, cat_data.column)  # Zero-allocation property access
+    level = extract_level_code_zero_alloc(column_data, row_idx)
     
-    # Execute this categorical using existing specialized function
+    # Execute this categorical using existing zero-allocation function
     execute_single_categorical!(cat_data, level, output)
     
-    # Recursively process the remaining categoricals
+    # Recursively process remaining categoricals
     if length(categorical_data) > 1
-        remaining_data = Base.tail(categorical_data)  # Get tail
+        remaining_data = Base.tail(categorical_data)
         execute_categorical_recursive!(remaining_data, output, input_data, row_idx)
     end
     
@@ -235,6 +253,9 @@ function execute_single_categorical!(
     level::Int, 
     output
 ) where {N, Positions}
+
+    # println("DEBUG: level=$level, contrast_matrix size=$(size(cat_data.contrast_matrix))")
+    # println("DEBUG: contrast row for level $level: $(cat_data.contrast_matrix[level, :])")
     
     # Level is already clamped by the caller
     # Just do the matrix lookup and assignment
@@ -244,4 +265,77 @@ function execute_single_categorical!(
     end
     
     return nothing
+end
+
+###############################################################################
+# 4. ZERO-ALLOCATION VERIFICATION TEST
+###############################################################################
+
+"""
+    verify_categorical_fix()
+
+Test function to verify the fix works correctly with zero allocations.
+Run this after implementing the changes.
+"""
+function verify_categorical_fix()
+    println("Testing categorical scenario fix...")
+    
+    # Create test data
+    n = 100
+    df = DataFrame(
+        x = randn(n),
+        group = categorical(rand(["A", "B", "C"], n))
+    )
+    df.y = randn(n)
+    
+    model = lm(@formula(y ~ x + group), df)
+    data_nt = Tables.columntable(df)
+    
+    # Create scenarios
+    scenario_A = create_scenario("A", data_nt; group = "A")
+    scenario_B = create_scenario("B", data_nt; group = "B")
+    scenario_C = create_scenario("C", data_nt; group = "C")
+    
+    # Compile formula
+    compiled = compile_formula(model, scenario_A.data)
+    buffer = Vector{Float64}(undef, length(compiled))
+    
+    # Test zero allocations
+    println("Testing zero allocations...")
+    alloc_test = @allocated begin
+        for i in 1:100
+            compiled(buffer, scenario_A.data, 1)
+            compiled(buffer, scenario_B.data, 1)  
+            compiled(buffer, scenario_C.data, 1)
+        end
+    end
+    println("Allocations for 300 evaluations: $alloc_test bytes")
+    
+    # Test correctness - results should be different
+    compiled(buffer, scenario_A.data, 1)
+    result_A = copy(buffer)
+    
+    compiled(buffer, scenario_B.data, 1)
+    result_B = copy(buffer)
+    
+    compiled(buffer, scenario_C.data, 1) 
+    result_C = copy(buffer)
+    
+    println("Results:")
+    println("  Scenario A: $result_A")
+    println("  Scenario B: $result_B") 
+    println("  Scenario C: $result_C")
+    
+    println("Results are different:")
+    println("  A ≠ B: $(result_A != result_B)")
+    println("  B ≠ C: $(result_B != result_C)")
+    println("  A ≠ C: $(result_A != result_C)")
+    
+    # Test marginal effects
+    println("\nTesting marginal effects...")
+    result = margins(model, df, :group)
+    println("Marginal effects result:")
+    show(result)
+    
+    return (alloc_test, result_A, result_B, result_C, result)
 end

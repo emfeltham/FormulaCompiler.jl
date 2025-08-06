@@ -41,6 +41,27 @@ export compile_formula_
 
 ################################# Core system #################################
 
+"""
+    OverrideVector{T} <: AbstractVector{T}
+
+A lazy vector that returns the same override value for all indices.
+This avoids allocating full arrays when setting all observations to a representative value.
+
+# Example
+```julia
+# Instead of: fill(2.5, 1_000_000)  # Allocates 8MB
+# Use: OverrideVector(2.5, 1_000_000)  # Allocates ~32 bytes
+```
+"""
+struct OverrideVector{T} <: AbstractVector{T}
+    override_value::T
+    length::Int
+    
+    function OverrideVector(value::T, length::Int) where T
+        new{T}(value, length)
+    end
+end
+
 include("apply_function.jl")
 include("get_data_value_specialized.jl")
 

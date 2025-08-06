@@ -5,27 +5,6 @@
 # CORE OVERRIDE VECTOR IMPLEMENTATION
 ###############################################################################
 
-"""
-    OverrideVector{T} <: AbstractVector{T}
-
-A lazy vector that returns the same override value for all indices.
-This avoids allocating full arrays when setting all observations to a representative value.
-
-# Example
-```julia
-# Instead of: fill(2.5, 1_000_000)  # Allocates 8MB
-# Use: OverrideVector(2.5, 1_000_000)  # Allocates ~32 bytes
-```
-"""
-struct OverrideVector{T} <: AbstractVector{T}
-    override_value::T
-    length::Int
-    
-    function OverrideVector(value::T, length::Int) where T
-        new{T}(value, length)
-    end
-end
-
 # AbstractVector interface
 Base.size(v::OverrideVector) = (v.length,)
 Base.length(v::OverrideVector) = v.length
@@ -62,6 +41,8 @@ end
 
 # Specialized method for String (most common case)
 function create_categorical_override(value::AbstractString, original_column::CategoricalArray)
+
+    
     levels_list = levels(original_column)
     
     if value ∉ levels_list
@@ -72,6 +53,10 @@ function create_categorical_override(value::AbstractString, original_column::Cat
     temp_cat = categorical([value], levels=levels_list, ordered=isordered(original_column))
     categorical_value = temp_cat[1]
     
+    # println("DEBUG: Creating override for value='$value'")
+    # println("DEBUG: Available levels: $levels_list") 
+    # println("DEBUG: Created categorical_value: $categorical_value")
+    # println("DEBUG: Level code: $(levelcode(categorical_value))")
     return OverrideVector(categorical_value, length(original_column))
 end
 
