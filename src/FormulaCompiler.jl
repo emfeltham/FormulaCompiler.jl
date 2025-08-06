@@ -2,7 +2,7 @@ module FormulaCompiler
 
 ################################ Dependencies ################################
 
-# used only for testing
+# development
 using Random
 using Test
 using BenchmarkTools
@@ -46,16 +46,7 @@ include("get_data_value_specialized.jl")
 
 include("step1_specialized_core.jl")
 include("step2_categorical_support.jl")
-
 include("step3_functions.jl")
-
-# step 4
-
-# include("phase1_interaction_positions.jl")
-# include("phase2_interaction_allocator.jl")
-# include("phase3_interaction_execution.jl")
-# include("phase4_interaction_analysis.jl")
-# include("phase5_7_integration_validation_testin.jl")
 include("step4_interactions.jl")
 
 export test_new_interaction_system
@@ -63,9 +54,6 @@ export compile_formula
 
 ################################## Overrides ##################################
 
-# include("override_1.jl")
-# include("override_2.jl")
-# include("override_4.jl")
 include("override_unified.jl")
 export OverrideVector, create_categorical_override, create_scenario_grid
 export DataScenario, create_scenario, create_override_data, create_override_vector
@@ -78,6 +66,8 @@ export ModelRowEvaluator, modelrow!, modelrow
 # include("derivative_step1_foundation.jl")
 # export compile_derivative_formula
 # include("derivative_step2_functions.jl")
+
+################################### Testing ###################################
 
 include("testing.jl")
 

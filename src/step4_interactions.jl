@@ -1,6 +1,6 @@
 # step4_interactions.jl
-# Complete interaction system with zero allocations for all cases
-# Function interactions use compile-time tuples
+# Complete interaction system with zero allocations for all cases (except functions!)
+# PLAN: @generated for functions?
 
 """
     FunctionPreEvalOperation
@@ -1536,7 +1536,7 @@ function execute_operation!(
 end
 
 ###############################################################################
-# SUPPORT FUNCTIONS (NEED TO BE AVAILABLE)
+# SUPPORT FUNCTIONS
 ###############################################################################
 
 """
@@ -1602,8 +1602,7 @@ end
 Enhanced to create specialized formula with new interaction system.
 """
 function compile_formula(model, data::NamedTuple)
-    compiled = _compile_formula(model, data)
-    return create_specialized_formula(compiled)
+    return create_specialized_formula(_compile_formula(model, data))
 end
 
 # Add this function to your step4_interactions.jl file

@@ -672,7 +672,7 @@ function demo_phase2_usage()
     println("Coefficients: $(coef(model))")
     
     # Compile specialized formula
-    specialized = compile_formula_specialized(model, data)
+    specialized = compile_formula(model, data)
     println("Specialized formula compiled with width: $(length(specialized))")
     
     # Compile Phase 2 derivatives

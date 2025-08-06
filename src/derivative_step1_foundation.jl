@@ -658,7 +658,7 @@ function demo_derivative_usage()
     println("Coefficients: $(coef(model))")
     
     # Compile specialized formula
-    specialized = compile_formula_specialized(model, data)
+    specialized = compile_formula(model, data)
     println("Specialized formula compiled with width: $(length(specialized))")
     
     # Compile derivatives for each variable
