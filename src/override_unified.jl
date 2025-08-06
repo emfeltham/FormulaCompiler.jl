@@ -51,8 +51,9 @@ function create_categorical_override(value::T, original_column::CategoricalArray
     if value ∉ levels_list
         error("Override value '$value' (type: $(typeof(value))) not in categorical levels: $levels_list")
     end
-    
+   
     # Create proper CategoricalValue that preserves ordering and levels
+    # (This should work for T = Bool too)
     temp_cat = categorical([value], levels=levels_list, ordered=isordered(original_column))
     categorical_value = temp_cat[1]
     
@@ -101,6 +102,21 @@ function create_categorical_override(value::CategoricalValue, original_column::C
         error("CategoricalValue has different levels than target column")
     end
     return OverrideVector(value, length(original_column))
+end
+
+# Method for Boolean categorical
+function create_categorical_override(value::Bool, original_column::CategoricalArray{Bool})
+    levels_list = levels(original_column)
+    
+    if value ∉ levels_list
+        error("Override value '$value' not in categorical levels: $levels_list")
+    end
+    
+    # Create proper CategoricalValue for Bool
+    temp_cat = categorical([value], levels=levels_list, ordered=isordered(original_column))
+    categorical_value = temp_cat[1]
+    
+    return OverrideVector(categorical_value, length(original_column))
 end
 
 ###############################################################################
@@ -207,9 +223,14 @@ Create appropriate OverrideVector based on original column type.
 """
 function create_override_vector(value, original_column::AbstractVector)
     if original_column isa CategoricalArray
+        # Categorical handling (including CategoricalArray{Bool})
         return create_categorical_override(value, original_column)
+    elseif original_column isa Vector{Bool} && value isa Bool
+        # Non-categorical boolean: convert to Float64 (0.0 or 1.0)
+        converted_value = Float64(value)
+        return OverrideVector(converted_value, length(original_column))
     else
-        # Numeric or other types - convert to appropriate type
+        # Other numeric or general types
         converted_value = convert(eltype(original_column), value)
         return OverrideVector(converted_value, length(original_column))
     end

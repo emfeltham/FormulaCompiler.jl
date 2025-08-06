@@ -180,9 +180,9 @@ Get component value for interactions with comprehensive validation.
     index::Int, 
     data::NamedTuple, 
     row_idx::Int,
-    output::Vector{Float64},
+    output::V,
     scratch::Vector{Float64}
-)
+) where {V <: AbstractVector{Float64}}
     if index != 1
         error("ConstantEvaluator is scalar but got index=$index (must be 1)")
     end
@@ -194,9 +194,9 @@ end
     index::Int, 
     data::NamedTuple, 
     row_idx::Int,
-    output::Vector{Float64},
+    output::V,
     scratch::Vector{Float64}
-)
+) where {V <: AbstractVector{Float64}}
     if index != 1
         error("ContinuousEvaluator is scalar but got index=$index (must be 1)")
     end
@@ -208,9 +208,9 @@ end
     index::Int, 
     data::NamedTuple, 
     row_idx::Int,
-    output::Vector{Float64},
+    output::V,
     scratch::Vector{Float64}
-)
+) where {V <: AbstractVector{Float64}}
     n_contrasts = size(component.contrast_matrix, 2)
     if index < 1 || index > n_contrasts
         error("CategoricalEvaluator index $index out of bounds (1:$n_contrasts)")
@@ -1299,7 +1299,9 @@ end
 
 Validate bounds for final interactions.
 """
-function validate_interaction_bounds!(data::FinalInteractionData, output::Vector{Float64})
+function validate_interaction_bounds!(
+    data::FinalInteractionData, output::V
+) where {V <: AbstractVector{Float64}}
     # Check the full range of positions that will be written
     max_output_pos = data.output_position + length(data.index_pattern) - 1
     
@@ -1381,10 +1383,10 @@ ZERO-ALLOCATION: Main execution interface.
 function execute_interaction_operations!(
     interaction_data::SpecializedInteractionData,
     scratch::Vector{Float64},
-    output::Vector{Float64},
+    output::V,
     data::NamedTuple,
     row_idx::Int
-)
+) where {V <: AbstractVector{Float64}}
     # Calculate operation counts at compile time using tuple recursion
     total_intermediate, total_final = count_operations_recursive(interaction_data.complete_interactions)
     
