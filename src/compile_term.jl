@@ -291,53 +291,6 @@ function get_schema_dict(schema)
 end
 
 """
-    populate_level_codes_from_data!(
-        categorical_schema::Dict{Symbol, CategoricalSchemaInfo}, 
-        data::NamedTuple
-    )
-
-Populate the level_codes field in each CategoricalSchemaInfo with actual data.
-"""
-function populate_level_codes_from_data!(
-    categorical_schema::Dict{Symbol, CategoricalSchemaInfo}, 
-    data::NamedTuple
-)
-    # println("DEBUG: Populating level codes from data")
-    
-    for (col_name, schema_info) in categorical_schema
-        if haskey(data, col_name)
-            col_data = data[col_name]
-            
-            if col_data isa CategoricalVector
-                # Pre-extract all level codes - allocate once during compilation
-                level_codes = [levelcode(val) for val in col_data]
-                
-                # Update the schema info with actual level codes
-                updated_info = CategoricalSchemaInfo(
-                    schema_info.dummy_contrasts,
-                    schema_info.full_dummy_contrasts,
-                    schema_info.main_effect_contrasts,
-                    schema_info.n_levels,
-                    schema_info.levels,
-                    level_codes,  # Now populated from data
-                    schema_info.column
-                )
-
-                categorical_schema[col_name] = updated_info
-                
-                # println("DEBUG:   Column $col_name: extracted $(length(level_codes)) level codes")
-            else
-                @warn "Column $col_name is not categorical in data but is categorical in model schema"
-            end
-        else
-            @warn "Column $col_name found in model schema but not in data"
-        end
-    end
-    
-    return nothing
-end
-
-"""
     determine_main_effect_contrasts!(categorical_schema::Dict{Symbol, CategoricalSchemaInfo}, model)
 
 Determine which categorical variables have main effects vs interaction-only.

@@ -5,6 +5,7 @@ module FormulaCompiler
 # used only for testing
 using Random
 using Test
+using BenchmarkTools
 
 # true deps
 using Dates: now
@@ -36,7 +37,7 @@ include("compile_term.jl")
 
 # Main compilation interface
 include("CompiledFormula.jl") # Clean execution plan system
-export compile_formula
+export compile_formula_
 
 ################################# Core system #################################
 
@@ -58,17 +59,19 @@ include("step3_functions.jl")
 include("step4_interactions.jl")
 
 export test_new_interaction_system
-
-include("modelrow.jl")
-export ModelRowEvaluator, modelrow!, modelrow
+export compile_formula
 
 ################################## Overrides ##################################
 
 # include("override_1.jl")
-export OverrideVector, create_categorical_override
-export DataScenario, create_scenario, create_override_data, create_override_vector
 # include("override_2.jl")
 # include("override_4.jl")
+include("override_unified.jl")
+export OverrideVector, create_categorical_override, create_scenario_grid
+export DataScenario, create_scenario, create_override_data, create_override_vector
+
+include("modelrow.jl")
+export ModelRowEvaluator, modelrow!, modelrow
 
 ############################## Derivative system ##############################
 
@@ -76,6 +79,6 @@ export DataScenario, create_scenario, create_override_data, create_override_vect
 # export compile_derivative_formula
 # include("derivative_step2_functions.jl")
 
-export modelrow!, modelrow
+include("testing.jl")
 
 end # end module

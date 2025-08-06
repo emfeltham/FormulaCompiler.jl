@@ -43,17 +43,16 @@ end
 ###############################################################################
 
 """
-    compile_formula(model, data::NamedTuple) -> CompiledFormula
+    _compile_formula(model, data::NamedTuple) -> CompiledFormula
 
 Compile formula using schema-based categorical extraction.
-UPDATED: Now uses fitted model's schema for categorical contrasts.
+Uses fitted model's schema for categorical contrasts.
+
+Internal method, used as intermediate step for `compile_formula()`
 """
-function compile_formula(model, data::NamedTuple)
+function _compile_formula(model, data::NamedTuple)
     rhs = fixed_effects_form(model).rhs
     column_names = extract_all_columns(rhs)
-    
-    # println("DEBUG: compile_formula called")
-    # println("DEBUG: Columns referenced: $column_names")
     
     # Use the updated schema extraction
     categorical_schema = extract_complete_categorical_schema(model)
@@ -242,4 +241,68 @@ function extract_level_codes_from_schema(categorical_schema::Dict{Symbol, Catego
     end
     
     return level_maps
+end
+
+"""
+    populate_level_codes_from_data!(
+        categorical_schema::Dict{Symbol, CategoricalSchemaInfo}, 
+        data::NamedTuple
+    )
+
+Populate the level_codes field in each CategoricalSchemaInfo with actual data.
+FIXED: Now handles OverrideVector{<:CategoricalValue} for scenario overrides.
+"""
+function populate_level_codes_from_data!(
+    categorical_schema::Dict{Symbol, CategoricalSchemaInfo}, 
+    data::NamedTuple
+)
+    # println("DEBUG: Populating level codes from data")
+    
+    for (col_name, schema_info) in categorical_schema
+        if haskey(data, col_name)
+            col_data = data[col_name]
+            
+            # FIXED: Handle different column types including OverrideVector
+            level_codes = if col_data isa CategoricalVector
+                # Original case: regular categorical vector
+                [levelcode(val) for val in col_data]
+                
+            elseif col_data isa OverrideVector && eltype(col_data) <: CategoricalValue
+                # NEW: Override case - all rows have the same categorical value
+                override_val = col_data.override_value
+                override_code = levelcode(override_val)
+                
+                # Use fill for efficiency but return a regular Vector for consistency
+                fill(override_code, length(col_data))
+                
+            elseif col_data isa OverrideVector
+                # Override with wrong type
+                error("Column $col_name is categorical in model but override value '$(col_data.override_value)' (type: $(typeof(col_data.override_value))) is not a CategoricalValue")
+                
+            else
+                # Completely wrong type - warn but continue
+                @warn "Column $col_name expected categorical but got $(typeof(col_data))"
+                Int[]  # Empty array as fallback
+            end
+            
+            # Update the schema info with actual level codes
+            updated_info = CategoricalSchemaInfo(
+                schema_info.dummy_contrasts,
+                schema_info.full_dummy_contrasts,
+                schema_info.main_effect_contrasts,
+                schema_info.n_levels,
+                schema_info.levels,
+                level_codes,  # Now populated correctly for OverrideVector
+                schema_info.column
+            )
+
+            categorical_schema[col_name] = updated_info
+            
+            # println("DEBUG:   Column $col_name: extracted $(length(level_codes)) level codes")
+        else
+            @warn "Column $col_name found in model schema but not in data"
+        end
+    end
+    
+    return nothing
 end
