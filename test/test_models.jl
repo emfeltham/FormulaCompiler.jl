@@ -66,7 +66,7 @@ using FormulaCompiler:
                     model = lm(formula, df)
                     
                     # Test that our system can compile it
-                    compiled = compile_formula_specialized(model, data)
+                    compiled = compile_formula(model, data)
                     @test compiled isa SpecializedFormula
                     
                     # Test correctness against modelmatrix
@@ -100,7 +100,7 @@ using FormulaCompiler:
                         model = glm(formula, df, Binomial(), LogitLink())
                         
                         # Test that our system can extract the design matrix
-                        compiled = compile_formula_specialized(model, data)
+                        compiled = compile_formula(model, data)
                         @test compiled isa SpecializedFormula
                         
                         # Test correctness - we should get the DESIGN MATRIX, not predictions
@@ -135,7 +135,7 @@ using FormulaCompiler:
                         model = glm(formula, df, Poisson(), LogLink())
                         
                         # Test that our system can extract the design matrix
-                        compiled = compile_formula_specialized(model, data)
+                        compiled = compile_formula(model, data)
                         @test compiled isa SpecializedFormula
                         
                         # Test correctness
@@ -169,7 +169,7 @@ using FormulaCompiler:
                 @testset "GLM $(family) $(link): $formula" begin
                     try
                         model = glm(formula, df, family, link)
-                        compiled = compile_formula_specialized(model, data)
+                        compiled = compile_formula(model, data)
                         
                         output = Vector{Float64}(undef, length(compiled))
                         compiled(output, data, 1)
@@ -210,7 +210,7 @@ using FormulaCompiler:
                         model = fit(MixedModel, formula, df; progress = false)
                         
                         # Test that our system can extract FIXED EFFECTS design matrix
-                        compiled = compile_formula_specialized(model, data)
+                        compiled = compile_formula(model, data)
                         @test compiled isa SpecializedFormula
                         
                         # For mixed models, we should get the fixed effects design matrix
@@ -258,7 +258,7 @@ using FormulaCompiler:
                         model = fit(MixedModel, formula, df, family; progress = false)
                         
                         # Test that our system can extract fixed effects design matrix
-                        compiled = compile_formula_specialized(model, data)
+                        compiled = compile_formula(model, data)
                         @test compiled isa SpecializedFormula
                         
                         # Test correctness
@@ -283,7 +283,7 @@ using FormulaCompiler:
         @testset "Complex interactions - Linear Model" begin
             formula = @formula(continuous_response ~ x * y * group3 + log(z) * group4)
             model = lm(formula, df)
-            compiled = compile_formula_specialized(model, data)
+            compiled = compile_formula(model, data)
             
             output = Vector{Float64}(undef, length(compiled))
             compiled(output, data, 1)
@@ -295,7 +295,7 @@ using FormulaCompiler:
             try
                 formula = @formula(logistic_response ~ x * y * group3 + log(z) * group4)
                 model = glm(formula, df, Binomial(), LogitLink())
-                compiled = compile_formula_specialized(model, data)
+                compiled = compile_formula(model, data)
                 
                 output = Vector{Float64}(undef, length(compiled))
                 compiled(output, data, 1)
@@ -311,7 +311,7 @@ using FormulaCompiler:
             try
                 formula = @formula(continuous_response ~ x * y * group3 + log(z) * group4 + (1|subject))
                 model = fit(MixedModel, formula, df)
-                compiled = compile_formula_specialized(model, data)
+                compiled = compile_formula(model, data)
                 
                 output = Vector{Float64}(undef, length(compiled))
                 compiled(output, data, 1)
@@ -337,7 +337,7 @@ using FormulaCompiler:
                 
         for (model_type, model) in models_to_test
             @testset "$model_type Performance" begin
-                compiled = compile_formula_specialized(model, data)
+                compiled = compile_formula(model, data)
                 output = Vector{Float64}(undef, length(compiled))
                 
                 # Warmup
@@ -379,7 +379,7 @@ using FormulaCompiler:
             
             for (model_type, model) in models_to_test
                 @testset "$model_type with scenarios" begin
-                    compiled = compile_formula_specialized(model, data)
+                    compiled = compile_formula(model, data)
                     
                     # Test original scenario
                     output_original = modelrow(compiled, scenario_original, 1)
@@ -404,7 +404,7 @@ using FormulaCompiler:
             ]
             
             for model in models_to_verify
-                compiled = compile_formula_specialized(model, data)
+                compiled = compile_formula(model, data)
                 
                 # Test that every row matches exactly
                 output = Vector{Float64}(undef, length(compiled))

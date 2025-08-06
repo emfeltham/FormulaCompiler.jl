@@ -34,7 +34,7 @@ function test_position_mapping_approach(formula, df, data)
     # Compile both versions
     model = fit(LinearModel, formula, df)
     current_compiled = compile_formula(model, data)
-    specialized_compiled = compile_formula_specialized(model, data)
+    specialized_compiled = compile_formula(model, data)
     
     # Test correctness first - this is critical
     output_current = Vector{Float64}(undef, length(current_compiled))
