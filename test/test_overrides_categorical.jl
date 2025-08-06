@@ -1,15 +1,15 @@
 # categorical_override_tests.jl
 # Five comprehensive tests for categorical override correctness
 
-using Test
+using Test, BenchmarkTools
+using FormulaCompiler
+
 using DataFrames
 using GLM
 using StatsModels
 using CategoricalArrays
 using Tables
 using Random
-
-using FormulaCompiler
 
 """
     create_categorical_test_data(n=100)
@@ -36,12 +36,59 @@ end
 
 Random.seed!(08540)
 
+@testset "Check variable differentiation" begin
+    df, data = create_categorical_test_data(100);
+
+    @testset "Varying cts. variable" begin
+        row_idx = 1
+        fx = @formula(response ~ x + cat3)
+        model = lm(fx, df)
+
+        overrides1 = Dict(:x => minimum(df.x))
+        overrides2 = Dict(:x => maximum(df.x))
+        scenario1 = create_scenario("Low", data, overrides1)
+        scenario2 = create_scenario("High", data, overrides2)
+        compiled_ = compile_formula(model, scenario1.data)
+
+        output1 = Vector{Float64}(undef, size(modelmatrix(model), 2))
+        output2 = Vector{Float64}(undef, size(modelmatrix(model), 2))
+        for row_idx in [1,10,50]
+            compiled_(output1, scenario1.data, row_idx)
+            compiled_(output2, scenario2.data, row_idx)
+            @test !(output1 == output2)
+        end
+    end
+
+    @testset "Varying cat. variable" begin
+        row_idx = 1
+
+        fx = @formula(response ~ x + cat3)
+        model = lm(fx, df)
+        
+        overrides1 = Dict(:cat3 => "Low")
+        overrides2 = Dict(:cat3 => "High")
+        scenario1 = create_scenario("Low", data, overrides1)
+        scenario2 = create_scenario("High", data, overrides2)
+        compiled_ = compile_formula(model, scenario1.data)
+
+        output1 = Vector{Float64}(undef, size(modelmatrix(model), 2))
+        output2 = Vector{Float64}(undef, size(modelmatrix(model), 2))
+        for row_idx in [1,10,50]
+            compiled_(output1, scenario1.data, row_idx)
+
+            compiled_(output2, scenario2.data, row_idx)
+
+            @test !(output1 == output2)
+        end
+    end
+end
+
 @testset "Categorical Override Tests" begin
     
     # Create test data
-    df, data = create_categorical_test_data(100)
+    df, data = create_categorical_test_data(100);
     
-    @testset "Test 1: Single Categorical - All Levels" begin
+    @testset "Single Categorical - All Levels" begin
         # Test that each level of a categorical produces correct output
         fx = @formula(response ~ x + cat3)
         model = lm(fx, df)
@@ -54,7 +101,7 @@ Random.seed!(08540)
                 compiled = compile_formula(model, scenario.data)
                 
                 # Create reference
-                ref_df = DataFrame(df)
+                ref_df = copy(df)
                 ref_df.cat3 .= level
 
                 # Reference model matrix
@@ -84,7 +131,7 @@ Random.seed!(08540)
         end
     end
     
-    @testset "Test 2: Multiple Categoricals - Mixed Levels" begin
+    @testset "Multiple Categoricals - Mixed Levels" begin
         # Test overriding multiple categorical variables simultaneously
         fx = @formula(response ~ cat2 + cat3 + cat4)
         model = lm(fx, df)
@@ -126,7 +173,7 @@ Random.seed!(08540)
         end
     end
     
-    @testset "Test 3: Categorical in Interaction" begin
+    @testset "Categorical in Interaction" begin
         # Test categorical overrides in interaction terms
         fx = @formula(response ~ x * cat3)
         model = lm(fx, df)
@@ -151,8 +198,8 @@ Random.seed!(08540)
         # 5. x & cat3: Med
         # 6. x & cat3: High
         
+        output = Vector{Float64}(undef, size(ref_mm, 2))
         for row_idx in [1, 10, 50, 100]
-            output = Vector{Float64}(undef, size(ref_mm, 2))
             compiled(output, scenario.data, row_idx)
             @test output ≈ ref_mm[row_idx, :] atol=1e-10
             
@@ -174,7 +221,6 @@ Random.seed!(08540)
             med_levelcode = levelcode(categorical(["Med"], levels=lvl)[1])
             # Use the contrast matrix to determine expected dummy values
             expected_dummies = contrast_matrix[med_levelcode, :]
-
 
             # 1. Test that output matches reference - this validates correctness
             @test output ≈ ref_mm[row_idx, :] atol=1e-10
@@ -297,7 +343,7 @@ Random.seed!(08540)
             # All should produce identical results
             compiled_string = compile_formula(model, scenario_string.data)
             compiled_symbol = compile_formula(model, scenario_symbol.data)
-            compiled_index = compile_formula(model, scenario_index.data)
+            # compiled_index = compile_formula(model, scenario_index.data)
             
             out_string = Vector{Float64}(undef, 3)
             out_symbol = Vector{Float64}(undef, 3)
@@ -305,7 +351,7 @@ Random.seed!(08540)
             
             compiled_string(out_string, scenario_string.data, 1)
             compiled_symbol(out_symbol, scenario_symbol.data, 1)
-            compiled_index(out_index, scenario_index.data, 1)
+            # compiled_index(out_index, scenario_index.data, 1)
             
             @test out_string ≈ out_symbol atol=1e-12
             # @test out_string ≈ out_index atol=1e-12

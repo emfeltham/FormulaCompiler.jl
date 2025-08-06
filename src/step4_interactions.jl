@@ -203,21 +203,27 @@ end
     return Float64(get_data_value_specialized(data, component.column, row_idx))
 end
 
+"""
+    get_component_interaction_value(component::CategoricalEvaluator, index::Int, input_data, row_idx, output, scratch)
+
+Extract level codes dynamically during execution instead of using pre-computed level_codes.
+"""
 @inline function get_component_interaction_value(
     component::CategoricalEvaluator, 
     index::Int, 
-    data::NamedTuple, 
+    input_data::NamedTuple, 
     row_idx::Int,
-    output::V,
-    scratch::Vector{Float64}
-) where {V <: AbstractVector{Float64}}
+    output::AbstractVector{Float64},
+    scratch::AbstractVector{Float64}
+) 
     n_contrasts = size(component.contrast_matrix, 2)
     if index < 1 || index > n_contrasts
         error("CategoricalEvaluator index $index out of bounds (1:$n_contrasts)")
     end
     
-    # Get the level for this row
-    level = component.level_codes[row_idx]
+    # FIXED: Extract level dynamically from current input_data instead of using pre-computed level_codes
+    column_data = getproperty(input_data, component.column)
+    level = extract_level_code_zero_alloc_interactions(column_data, row_idx)
     
     if level < 1 || level > component.n_levels
         error("Level $level out of bounds for categorical $(component.column) with $(component.n_levels) levels")
@@ -225,6 +231,26 @@ end
     
     # Return the correct contrast value
     return component.contrast_matrix[level, index]
+end
+
+"""
+    extract_level_code_zero_alloc_interactions(column_data, row_idx::Int) -> Int
+
+Extract level code for interactions with zero allocations using type-stable dispatch.
+This is identical to the main categorical system's extract_level_code_zero_alloc.
+"""
+@inline function extract_level_code_zero_alloc_interactions(column_data::CategoricalVector, row_idx::Int)
+    return Int(levelcode(column_data[row_idx]))
+end
+
+@inline function extract_level_code_zero_alloc_interactions(column_data::OverrideVector{CategoricalValue{T,R}}, row_idx::Int) where {T,R}
+    # For OverrideVector, all rows have the same value - extract once, no allocation
+    return Int(levelcode(column_data.override_value))
+end
+
+@inline function extract_level_code_zero_alloc_interactions(column_data, row_idx::Int)
+    # Fallback for other types
+    error("Cannot extract level code from $(typeof(column_data)) in interactions")
 end
 
 @inline function get_component_interaction_value(
@@ -573,10 +599,10 @@ end
 @inline function get_component_interaction_value(
     ref::InteractionScratchReference,
     index::Int,
-    data::NamedTuple,
+    input_data::NamedTuple,
     row_idx::Int,
-    output::Vector{Float64},
-    scratch::Vector{Float64}
+    output::AbstractVector{Float64},
+    scratch::AbstractVector{Float64}
 )
     if index < 1 || index > length(ref.scratch_positions)
         error("InteractionScratchReference index $index out of bounds (1:$(length(ref.scratch_positions)))")
@@ -1715,4 +1741,107 @@ function execute_function_in_interaction!(
     scratch[target_scratch_pos] = result
     
     return nothing
+end
+
+###############################################################################
+# VERIFICATION TEST for interactions
+###############################################################################
+
+"""
+    test_categorical_interaction_fix()
+
+Test that categorical × continuous interactions work correctly with scenarios.
+"""
+function test_categorical_interaction_fix()
+    println("Testing categorical interaction fix...")
+    
+    # Create test data with interaction
+    n = 100
+    df = DataFrame(
+        x = randn(n),
+        cat3 = categorical(rand(["A", "B", "C"], n))
+    )
+    df.y = (
+        2.0 * df.x +                           # Main x effect
+        1.0 * (df.cat3 .== "B") +              # Main cat3 B effect  
+        3.0 * (df.cat3 .== "C") +              # Main cat3 C effect
+        0.5 * df.x .* (df.cat3 .== "B") +      # Interaction x:B
+        -0.8 * df.x .* (df.cat3 .== "C") +     # Interaction x:C
+        randn(n) * 0.1
+    )
+    
+    # Fit interaction model
+    model = lm(@formula(y ~ x * cat3), df)
+    data_nt = Tables.columntable(df)
+    
+    println("Model coefficients:")
+    coef_names = coefnames(model)
+    coefs = coef(model)
+    for (name, coef) in zip(coef_names, coefs)
+        println("  $name: $(round(coef, digits=4))")
+    end
+    
+    # Create scenarios with different categorical levels
+    scenario_A = create_scenario("A", data_nt; cat3 = "A", x = 1.0)
+    scenario_B = create_scenario("B", data_nt; cat3 = "B", x = 1.0)  
+    scenario_C = create_scenario("C", data_nt; cat3 = "C", x = 1.0)
+    
+    # Compile and test
+    compiled = compile_formula(model, scenario_A.data)
+    buffer = Vector{Float64}(undef, length(compiled))
+    
+    # Test zero allocations
+    alloc_test = @allocated begin
+        for i in 1:50
+            compiled(buffer, scenario_A.data, 1)
+            compiled(buffer, scenario_B.data, 1)
+            compiled(buffer, scenario_C.data, 1)
+        end
+    end
+    println("Allocations for 150 interaction evaluations: $alloc_test bytes")
+    
+    # Test that results are different
+    compiled(buffer, scenario_A.data, 1)
+    result_A = copy(buffer)
+    
+    compiled(buffer, scenario_B.data, 1)
+    result_B = copy(buffer)
+    
+    compiled(buffer, scenario_C.data, 1)
+    result_C = copy(buffer)
+    
+    println("\nInteraction model matrix results:")
+    println("  Scenario A (cat3=A, x=1): $result_A")
+    println("  Scenario B (cat3=B, x=1): $result_B")
+    println("  Scenario C (cat3=C, x=1): $result_C")
+    
+    # Check differences in interaction terms (should be different)
+    println("\nResults are different:")
+    println("  A ≠ B: $(result_A != result_B)")
+    println("  B ≠ C: $(result_B != result_C)")
+    println("  A ≠ C: $(result_A != result_C)")
+    
+    # Test marginal effects with interaction
+    println("\nTesting marginal effects with interaction...")
+    try
+        # Test continuous marginal effect (should vary by categorical level)
+        result_x = margins(model, df, :x)
+        println("Marginal effect of x (average): $(result_x.effects[:x])")
+        
+        # Test categorical marginal effects  
+        result_cat = margins(model, df, :cat3)
+        println("Categorical effects:")
+        if result_cat.effects[:cat3] isa Dict
+            for (contrast, effect) in result_cat.effects[:cat3]
+                println("  $contrast: $(round(effect, digits=4))")
+            end
+        end
+        
+        println("✅ Marginal effects with interactions working!")
+        
+    catch e
+        println("❌ Marginal effects failed: $e")
+    end
+    
+    return (alloc_test, result_A, result_B, result_C)
 end
