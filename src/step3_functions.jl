@@ -1064,10 +1064,10 @@ UPDATED: Main execution interface with zero-allocation scratch space handling.
 function execute_linear_function_operations!(
     function_data::SpecializedFunctionData,
     scratch::Vector{Float64},
-    output::Vector{Float64},
+    output::V,  # Type parameter
     data::NamedTuple,
     row_idx::Int
-)
+) where {V <: AbstractVector{Float64}}
     # Create operation encoding for dispatch
     n_unary = length(function_data.unary_functions)
     n_intermediate = length(function_data.intermediate_binaries)
