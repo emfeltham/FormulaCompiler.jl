@@ -1,12 +1,12 @@
-# step4_interactions.jl - UNIFIED REPLACEMENT - FIXED VERSION
-# Complete interaction system mirroring function system exactly
-# REPLACES old step4_interactions.jl entirely
+# step4_interactions.jl
+# Complete interaction system with zero allocations for all cases
+# Function interactions use compile-time tuples
 
 """
     FunctionPreEvalOperation
 
 Operation to pre-evaluate a function to scratch before using in interaction.
-Now stores compiled function data from step3 instead of raw evaluator.
+Stores compiled function data from functions step.
 """
 struct FunctionPreEvalOperation
     function_data::SpecializedFunctionData  # The compiled function from step3
@@ -21,7 +21,7 @@ end
 """
     CompleteInteractionData{IntermediateTuple, FinalTuple}
 
-ZERO-ALLOCATION: Groups operations using compile-time tuples instead of Vector{Any}.
+Groups operations using compile-time tuples instead of Vector{Any}.
 Mirrors the function system's tuple-based approach exactly.
 """
 struct CompleteInteractionData{IntermediateTuple, FinalTuple}
@@ -42,7 +42,7 @@ end
 """
     SpecializedInteractionData{CompleteInteractionTuple}
 
-ZERO-ALLOCATION: Uses compile-time tuple of CompleteInteractionData.
+Uses compile-time tuple of CompleteInteractionData.
 """
 struct SpecializedInteractionData{CompleteInteractionTuple}
     complete_interactions::CompleteInteractionTuple  # NTuple{N, CompleteInteractionData{...}}
@@ -69,58 +69,58 @@ struct InteractionScratchPosition{P}
 end
 
 """
-    IntermediateInteractionData{C1, C2, Input1Type, Input2Type}
+    IntermediateInteractionData{C1, C2, Input1Type, Input2Type, PatternTuple, PreEvalTuple}
 
-UPDATED: Added function_pre_evals field.
+Uses compile-time tuples for patterns and pre-evals.
 """
-struct IntermediateInteractionData{C1, C2, Input1Type, Input2Type}
+struct IntermediateInteractionData{C1, C2, Input1Type, Input2Type, PatternTuple, PreEvalTuple}
     component1::C1
     component2::C2
     input1_source::Input1Type
     input2_source::Input2Type
     width1::Int
     width2::Int
-    index_pattern::Vector{Tuple{Int, Int}}
+    index_pattern::PatternTuple          # FIXED: Now a tuple, not Vector
     scratch_position::Int
-    function_pre_evals::Vector{FunctionPreEvalOperation}  # NEW
+    function_pre_evals::PreEvalTuple     # FIXED: Now a tuple, not Vector
     
     function IntermediateInteractionData(
         comp1::C1, comp2::C2, 
         input1::T1, input2::T2,
         w1::Int, w2::Int,
-        pattern::Vector{Tuple{Int, Int}},
+        pattern::PT,
         scratch_pos::Int,
-        pre_evals::Vector{FunctionPreEvalOperation} = FunctionPreEvalOperation[]
-    ) where {C1, C2, T1, T2}
-        new{C1, C2, T1, T2}(comp1, comp2, input1, input2, w1, w2, pattern, scratch_pos, pre_evals)
+        pre_evals::PET
+    ) where {C1, C2, T1, T2, PT, PET}
+        new{C1, C2, T1, T2, PT, PET}(comp1, comp2, input1, input2, w1, w2, pattern, scratch_pos, pre_evals)
     end
 end
 
 """
-    FinalInteractionData{C1, C2, Input1Type, Input2Type}
+    FinalInteractionData{C1, C2, Input1Type, Input2Type, PatternTuple, PreEvalTuple}
 
-UPDATED: Added function_pre_evals field.
+Uses compile-time tuples for patterns and pre-evals.
 """
-struct FinalInteractionData{C1, C2, Input1Type, Input2Type}
+struct FinalInteractionData{C1, C2, Input1Type, Input2Type, PatternTuple, PreEvalTuple}
     component1::C1
     component2::C2
     input1_source::Input1Type
     input2_source::Input2Type
     width1::Int
     width2::Int
-    index_pattern::Vector{Tuple{Int, Int}}
+    index_pattern::PatternTuple          # FIXED: Now a tuple, not Vector
     output_position::Int
-    function_pre_evals::Vector{FunctionPreEvalOperation}  # NEW
+    function_pre_evals::PreEvalTuple     # FIXED: Now a tuple, not Vector
     
     function FinalInteractionData(
         comp1::C1, comp2::C2,
         input1::T1, input2::T2,
         w1::Int, w2::Int,
-        pattern::Vector{Tuple{Int, Int}},
+        pattern::PT,
         output_pos::Int,
-        pre_evals::Vector{FunctionPreEvalOperation} = FunctionPreEvalOperation[]
-    ) where {C1, C2, T1, T2}
-        new{C1, C2, T1, T2}(comp1, comp2, input1, input2, w1, w2, pattern, output_pos, pre_evals)
+        pre_evals::PET
+    ) where {C1, C2, T1, T2, PT, PET}
+        new{C1, C2, T1, T2, PT, PET}(comp1, comp2, input1, input2, w1, w2, pattern, output_pos, pre_evals)
     end
 end
 
@@ -141,28 +141,28 @@ end
 ###############################################################################
 
 """
-    get_interaction_value_zero_alloc(input, output, scratch, input_data, row_idx) -> Float64
+    get_interaction_value(input, output, scratch, input_data, row_idx) -> Float64
 
-Zero-allocation input value access mirroring get_input_value_zero_alloc exactly.
+Zero-allocation input value access mirroring get_input_value exactly.
 """
 
 # Constant values - compile-time dispatch
-@inline function get_interaction_value_zero_alloc(input::Float64, output, scratch, input_data, row_idx)
+@inline function get_interaction_value(input::Float64, output, scratch, input_data, row_idx)
     return input
 end
 
 # Column references - compile-time dispatch  
-@inline function get_interaction_value_zero_alloc(input::Symbol, output, scratch, input_data, row_idx)
+@inline function get_interaction_value(input::Symbol, output, scratch, input_data, row_idx)
     return Float64(get_data_value_specialized(input_data, input, row_idx))
 end
 
 # Output positions - compile-time dispatch
-@inline function get_interaction_value_zero_alloc(input::Int, output, scratch, input_data, row_idx)
+@inline function get_interaction_value(input::Int, output, scratch, input_data, row_idx)
     return output[input]
 end
 
 # Interaction scratch positions - compile-time dispatch
-@inline function get_interaction_value_zero_alloc(input::InteractionScratchPosition{P}, output, scratch, input_data, row_idx) where P
+@inline function get_interaction_value(input::InteractionScratchPosition{P}, output, scratch, input_data, row_idx) where P
     return scratch[input.position]
 end
 
@@ -174,7 +174,6 @@ end
     get_component_interaction_value(component::AbstractEvaluator, index::Int, data::NamedTuple, row_idx::Int, output::Vector{Float64}, scratch::Vector{Float64}) -> Float64
 
 Get component value for interactions with comprehensive validation.
-FIXED: Ensures correct contrast matrix is used for categorical components.
 """
 @inline function get_component_interaction_value(
     component::ConstantEvaluator, 
@@ -212,9 +211,6 @@ end
     output::Vector{Float64},
     scratch::Vector{Float64}
 )
-    # FIXED: Ensure we're using the correct contrast matrix for interactions
-    # The component should already have the right contrast matrix from compilation
-    
     n_contrasts = size(component.contrast_matrix, 2)
     if index < 1 || index > n_contrasts
         error("CategoricalEvaluator index $index out of bounds (1:$n_contrasts)")
@@ -223,8 +219,6 @@ end
     # Get the level for this row
     level = component.level_codes[row_idx]
     
-    # CRITICAL FIX: Don't clamp the level - if it's out of bounds, that's an error
-    # The contrast matrix should match the levels exactly
     if level < 1 || level > component.n_levels
         error("Level $level out of bounds for categorical $(component.column) with $(component.n_levels) levels")
     end
@@ -233,7 +227,6 @@ end
     return component.contrast_matrix[level, index]
 end
 
-# Check if the issue is with FunctionEvaluator evaluation
 @inline function get_component_interaction_value(
     component::FunctionEvaluator, 
     index::Int, 
@@ -242,45 +235,72 @@ end
     output::Vector{Float64},
     scratch::Vector{Float64}
 )
-
-    println("CALLED")
-
     if index != 1
         error("FunctionEvaluator is scalar but got index=$index (must be 1)")
     end
     
-    # Debug
-    println("DEBUG: Evaluating function $(component.func) for interaction")
+    # FIXED: Evaluate arguments without allocating
+    n_args = length(component.arg_evaluators)
     
-    # Evaluate arguments
-    arg_values = Float64[]
-    for (i, arg_eval) in enumerate(component.arg_evaluators)
-        if arg_eval isa ContinuousEvaluator
-            val = Float64(get_data_value_specialized(input_data, arg_eval.column, row_idx))
-            push!(arg_values, val)
-            println("  Arg $i ($(arg_eval.column)): $val")
+    if n_args == 0
+        # No arguments - shouldn't happen but handle gracefully
+        return Float64(component.func())
+    elseif n_args == 1
+        # Unary function - evaluate single argument inline
+        arg_eval = component.arg_evaluators[1]
+        arg_val = if arg_eval isa ContinuousEvaluator
+            Float64(get_data_value_specialized(input_data, arg_eval.column, row_idx))
         elseif arg_eval isa ConstantEvaluator
-            push!(arg_values, arg_eval.value)
-            println("  Arg $i (const): $(arg_eval.value)")
+            arg_eval.value
         else
             error("Unsupported argument evaluator in function: $(typeof(arg_eval))")
         end
-    end
-    
-    # Apply function
-    result = if length(arg_values) == 1
-        if component.func === log
-            arg_values[1] > 0.0 ? log(arg_values[1]) : (arg_values[1] == 0.0 ? -Inf : NaN)
+        
+        # Apply function with special cases
+        result = if component.func === log
+            arg_val > 0.0 ? log(arg_val) : (arg_val == 0.0 ? -Inf : NaN)
+        elseif component.func === exp
+            exp(clamp(arg_val, -700.0, 700.0))
+        elseif component.func === sqrt
+            arg_val ≥ 0.0 ? sqrt(arg_val) : NaN
+        elseif component.func === abs
+            abs(arg_val)
+        elseif component.func === sin
+            sin(arg_val)
+        elseif component.func === cos
+            cos(arg_val)
         else
-            Float64(component.func(arg_values[1]))
+            Float64(component.func(arg_val))
         end
+        
+        return result
+    elseif n_args == 2
+        # Binary function - evaluate both arguments inline
+        arg_eval1 = component.arg_evaluators[1]
+        arg_val1 = if arg_eval1 isa ContinuousEvaluator
+            Float64(get_data_value_specialized(input_data, arg_eval1.column, row_idx))
+        elseif arg_eval1 isa ConstantEvaluator
+            arg_eval1.value
+        else
+            error("Unsupported argument evaluator in function: $(typeof(arg_eval1))")
+        end
+        
+        arg_eval2 = component.arg_evaluators[2]
+        arg_val2 = if arg_eval2 isa ContinuousEvaluator
+            Float64(get_data_value_specialized(input_data, arg_eval2.column, row_idx))
+        elseif arg_eval2 isa ConstantEvaluator
+            arg_eval2.value
+        else
+            error("Unsupported argument evaluator in function: $(typeof(arg_eval2))")
+        end
+        
+        # Apply binary function
+        return Float64(component.func(arg_val1, arg_val2))
     else
-        Float64(component.func(arg_values...))
+        # N-ary function (n > 2) - this is rare and might need special handling
+        # For now, error as we don't support it without allocation
+        error("Functions with more than 2 arguments not supported in interactions without allocation")
     end
-    
-    println("  Function result: $result")
-    
-    return result
 end
 
 @inline function get_component_interaction_value(
@@ -336,7 +356,6 @@ end
     scratch::AbstractVector{Float64}
 )
     # Always use component-based access, don't re-access raw data
-    # This ensures we get the same values as the main execution path
     return get_component_interaction_value(component, index, input_data, row_idx, output, scratch)
 end
 
@@ -350,54 +369,83 @@ end
     output::AbstractVector{Float64}, 
     scratch::AbstractVector{Float64}
 )
-    # CRITICAL FIX: When component is FunctionEvaluator and source is Int,
-    # we need to EVALUATE the function, not read from output[source]
-    
     if index != 1
         error("FunctionEvaluator is scalar but got index=$index (must be 1)")
     end
     
-    # Evaluate the function's arguments
-    arg_values = Float64[]
-    for arg_eval in component.arg_evaluators
-        if arg_eval isa ContinuousEvaluator
-            val = Float64(get_data_value_specialized(input_data, arg_eval.column, row_idx))
-            push!(arg_values, val)
+    # FIXED: Evaluate the function's arguments without allocating
+    n_args = length(component.arg_evaluators)
+    
+    if n_args == 0
+        # No arguments - shouldn't happen but handle gracefully
+        return Float64(component.func())
+    elseif n_args == 1
+        # Unary function - evaluate single argument inline
+        arg_eval = component.arg_evaluators[1]
+        arg_val = if arg_eval isa ContinuousEvaluator
+            Float64(get_data_value_specialized(input_data, arg_eval.column, row_idx))
         elseif arg_eval isa ConstantEvaluator
-            push!(arg_values, arg_eval.value)
+            arg_eval.value
         elseif arg_eval isa CategoricalEvaluator
             level = arg_eval.level_codes[row_idx]
             level = clamp(level, 1, arg_eval.n_levels)
-            push!(arg_values, arg_eval.contrast_matrix[level, 1])
+            arg_eval.contrast_matrix[level, 1]
         else
             error("Unsupported argument type in function: $(typeof(arg_eval))")
         end
-    end
-    
-    # Apply the function
-    result = if length(arg_values) == 1
-        if component.func === log
-            arg_values[1] > 0.0 ? log(arg_values[1]) : (arg_values[1] == 0.0 ? -Inf : NaN)
+        
+        # Apply the function with special cases
+        result = if component.func === log
+            arg_val > 0.0 ? log(arg_val) : (arg_val == 0.0 ? -Inf : NaN)
         elseif component.func === exp
-            exp(clamp(arg_values[1], -700.0, 700.0))
+            exp(clamp(arg_val, -700.0, 700.0))
         elseif component.func === sqrt
-            arg_values[1] ≥ 0.0 ? sqrt(arg_values[1]) : NaN
+            arg_val ≥ 0.0 ? sqrt(arg_val) : NaN
         elseif component.func === abs
-            abs(arg_values[1])
+            abs(arg_val)
         elseif component.func === sin
-            sin(arg_values[1])
+            sin(arg_val)
         elseif component.func === cos
-            cos(arg_values[1])
+            cos(arg_val)
         else
-            Float64(component.func(arg_values[1]))
+            Float64(component.func(arg_val))
         end
-    elseif length(arg_values) == 2
-        Float64(component.func(arg_values[1], arg_values[2]))
+        
+        return result
+    elseif n_args == 2
+        # Binary function - evaluate both arguments inline
+        arg_eval1 = component.arg_evaluators[1]
+        arg_val1 = if arg_eval1 isa ContinuousEvaluator
+            Float64(get_data_value_specialized(input_data, arg_eval1.column, row_idx))
+        elseif arg_eval1 isa ConstantEvaluator
+            arg_eval1.value
+        elseif arg_eval1 isa CategoricalEvaluator
+            level = arg_eval1.level_codes[row_idx]
+            level = clamp(level, 1, arg_eval1.n_levels)
+            arg_eval1.contrast_matrix[level, 1]
+        else
+            error("Unsupported argument type in function: $(typeof(arg_eval1))")
+        end
+        
+        arg_eval2 = component.arg_evaluators[2]
+        arg_val2 = if arg_eval2 isa ContinuousEvaluator
+            Float64(get_data_value_specialized(input_data, arg_eval2.column, row_idx))
+        elseif arg_eval2 isa ConstantEvaluator
+            arg_eval2.value
+        elseif arg_eval2 isa CategoricalEvaluator
+            level = arg_eval2.level_codes[row_idx]
+            level = clamp(level, 1, arg_eval2.n_levels)
+            arg_eval2.contrast_matrix[level, 1]
+        else
+            error("Unsupported argument type in function: $(typeof(arg_eval2))")
+        end
+        
+        # Apply binary function
+        return Float64(component.func(arg_val1, arg_val2))
     else
-        Float64(component.func(arg_values...))
+        # N-ary function (n > 2) - this is rare and might need special handling
+        error("Functions with more than 2 arguments not supported in interactions without allocation")
     end
-    
-    return result
 end
 
 # Output position sources - GENERAL CASE (non-function components)
@@ -443,75 +491,48 @@ end
         return scratch[scratch_pos]
     else
         # For other component types, use the source position directly
-        return get_interaction_value_zero_alloc(source, output, scratch, input_data, row_idx)
+        return get_interaction_value(source, output, scratch, input_data, row_idx)
     end
 end
 
 ###############################################################################
-# INTERACTION PATTERN GENERATION
+# INTERACTION PATTERN GENERATION (NOW RETURNS TUPLE)
 ###############################################################################
 
 """
-    compute_interaction_pattern(width1::Int, width2::Int) -> Vector{Tuple{Int, Int}}
+    compute_interaction_pattern_tuple(width1::Int, width2::Int)
 
-Generate interaction pattern matching StatsModels' kron(b, a) convention.
+Generate interaction pattern as compile-time tuple.
+Returns tuple (instead of Vector) for zero allocation.
 """
-function compute_interaction_pattern(width1::Int, width2::Int)
+function compute_interaction_pattern_tuple(width1::Int, width2::Int)
     if width1 <= 0 || width2 <= 0
         error("Invalid component widths: width1=$width1, width2=$width2 (both must be > 0)")
     end
     
-    pattern = Vector{Tuple{Int, Int}}()
-    sizehint!(pattern, width1 * width2)
+    n_patterns = width1 * width2
     
-    # Match StatsModels: kron(b, a) means a varies fast, b varies slow
-    for j in 1:width2  # Second component (b) - slow varying
-        for i in 1:width1  # First component (a) - fast varying
-            push!(pattern, (i, j))
-        end
+    # Create compile-time tuple using ntuple
+    pattern_tuple = ntuple(n_patterns) do idx
+        # Convert linear index to (i, j) pair
+        # Match StatsModels: kron(b, a) means a varies fast, b varies slow
+        j = ((idx - 1) ÷ width1) + 1  # Slow index (second component)
+        i = ((idx - 1) % width1) + 1  # Fast index (first component)
+        (i, j)
     end
     
-    return pattern
+    return pattern_tuple
 end
 
-
 ###############################################################################
-# TEMP ALLOCATOR FOR INTERACTIONS (MIRROR FUNCTION SYSTEM)
-###############################################################################
-
-"""
-    TempAllocator
-
-Manages temporary position allocation during decomposition.
-FIXED: Using existing definition from functions (should be available in scope).
-"""
-# Note: TempAllocator should already be defined in step3_functions.jl
-# If not available, uncomment below:
-#
-# mutable struct TempAllocator
-#     next_temp::Int
-#     temp_base::Int
-#     
-#     function TempAllocator(temp_start::Int)
-#         new(temp_start, temp_start)
-#     end
-# end
-# 
-# function allocate_temp!(allocator::TempAllocator)
-#     temp_pos = allocator.next_temp
-#     allocator.next_temp += 1
-#     return temp_pos
-# end
-
-###############################################################################
-# INTERACTION DECOMPOSITION (MIRROR FUNCTION SYSTEM)
+# LINEARIZED OPERATION (TEMPORARY FOR CONSTRUCTION)
 ###############################################################################
 
 """
     LinearizedInteractionOperation
 
 Intermediate representation for interaction decomposition.
-UPDATED: Added function_pre_evals field.
+Still uses Vectors during construction phase only.
 """
 struct LinearizedInteractionOperation
     operation_type::Symbol  # :intermediate_interaction or :final_interaction
@@ -521,7 +542,7 @@ struct LinearizedInteractionOperation
     input2_source::Union{Symbol, Int, Float64, InteractionScratchPosition}
     output_positions::Vector{Int}
     scratch_position::Union{Int, Nothing}  # For intermediate operations only
-    function_pre_evals::Vector{FunctionPreEvalOperation}  # NEW: Functions to pre-evaluate
+    function_pre_evals::Vector{FunctionPreEvalOperation}  # Will be converted to tuple
 end
 
 """
@@ -574,7 +595,6 @@ end
     get_component_input_source(component::AbstractEvaluator)
 
 Extract input source for component (column symbol, position, etc.)
-FIXED: Properly handles FunctionEvaluator in interactions.
 """
 function get_component_input_source(component::AbstractEvaluator)
     if component isa ConstantEvaluator
@@ -584,8 +604,6 @@ function get_component_input_source(component::AbstractEvaluator)
     elseif component isa CategoricalEvaluator
         return component.column
     elseif component isa FunctionEvaluator
-        # For functions in interactions, we use the column symbol
-        # The function will be evaluated in get_component_interaction_value
         return :function_component  # Special marker
     elseif component isa InteractionScratchReference
         return InteractionScratchPosition(component.scratch_positions[1])
@@ -597,7 +615,7 @@ end
 """
     decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEvaluator, temp_allocator::TempAllocator)
 
-COMPLETE FIX: Handles FunctionEvaluator components properly with pre-evaluation.
+Decompose interaction into operations. Still returns Vector during construction.
 """
 function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEvaluator, temp_allocator::TempAllocator)
     operations = LinearizedInteractionOperation[]
@@ -606,9 +624,6 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
     N = length(components)
     final_positions = interaction_eval.positions
     component_widths = interaction_eval.component_widths
-    
-    # # println("DEBUG: === DECOMPOSITION START ===")
-    # # println("DEBUG: N-way interaction with N=$N components")
     
     # Track function pre-evaluations needed for this interaction
     function_pre_evals = FunctionPreEvalOperation[]
@@ -623,31 +638,26 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
         
         if comp isa FunctionEvaluator
             # Functions need pre-evaluation to scratch
-            # Allocate position for this function's final result
             func_result_pos = allocate_temp!(temp_allocator)
             
             # Create a temp allocator for the function's internal operations
-            # It starts at the CURRENT next position (after the result position)
             func_internal_allocator = TempAllocator(temp_allocator.next_temp)
             
             # Decompose the function using step3's system
-            # It will write its final result to func_result_pos
-            # and use func_internal_allocator for any intermediate operations
             func_operations = decompose_function_tree_as_intermediate(
                 comp, 
                 func_result_pos, 
                 func_internal_allocator
             )
             
-            # Update the main allocator to account for ALL positions used by the function
-            # (including any intermediate positions allocated by func_internal_allocator)
+            # Update the main allocator
             temp_allocator.next_temp = func_internal_allocator.next_temp
             
-            # Separate operations by type (these are LinearizedOperation from step3)
+            # Separate operations by type
             intermediate_ops = filter(op -> op.operation_type == :intermediate_binary, func_operations)
             final_ops = filter(op -> op.operation_type == :final_binary, func_operations)
             
-            # Create tuples of specialized data inline (avoiding missing function imports)
+            # Create tuples of specialized data inline
             intermediate_tuple = if length(intermediate_ops) == 0
                 ()
             else
@@ -681,7 +691,6 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
             push!(function_pre_evals, pre_eval)
             
             # Create scratch reference for the function's output
-            # The interaction will read from func_result_pos
             func_scratch_ref = InteractionScratchReference([func_result_pos])
             push!(processed_components, func_scratch_ref)
             push!(processed_input_sources, InteractionScratchPosition(func_result_pos))
@@ -703,13 +712,8 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
             end
             
             push!(processed_widths, width)
-            
-            # # println("DEBUG: Component $i: $(typeof(comp)), width=$width")
         end
     end
-    
-    # # println("DEBUG: Final positions: $(length(final_positions)) positions")
-    # # println("DEBUG: Function pre-evaluations needed: $(length(function_pre_evals))")
     
     if N == 2
         # Binary case
@@ -765,7 +769,7 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
                 next_input_source,
                 final_positions,
                 nothing,
-                i == 2 ? function_pre_evals : FunctionPreEvalOperation[]  # Only first op needs pre-evals
+                i == 2 ? function_pre_evals : FunctionPreEvalOperation[]
             ))
         else
             # Intermediate step
@@ -784,7 +788,7 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
                 next_input_source,
                 scratch_positions,
                 scratch_start,
-                i == 2 ? function_pre_evals : FunctionPreEvalOperation[]  # Only first op needs pre-evals
+                i == 2 ? function_pre_evals : FunctionPreEvalOperation[]
             ))
             
             current_component = InteractionScratchReference(scratch_positions)
@@ -796,61 +800,8 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
     return operations
 end
 
-"""
-    create_corrected_interaction_evaluator(
-        components::Tuple,  # Accept any Tuple type - ZERO ALLOCATION
-        corrected_widths::Vector{Int},
-        original_positions::Vector{Int},
-        start_position::Int
-    )
-
-ZERO-ALLOCATION VERSION: Just accept any Tuple type - no conversion needed.
-The issue was overly restrictive type signature, not actual type problems.
-"""
-function create_corrected_interaction_evaluator(
-    components::Tuple,  # ← ONLY CHANGE: Accept any Tuple
-    corrected_widths::Vector{Int},
-    original_positions::Vector{Int},
-    start_position::Int
-)
-    # Get the actual number of components
-    N = length(components)
-    
-    # Calculate corrected total width
-    corrected_total_width = prod(corrected_widths)
-    
-    # Create corrected positions (may need to truncate or extend)
-    corrected_positions = if length(original_positions) == corrected_total_width
-        original_positions
-    elseif length(original_positions) > corrected_total_width
-        # Truncate
-        original_positions[1:corrected_total_width]
-    else
-        # Extend (this might indicate a deeper issue)
-        extended_positions = copy(original_positions)
-        last_pos = isempty(original_positions) ? start_position - 1 : maximum(original_positions)
-        while length(extended_positions) < corrected_total_width
-            last_pos += 1
-            push!(extended_positions, last_pos)
-        end
-        extended_positions
-    end
-    
-    # Convert corrected widths to tuple
-    corrected_widths_tuple = ntuple(i -> corrected_widths[i], N)
-    
-    # Create InteractionEvaluator - components tuple is used as-is (ZERO ALLOCATION)
-    return InteractionEvaluator{N, typeof(components), typeof(corrected_widths_tuple)}(
-        components,  # ← NO CONVERSION - use original tuple directly
-        corrected_widths_tuple,
-        corrected_positions,
-        start_position,
-        corrected_total_width
-    )
-end
-
 ###############################################################################
-# INTERACTION DATA CREATION
+# INTERACTION DATA CREATION (NOW WITH TUPLES)
 ###############################################################################
 
 function create_intermediate_interaction_data(op::LinearizedInteractionOperation)
@@ -859,7 +810,18 @@ function create_intermediate_interaction_data(op::LinearizedInteractionOperation
     
     width1 = get_actual_component_width(op.component1)
     width2 = get_actual_component_width(op.component2)
-    pattern = compute_interaction_pattern(width1, width2)
+    
+    # FIXED: Create pattern as tuple
+    pattern_tuple = compute_interaction_pattern_tuple(width1, width2)
+    
+    # FIXED: Convert pre-evals vector to tuple
+    pre_evals_tuple = if isempty(op.function_pre_evals)
+        ()
+    else
+        ntuple(length(op.function_pre_evals)) do i
+            op.function_pre_evals[i]
+        end
+    end
     
     return IntermediateInteractionData(
         op.component1,
@@ -868,9 +830,9 @@ function create_intermediate_interaction_data(op::LinearizedInteractionOperation
         op.input2_source,
         width1,
         width2,
-        pattern,
+        pattern_tuple,      # Now a tuple
         op.scratch_position,
-        op.function_pre_evals  # Pass through pre-evals
+        pre_evals_tuple     # Now a tuple
     )
 end
 
@@ -880,9 +842,20 @@ function create_final_interaction_data(op::LinearizedInteractionOperation)
     
     width1 = get_actual_component_width(op.component1)
     width2 = get_actual_component_width(op.component2)
-    pattern = compute_interaction_pattern(width1, width2)
+    
+    # FIXED: Create pattern as tuple
+    pattern_tuple = compute_interaction_pattern_tuple(width1, width2)
     
     output_position = length(op.output_positions) > 0 ? op.output_positions[1] : 1
+    
+    # FIXED: Convert pre-evals vector to tuple
+    pre_evals_tuple = if isempty(op.function_pre_evals)
+        ()
+    else
+        ntuple(length(op.function_pre_evals)) do i
+            op.function_pre_evals[i]
+        end
+    end
     
     return FinalInteractionData(
         op.component1,
@@ -891,9 +864,9 @@ function create_final_interaction_data(op::LinearizedInteractionOperation)
         op.input2_source,
         width1,
         width2,
-        pattern,
+        pattern_tuple,      # Now a tuple
         output_position,
-        op.function_pre_evals  # Pass through pre-evals
+        pre_evals_tuple     # Now a tuple
     )
 end
 
@@ -909,25 +882,39 @@ function get_actual_component_width(component::AbstractEvaluator)
 end
 
 ###############################################################################
-# ENHANCED EXECUTION WITH VALIDATION
+# ZERO-ALLOCATION PRE-EVAL EXECUTION
 ###############################################################################
 
 """
-    execute_operation!(data::IntermediateInteractionData{C1, C2, T1, T2}, scratch, output, input_data, row_idx)
+    execute_pre_evals_recursive!(pre_evals::Tuple{}, scratch, output, input_data, row_idx)
 
-Execute intermediate interaction with debugging.
+Base case: empty tuple of pre-evals.
 """
-function execute_operation!(
-    data::IntermediateInteractionData{C1, C2, T1, T2},
+function execute_pre_evals_recursive!(
+    pre_evals::Tuple{},
     scratch::AbstractVector{Float64},
     output::AbstractVector{Float64},
     input_data::NamedTuple,
     row_idx::Int
-) where {C1, C2, T1, T2}
+)
+    return nothing
+end
 
-    # Execute function pre-evaluations using step3's execution system
-    for pre_eval in data.function_pre_evals
-        # Use step3's execute_operation! directly
+"""
+    execute_pre_evals_recursive!(pre_evals::Tuple, scratch, output, input_data, row_idx)
+
+Recursive case: execute first pre-eval, then remaining.
+"""
+function execute_pre_evals_recursive!(
+    pre_evals::Tuple,
+    scratch::AbstractVector{Float64},
+    output::AbstractVector{Float64},
+    input_data::NamedTuple,
+    row_idx::Int
+)
+    if length(pre_evals) > 0
+        # Execute first pre-eval using step3's execution system
+        pre_eval = pre_evals[1]
         execute_operation!(
             pre_eval.function_data,
             pre_eval.function_op,
@@ -936,37 +923,50 @@ function execute_operation!(
             input_data,
             row_idx
         )
+        
+        # Recursively execute remaining
+        if length(pre_evals) > 1
+            remaining = Base.tail(pre_evals)
+            execute_pre_evals_recursive!(remaining, scratch, output, input_data, row_idx)
+        end
     end
+    
+    return nothing
+end
 
+###############################################################################
+# ENHANCED EXECUTION WITH ZERO ALLOCATIONS
+###############################################################################
+
+"""
+    execute_operation!(data::IntermediateInteractionData, scratch, output, input_data, row_idx)
+
+Execute intermediate interaction with zero allocations.
+Uses tuple-based patterns and pre-evals.
+"""
+function execute_operation!(
+    data::IntermediateInteractionData{C1, C2, T1, T2, PT, PET},
+    scratch::AbstractVector{Float64},
+    output::AbstractVector{Float64},
+    input_data::NamedTuple,
+    row_idx::Int
+) where {C1, C2, T1, T2, PT, PET}
+
+    # FIXED: Execute function pre-evaluations using recursive tuple processing
+    execute_pre_evals_recursive!(data.function_pre_evals, scratch, output, input_data, row_idx)
+    
     # Validation
     validate_interaction_bounds!(data, scratch)
     
-    # Debug for 2x2 categorical interactions
-    if length(data.index_pattern) == 4 && data.component1 isa CategoricalEvaluator && data.component2 isa CategoricalEvaluator
-        # println("DEBUG: Computing 2×2 categorical intermediate at scratch[$(data.scratch_position)]")
-        
-        # What are the actual levels for this row?
-        level1 = data.component1.level_codes[row_idx]
-        level2 = data.component2.level_codes[row_idx]
-        # println("  Row $row_idx: group2 level=$level1, group3 level=$level2")
-    end
-    
+    # FIXED: Pattern is now a tuple, iterate with compile-time bounds
     @inbounds for pattern_idx in 1:length(data.index_pattern)
-        i, j = data.index_pattern[pattern_idx]
+        i, j = data.index_pattern[pattern_idx]  # Tuple access is zero-allocation
         
         val1 = get_value_from_source(data.input1_source, data.component1, i, input_data, row_idx, output, scratch)
         val2 = get_value_from_source(data.input2_source, data.component2, j, input_data, row_idx, output, scratch)
         
         product = val1 * val2
         scratch_pos = data.scratch_position + pattern_idx - 1
-        
-        # Debug the intermediate values
-        if length(data.index_pattern) == 4 && pattern_idx <= 4
-            contrast_names = ["M&B", "Z&B", "M&C", "Z&C"]
-            # println("  scratch[$scratch_pos] = $product (should be $(contrast_names[pattern_idx]))")
-            # println("    val1 (i=$i): $val1, val2 (j=$j): $val2")
-        end
-        
         scratch[scratch_pos] = product
     end
     
@@ -974,39 +974,25 @@ function execute_operation!(
 end
 
 function execute_operation!(
-    data::FinalInteractionData{C1, C2, T1, T2},
+    data::FinalInteractionData{C1, C2, T1, T2, PT, PET},
     scratch::AbstractVector{Float64},
     output::AbstractVector{Float64},
     input_data::NamedTuple,
     row_idx::Int
-) where {C1, C2, T1, T2}
+) where {C1, C2, T1, T2, PT, PET}
     
-    # Execute function pre-evaluations using step3's execution system
-    for pre_eval in data.function_pre_evals
-        # Use step3's execute_operation! directly
-        execute_operation!(
-            pre_eval.function_data,
-            pre_eval.function_op,
-            scratch,  # Use interaction's scratch space
-            output,
-            input_data,
-            row_idx
-        )
-    end
+    # FIXED: Execute function pre-evaluations using recursive tuple processing
+    execute_pre_evals_recursive!(data.function_pre_evals, scratch, output, input_data, row_idx)
     
     # Validation
     validate_interaction_bounds!(data, output)
     
+    # FIXED: Pattern is now a tuple, iterate with compile-time bounds
     @inbounds for pattern_idx in 1:length(data.index_pattern)
-        i, j = data.index_pattern[pattern_idx]
+        i, j = data.index_pattern[pattern_idx]  # Tuple access is zero-allocation
         
         val1 = get_value_from_source(data.input1_source, data.component1, i, input_data, row_idx, output, scratch)
         val2 = get_value_from_source(data.input2_source, data.component2, j, input_data, row_idx, output, scratch)
-        
-        # DEBUG: Add this for log(z) & group4 interaction
-        if data.component1 isa InteractionScratchReference && data.output_position >= 14 && data.output_position <= 16
-            # println("DEBUG: log(z) & group4 pattern_idx=$pattern_idx: val1=$val1, val2=$val2, product=$(val1*val2)")
-        end
         
         product = val1 * val2
         output_pos = data.output_position + pattern_idx - 1
@@ -1017,7 +1003,7 @@ function execute_operation!(
 end
 
 ###############################################################################
-# TUPLE-BASED RECURSIVE EXECUTION (MIRROR FUNCTION SYSTEM)
+# TUPLE-BASED RECURSIVE EXECUTION (UNCHANGED)
 ###############################################################################
 
 """
@@ -1099,7 +1085,7 @@ end
 """
     execute_complete_interaction!(complete_interaction::CompleteInteractionData{IT, FT}, ...)
 
-ZERO-ALLOCATION: Execute one complete interaction using recursive tuple processing.
+Execute one complete interaction using recursive tuple processing.
 """
 function execute_complete_interaction!(
     complete_interaction::CompleteInteractionData{IT, FT},
@@ -1143,7 +1129,6 @@ end
     execute_complete_interactions_recursive!(complete_tuple::Tuple, ...)
 
 Recursive case: execute first complete interaction, then process remaining.
-ZERO-ALLOCATION: Uses tuple recursion instead of vector iteration.
 """
 function execute_complete_interactions_recursive!(
     complete_tuple::Tuple,
@@ -1167,7 +1152,7 @@ end
 """
     execute_operation!(data::SpecializedInteractionData{CT}, op::InteractionOp{I, F}, ...)
 
-ZERO-ALLOCATION: Execute complete interactions using recursive tuple processing.
+Execute complete interactions using recursive tuple processing.
 """
 function execute_operation!(
     data::SpecializedInteractionData{CT},
@@ -1185,157 +1170,13 @@ function execute_operation!(
 end
 
 ###############################################################################
-# ANALYSIS (MIRROR FUNCTION SYSTEM)
+# ANALYSIS (UNCHANGED FROM ORIGINAL)
 ###############################################################################
-
-"""
-    fix_component_references(interaction_eval::InteractionEvaluator, evaluator::CombinedEvaluator) -> InteractionEvaluator
-
-FIXED: Properly handle reference level encoding for categorical components.
-The key insight is that categorical components in interactions should use the same
-level codes and contrast matrices as StatsModels expects.
-"""
-function fix_component_references(interaction_eval::InteractionEvaluator, evaluator::CombinedEvaluator)
-    N = length(interaction_eval.components)
-    corrected_components = []
-    
-    for (comp_idx, comp) in enumerate(interaction_eval.components)
-        if comp isa CategoricalEvaluator
-            # Try to find matching main categorical evaluator
-            matching_main_eval = find_matching_categorical_evaluator(comp, evaluator.categorical_evaluators)
-            
-            if matching_main_eval !== nothing
-                # # println("DEBUG: Using main categorical evaluator for $(comp.column)")
-                push!(corrected_components, matching_main_eval)
-            else
-                # REFERENCE LEVEL FIX: For interaction-only formulas, ensure proper contrast encoding
-                # # println("DEBUG: Fixing reference level encoding for $(comp.column)")
-                
-                # The issue is likely in the contrast matrix or level codes
-                # Let's verify the component looks correct
-                # # println("DEBUG: Original component $(comp.column):")
-                # println("  n_levels: $(comp.n_levels)")
-                # println("  contrast_matrix size: $(size(comp.contrast_matrix))")
-                # println("  positions: $(comp.positions)")
-                # println("  level_codes length: $(length(comp.level_codes))")
-                
-                # For now, use the original component but this is where we'd apply the fix
-                # The real fix should ensure the contrast matrix uses DummyCoding 
-                # (n_levels-1 contrasts) rather than full encoding (n_levels contrasts)
-                
-                # TEMPORARY FIX: Check if the contrast matrix has the wrong dimensions
-                expected_contrasts = comp.n_levels - 1  # DummyCoding drops reference level
-                actual_contrasts = size(comp.contrast_matrix, 2)
-                
-                if actual_contrasts != expected_contrasts
-                    # # println("DEBUG: ❌ CONTRAST MISMATCH for $(comp.column)!")
-                    # println("  Expected contrasts (DummyCoding): $expected_contrasts")  
-                    # println("  Actual contrasts: $actual_contrasts")
-                    
-                    # This is the root cause of the issue!
-                    # The contrast matrix should have (n_levels - 1) columns for DummyCoding
-                    # But it has n_levels columns, suggesting wrong contrast encoding
-                    
-                    @warn "Categorical component $(comp.column) has wrong contrast encoding"
-                end
-                
-                push!(corrected_components, comp)
-            end
-            
-        elseif comp isa FunctionEvaluator
-            correct_func_eval = find_matching_function_evaluator(comp, evaluator.function_evaluators)
-            
-            if correct_func_eval !== nothing
-                push!(corrected_components, correct_func_eval)
-            else
-                @warn "No matching function evaluator found for $(comp.func), keeping original"
-                push!(corrected_components, comp)
-            end
-        else
-            push!(corrected_components, comp)
-        end
-    end
-    
-    corrected_components_tuple = ntuple(length(corrected_components)) do i
-        corrected_components[i]
-    end
-    
-    corrected_widths_tuple = ntuple(length(corrected_components)) do i
-        get_component_output_width(corrected_components[i])
-    end
-    
-    return InteractionEvaluator{N, typeof(corrected_components_tuple), typeof(corrected_widths_tuple)}(
-        corrected_components_tuple,
-        corrected_widths_tuple,
-        interaction_eval.positions,
-        interaction_eval.start_position,
-        interaction_eval.total_width
-    )
-end
-
-"""
-    find_matching_categorical_evaluator(target::CategoricalEvaluator, categorical_evaluators::Vector{CategoricalEvaluator}) -> Union{CategoricalEvaluator, Nothing}
-
-Find the categorical evaluator in main execution that matches the target.
-This ensures we use the same level codes and contrast matrices.
-"""
-function find_matching_categorical_evaluator(target::CategoricalEvaluator, categorical_evaluators::Vector{CategoricalEvaluator})
-    for main_eval in categorical_evaluators
-        if main_eval.column == target.column
-            # # println("DEBUG: Found matching categorical evaluator for $(target.column)")
-            # println("  Target levels: $(target.n_levels), Main levels: $(main_eval.n_levels)")
-            # println("  Target contrasts: $(size(target.contrast_matrix, 2)), Main contrasts: $(size(main_eval.contrast_matrix, 2))")
-            
-            # Verify they're truly compatible
-            if (main_eval.n_levels == target.n_levels && 
-                size(main_eval.contrast_matrix) == size(target.contrast_matrix))
-                return main_eval
-            else
-                @warn "Found categorical evaluator for $(target.column) but dimensions don't match"
-            end
-        end
-    end
-    
-    return nothing
-end
-
-"""
-    find_matching_function_evaluator(target::FunctionEvaluator, function_evaluators::Vector{FunctionEvaluator}) -> Union{FunctionEvaluator, Nothing}
-
-Find function evaluator that matches the target function and arguments.
-"""
-function find_matching_function_evaluator(target::FunctionEvaluator, function_evaluators::Vector{FunctionEvaluator})
-    for existing_func_eval in function_evaluators
-        if (existing_func_eval.func == target.func && 
-            length(existing_func_eval.arg_evaluators) == length(target.arg_evaluators))
-            
-            args_match = true
-            for (existing_arg, target_arg) in zip(existing_func_eval.arg_evaluators, target.arg_evaluators)
-                if existing_arg isa ContinuousEvaluator && target_arg isa ContinuousEvaluator
-                    if existing_arg.column != target_arg.column
-                        args_match = false
-                        break
-                    end
-                elseif typeof(existing_arg) != typeof(target_arg)
-                    args_match = false
-                    break
-                end
-            end
-            
-            if args_match
-                return existing_func_eval
-            end
-        end
-    end
-    
-    return nothing
-end
 
 """
     analyze_interaction_operations_linear(evaluator::CombinedEvaluator) -> (SpecializedInteractionData, InteractionOp)
 
-FIXED VERSION: Trusts the component widths from compilation phase.
-No component reference fixing needed - schema-based compilation handles this.
+Analyze and create specialized interaction data with compile-time tuples.
 """
 function analyze_interaction_operations_linear(evaluator::CombinedEvaluator)
     interaction_evaluators = evaluator.interaction_evaluators
@@ -1354,23 +1195,6 @@ function analyze_interaction_operations_linear(evaluator::CombinedEvaluator)
     total_final = 0
     
     for (idx, interaction_eval) in enumerate(interaction_evaluators)
-        # # println("DEBUG: Processing interaction $idx with $(length(interaction_eval.components)) components")
-        
-        # Debug the components and their stored widths
-        for (comp_idx, comp) in enumerate(interaction_eval.components)
-            stored_width = interaction_eval.component_widths[comp_idx]
-            if comp isa CategoricalEvaluator
-                actual_width = size(comp.contrast_matrix, 2)
-                # # println("DEBUG:   Component $comp_idx ($(comp.column)): stored_width=$stored_width, actual_contrasts=$actual_width")
-                if stored_width != actual_width
-                    # # println("DEBUG:   ⚠️ WIDTH MISMATCH DETECTED!")
-                end
-            else
-                # # println("DEBUG:   Component $comp_idx: $(typeof(comp)), stored_width=$stored_width")
-            end
-        end
-        
-        # Decompose using the components and their stored widths
         operations = decompose_interaction_tree_zero_alloc(interaction_eval, temp_allocator)
         
         # Separate operations for this specific interaction
@@ -1381,8 +1205,6 @@ function analyze_interaction_operations_linear(evaluator::CombinedEvaluator)
         all_decomposed_interactions[idx] = (intermediate_ops, final_ops, idx)
         total_intermediate += length(intermediate_ops)
         total_final += length(final_ops)
-        
-        # # println("DEBUG:   Created $(length(intermediate_ops)) intermediate + $(length(final_ops)) final operations")
     end
     
     # Create compile-time tuple of complete interactions
@@ -1405,19 +1227,17 @@ function analyze_interaction_operations_linear(evaluator::CombinedEvaluator)
     specialized_data = SpecializedInteractionData(complete_tuple)
     interaction_op = InteractionOp(total_intermediate, total_final)
     
-    # # println("DEBUG: Total interaction operations: $total_intermediate intermediate + $total_final final")
-    
     return specialized_data, interaction_op
 end
 
 ###############################################################################
-# SCRATCH CALCULATION (MIRROR FUNCTION SYSTEM)
+# SCRATCH CALCULATION
 ###############################################################################
 
 """
     calculate_max_interaction_scratch_needed(evaluator::CombinedEvaluator) -> Int
 
-FIXED VERSION: Uses stored component widths for accurate scratch calculation.
+Calculate maximum scratch space needed for interactions.
 """
 function calculate_max_interaction_scratch_needed(evaluator::CombinedEvaluator)
     interaction_evaluators = evaluator.interaction_evaluators
@@ -1477,10 +1297,10 @@ end
 """
     validate_interaction_bounds!(data::FinalInteractionData, output::Vector{Float64})
 
-FIXED VERSION: Enhanced validation for final interactions.
+Validate bounds for final interactions.
 """
 function validate_interaction_bounds!(data::FinalInteractionData, output::Vector{Float64})
-    # FIXED: Check the full range of positions that will be written
+    # Check the full range of positions that will be written
     max_output_pos = data.output_position + length(data.index_pattern) - 1
     
     if max_output_pos > length(output)
@@ -1497,10 +1317,10 @@ end
 """
     validate_interaction_bounds!(data::IntermediateInteractionData, scratch::Vector{Float64})
 
-FIXED VERSION: Enhanced validation for intermediate interactions.
+Validate bounds for intermediate interactions.
 """
 function validate_interaction_bounds!(data::IntermediateInteractionData, scratch::Vector{Float64})
-    # FIXED: Check the full range of positions that will be written
+    # Check the full range of positions that will be written
     max_scratch_pos = data.scratch_position + length(data.index_pattern) - 1
     
     if max_scratch_pos > length(scratch)
@@ -1514,51 +1334,8 @@ function validate_interaction_bounds!(data::IntermediateInteractionData, scratch
     return nothing
 end
 
-# TEST HELPER: Enhanced debugging for categorical interaction issues
-"""
-    debug_categorical_interaction(interaction_eval::InteractionEvaluator, name::String="")
-
-Debug helper for categorical interaction issues.
-"""
-function debug_categorical_interaction(interaction_eval::InteractionEvaluator, name::String="")
-    # # println("DEBUG: === DEBUGGING CATEGORICAL INTERACTION: $name ===")
-    
-    components = interaction_eval.components
-    N = length(components)
-    
-    # # println("DEBUG: $N-way interaction")
-    
-    total_expected_width = 1
-    for (i, comp) in enumerate(components)
-        width = get_component_output_width(comp)
-        total_expected_width *= width
-        
-        # # println("DEBUG: Component $i: $(typeof(comp))")
-        # # println("DEBUG:   Width: $width")
-        
-        if comp isa CategoricalEvaluator
-            # # println("DEBUG:   Levels: $(comp.n_levels)")
-            # # println("DEBUG:   Contrasts: $(size(comp.contrast_matrix, 2))")
-            # # println("DEBUG:   Contrast matrix size: $(size(comp.contrast_matrix))")
-        end
-    end
-    
-    # # println("DEBUG: Expected total interaction width: $total_expected_width")
-    # # println("DEBUG: Actual positions provided: $(length(interaction_eval.positions))")
-    # # println("DEBUG: Positions: $(interaction_eval.positions[1:min(10, end)]...)$(length(interaction_eval.positions) > 10 ? "..." : "")")
-    
-    if length(interaction_eval.positions) != total_expected_width
-        # # println("DEBUG: ❌ WIDTH MISMATCH!")
-        # # println("DEBUG: This is likely the source of the test failure")
-    else
-        # # println("DEBUG: ✅ Width matches expected")
-    end
-    
-    # # println("DEBUG: === END DEBUG ===")
-end
-
 ###############################################################################
-# INTERFACE METHODS (MIRROR FUNCTION SYSTEM)
+# INTERFACE METHODS
 ###############################################################################
 
 """
@@ -1599,7 +1376,7 @@ end
 """
     execute_interaction_operations!(interaction_data::SpecializedInteractionData, ...)
 
-ZERO-ALLOCATION: Updated for new data structure with compile-time operation counting.
+ZERO-ALLOCATION: Main execution interface.
 """
 function execute_interaction_operations!(
     interaction_data::SpecializedInteractionData,
@@ -1608,7 +1385,7 @@ function execute_interaction_operations!(
     data::NamedTuple,
     row_idx::Int
 )
-    # ZERO-ALLOCATION: Calculate operation counts at compile time using tuple recursion
+    # Calculate operation counts at compile time using tuple recursion
     total_intermediate, total_final = count_operations_recursive(interaction_data.complete_interactions)
     
     op = InteractionOp(total_intermediate, total_final)
@@ -1629,7 +1406,7 @@ end
 """
     count_operations_recursive(complete_tuple::Tuple) -> (Int, Int)
 
-ZERO-ALLOCATION: Count operations using tuple recursion instead of loops.
+Count operations using tuple recursion.
 """
 function count_operations_recursive(complete_tuple::Tuple)
     if length(complete_tuple) == 0
@@ -1650,6 +1427,8 @@ function count_operations_recursive(complete_tuple::Tuple)
         return (first_intermediate + remaining_intermediate, first_final + remaining_final)
     end
 end
+
+## %
 
 ###############################################################################
 # COMPLETE FORMULA INTEGRATION
@@ -1818,12 +1597,12 @@ function create_specialized_formula(compiled_formula::CompiledFormula)
 end
 
 """
-    compile_formula_specialized(model, data::NamedTuple)
+    compile_formula(model, data::NamedTuple)
 
 Enhanced to create specialized formula with new interaction system.
 """
-function compile_formula_specialized(model, data::NamedTuple)
-    compiled = compile_formula(model, data)
+function compile_formula(model, data::NamedTuple)
+    compiled = _compile_formula(model, data)
     return create_specialized_formula(compiled)
 end
 
@@ -1833,7 +1612,7 @@ end
 """
     validate_schema_based_interactions(evaluator::CombinedEvaluator)
 
-PHASE 3 NEW: Validate that schema-based compilation produced correct interaction components.
+Validate that schema-based compilation produced correct interaction components.
 """
 function validate_schema_based_interactions(evaluator::CombinedEvaluator)
     # # println("DEBUG: === VALIDATING SCHEMA-BASED INTERACTIONS ===")
