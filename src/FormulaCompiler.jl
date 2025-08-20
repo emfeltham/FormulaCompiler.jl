@@ -70,6 +70,9 @@ include("step2_categorical_support.jl")
 include("step3_functions.jl")
 include("step4_interactions.jl")
 
+# Zero-allocation function interactions via metaprogramming
+include("generated_function_interactions.jl")
+
 export test_new_interaction_system
 export compile_formula
 
