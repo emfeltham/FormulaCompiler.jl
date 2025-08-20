@@ -20,7 +20,7 @@ data = Tables.columntable(df)
 # Test basic functionality
 println("Testing basic compilation...")
 model = lm(@formula(y ~ x * group), df)
-compiled = compile_formula(model)
+compiled = compile_formula(model, data)  # Need both model and data!
 row_vec = Vector{Float64}(undef, length(compiled))
 
 # Test evaluation

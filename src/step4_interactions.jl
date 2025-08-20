@@ -663,64 +663,86 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
         width = component_widths[i]
         
         if comp isa FunctionEvaluator
-            # Functions need pre-evaluation to scratch
-            func_result_pos = allocate_temp!(temp_allocator)
-            
-            # Create a temp allocator for the function's internal operations
-            func_internal_allocator = TempAllocator(temp_allocator.next_temp)
-            
-            # Decompose the function using step3's system
-            func_operations = decompose_function_tree_as_intermediate(
-                comp, 
-                func_result_pos, 
-                func_internal_allocator
-            )
-            
-            # Update the main allocator
-            temp_allocator.next_temp = func_internal_allocator.next_temp
-            
-            # Separate operations by type
-            intermediate_ops = filter(op -> op.operation_type == :intermediate_binary, func_operations)
-            final_ops = filter(op -> op.operation_type == :final_binary, func_operations)
-            
-            # Create tuples of specialized data inline
-            intermediate_tuple = if length(intermediate_ops) == 0
-                ()
+            # Check if this is a specializable function×component pattern
+            other_components = [components[j] for j in 1:N if j != i]
+            if N == 2 && length(other_components) == 1 && is_specialized_function_interaction(comp, other_components[1])
+                # Use specialized zero-allocation path - bypass individual component processing
+                # The specialized interaction handles the entire interaction internally
+                specialized_interaction = create_specialized_function_interaction(comp, other_components[1], final_positions)
+                
+                # Create the operation directly and skip the regular binary interaction logic
+                push!(operations, LinearizedInteractionOperation(
+                    :specialized_interaction,
+                    specialized_interaction,
+                    other_components[1],  # Keep the other component for reference
+                    :specialized,  # input1_source - indicates specialized path
+                    :specialized,  # input2_source - indicates specialized path  
+                    final_positions,
+                    nothing,  # scratch_position not used
+                    FunctionPreEvalOperation[]  # No pre-evaluations needed!
+                ))
+                
+                return operations  # Early return - no further processing needed
             else
-                ntuple(length(intermediate_ops)) do j
-                    op = intermediate_ops[j]
-                    input1 = length(op.inputs) > 0 ? op.inputs[1] : Symbol()
-                    input2 = length(op.inputs) > 1 ? op.inputs[2] : Symbol()
-                    IntermediateBinaryFunctionData(op.func, input1, input2, op.scratch_position)
+                # Fallback: Functions need pre-evaluation to scratch
+                func_result_pos = allocate_temp!(temp_allocator)
+                
+                # Create a temp allocator for the function's internal operations
+                func_internal_allocator = TempAllocator(temp_allocator.next_temp)
+                
+                # Decompose the function using step3's system
+                func_operations = decompose_function_tree_as_intermediate(
+                    comp, 
+                    func_result_pos, 
+                    func_internal_allocator
+                )
+                
+                # Update the main allocator
+                temp_allocator.next_temp = func_internal_allocator.next_temp
+                
+                # Separate operations by type
+                intermediate_ops = filter(op -> op.operation_type == :intermediate_binary, func_operations)
+                final_ops = filter(op -> op.operation_type == :final_binary, func_operations)
+                
+                # Create tuples of specialized data inline
+                intermediate_tuple = if length(intermediate_ops) == 0
+                    ()
+                else
+                    ntuple(length(intermediate_ops)) do j
+                        op = intermediate_ops[j]
+                        input1 = length(op.inputs) > 0 ? op.inputs[1] : Symbol()
+                        input2 = length(op.inputs) > 1 ? op.inputs[2] : Symbol()
+                        IntermediateBinaryFunctionData(op.func, input1, input2, op.scratch_position)
+                    end
                 end
-            end
-            
-            final_tuple = if length(final_ops) == 0
-                ()
-            else
-                ntuple(length(final_ops)) do j
-                    op = final_ops[j]
-                    input1 = length(op.inputs) > 0 ? op.inputs[1] : Symbol()
-                    input2 = length(op.inputs) > 1 ? op.inputs[2] : Symbol()
-                    FinalBinaryFunctionData(op.func, input1, input2, op.output_position)
+                
+                final_tuple = if length(final_ops) == 0
+                    ()
+                else
+                    ntuple(length(final_ops)) do j
+                        op = final_ops[j]
+                        input1 = length(op.inputs) > 0 ? op.inputs[1] : Symbol()
+                        input2 = length(op.inputs) > 1 ? op.inputs[2] : Symbol()
+                        FinalBinaryFunctionData(op.func, input1, input2, op.output_position)
+                    end
                 end
-            end
-            
-            # Create the compiled function data
-            function_data = SpecializedFunctionData((), intermediate_tuple, final_tuple)
-            function_op = FunctionOp(0, length(intermediate_ops), length(final_ops))
-            
-            # Create the pre-eval operation with compiled function data
-            pre_eval = FunctionPreEvalOperation(function_data, function_op, func_result_pos)
-            
-            # Store in the function_pre_evals vector
-            push!(function_pre_evals, pre_eval)
-            
-            # Create scratch reference for the function's output
-            func_scratch_ref = InteractionScratchReference([func_result_pos])
-            push!(processed_components, func_scratch_ref)
-            push!(processed_input_sources, InteractionScratchPosition(func_result_pos))
-            push!(processed_widths, 1)  # Functions are scalar
+                
+                # Create the compiled function data
+                function_data = SpecializedFunctionData((), intermediate_tuple, final_tuple)
+                function_op = FunctionOp(0, length(intermediate_ops), length(final_ops))
+                
+                # Create the pre-eval operation with compiled function data
+                pre_eval = FunctionPreEvalOperation(function_data, function_op, func_result_pos)
+                
+                # Store in the function_pre_evals vector
+                push!(function_pre_evals, pre_eval)
+                
+                # Create scratch reference for the function's output
+                func_scratch_ref = InteractionScratchReference([func_result_pos])
+                push!(processed_components, func_scratch_ref)
+                push!(processed_input_sources, InteractionScratchPosition(func_result_pos))
+                push!(processed_widths, 1)  # Functions are scalar
+            end  # End of specialized vs. fallback check
             
         else
             # Regular component (categorical, continuous, etc.)
@@ -862,9 +884,34 @@ function create_intermediate_interaction_data(op::LinearizedInteractionOperation
     )
 end
 
+function create_specialized_interaction_data(op::LinearizedInteractionOperation)
+    @assert op.operation_type == :specialized_interaction
+    
+    # For specialized interactions, the component1 is the specialized interaction evaluator
+    # We can use it directly without the complex pattern/width calculation
+    specialized_evaluator = op.component1
+    
+    return IntermediateInteractionData(
+        specialized_evaluator,
+        specialized_evaluator,  # Use same evaluator for both components since it's self-contained
+        :specialized,           # input1_source - not used in specialized execution
+        :specialized,           # input2_source - not used in specialized execution  
+        output_width(specialized_evaluator),  # width1 - the actual output width
+        1,                      # width2 - not used
+        ((1, 1),),             # pattern_tuple - minimal pattern, not used in specialized execution
+        1,                      # scratch_position - not used for specialized interactions
+        ()                      # function_pre_evals - empty since no pre-evaluation needed
+    )
+end
+
 function create_final_interaction_data(op::LinearizedInteractionOperation)
-    @assert op.operation_type == :final_interaction
+    @assert op.operation_type in [:final_interaction, :specialized_interaction]
     @assert op.scratch_position === nothing
+    
+    # Handle specialized interactions differently
+    if op.operation_type == :specialized_interaction
+        return create_specialized_interaction_data(op)
+    end
     
     width1 = get_actual_component_width(op.component1)
     width2 = get_actual_component_width(op.component2)
@@ -978,6 +1025,14 @@ function execute_operation!(
     row_idx::Int
 ) where {C1, C2, T1, T2, PT, PET}
 
+    # Check if this is a specialized interaction using type-based dispatch
+    if is_specialized_interaction_type(data.component1)
+        # This is a specialized interaction - call its execute_interaction! method directly
+        execute_interaction!(data.component1, output, input_data, row_idx)
+        return nothing
+    end
+
+    # Regular interaction execution path
     # FIXED: Execute function pre-evaluations using recursive tuple processing
     execute_pre_evals_recursive!(data.function_pre_evals, scratch, output, input_data, row_idx)
     
@@ -1225,7 +1280,7 @@ function analyze_interaction_operations_linear(evaluator::CombinedEvaluator)
         
         # Separate operations for this specific interaction
         intermediate_ops = filter(op -> op.operation_type == :intermediate_interaction, operations)
-        final_ops = filter(op -> op.operation_type == :final_interaction, operations)
+        final_ops = filter(op -> op.operation_type in [:final_interaction, :specialized_interaction], operations)
         
         # Store for ntuple construction
         all_decomposed_interactions[idx] = (intermediate_ops, final_ops, idx)
