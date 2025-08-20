@@ -1,6 +1,6 @@
 # FormulaCompiler.jl
 
-High-performance, zero-allocation model matrix evaluation/update for Julia statistical models.
+High-performance, zero-allocation model matrix evaluation/update for Julia statistical models. Useful for efficient marginal effect calculations, simulations, among other purposes.
 
 ## Key Features
 
@@ -10,6 +10,7 @@ High-performance, zero-allocation model matrix evaluation/update for Julia stati
 - **Analytical derivatives**: Built-in derivative compilation for marginal effects
 - **Full ecosystem compatibility**: Works with GLM.jl, MixedModels.jl, StandardizedPredictors.jl
 - **Extensible architecture**: Evaluator trees enable custom backends and analysis
+- **Generality**: The system should work for any possible formula that works with StatsModels.jl.
 
 ## Installation
 
