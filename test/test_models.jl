@@ -4,241 +4,94 @@
 using FormulaCompiler:
     compile_formula,
     SpecializedFormula,
-    make_test_data
+    make_test_data,
+    test_formulas
 
 @testset "Comprehensive Model Compatibility Tests" begin
     # Create comprehensive test data with edge cases
-    
-    df = make_test_data()
+    n = 500
+    df = make_test_data(; n)
     data = Tables.columntable(df)
     
-    @testset "Linear Models (LM) - Baseline" begin
-        @testset "Basic linear model formulas" begin
-            linear_formulas = [
-                @formula(continuous_response ~ 1),                    # Intercept only
-                @formula(continuous_response ~ 0 + x),                # No intercept  
-                @formula(continuous_response ~ x),                    # Simple continuous
-                @formula(continuous_response ~ group3),               # Simple categorical
-                @formula(continuous_response ~ x + y),                # Multiple continuous
-                @formula(continuous_response ~ group3 + group4),      # Multiple categorical
-                @formula(continuous_response ~ x + group3),           # Mixed
-                @formula(continuous_response ~ x * group3),           # Interaction
-                @formula(continuous_response ~ x & group3),           # Interaction w/o main effect
-                @formula(continuous_response ~ log(z)),               # Function
-                @formula(continuous_response ~ x * y * group3),       # Three-way interaction
-                @formula(continuous_response ~ x * y * group3 * group4), # Four-way interaction
-                @formula(continuous_response ~ exp(x) * y * group3 * group4), # Four-way interaction w/ func
-            ]
-            
-            for fx in linear_formulas
-                @testset "LM Formula: $fx" begin
-                    model = lm(fx, df)
+    @testset "LMs" begin
+        for fx in test_formulas.lm
+            @testset "$(fx.name)" begin
+                model = lm(fx.formula, df)
+                
+                # Test that our system can compile it
+                compiled = compile_formula(model, data)
+                @test compiled isa SpecializedFormula
+                
+                # Test correctness against modelmatrix
+                output = Vector{Float64}(undef, length(compiled))
+                for test_row in [1, 10, 50, 100, n]
+                    compiled(output, data, test_row)
+                    expected = modelmatrix(model)[test_row, :]
+                    @test isapprox(output, expected, rtol=1e-12)
+                end
+            end
+        end
+    end
+    
+    @testset "GLMs" begin
+        for fx in test_formulas.glm
+            @testset "$(fx.name)" begin
+                # Fit GLM with link
+                model = glm(fx.formula, df, fx.distribution, fx.link)
+                
+                # Test that our system can extract the design matrix
+                compiled = compile_formula(model, data)
+                @test compiled isa SpecializedFormula
+                
+                # Test correctness - we should get the DESIGN MATRIX, not predictions
+                output = Vector{Float64}(undef, length(compiled))
+                for test_row in [1, 25, 75, 150]
+                    compiled(output, data, test_row)
+                    expected = modelmatrix(model)[test_row, :]
+                    @test isapprox(output, expected, rtol=1e-12)
+                end
+            end
+        end
+    end
+
+    @testset "MMs" begin
+        @testset "LMMs" begin
+            for fx in test_formulas.lmm
+                @testset "$(fx.name)" begin
+                    model = fit(MixedModel, fx.formula, df; progress = false)
                     
-                    # Test that our system can compile it
+                    # Test that our system can extract FIXED EFFECTS design matrix
                     compiled = compile_formula(model, data)
                     @test compiled isa SpecializedFormula
                     
-                    # Test correctness against modelmatrix
+                    # For mixed models, we should get the fixed effects design matrix
                     output = Vector{Float64}(undef, length(compiled))
-                    for test_row in [1, 10, 50, 100, n]
+                    for test_row in [1, 25, 100]
                         compiled(output, data, test_row)
+                        # Compare against fixed effects design matrix
                         expected = modelmatrix(model)[test_row, :]
                         @test isapprox(output, expected, rtol=1e-12)
-                        # "LM failed at row $test_row for $fx"
-                    end
-                end
-            end
-        end
-    end
-    
-    @testset "Generalized Linear Models (GLM)" begin
-        @testset "Logistic regression" begin
-            logistic_formulas = [
-                @formula(logistic_response ~ x),
-                @formula(logistic_response ~ x + group3),
-                @formula(logistic_response ~ x * group3),
-                @formula(logistic_response ~ log(abs(z)) + group3),
-                @formula(logistic_response ~ x + y + group3 + group4),
-                @formula(logistic_response ~ x * y + group3),
-            ]
-            
-            for formula in logistic_formulas
-                @testset "Logistic: $formula" begin
-                    try
-                        # Fit GLM with logistic link
-                        model = glm(formula, df, Binomial(), LogitLink())
-                        
-                        # Test that our system can extract the design matrix
-                        compiled = compile_formula(model, data)
-                        @test compiled isa SpecializedFormula
-                        
-                        # Test correctness - we should get the DESIGN MATRIX, not predictions
-                        output = Vector{Float64}(undef, length(compiled))
-                        for test_row in [1, 25, 75, 150]
-                            compiled(output, data, test_row)
-                            expected = modelmatrix(model)[test_row, :]
-                            @test isapprox(output, expected, rtol=1e-12)
-                            # "GLM Logistic failed at row $test_row for $formula"
-                        end    
-                    catch e
-                        @warn "GLM Logistic failed for $formula" exception=e
-                        @test_broken false
-                        # "GLM Logistic support needed"
                     end
                 end
             end
         end
         
-        @testset "Poisson regression" begin
-            poisson_formulas = [
-                @formula(count_response ~ x),
-                @formula(count_response ~ x + group3),
-                @formula(count_response ~ log(z)),
-                @formula(count_response ~ x * group3),
-            ]
-            
-            for formula in poisson_formulas
-                @testset "Poisson: $formula" begin
-                    try
-                        # Fit GLM with Poisson distribution
-                        model = glm(formula, df, Poisson(), LogLink())
-                        
-                        # Test that our system can extract the design matrix
-                        compiled = compile_formula(model, data)
-                        @test compiled isa SpecializedFormula
-                        
-                        # Test correctness
-                        output = Vector{Float64}(undef, length(compiled))
-                        for test_row in [1, 50, 100]
-                            compiled(output, data, test_row)
-                            expected = modelmatrix(model)[test_row, :]
-                            @test isapprox(output, expected, rtol=1e-12)
-                            # "GLM Poisson failed at row $test_row for $formula"
-                        end
-                    catch e
-                        @warn "GLM Poisson failed for $formula" exception=e
-                        @test_broken false
-                        # "GLM Poisson support needed"
-                    end
-                end
-            end
-        end
-        
-        @testset "Other GLM families" begin
-            # Test other common GLM families
-            other_glm_tests = [
-                # Gamma regression
-                (@formula(z ~ x + group3), Gamma(), LogLink()),
-                
-                # Gaussian with log link (unusual but valid)
-                (@formula(z ~ x + group3), Normal(), LogLink()),
-            ]
-            
-            for (formula, family, link) in other_glm_tests
-                @testset "GLM $(family) $(link): $formula" begin
-                    try
-                        model = glm(formula, df, family, link)
-                        compiled = compile_formula(model, data)
-                        
-                        output = Vector{Float64}(undef, length(compiled))
-                        compiled(output, data, 1)
-                        expected = modelmatrix(model)[1, :]
+        @testset "GLMMs" begin
+            for fx in test_formulas.glmm
+                @testset "$(fx.name)" begin
+                    model = fit(MixedModel, fx.formula, df, fx.distribution, fx.link; progress = false)
+                    
+                    # Test that our system can extract FIXED EFFECTS design matrix
+                    compiled = compile_formula(model, data)
+                    @test compiled isa SpecializedFormula
+                    
+                    # For mixed models, we should get the fixed effects design matrix
+                    output = Vector{Float64}(undef, length(compiled))
+                    for test_row in [1, 25, 100]
+                        compiled(output, data, test_row)
+                        # Compare against fixed effects design matrix
+                        expected = modelmatrix(model)[test_row, :]
                         @test isapprox(output, expected, rtol=1e-12)
-                    catch e
-                        @warn "GLM $(family) $(link) failed for $formula" exception=e
-                        @test_broken false
-                        # "GLM $(family) $(link) support may be needed"
-                    end
-                end
-            end
-        end
-    end
-    
-    @testset "Mixed Effects Models (MixedModels.jl)" begin
-        @testset "Linear mixed models" begin
-            mixed_formulas = [
-                # Simple random intercept
-                @formula(continuous_response ~ x + (1|subject)),
-                @formula(continuous_response ~ x + group3 + (1|subject)),
-                
-                # Random slope
-                @formula(continuous_response ~ x + (x|subject)),
-                @formula(continuous_response ~ x + group3 + (x|subject)),
-                
-                # Multiple random effects
-                @formula(continuous_response ~ x + (1|subject) + (1|cluster)),
-                
-                # Interactions with random effects
-                @formula(continuous_response ~ x * group3 + (1|subject)),
-                @formula(continuous_response ~ x * group3 + (x|subject)),
-            ]
-            
-            for fx in mixed_formulas
-                @testset "LMM: $formula" begin
-                    try
-                        model = fit(MixedModel, fx, df; progress = false)
-                        
-                        # Test that our system can extract FIXED EFFECTS design matrix
-                        compiled = compile_formula(model, data)
-                        @test compiled isa SpecializedFormula
-                        
-                        # For mixed models, we should get the fixed effects design matrix
-                        output = Vector{Float64}(undef, length(compiled))
-                        for test_row in [1, 25, 100]
-                            compiled(output, data, test_row)
-                            # Compare against fixed effects design matrix
-                            expected = modelmatrix(model)[test_row, :]
-                            @test isapprox(output, expected, rtol=1e-12)
-                            # "LMM failed at row $test_row for $fx"
-                        end
-                    catch e
-                        @warn "Linear Mixed Model failed for $fx" exception=e
-                        @test_broken false
-                        # "LMM support needed"
-                    end
-                end
-            end
-        end
-        
-        @testset "Generalized linear mixed models" begin
-            glmm_formulas = [
-                # Logistic mixed models
-                @formula(logistic_response ~ x + (1|subject)),
-                @formula(logistic_response ~ x + group3 + (1|subject)),
-                @formula(logistic_response ~ x * group3 + (1|subject)),
-                
-                # Poisson mixed models
-                @formula(count_response ~ x + (1|subject)),
-                @formula(count_response ~ x + group3 + (1|cluster)),
-            ]
-            
-            for formula in glmm_formulas
-                @testset "GLMM: $formula" begin
-                    try
-                        # Determine family based on response variable
-                        family = if occursin("logistic_response", string(formula.lhs))
-                            Binomial()
-                        elseif occursin("count_response", string(formula.lhs))
-                            Poisson()
-                        else
-                            Normal()
-                        end
-                        
-                        model = fit(MixedModel, formula, df, family; progress = false)
-                        
-                        # Test that our system can extract fixed effects design matrix
-                        compiled = compile_formula(model, data)
-                        @test compiled isa SpecializedFormula
-                        
-                        # Test correctness
-                        output = Vector{Float64}(undef, length(compiled))
-                        compiled(output, data, 1)
-                        expected = modelmatrix(model)[1, :]
-                        @test isapprox(output, expected, rtol=1e-12)
-                    catch e
-                        @warn "GLMM failed for $formula" exception=e
-                        @test_broken false
-                        # "GLMM support may be needed"
                     end
                 end
             end
