@@ -980,40 +980,33 @@ end
 
 Recursive case: execute first pre-eval, then remaining.
 """
-@generated function execute_pre_evals_recursive!(
-    pre_evals::T,
+function execute_pre_evals_recursive!(
+    pre_evals::Tuple,
     scratch::AbstractVector{Float64},
     output::AbstractVector{Float64},
     input_data::NamedTuple,
     row_idx::Int
-) where T <: Tuple
-    N = length(T.parameters)
-    
-    if N == 0
-        return quote
-            return nothing
+)
+    if length(pre_evals) > 0
+        # Execute first pre-eval using step3's execution system
+        pre_eval = pre_evals[1]
+        execute_operation!(
+            pre_eval.function_data,
+            pre_eval.function_op,
+            scratch,  # Use interaction's scratch space
+            output,
+            input_data,
+            row_idx
+        )
+        
+        # Recursively execute remaining
+        if length(pre_evals) > 1
+            remaining = Base.tail(pre_evals)
+            execute_pre_evals_recursive!(remaining, scratch, output, input_data, row_idx)
         end
     end
     
-    # Generate unrolled execution for all pre-evaluations
-    exprs = []
-    for i in 1:N
-        push!(exprs, quote
-            execute_operation!(
-                pre_evals[$i].function_data,
-                pre_evals[$i].function_op,
-                scratch,
-                output,
-                input_data,
-                row_idx
-            )
-        end)
-    end
-    
-    return quote
-        $(exprs...)
-        return nothing
-    end
+    return nothing
 end
 
 ###############################################################################
@@ -1114,35 +1107,24 @@ end
 """
     execute_intermediate_interactions_recursive!(intermediate_tuple::Tuple, ...)
 
-Generated function: execute all intermediate interactions with unrolled loop.
+Recursive case: execute first intermediate interaction, then process remaining.
 """
-@generated function execute_intermediate_interactions_recursive!(
-    intermediate_tuple::T,
+function execute_intermediate_interactions_recursive!(
+    intermediate_tuple::Tuple,
     scratch::AbstractVector{Float64},
     output::AbstractVector{Float64},
     input_data::NamedTuple,
     row_idx::Int
-) where T <: Tuple
-    N = length(T.parameters)
-    
-    if N == 0
-        return quote
-            return nothing
+)
+    if length(intermediate_tuple) > 0
+        execute_operation!(intermediate_tuple[1], scratch, output, input_data, row_idx)
+        
+        if length(intermediate_tuple) > 1
+            remaining = Base.tail(intermediate_tuple)
+            execute_intermediate_interactions_recursive!(remaining, scratch, output, input_data, row_idx)
         end
     end
-    
-    # Generate unrolled execution for all intermediate interactions
-    exprs = []
-    for i in 1:N
-        push!(exprs, quote
-            execute_operation!(intermediate_tuple[$i], scratch, output, input_data, row_idx)
-        end)
-    end
-    
-    return quote
-        $(exprs...)
-        return nothing
-    end
+    return nothing
 end
 
 """
@@ -1163,35 +1145,24 @@ end
 """
     execute_final_interactions_recursive!(final_tuple::Tuple, ...)
 
-Generated function: execute all final interactions with unrolled loop.
+Recursive case: execute first final interaction, then process remaining.
 """
-@generated function execute_final_interactions_recursive!(
-    final_tuple::T,
+function execute_final_interactions_recursive!(
+    final_tuple::Tuple,
     scratch::AbstractVector{Float64},
     output::AbstractVector{Float64},
     input_data::NamedTuple,
     row_idx::Int
-) where T <: Tuple
-    N = length(T.parameters)
-    
-    if N == 0
-        return quote
-            return nothing
+)
+    if length(final_tuple) > 0
+        execute_operation!(final_tuple[1], scratch, output, input_data, row_idx)
+        
+        if length(final_tuple) > 1
+            remaining = Base.tail(final_tuple)
+            execute_final_interactions_recursive!(remaining, scratch, output, input_data, row_idx)
         end
     end
-    
-    # Generate unrolled execution for all final interactions
-    exprs = []
-    for i in 1:N
-        push!(exprs, quote
-            execute_operation!(final_tuple[$i], scratch, output, input_data, row_idx)
-        end)
-    end
-    
-    return quote
-        $(exprs...)
-        return nothing
-    end
+    return nothing
 end
 
 """
@@ -1240,35 +1211,24 @@ end
 """
     execute_complete_interactions_recursive!(complete_tuple::Tuple, ...)
 
-Generated function: execute all complete interactions with unrolled loop.
+Recursive case: execute first complete interaction, then process remaining.
 """
-@generated function execute_complete_interactions_recursive!(
-    complete_tuple::T,
+function execute_complete_interactions_recursive!(
+    complete_tuple::Tuple,
     scratch::AbstractVector{Float64},
     output::AbstractVector{Float64},
     input_data::NamedTuple,
     row_idx::Int
-) where T <: Tuple
-    N = length(T.parameters)
-    
-    if N == 0
-        return quote
-            return nothing
+)
+    if length(complete_tuple) > 0
+        execute_complete_interaction!(complete_tuple[1], scratch, output, input_data, row_idx)
+        
+        if length(complete_tuple) > 1
+            remaining = Base.tail(complete_tuple)
+            execute_complete_interactions_recursive!(remaining, scratch, output, input_data, row_idx)
         end
     end
-    
-    # Generate unrolled execution for all complete interactions
-    exprs = []
-    for i in 1:N
-        push!(exprs, quote
-            execute_complete_interaction!(complete_tuple[$i], scratch, output, input_data, row_idx)
-        end)
-    end
-    
-    return quote
-        $(exprs...)
-        return nothing
-    end
+    return nothing
 end
 
 # Main execute_operation! for SpecializedInteractionData
@@ -1520,47 +1480,45 @@ end
 """
     count_operations_zero_alloc(complete_tuple::Tuple) -> (Int, Int)
 
-Count operations using compile-time tuple iteration with zero allocations.
-Uses @generated function for compile-time unrolling with minimal allocations.
+Count operations using tuple recursion.
 """
-@generated function count_operations_zero_alloc(complete_tuple::T) where T
-    if T === Tuple{}
-        return quote
-            return (0, 0)
-        end
-    end
-    
-    N = length(T.parameters)
-    
-    if N == 0
-        return quote
-            return (0, 0)
-        end
-    elseif N == 1
-        return quote
-            intermediate_count = length(complete_tuple[1].intermediate_operations)
-            final_count = length(complete_tuple[1].final_operations)
-            return (intermediate_count, final_count)
-        end
-    else
-        # Generate unrolled loop for multiple elements
-        intermediate_sum = Expr(:call, :+)
-        final_sum = Expr(:call, :+)
-        
-        for i in 1:N
-            push!(intermediate_sum.args, :(length(complete_tuple[$i].intermediate_operations)))
-            push!(final_sum.args, :(length(complete_tuple[$i].final_operations)))
-        end
-        
-        return quote
-            intermediate_total = $intermediate_sum
-            final_total = $final_sum
-            return (intermediate_total, final_total)
-        end
-    end
+function count_operations_zero_alloc(complete_tuple::Tuple)
+    return count_operations_recursive(complete_tuple)
 end
 
-# Old recursive version removed - replaced with @generated functions for zero allocation
+"""
+    count_operations_recursive(complete_tuple::Tuple{}) -> (Int, Int)
+
+Base case: empty tuple - zero operations.
+"""
+function count_operations_recursive(complete_tuple::Tuple{})
+    return (0, 0)
+end
+
+"""
+    count_operations_recursive(complete_tuple::Tuple) -> (Int, Int)
+
+Count operations using tuple recursion.
+"""
+function count_operations_recursive(complete_tuple::Tuple)
+    if length(complete_tuple) == 0
+        return (0, 0)
+    end
+    
+    # Count operations in first complete interaction
+    first_intermediate = length(complete_tuple[1].intermediate_operations)
+    first_final = length(complete_tuple[1].final_operations)
+    
+    if length(complete_tuple) == 1
+        return (first_intermediate, first_final)
+    else
+        # Recursively count remaining interactions
+        remaining = Base.tail(complete_tuple)
+        remaining_intermediate, remaining_final = count_operations_recursive(remaining)
+        
+        return (first_intermediate + remaining_intermediate, first_final + remaining_final)
+    end
+end
 
 ## %
 
