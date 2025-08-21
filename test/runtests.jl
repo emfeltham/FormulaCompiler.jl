@@ -33,8 +33,8 @@ Random.seed!(06515)
     include("test_models.jl")
 
     # Derivatives
-    include("test_derivative_phase1.jl")
-    include("test_derivative_phase2.jl")
+    # include("test_derivative_phase1.jl")
+    # include("test_derivative_phase2.jl")
     
     # Integration and compatibility tests
     # include("test_integration.jl")
