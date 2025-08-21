@@ -54,22 +54,11 @@ function _compile_formula(model, data::NamedTuple)
     rhs = fixed_effects_form(model).rhs
     column_names = extract_all_columns(rhs)
     
-    # Use the updated schema extraction
-    categorical_schema = extract_complete_categorical_schema(model)
-    
-    # Populate schema with actual data level codes
-    populate_level_codes_from_data!(categorical_schema, data)
-    
-    # Determine which variables have main effects vs interaction-only
-    determine_main_effect_contrasts!(categorical_schema, model)
-    
-    # Validate the extracted schema
-    validate_categorical_schema(categorical_schema)
-    
-    # println("DEBUG: Schema extraction complete, $(length(categorical_schema)) categorical variables")
+    # SCHEMA-FREE APPROACH: Use authentic term.contrasts.matrix throughout
+    # No schema extraction needed - all categorical info comes from fitted formula terms
     
     # Continue with normal compilation...
-    root_evaluator = compile_term(rhs, 1, ScratchAllocator(), categorical_schema)
+    root_evaluator = compile_term(rhs, 1, ScratchAllocator())
 
     # println("DEBUG: root_evaluator type: $(typeof(root_evaluator))")
     # println("DEBUG: root_evaluator is nothing: $(root_evaluator === nothing)")
@@ -84,11 +73,8 @@ function _compile_formula(model, data::NamedTuple)
     
     validate_data_columns!(data, column_names)
     
-    # Extract level codes for backward compatibility
+    # No categorical levels needed with authentic approach
     categorical_levels = Dict{Symbol, Vector{Int}}()
-    for (col_name, schema_info) in categorical_schema
-        categorical_levels[col_name] = schema_info.level_codes
-    end
     
     # println("DEBUG: Compilation complete - output_width: $out_width, scratch_size: $scratch_size")
     
