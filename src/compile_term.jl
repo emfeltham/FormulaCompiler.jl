@@ -61,6 +61,83 @@ function create_full_dummy_matrix(levels::Vector)
     return Matrix{Float64}(I, n_levels, n_levels)  # Identity matrix
 end
 
+
+"""
+    extract_categorical_schema_from_mixed_model(model::Union{LinearMixedModel, GeneralizedLinearMixedModel}) -> Dict{Symbol, CategoricalSchemaInfo}
+
+Extract categorical schema for MixedModels by working directly with the fixed effects formula.
+MixedModels don't store schemas like GLM models, so we extract from the formula structure.
+"""
+function extract_categorical_schema_from_mixed_model(model::Union{LinearMixedModel, GeneralizedLinearMixedModel})
+    # Get the fixed effects formula (strips random effects)
+    fixed_form = fixed_effects_form(model)
+    
+    # Get coefficient names from the MixedModel
+    fitted_coefnames = coefnames(model)
+    
+    categorical_info = Dict{Symbol, CategoricalSchemaInfo}()
+    
+    # Extract categorical terms directly from the formula RHS
+    extract_categorical_terms_from_formula!(categorical_info, fixed_form.rhs, fitted_coefnames)
+    
+    return categorical_info
+end
+
+"""
+    extract_categorical_terms_from_formula!(categorical_info, term, fitted_coefnames)
+
+Recursively extract categorical terms from formula structure.
+"""
+function extract_categorical_terms_from_formula!(categorical_info::Dict{Symbol, CategoricalSchemaInfo}, term::CategoricalTerm, fitted_coefnames::Vector{String})
+    col_symbol = term.sym
+    
+    # Extract contrast matrix from the fitted coefficient names
+    # This follows the same logic as the schema-based approach but reconstructs from coefnames
+    contrast_matrix = term.contrasts.matrix
+    levels = term.contrasts.levels
+    n_levels = length(levels)
+    
+    # Create both dummy and full dummy contrasts
+    dummy_contrasts = contrast_matrix  # The fitted contrasts (usually DummyCoding)
+    full_dummy_contrasts = Matrix{Float64}(I, n_levels, n_levels)  # FullDummyCoding for interactions
+    
+    categorical_info[col_symbol] = CategoricalSchemaInfo(
+        dummy_contrasts,
+        full_dummy_contrasts,  
+        dummy_contrasts,  # Use dummy as the selected contrasts initially
+        n_levels,
+        levels,
+        Int[],  # level_codes will be populated later
+        col_symbol
+    )
+end
+
+function extract_categorical_terms_from_formula!(categorical_info::Dict{Symbol, CategoricalSchemaInfo}, term::MatrixTerm, fitted_coefnames::Vector{String})
+    # Process each term in the MatrixTerm
+    for sub_term in term.terms
+        extract_categorical_terms_from_formula!(categorical_info, sub_term, fitted_coefnames)
+    end
+end
+
+function extract_categorical_terms_from_formula!(categorical_info::Dict{Symbol, CategoricalSchemaInfo}, term::InteractionTerm, fitted_coefnames::Vector{String})
+    # Process each component of the interaction
+    for comp in term.terms
+        extract_categorical_terms_from_formula!(categorical_info, comp, fitted_coefnames)
+    end
+end
+
+function extract_categorical_terms_from_formula!(categorical_info::Dict{Symbol, CategoricalSchemaInfo}, term::FunctionTerm, fitted_coefnames::Vector{String})
+    # Process function arguments
+    for arg in term.args
+        extract_categorical_terms_from_formula!(categorical_info, arg, fitted_coefnames)
+    end
+end
+
+# Fallback for non-categorical terms
+function extract_categorical_terms_from_formula!(categorical_info::Dict{Symbol, CategoricalSchemaInfo}, term, fitted_coefnames::Vector{String})
+    # Do nothing for non-categorical terms
+end
+
 """
     extract_complete_categorical_schema(model) -> Dict{Symbol, CategoricalSchemaInfo}
 
@@ -69,6 +146,11 @@ FIXED: Always creates both DummyCoding and FullDummyCoding matrices.
 """
 function extract_complete_categorical_schema(model)
     # println("DEBUG: Schema extraction starting for model type: $(typeof(model))")
+    
+    # Handle MixedModels differently - they don't have schemas, work with formulas directly
+    if model isa Union{LinearMixedModel, GeneralizedLinearMixedModel}
+        return extract_categorical_schema_from_mixed_model(model)
+    end
     
     # Step 1: Get coefficient names - these work for TableRegressionModel
     fitted_coefnames = try
@@ -86,13 +168,6 @@ function extract_complete_categorical_schema(model)
     end
     
     # println("DEBUG: Found $(length(fitted_coefnames)) coefficient names")
-    
-    # Step 2: Get the schema (this has the contrast matrices used during fitting)
-    schema = get_model_schema(model)
-    schema_dict = get_schema_dict(schema)
-    
-    # println("DEBUG: Fitted model has $(size(fitted_matrix, 2)) columns")
-    # println("DEBUG: Coefficient names: $(fitted_coefnames[1:min(10, end)])")
     
     # Step 2: Get the schema (this has the contrast matrices used during fitting)
     schema = get_model_schema(model)
@@ -476,24 +551,15 @@ function compile_term(
     elseif term isa CategoricalTerm
         # println("DEBUG: Compiling CategoricalTerm for $(term.sym)")
         
-        if haskey(categorical_schema, term.sym)
-            schema_info = categorical_schema[term.sym]
-            
-            # Use main effect contrasts for standalone categorical terms
-            contrast_matrix = if schema_info.main_effect_contrasts !== nothing
-                schema_info.main_effect_contrasts
-            else
-                # Fallback to DummyCoding for safety
-                schema_info.dummy_contrasts
-            end
-            
-            level_codes = schema_info.level_codes
-            
-            # println("DEBUG: Using contrasts for $(term.sym): $(size(contrast_matrix))")
-            
-        else
-            error("Categorical variable $(term.sym) not found in schema. Available: $(keys(categorical_schema))")
-        end
+        # AUTHENTIC APPROACH: Use the exact contrasts from the fitted formula
+        contrast_matrix = term.contrasts.matrix
+        levels = term.contrasts.levels
+        n_levels = length(levels)
+        
+        # Use empty level codes - levels are extracted dynamically at runtime
+        level_codes = Int[]
+        
+        # println("DEBUG: Using authentic contrasts for $(term.sym): $(size(contrast_matrix)) from $(typeof(term.contrasts))")
         
         n_contrasts = size(contrast_matrix, 2)
         positions = collect(start_position:(start_position + n_contrasts - 1))
@@ -501,7 +567,7 @@ function compile_term(
         evaluator = CategoricalEvaluator(
             term.sym,
             contrast_matrix,
-            schema_info.n_levels,
+            n_levels,  # Use authentic n_levels from term
             positions,
             level_codes
         )
@@ -663,29 +729,25 @@ function compile_interaction_term_direct(
     
     for comp in term.terms
         if comp isa CategoricalTerm
-            if haskey(categorical_schema, comp.sym)
-                schema_info = categorical_schema[comp.sym]
-                
-                # Default to DummyCoding for direct compilation
-                contrast_matrix = schema_info.dummy_contrasts
-                level_codes = schema_info.level_codes
-                n_contrasts = size(contrast_matrix, 2)
-                temp_positions = collect(1:n_contrasts)
-                
-                interaction_categorical_eval = CategoricalEvaluator(
-                    comp.sym,
-                    contrast_matrix,
-                    schema_info.n_levels,
-                    temp_positions,
-                    level_codes
-                )
-                
-                push!(component_evaluators, interaction_categorical_eval)
-                push!(component_widths, n_contrasts)
-                
-            else
-                error("Categorical variable $(comp.sym) not found in schema")
-            end
+            # AUTHENTIC APPROACH: Use exact contrasts from the fitted formula component
+            contrast_matrix = comp.contrasts.matrix
+            levels = comp.contrasts.levels
+            n_levels = length(levels)
+            level_codes = Int[]  # Extracted dynamically at runtime
+            
+            n_contrasts = size(contrast_matrix, 2)
+            temp_positions = collect(1:n_contrasts)
+            
+            interaction_categorical_eval = CategoricalEvaluator(
+                comp.sym,
+                contrast_matrix,  # Authentic contrast matrix
+                n_levels,         # Authentic n_levels
+                temp_positions,
+                level_codes
+            )
+            
+            push!(component_evaluators, interaction_categorical_eval)
+            push!(component_widths, n_contrasts)
         else
             # Handle non-categorical components
             temp_allocator = ScratchAllocator()
@@ -770,45 +832,25 @@ function compile_interaction_term_with_context(
         # println("DEBUG: Processing interaction component $i: $(typeof(comp))")
         
         if comp isa CategoricalTerm
-            # println("DEBUG: Categorical component: $(comp.sym)")
+            # AUTHENTIC APPROACH: Use exact contrasts from the fitted formula component
+            contrast_matrix = comp.contrasts.matrix
+            levels = comp.contrasts.levels
+            n_levels = length(levels)
+            level_codes = Int[]  # Extracted dynamically at runtime
             
-            if haskey(categorical_schema, comp.sym)
-                schema_info = categorical_schema[comp.sym]
-                
-                # FIXED: Use the new logic to determine contrast type
-                contrast_type = determine_interaction_contrast_type(
-                    comp, term.terms, main_effect_vars, categorical_schema
-                )
-                
-                # Select appropriate contrast matrix based on determined type
-                contrast_matrix = if contrast_type == :full_dummy_coding
-                    schema_info.full_dummy_contrasts
-                else
-                    schema_info.dummy_contrasts
-                end
-                
-                # println("DEBUG: $(comp.sym) using $(contrast_type) with size $(size(contrast_matrix))")
-                
-                level_codes = schema_info.level_codes
-                n_contrasts = size(contrast_matrix, 2)
-                temp_positions = collect(1:n_contrasts)  # Temp positions
-                
-                interaction_categorical_eval = CategoricalEvaluator(
-                    comp.sym,
-                    contrast_matrix,    # Context-appropriate contrasts
-                    schema_info.n_levels,
-                    temp_positions,
-                    level_codes
-                )
-                
-                push!(component_evaluators, interaction_categorical_eval)
-                push!(component_widths, n_contrasts)
-                
-                # println("DEBUG: Created interaction categorical component with $(n_contrasts) contrasts")
-                
-            else
-                error("Categorical variable $(comp.sym) not found in schema for interaction")
-            end
+            n_contrasts = size(contrast_matrix, 2)
+            temp_positions = collect(1:n_contrasts)
+            
+            interaction_categorical_eval = CategoricalEvaluator(
+                comp.sym,
+                contrast_matrix,  # Authentic contrast matrix
+                n_levels,         # Authentic n_levels
+                temp_positions,
+                level_codes
+            )
+            
+            push!(component_evaluators, interaction_categorical_eval)
+            push!(component_widths, n_contrasts)
             
         else
             # Handle non-categorical components (continuous, functions, etc.)

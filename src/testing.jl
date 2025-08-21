@@ -1,5 +1,42 @@
 # testing.jl
 
+function make_test_data(; n = 500)
+    df = DataFrame(
+        # Continuous variables
+        x = randn(n),
+        y = randn(n), 
+        z = abs.(randn(n)) .+ 0.01,  # Positive for log
+        w = randn(n),
+        t = randn(n),
+        
+        # Categorical variables with different levels
+        group3 = categorical(rand(["A", "B", "C"], n)),           # 3 levels
+        group4 = categorical(rand(["W", "X", "Y", "Z"], n)),      # 4 levels
+        binary = categorical(rand(["Yes", "No"], n)),             # 2 levels
+        group5 = categorical(rand(["P", "Q", "R", "S", "T"], n)), # 5 levels
+        
+        # Random effects grouping variables
+        subject = categorical(rand(1:20, n)),     # 20 subjects
+        cluster = categorical(rand(1:10, n)),     # 10 clusters
+        
+        # Boolean/logical
+        flag = rand([true, false], n),
+        
+        # Response variables for different model types
+        continuous_response = randn(n),
+        binary_response = rand([0, 1], n),
+        count_response = rand(0:10, n),
+        
+    )
+    # Create correlated response for logistic
+    df.linear_predictor = 0.5 .+ 0.3 .* randn(n) .+ 0.2 .* (df.group3 .== "A")
+    
+    # Create logistic response from linear predictor
+    probabilities = 1 ./ (1 .+ exp.(-df.linear_predictor))
+    df.logistic_response = [rand() < p ? 1 : 0 for p in probabilities]
+    return df
+end
+
 ###############################################################################
 # TESTING
 ###############################################################################

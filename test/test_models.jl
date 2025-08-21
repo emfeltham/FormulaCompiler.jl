@@ -3,45 +3,13 @@
 
 using FormulaCompiler:
     compile_formula,
-    SpecializedFormula
+    SpecializedFormula,
+    make_test_data
 
 @testset "Comprehensive Model Compatibility Tests" begin
     # Create comprehensive test data with edge cases
-    n = 500
-    df = DataFrame(
-        # Continuous variables
-        x = randn(n),
-        y = randn(n), 
-        z = abs.(randn(n)) .+ 0.01,  # Positive for log
-        w = randn(n),
-        t = randn(n),
-        
-        # Categorical variables with different levels
-        group3 = categorical(rand(["A", "B", "C"], n)),           # 3 levels
-        group4 = categorical(rand(["W", "X", "Y", "Z"], n)),      # 4 levels
-        binary = categorical(rand(["Yes", "No"], n)),             # 2 levels
-        group5 = categorical(rand(["P", "Q", "R", "S", "T"], n)), # 5 levels
-        
-        # Random effects grouping variables
-        subject = categorical(rand(1:20, n)),     # 20 subjects
-        cluster = categorical(rand(1:10, n)),     # 10 clusters
-        
-        # Boolean/logical
-        flag = rand([true, false], n),
-        
-        # Response variables for different model types
-        continuous_response = randn(n),
-        binary_response = rand([0, 1], n),
-        count_response = rand(0:10, n),
-        
-    )
-    # Create correlated response for logistic
-    df.linear_predictor = 0.5 .+ 0.3 .* randn(n) .+ 0.2 .* (df.group3 .== "A")
     
-    # Create logistic response from linear predictor
-    probabilities = 1 ./ (1 .+ exp.(-df.linear_predictor))
-    df.logistic_response = [rand() < p ? 1 : 0 for p in probabilities]
-    
+    df = make_test_data()
     data = Tables.columntable(df)
     
     @testset "Linear Models (LM) - Baseline" begin
@@ -55,15 +23,16 @@ using FormulaCompiler:
                 @formula(continuous_response ~ group3 + group4),      # Multiple categorical
                 @formula(continuous_response ~ x + group3),           # Mixed
                 @formula(continuous_response ~ x * group3),           # Interaction
+                @formula(continuous_response ~ x & group3),           # Interaction w/o main effect
                 @formula(continuous_response ~ log(z)),               # Function
                 @formula(continuous_response ~ x * y * group3),       # Three-way interaction
                 @formula(continuous_response ~ x * y * group3 * group4), # Four-way interaction
                 @formula(continuous_response ~ exp(x) * y * group3 * group4), # Four-way interaction w/ func
             ]
             
-            for formula in linear_formulas
-                @testset "LM Formula: $formula" begin
-                    model = lm(formula, df)
+            for fx in linear_formulas
+                @testset "LM Formula: $fx" begin
+                    model = lm(fx, df)
                     
                     # Test that our system can compile it
                     compiled = compile_formula(model, data)
@@ -75,7 +44,7 @@ using FormulaCompiler:
                         compiled(output, data, test_row)
                         expected = modelmatrix(model)[test_row, :]
                         @test isapprox(output, expected, rtol=1e-12)
-                        # "LM failed at row $test_row for $formula"
+                        # "LM failed at row $test_row for $fx"
                     end
                 end
             end
@@ -204,10 +173,10 @@ using FormulaCompiler:
                 @formula(continuous_response ~ x * group3 + (x|subject)),
             ]
             
-            for formula in mixed_formulas
+            for fx in mixed_formulas
                 @testset "LMM: $formula" begin
                     try
-                        model = fit(MixedModel, formula, df; progress = false)
+                        model = fit(MixedModel, fx, df; progress = false)
                         
                         # Test that our system can extract FIXED EFFECTS design matrix
                         compiled = compile_formula(model, data)
@@ -220,10 +189,10 @@ using FormulaCompiler:
                             # Compare against fixed effects design matrix
                             expected = modelmatrix(model)[test_row, :]
                             @test isapprox(output, expected, rtol=1e-12)
-                            # "LMM failed at row $test_row for $formula"
+                            # "LMM failed at row $test_row for $fx"
                         end
                     catch e
-                        @warn "Linear Mixed Model failed for $formula" exception=e
+                        @warn "Linear Mixed Model failed for $fx" exception=e
                         @test_broken false
                         # "LMM support needed"
                     end
