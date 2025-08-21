@@ -110,59 +110,79 @@ export test_cases, test_correctness, test_data
 # MODEL SCENARIOS
 ###############################################################################
 
-test_basic = [
-    (@formula(response ~ 1), "Baseline (no interactions)"),
-    (@formula(response ~ x), "Baseline (no interactions)"),
-    (@formula(response ~ x + y), "Multiple continuous"),
-    (@formula(response ~ x + y + z + w + t),  "Many continuous variables"),
-];
+struct LMTest
+    name::String
+    formula::FormulaTerm
+end
 
-test_categoricals = [
-    (@formula(response ~ group3), "Single categorical"),
-    (@formula(response ~ group3 + group4), "Two categoricals"),
-    (@formula(response ~ group3 + group4 + binary), "Three categoricals"),
-    (@formula(response ~ x + group3), "Mixed continuous + categorical"),
-    (@formula(response ~ x + y + group3 + group4), "Multiple mixed"),
-];
+linear_formulas = [
+    LMTest("Intercept only", @formula(continuous_response ~ 1)),
+    LMTest("No intercept", @formula(continuous_response ~ 0 + x)),
+    LMTest("Simple continuous", @formula(continuous_response ~ x)),
+    LMTest("Simple categorical", @formula(continuous_response ~ group3)),
+    LMTest("Multiple continuous", @formula(continuous_response ~ x + y)),
+    LMTest("Multiple categorical", @formula(continuous_response ~ group3 + group4)),
+    LMTest("Mixed", @formula(continuous_response ~ x + group3)),
+    LMTest("Simple interaction", @formula(continuous_response ~ x * group3)),
+    LMTest("Interaction w/o main", @formula(continuous_response ~ x & group3)),
+    LMTest("Function", @formula(continuous_response ~ log(z))),
+    LMTest("Three-way interaction", @formula(continuous_response ~ x * y * group3)),
+    LMTest("Four-way interaction", @formula(continuous_response ~ x * y * group3 * group4)),
+    LMTest("Four-way w/ function", @formula(continuous_response ~ exp(x) * y * group3 * group4)),
+    LMTest("Complex interaction", @formula(continuous_response ~ x * y * group3 + log(z) * group4)),
+]
 
-test_functions = [
-    (@formula(response ~ log(z)), "Function 1"),
-    (@formula(response ~ z > 0), "Comparison 1"),
-    (@formula(response ~ x^2), "Function 2"),
-    (@formula(response ~ log(abs(z))), "2-Nested Function 1"),
-    (@formula(response ~ abs(z)^2), "2-Nested Function 2"),
-    (@formula(response ~ abs(log(abs(z)))), "3-Nested Function"),
-    (@formula(response ~ log(abs(z))^2), "3-Nested Function 2"),
-    (@formula(response ~ (z + y)^2), "2-Function"),
-    (@formula(response ~ abs(z + x)), "2-Function 1"),
-    (@formula(response ~ abs(z + y + x)), "3-Function 1"),
-    (@formula(response ~ (z + y + x)^2), "3-Function 2"),
-    (@formula(response ~ abs(z + y + x + w)), "3-Function 1")
-];
+struct GLMTest
+    name::String
+    formula::FormulaTerm
+    distribution
+    link
+end
 
-test_interactions = [
-    (@formula(response ~ x * y), "Simple 2-way interaction 1"),
-    (@formula(response ~ x + x & y), "Simple 2-way interaction 2"),
-    (@formula(response ~ x * group3), "Continuous × Categorical 1"),
-    (@formula(response ~ x & group3 + x), "Continuous × Categorical 2"),
-    (@formula(response ~ group3 * binary), "Categorical × Categorical"),
-    (@formula(response ~ log(z) * group4), "Function × Categorical"),
-    (@formula(response ~ x * log(z)), "Continuous × Function"),
-    (@formula(response ~ log(abs(x) + 2) * (y - 3.5)), "2-way Complex Function 1"),
+glm_tests = [
+    GLMTest("Logistic: simple", @formula(logistic_response ~ x), Binomial(), LogitLink()),
+    GLMTest("Logistic: mixed", @formula(logistic_response ~ x + group3), Binomial(), LogitLink()),
+    GLMTest("Logistic: interaction", @formula(logistic_response ~ x * group3), Binomial(), LogitLink()),
+    GLMTest("Logistic: function", @formula(logistic_response ~ log(abs(z)) + group3), Binomial(), LogitLink()),
+    GLMTest("Logistic: complex", @formula(logistic_response ~ x * y * group3 + log(abs(z)) + group4), Binomial(), LogitLink()),
+    GLMTest("Poisson: simple", @formula(count_response ~ x), Poisson(), LogLink()),
+    GLMTest("Poisson: mixed", @formula(count_response ~ x + group3), Poisson(), LogLink()),
+    GLMTest("Poisson: interaction", @formula(count_response ~ x * group3), Poisson(), LogLink()),
+    GLMTest("Gamma: mixed", @formula(z ~ x + group3), Gamma(), LogLink()),
+    GLMTest("Gaussian: mixed", @formula(z ~ x + group3), Normal(), LogLink()),
+]
 
-    (@formula(response ~ x * y * z), "3-way continuous"),
-    (@formula(response ~ x * y * group3), "3-way interaction"),
-    (@formula(response ~ group3 * group4 * binary), "3-way categorical, binary"),
-    (@formula(response ~ group3 * group4 * group5), "3-way categorical"),
-    
-    (@formula(response ~ x * y * z * w), "4-way interaction"),
-    (@formula(response ~ group2 * group3 * group4 * group5), "4-way categorical"),
-    (@formula(response ~ log(z) * exp(w) * group3), "Multiple functions × categorical"),
-    (@formula(response ~ x * y * group3 + log(z) * group4), "Your original formula!"),
-];
+struct LMMTest
+    name::String
+    formula::FormulaTerm
+end
 
-test_scenarios = (
-    basic = test_basic, categoricals = test_categoricals, functions = test_functions, interactions = test_interactions, 
+lmm_formulas = [
+    LMMTest("Random intercept", @formula(continuous_response ~ x + (1|subject))),
+    LMMTest("Mixed + categorical", @formula(continuous_response ~ x + group3 + (1|subject))),
+    LMMTest("Random slope", @formula(continuous_response ~ x + (x|subject))),
+    LMMTest("Random slope + cat", @formula(continuous_response ~ x + group3 + (x|subject))),
+    LMMTest("Multiple random", @formula(continuous_response ~ x + (1|subject) + (1|cluster))),
+    LMMTest("Interaction + random", @formula(continuous_response ~ x * group3 + (1|subject))),
+]
+
+struct GLMMTest
+    name::String
+    formula::FormulaTerm
+    distribution
+    link
+end
+
+glmm_tests = [
+    GLMMTest("Logistic: 1", @formula(logistic_response ~ x + (1|subject)), Binomial(), LogitLink()),
+    GLMMTest("Logistic: 2", @formula(logistic_response ~ x + group3 + (1|subject)), Binomial(), LogitLink()),
+    GLMMTest("Poisson: 1", @formula(count_response ~ x + (1|subject)), Poisson(), LogLink()),
+    GLMMTest("Poisson: 2", @formula(count_response ~ x + group3 + (1|cluster)), Poisson(), LogLink()),
+]
+
+test_formulas = (
+    lm = linear_formulas,
+    glm = glm_tests,
+    lmm = lmm_formulas,
+    glmm = glmm_tests
 )
-
-export test_scenarios
