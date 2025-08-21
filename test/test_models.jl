@@ -2,7 +2,7 @@
 # Comprehensive testing for GLM, MixedModels, and all supported model types
 
 using FormulaCompiler:
-    compile_formula_specialized,
+    compile_formula,
     SpecializedFormula
 
 @testset "Comprehensive Model Compatibility Tests" begin
