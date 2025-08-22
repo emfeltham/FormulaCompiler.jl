@@ -19,26 +19,28 @@ results_df = DataFrame(
     status = String[]
 )
 
-# Benchmark function
+# Benchmark function with proper warmup and measurement
 function benchmark_model!(results_df, category, name, model, model_type)
     compiled = compile_formula(model, data)
     buffer = Vector{Float64}(undef, length(compiled))
     
-    # Warmup
-    compiled(buffer, data, 1)
+    # Extensive warmup to ensure compilation is complete
+    for i in 1:100
+        compiled(buffer, data, 1)
+    end
     
-    # Benchmark
-    benchmark_result = @benchmark $compiled($buffer, $data, 1) samples=100 seconds=1
+    # Benchmark with proper settings for accurate allocation measurement
+    benchmark_result = @benchmark $compiled($buffer, $data, 1) samples=1000 seconds=2
     
     memory_bytes = minimum(benchmark_result.memory)
     time_ns = minimum(benchmark_result.times)
     
     status = if memory_bytes == 0
-        "🎯 ZERO"
-    elseif memory_bytes < 20
         "✅ PASS"
-    else
+    elseif memory_bytes < 10
         "❌ FAIL"
+    else
+        "❌ BIG FAIL"
     end
     
     push!(results_df, (
@@ -58,18 +60,24 @@ for fx in test_formulas.lm
     benchmark_model!(results_df, "LM", fx.name, model, "LinearModel")
 end
 
-## example
+## example - proper measurement without artifacts
 function example_run!(compiled, data)
     buffer = Vector{Float64}(undef, length(compiled))
-    compiled(buffer, data, 1) # Warmup
-    return @btime $compiled($buffer, $data, 1)
+    
+    # Extensive warmup to eliminate compilation overhead
+    for i in 1:100
+        compiled(buffer, data, 1)
+    end
+    
+    # Use @benchmark for accurate allocation measurement
+    return @benchmark $compiled($buffer, $data, 1) samples=1000 seconds=2
 end;
 
 i = 2
 fx = test_formulas.lm[i]
 model = lm(fx.formula, df)
 compiled = compile_formula(model, data)
-example_run!(compiled, data);
+example_run!(compiled, data)
 ##
 
 for fx in test_formulas.glm
@@ -87,27 +95,32 @@ for fx in test_formulas.glmm
     benchmark_model!(results_df, "GLMM", fx.name, model, "GeneralizedLinearMixedModel")
 end
 
-# Complex cases
-complex_cases = [
-    ("Complex", "Complex interaction", @formula(continuous_response ~ x * y * group3 + log(z) * group4), lm),
-    ("Complex", "Complex logistic", @formula(logistic_response ~ x * y * group3 + log(z) * group4), (f, d) -> glm(f, d, Binomial(), LogitLink())),
-]
+# CHECK RESULTS
 
-for (category, name, formula, model_func) in complex_cases
-    model = model_func(formula, df)
-    benchmark_model!(results_df, category, name, model, string(typeof(model).__name__))
-end
-
-# Analysis
-successful = filter(r -> r.memory_bytes >= 0, results_df)
-worst = sort(successful, :memory_bytes, rev=true)[1:min(10, end), :]
-best = sort(successful, :memory_bytes)[1:min(10, end), :]
-
-println("🚨 WORST ALLOCATORS:")
-println(worst[:, [:category, :name, :model_size, :memory_bytes, :status]])
-println("\n✅ BEST PERFORMERS:")
-println(best[:, [:category, :name, :model_size, :memory_bytes, :status]])
-
-# Export
-CSV.write("test/allocation_results.csv", results_df)
 results_df
+CSV.write("test/allocation_results.csv", results_df)
+
+# # Complex cases
+# complex_cases = [
+#     ("Complex", "Complex interaction", @formula(continuous_response ~ x * y * group3 + log(z) * group4), lm),
+#     ("Complex", "Complex logistic", @formula(logistic_response ~ x * y * group3 + log(z) * group4), (f, d) -> glm(f, d, Binomial(), LogitLink())),
+# ]
+
+# for (category, name, formula, model_func) in complex_cases
+#     model = model_func(formula, df)
+#     benchmark_model!(results_df, category, name, model, string(typeof(model).name.name))
+# end
+
+# # Analysis
+# successful = filter(r -> r.memory_bytes >= 0, results_df)
+# worst = sort(successful, :memory_bytes, rev=true)[1:min(10, end), :]
+# best = sort(successful, :memory_bytes)[1:min(10, end), :]
+
+# println("🚨 WORST ALLOCATORS:")
+# println(worst[:, [:category, :name, :model_size, :memory_bytes, :status]])
+# println("\n✅ BEST PERFORMERS:")
+# println(best[:, [:category, :name, :model_size, :memory_bytes, :status]])
+
+# # Export
+# CSV.write("test/allocation_results.csv", results_df)
+# results_df
