@@ -20,15 +20,18 @@ struct ConstantEvaluator <: AbstractEvaluator
 end
 
 """
-    ContinuousEvaluator
+    ContinuousEvaluator{Column}
 
-Self-contained continuous variable evaluator.
+Self-contained continuous variable evaluator with concrete symbol type.
 """
-struct ContinuousEvaluator <: AbstractEvaluator
-    column::Symbol
+struct ContinuousEvaluator{Column} <: AbstractEvaluator where {Column}
     position::Int # Where output goes in model matrix
     # No scratch space needed for direct data access
+    # Column symbol is captured at type level for zero allocations
 end
+
+# Helper function to extract column symbol from type parameter
+get_column_symbol(::ContinuousEvaluator{Column}) where {Column} = Column
 
 """
     CategoricalEvaluator
@@ -93,9 +96,9 @@ struct PrecomputedConstantOp
     position::Int64 # Ensure this is exactly Int64 (not Int)
 end
 
-struct PrecomputedContinuousOp
-    column::Symbol # This should be fine
+struct PrecomputedContinuousOp{Column}
     position::Int64 # Ensure this is exactly Int64
+    # Column symbol captured at type level for zero allocations
 end
 
 """

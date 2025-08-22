@@ -13,3 +13,16 @@ for no-allocation indexing?
 )
     return data[column][row_idx]
 end
+
+"""
+    get_data_value_type_stable(data::NamedTuple, ::Val{column}, row_idx::Int)
+
+Type-stable version using Val{symbol} for compile-time dispatch.
+"""
+@inline function get_data_value_type_stable(
+    data::NamedTuple,
+    ::Val{column},
+    row_idx::Int
+) where column
+    return data[column][row_idx]
+end

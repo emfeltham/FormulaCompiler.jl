@@ -52,14 +52,14 @@ function generate_component_interaction_expr(pos1, pos2)
         # The component is continuous (width=1), so always use index 1
         # Use direct data access instead of get_component_interaction_value to avoid allocations
         quote
-            component_val = get_data_value_specialized(data, eval.component.column, row_idx)
+            component_val = get_data_value_specialized(data, get_column_symbol(eval.component), row_idx)
             interaction_result = func_result * component_val
         end
     elseif pos1 == :continuous && pos2 == :function  
         # x * log(z) pattern - component first, function second
         # The component is continuous (width=1), so always use index 1
         quote
-            component_val = get_data_value_specialized(data, eval.component.column, row_idx)
+            component_val = get_data_value_specialized(data, get_column_symbol(eval.component), row_idx)
             interaction_result = component_val * func_result
         end
     elseif pos1 == :function && pos2 == :categorical
@@ -254,7 +254,7 @@ function extract_function_input_variable(func_eval::FunctionEvaluator)
     if length(func_eval.arg_evaluators) == 1
         arg_eval = func_eval.arg_evaluators[1]
         if arg_eval isa ContinuousEvaluator
-            return arg_eval.column
+            return get_column_symbol(arg_eval)
         end
     end
     

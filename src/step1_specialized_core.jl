@@ -144,9 +144,9 @@ function analyze_continuous_operations(evaluator::CombinedEvaluator)
         return empty_data, ContinuousOp(empty_data)
     end
     
-    # Extract columns and positions
+    # Extract columns from type parameters and positions
     columns = ntuple(n_ops) do i
-        continuous_ops[i].column
+        typeof(continuous_ops[i]).parameters[1]
     end
     
     positions = ntuple(n_ops) do i
@@ -184,7 +184,7 @@ function execute_operation!(data::ContinuousData{1, Cols}, op::ContinuousOp{1, C
     @inbounds begin
         col = data.columns[1]
         pos = data.positions[1]
-        val = get_data_value_specialized(input_data, col, row_idx)
+        val = get_data_value_type_stable(input_data, Val{col}(), row_idx)
         output[pos] = Float64(val)
     end
     return nothing
@@ -196,13 +196,13 @@ function execute_operation!(data::ContinuousData{2, Cols}, op::ContinuousOp{2, C
         # First variable
         col1 = data.columns[1]
         pos1 = data.positions[1]
-        val1 = get_data_value_specialized(input_data, col1, row_idx)
+        val1 = get_data_value_type_stable(input_data, Val{col1}(), row_idx)
         output[pos1] = Float64(val1)
         
         # Second variable  
         col2 = data.columns[2]
         pos2 = data.positions[2]
-        val2 = get_data_value_specialized(input_data, col2, row_idx)
+        val2 = get_data_value_type_stable(input_data, Val{col2}(), row_idx)
         output[pos2] = Float64(val2)
     end
     return nothing
@@ -214,19 +214,19 @@ function execute_operation!(data::ContinuousData{3, Cols}, op::ContinuousOp{3, C
         # First variable
         col1 = data.columns[1]
         pos1 = data.positions[1]
-        val1 = get_data_value_specialized(input_data, col1, row_idx)
+        val1 = get_data_value_type_stable(input_data, Val{col1}(), row_idx)
         output[pos1] = Float64(val1)
         
         # Second variable  
         col2 = data.columns[2]
         pos2 = data.positions[2]
-        val2 = get_data_value_specialized(input_data, col2, row_idx)
+        val2 = get_data_value_type_stable(input_data, Val{col2}(), row_idx)
         output[pos2] = Float64(val2)
         
         # Third variable
         col3 = data.columns[3]
         pos3 = data.positions[3]
-        val3 = get_data_value_specialized(input_data, col3, row_idx)
+        val3 = get_data_value_type_stable(input_data, Val{col3}(), row_idx)
         output[pos3] = Float64(val3)
     end
     return nothing
@@ -239,7 +239,7 @@ function execute_operation!(data::ContinuousData{N, Cols}, op::ContinuousOp{N, C
     @inbounds for i in 1:N
         col = data.columns[i]
         pos = data.positions[i]
-        val = get_data_value_specialized(input_data, col, row_idx)
+        val = get_data_value_type_stable(input_data, Val{col}(), row_idx)
         output[pos] = Float64(val)
     end
     

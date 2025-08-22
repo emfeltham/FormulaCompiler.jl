@@ -159,8 +159,8 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
             # # println("DEBUG:   Arg: constant $(arg_eval.value)")
             
         elseif arg_eval isa ContinuousEvaluator
-            push!(arg_inputs, arg_eval.column)
-            # # println("DEBUG:   Arg: column $(arg_eval.column)")
+            push!(arg_inputs, get_column_symbol(arg_eval))
+            # # println("DEBUG:   Arg: column $(get_column_symbol(arg_eval))")
             
         elseif arg_eval isa FunctionEvaluator
             # FIXED: Nested function - create intermediate operations and use scratch
@@ -265,7 +265,7 @@ function decompose_function_tree_as_intermediate(func_eval::FunctionEvaluator, t
         if arg_eval isa ConstantEvaluator
             push!(arg_inputs, arg_eval.value)
         elseif arg_eval isa ContinuousEvaluator
-            push!(arg_inputs, arg_eval.column)
+            push!(arg_inputs, get_column_symbol(arg_eval))
         elseif arg_eval isa FunctionEvaluator
             # Nested-nested function
             nested_scratch_pos = allocate_temp!(temp_allocator)

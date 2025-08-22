@@ -545,7 +545,8 @@ function compile_term(
         return evaluator
         
     elseif term isa Union{ContinuousTerm, Term}
-        evaluator = ContinuousEvaluator(term.sym, start_position)
+        # Capture concrete symbol as type parameter for zero allocations
+        evaluator = ContinuousEvaluator{term.sym}(start_position)
         return evaluator
         
     elseif term isa CategoricalTerm
@@ -676,7 +677,9 @@ function compile_term(
             if eval isa ConstantEvaluator
                 push!(constant_ops, PrecomputedConstantOp(eval.value, eval.position))
             elseif eval isa ContinuousEvaluator
-                push!(continuous_ops, PrecomputedContinuousOp(eval.column, eval.position))
+                # Extract column from type parameter and create parameterized PrecomputedContinuousOp
+                column_symbol = typeof(eval).parameters[1]
+                push!(continuous_ops, PrecomputedContinuousOp{column_symbol}(eval.position))
             elseif eval isa CategoricalEvaluator
                 push!(categorical_evals, eval)
             elseif eval isa FunctionEvaluator

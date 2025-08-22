@@ -202,7 +202,7 @@ end
     if index != 1
         error("ContinuousEvaluator is scalar but got index=$index (must be 1)")
     end
-    return Float64(get_data_value_specialized(data, component.column, row_idx))
+    return Float64(get_data_value_specialized(data, get_column_symbol(component), row_idx))
 end
 
 """
@@ -277,7 +277,7 @@ end
         # Unary function - evaluate single argument inline
         arg_eval = component.arg_evaluators[1]
         arg_val = if arg_eval isa ContinuousEvaluator
-            Float64(get_data_value_specialized(input_data, arg_eval.column, row_idx))
+            Float64(get_data_value_specialized(input_data, get_column_symbol(arg_eval), row_idx))
         elseif arg_eval isa ConstantEvaluator
             arg_eval.value
         else
@@ -306,7 +306,7 @@ end
         # Binary function - evaluate both arguments inline
         arg_eval1 = component.arg_evaluators[1]
         arg_val1 = if arg_eval1 isa ContinuousEvaluator
-            Float64(get_data_value_specialized(input_data, arg_eval1.column, row_idx))
+            Float64(get_data_value_specialized(input_data, get_column_symbol(arg_eval1), row_idx))
         elseif arg_eval1 isa ConstantEvaluator
             arg_eval1.value
         else
@@ -315,7 +315,7 @@ end
         
         arg_eval2 = component.arg_evaluators[2]
         arg_val2 = if arg_eval2 isa ContinuousEvaluator
-            Float64(get_data_value_specialized(input_data, arg_eval2.column, row_idx))
+            Float64(get_data_value_specialized(input_data, get_column_symbol(arg_eval2), row_idx))
         elseif arg_eval2 isa ConstantEvaluator
             arg_eval2.value
         else
@@ -411,7 +411,7 @@ end
         # Unary function - evaluate single argument inline
         arg_eval = component.arg_evaluators[1]
         arg_val = if arg_eval isa ContinuousEvaluator
-            Float64(get_data_value_specialized(input_data, arg_eval.column, row_idx))
+            Float64(get_data_value_specialized(input_data, get_column_symbol(arg_eval), row_idx))
         elseif arg_eval isa ConstantEvaluator
             arg_eval.value
         elseif arg_eval isa CategoricalEvaluator
@@ -444,7 +444,7 @@ end
         # Binary function - evaluate both arguments inline
         arg_eval1 = component.arg_evaluators[1]
         arg_val1 = if arg_eval1 isa ContinuousEvaluator
-            Float64(get_data_value_specialized(input_data, arg_eval1.column, row_idx))
+            Float64(get_data_value_specialized(input_data, get_column_symbol(arg_eval1), row_idx))
         elseif arg_eval1 isa ConstantEvaluator
             arg_eval1.value
         elseif arg_eval1 isa CategoricalEvaluator
@@ -457,7 +457,7 @@ end
         
         arg_eval2 = component.arg_evaluators[2]
         arg_val2 = if arg_eval2 isa ContinuousEvaluator
-            Float64(get_data_value_specialized(input_data, arg_eval2.column, row_idx))
+            Float64(get_data_value_specialized(input_data, get_column_symbol(arg_eval2), row_idx))
         elseif arg_eval2 isa ConstantEvaluator
             arg_eval2.value
         elseif arg_eval2 isa CategoricalEvaluator
@@ -628,7 +628,7 @@ function get_component_input_source(component::AbstractEvaluator)
     if component isa ConstantEvaluator
         return component.value
     elseif component isa ContinuousEvaluator
-        return component.column
+        return get_column_symbol(component)
     elseif component isa CategoricalEvaluator
         return component.column
     elseif component isa FunctionEvaluator
@@ -754,7 +754,7 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
             if comp isa CategoricalEvaluator
                 push!(processed_input_sources, comp.column)
             elseif comp isa ContinuousEvaluator
-                push!(processed_input_sources, comp.column)
+                push!(processed_input_sources, get_column_symbol(comp))
             elseif comp isa ConstantEvaluator
                 push!(processed_input_sources, comp.value)
             else
@@ -1780,7 +1780,7 @@ function execute_function_in_interaction!(
     for (i, arg_eval) in enumerate(func_eval.arg_evaluators)
         arg_range = func_eval.arg_scratch_map[i]
         if arg_eval isa ContinuousEvaluator
-            scratch[first(arg_range)] = Float64(get_data_value_specialized(input_data, arg_eval.column, row_idx))
+            scratch[first(arg_range)] = Float64(get_data_value_specialized(input_data, get_column_symbol(arg_eval), row_idx))
         elseif arg_eval isa ConstantEvaluator
             scratch[first(arg_range)] = arg_eval.value
         else
