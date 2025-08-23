@@ -16,14 +16,17 @@ Note that “compile to fully typed structs” is the right mental model: we’r
 - Interactions: allocations scale up (112–2416 bytes) as continuous reads multiply.
 - Root cause: symbol-based data access for continuous values in execution paths.
 
-## Phase 1 — Continuous (fast win)
-- Make continuous column access type-stable and allocation-free.
+## Phase 1 — Continuous (architecture-first)
+- Make continuous column access type-stable and allocation-free by carrying column identity in types (no runtime wrapping).
 - Changes:
   - `src/evaluators.jl`: parametrize `ContinuousEvaluator` → `ContinuousEvaluator{Column}` (keep `position`; drop `column::Symbol`). Parametrize `PrecomputedContinuousOp{Column}`.
   - `src/compile_term.jl`: construct `ContinuousEvaluator{term.sym}(start_position)`; push `PrecomputedContinuousOp{column_symbol}(pos)`.
   - `src/step1_specialized_core.jl`:
-    - Represent columns as `NTuple{N, Val{Column}}` (or derive `Column` from type param).
-    - In executor, use `get_data_value_type_stable(input, Val{col}(), row_idx)`.
+    - Store columns as `NTuple{N, (Val{:x}(), Val{:y}(), …)}` — i.e., actual `Val` instances in the tuple, so `Cols` encodes the columns at the type level.
+    - In the executor, use the stored `Val` directly:
+      - `colval = data.columns[i]`
+      - `val = get_data_value_type_stable(input, colval, row_idx)`
+      - Do not construct `Val{col}()` in the loop.
   - `src/step4_interactions.jl`:
     - In `execute_operation!(CompleteFormulaData, ...)`, call step1 executor: `execute_operation!(data.continuous, op.continuous, ...)` instead of `execute_complete_continuous_operations!`.
 - Acceptance: simple/multiple continuous, mixed (no functions), and non-function interactions drop to 0 bytes.
@@ -55,6 +58,10 @@ Note that “compile to fully typed structs” is the right mental model: we’r
   - `julia --project=test test/allocation_survey.jl`
   - Inspect `test/allocation_results.csv` — expect 0 bytes across all rows after each phase is implemented.
 - If any row > 0: locate the call site still using symbol-based access and replace with Val-based.
+
+## Constraints (no runtime wrapping)
+- All column identity must be present in types at compile time (parametric evaluators, stored `Val{Column}` in tuples).
+- `get_data_value_type_stable(data, ::Val{Column}, i)` must leverage types to resolve the field index (constant-foldable), with no dynamic `Symbol` lookup or `Val{col}` construction inside hot loops.
 
 ## Work Method
 - Implement Phase 1; re-run survey.
