@@ -3,11 +3,14 @@ using FormulaCompiler
 using DataFrames, GLM, Tables, CategoricalArrays, MixedModels
 using StatsModels, BenchmarkTools, CSV
 using FormulaCompiler: make_test_data, test_formulas
+using Random
+
+Random.seed!(08540)
 
 # Setup
 n = 500
-df = make_test_data(; n)
-data = Tables.columntable(df)
+df = make_test_data(; n);
+data = Tables.columntable(df);
 
 results_df = DataFrame(
     category = String[],
@@ -17,7 +20,7 @@ results_df = DataFrame(
     memory_bytes = Int[],
     time_ns = Float64[],
     status = String[]
-)
+);
 
 # Benchmark function with proper warmup and measurement
 function benchmark_model!(results_df, category, name, model, model_type)
@@ -72,6 +75,9 @@ fx = test_formulas.lm[i]
 model = lm(fx.formula, df)
 compiled = compile_formula(model, data)
 example_run!(compiled, data)
+
+buffer = Vector{Float64}(undef, length(compiled))
+@btime compiled($buffer, $data, 1);
 ##
 
 for fx in test_formulas.lm
