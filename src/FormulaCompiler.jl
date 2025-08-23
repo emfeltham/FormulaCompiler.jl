@@ -48,18 +48,18 @@ include("compilation/pipeline/step4_function_interactions.jl")
 
 export test_new_interaction_system, compile_formula
 
+################################## Scenarios ##################################
+
+# Override and scenario system (needed by modelrow)
+include("scenarios/overrides.jl")
+export create_categorical_override, create_scenario_grid
+export DataScenario, create_scenario, create_override_data, create_override_vector
+
 ################################# Evaluation #################################
 
 # High-level evaluation interface
 include("evaluation/modelrow.jl")
 export ModelRowEvaluator, modelrow!, modelrow
-
-################################## Scenarios ##################################
-
-# Override and scenario system
-include("scenarios/overrides.jl")
-export create_categorical_override, create_scenario_grid
-export DataScenario, create_scenario, create_override_data, create_override_vector
 
 ############################## Development Tools ##############################
 
