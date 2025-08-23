@@ -60,8 +60,6 @@ function _compile_formula(model, data::NamedTuple)
     # Continue with normal compilation...
     root_evaluator = compile_term(rhs, 1, ScratchAllocator())
 
-    # println("DEBUG: root_evaluator type: $(typeof(root_evaluator))")
-    # println("DEBUG: root_evaluator is nothing: $(root_evaluator === nothing)")
 
     if root_evaluator === nothing
         error("compile_term returned nothing - check compilation logic")
@@ -76,7 +74,6 @@ function _compile_formula(model, data::NamedTuple)
     # No categorical levels needed with authentic approach
     categorical_levels = Dict{Symbol, Vector{Int}}()
     
-    # println("DEBUG: Compilation complete - output_width: $out_width, scratch_size: $scratch_size")
     
     return CompiledFormula(
         root_evaluator,

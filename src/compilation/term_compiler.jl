@@ -145,7 +145,6 @@ Properly extract categorical contrasts for both main effects and interactions.
 FIXED: Always creates both DummyCoding and FullDummyCoding matrices.
 """
 function extract_complete_categorical_schema(model)
-    # println("DEBUG: Schema extraction starting for model type: $(typeof(model))")
     
     # Handle MixedModels differently - they don't have schemas, work with formulas directly
     if model isa Union{LinearMixedModel, GeneralizedLinearMixedModel}
@@ -167,7 +166,6 @@ function extract_complete_categorical_schema(model)
         String[]
     end
     
-    # println("DEBUG: Found $(length(fitted_coefnames)) coefficient names")
     
     # Step 2: Get the schema (this has the contrast matrices used during fitting)
     schema = get_model_schema(model)
@@ -180,20 +178,16 @@ function extract_complete_categorical_schema(model)
         if term_info isa CategoricalTerm
             col_symbol = extract_symbol_from_term(term_key, term_info)
             
-            # println("DEBUG: Processing categorical variable: $col_symbol")
             
             # Get the contrast matrix that was ACTUALLY used during fitting
             fitted_contrast_matrix = Matrix{Float64}(term_info.contrasts.matrix)
             levels = collect(term_info.contrasts.levels)
             n_levels = length(levels)
             
-            # println("DEBUG:   Levels: $levels")
-            # println("DEBUG:   Fitted contrast matrix size: $(size(fitted_contrast_matrix))")
             
             # Step 4: Determine if this variable appears in main effects vs interactions
             main_effect_info = analyze_main_effect_usage(col_symbol, model, fitted_coefnames)
             
-            # println("DEBUG:   Main effect usage: $(main_effect_info.has_main_effect)")
             
             # Step 5: ALWAYS create both contrast types
             dummy_contrasts = create_dummy_coding_matrix(levels)
@@ -206,8 +200,6 @@ function extract_complete_categorical_schema(model)
                 nothing  # No main effect
             end
             
-            # println("DEBUG:   Created DummyCoding: $(size(dummy_contrasts))")
-            # println("DEBUG:   Created FullDummyCoding: $(size(full_dummy_contrasts))")
             
             # Step 6: Store all contrast types
             categorical_info[col_symbol] = CategoricalSchemaInfo(
@@ -222,7 +214,6 @@ function extract_complete_categorical_schema(model)
         end
     end
     
-    # println("DEBUG: Schema extraction complete: $(length(categorical_info)) variables")
     return categorical_info
 end
 
@@ -250,7 +241,6 @@ function determine_interaction_contrast_type(
 )
     # Rule 1: Has main effect → always use DummyCoding
     if comp.sym in main_effect_vars
-        # println("DEBUG: $(comp.sym) has main effect → DummyCoding")
         return :dummy_coding
     end
     
@@ -270,11 +260,9 @@ function determine_interaction_contrast_type(
     
     if all_others_are_nonredundant_cats && !isempty(other_components)
         # Pure non-redundant categorical interaction
-        # println("DEBUG: $(comp.sym) in pure non-redundant categorical interaction → FullDummyCoding")
         return :full_dummy_coding
     else
         # Mixed interaction or has redundant components
-        # println("DEBUG: $(comp.sym) in mixed/redundant interaction → DummyCoding")
         return :dummy_coding
     end
 end
@@ -341,9 +329,7 @@ function get_model_schema(model)
         return model.model.schema
     else
         # Debug what fields are available
-        # println("DEBUG: Model fields: $(fieldnames(typeof(model)))")
         if hasfield(typeof(model), :mf)
-            # println("DEBUG: model.mf fields: $(fieldnames(typeof(model.mf)))")
         end
         error("Cannot locate schema in model of type $(typeof(model)). Available fields: $(fieldnames(typeof(model)))")
     end
@@ -360,7 +346,6 @@ function get_schema_dict(schema)
     elseif hasfield(typeof(schema), :terms)
         return schema.terms
     else
-        # println("DEBUG: Schema fields: $(fieldnames(typeof(schema)))")
         error("Cannot locate schema dictionary in schema of type $(typeof(schema)). Available fields: $(fieldnames(typeof(schema)))")
     end
 end
@@ -375,20 +360,17 @@ function determine_main_effect_contrasts!(
     categorical_schema::Dict{Symbol, CategoricalSchemaInfo}, 
     model
 )
-    # println("DEBUG: Determining main effect vs interaction-only contrasts")
     
     # Get the fixed effects formula (strips random effects for mixed models)
     fixed_formula = fixed_effects_form(model)
     main_effect_terms = extract_main_effect_terms(fixed_formula.rhs)
     
-    # println("DEBUG: Main effect categorical terms: $main_effect_terms")
     
     for (col_name, schema_info) in categorical_schema
         has_main_effect = col_name in main_effect_terms
         
         if has_main_effect
             # This variable has a main effect - main_effect_contrasts should already be set
-            # println("DEBUG:   $col_name: HAS main effect")
         else
             # This variable is interaction-only - ensure main_effect_contrasts is nothing
             if schema_info.main_effect_contrasts !== nothing
@@ -404,7 +386,6 @@ function determine_main_effect_contrasts!(
                 
                 categorical_schema[col_name] = updated_info
             end
-            # println("DEBUG:   $col_name: interaction-only (no main effect)")
         end
     end
     
@@ -465,10 +446,8 @@ end
 Validate that the extracted schema information is consistent and complete.
 """
 function validate_categorical_schema(categorical_schema::Dict{Symbol, CategoricalSchemaInfo})
-    # println("DEBUG: Validating categorical schema")
     
     for (col_name, schema_info) in categorical_schema
-        # println("DEBUG: Validating column: $col_name")
         
         # Check basic consistency
         if schema_info.n_levels != length(schema_info.levels)
@@ -500,18 +479,13 @@ function validate_categorical_schema(categorical_schema::Dict{Symbol, Categorica
             error("Full dummy contrast matrix for $col_name has $(full_dummy_size[2]) columns, expected $expected_full_cols")
         end
         
-        # println("DEBUG:   Dummy contrasts: $(dummy_size)")
-        # println("DEBUG:   Full dummy contrasts: $(full_dummy_size)")
         
         if schema_info.main_effect_contrasts !== nothing
             main_size = size(schema_info.main_effect_contrasts)
-            # println("DEBUG:   Main effect contrasts: $(main_size)")
         else
-            # println("DEBUG:   No main effect contrasts (interaction-only)")
         end
     end
     
-    # println("DEBUG: Schema validation complete")
     return true
 end
 
@@ -549,7 +523,6 @@ function compile_term(
         return evaluator
         
     elseif term isa CategoricalTerm
-        # println("DEBUG: Compiling CategoricalTerm for $(term.sym)")
         
         # AUTHENTIC APPROACH: Use the exact contrasts from the fitted formula
         contrast_matrix = term.contrasts.matrix
@@ -559,7 +532,6 @@ function compile_term(
         # Use empty level codes - levels are extracted dynamically at runtime
         level_codes = Int[]
         
-        # println("DEBUG: Using authentic contrasts for $(term.sym): $(size(contrast_matrix)) from $(typeof(term.contrasts))")
         
         n_contrasts = size(contrast_matrix, 2)
         positions = collect(start_position:(start_position + n_contrasts - 1))
@@ -572,7 +544,6 @@ function compile_term(
             level_codes
         )
         
-        # println("DEBUG: Created CategoricalEvaluator with $(n_contrasts) contrasts")
         return evaluator
         
     elseif term isa FunctionTerm
@@ -631,7 +602,6 @@ function compile_term(
         )
         
     elseif term isa MatrixTerm
-        # println("DEBUG: Compiling MatrixTerm with $(length(term.terms)) sub-terms")
         
         # PHASE 1: Collect main effect categoricals for context
         main_effect_vars = collect_main_effect_categoricals(term)
@@ -689,7 +659,6 @@ function compile_term(
             end
         end
         
-        # println("DEBUG: MatrixTerm compiled: $(length(constant_ops)) constants, $(length(continuous_ops)) continuous, $(length(categorical_evals)) categorical, $(length(function_evals)) functions, $(length(interaction_evals)) interactions")
         
         return CombinedEvaluator(
             constant_ops,
@@ -788,7 +757,6 @@ function collect_main_effect_categoricals(matrix_term::MatrixTerm)
     for sub_term in matrix_term.terms
         if sub_term isa CategoricalTerm
             push!(main_effects, sub_term.sym)
-            # println("DEBUG: Found main effect: $(sub_term.sym)")
         elseif sub_term isa Union{ContinuousTerm, Term}
             # These don't affect categorical contrast choices
         elseif sub_term isa InteractionTerm
@@ -796,11 +764,9 @@ function collect_main_effect_categoricals(matrix_term::MatrixTerm)
         elseif sub_term isa InterceptTerm || sub_term isa ConstantTerm
             # Skip - not relevant
         else
-            # println("DEBUG: Unknown sub_term type in main effect collection: $(typeof(sub_term))")
         end
     end
     
-    # println("DEBUG: Collected main effect categoricals: $main_effects")
     return main_effects
 end
 
@@ -823,14 +789,12 @@ function compile_interaction_term_with_context(
     categorical_schema::Dict{Symbol, CategoricalSchemaInfo},
     main_effect_vars::Set{Symbol}
 )
-    # println("DEBUG: Compiling interaction with context: main effects = $main_effect_vars")
     
     component_evaluators = AbstractEvaluator[]
     component_widths = Int[]
     
     # Process each interaction component with context-aware contrast selection
     for (i, comp) in enumerate(term.terms)
-        # println("DEBUG: Processing interaction component $i: $(typeof(comp))")
         
         if comp isa CategoricalTerm
             # AUTHENTIC APPROACH: Use exact contrasts from the fitted formula component
@@ -861,7 +825,6 @@ function compile_interaction_term_with_context(
             push!(component_evaluators, comp_eval)
             push!(component_widths, output_width(comp_eval))
             
-            # println("DEBUG: Created non-categorical component with width $(output_width(comp_eval))")
         end
     end
     
@@ -873,7 +836,6 @@ function compile_interaction_term_with_context(
     total_width = prod(component_widths)
     positions = collect(start_position:(start_position + total_width - 1))
     
-    # println("DEBUG: Context-aware interaction total width: $total_width ($(join(component_widths, " × ")))")
     
     return InteractionEvaluator{N, typeof(components_tuple), typeof(widths_tuple)}(
         components_tuple,

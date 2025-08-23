@@ -53,10 +53,6 @@ function create_categorical_override(value::AbstractString, original_column::Cat
     temp_cat = categorical([value], levels=levels_list, ordered=isordered(original_column))
     categorical_value = temp_cat[1]
     
-    # println("DEBUG: Creating override for value='$value'")
-    # println("DEBUG: Available levels: $levels_list") 
-    # println("DEBUG: Created categorical_value: $categorical_value")
-    # println("DEBUG: Level code: $(levelcode(categorical_value))")
     return OverrideVector(categorical_value, length(original_column))
 end
 
