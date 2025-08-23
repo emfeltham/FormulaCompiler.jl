@@ -2,97 +2,75 @@ module FormulaCompiler
 
 ################################ Dependencies ################################
 
-# development
-using Random
-using Test
-using BenchmarkTools
+# Development dependencies (remove from production builds)
+using Random, Test, BenchmarkTools
 
-# true deps
+# Core dependencies
 using Dates: now
 using Statistics
-using StatsModels, GLM, CategoricalArrays, Tables, DataFrames, Random
-
-import MixedModels
-using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
-
-using StandardizedPredictors: ZScoredTerm
-
+using StatsModels, GLM, CategoricalArrays, Tables, DataFrames
 using LinearAlgebra: dot, I
 using ForwardDiff
-
 using Base.Iterators: product # -> compute_kronecker_pattern
 
-# useful for booleans in formulas
-not(x::Bool) = !x
-# N.B., this is dangerous -- does not clearly fail when x outside [0,1]
-not(x::T) where {T<:Real} = one(x) - x
-export not
+# External package integration
+import MixedModels
+using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
+using StandardizedPredictors: ZScoredTerm
+
+################################# Core System #################################
+
+# Core utilities and types
+include("core/utilities.jl")
+export not, OverrideVector
+
+################################# Compilation #################################
+
+# External package integration
+include("integration/mixed_models.jl")
+
+# Evaluation system (needed by compilation)
+include("evaluation/evaluators.jl")
+include("evaluation/data_access.jl")
+include("evaluation/function_ops.jl")
+
+# Compilation system
+include("compilation/term_compiler.jl")
+include("compilation/legacy_compiled.jl")
+export compile_formula_
+
+# Specialized compilation pipeline
+include("compilation/pipeline/step1_constants.jl")
+include("compilation/pipeline/step2_categorical.jl")
+include("compilation/pipeline/step3_functions.jl")
+include("compilation/pipeline/step4_interactions.jl")
+include("compilation/pipeline/step4_function_interactions.jl")
+
+export test_new_interaction_system, compile_formula
 
 ################################# Evaluation #################################
 
-# Include files in dependency order
-include("fixed_helpers.jl") # No dependencies
-include("evaluators.jl")
-include("compile_term.jl")
-
-# Main compilation interface
-include("CompiledFormula.jl") # Clean execution plan system
-export compile_formula_
-
-################################# Core system #################################
-
-"""
-    OverrideVector{T} <: AbstractVector{T}
-
-A lazy vector that returns the same override value for all indices.
-This avoids allocating full arrays when setting all observations to a representative value.
-
-# Example
-```julia
-# Instead of: fill(2.5, 1_000_000)  # Allocates 8MB
-# Use: OverrideVector(2.5, 1_000_000)  # Allocates ~32 bytes
-```
-"""
-struct OverrideVector{T} <: AbstractVector{T}
-    override_value::T
-    length::Int
-    
-    function OverrideVector(value::T, length::Int) where T
-        new{T}(value, length)
-    end
-end
-
-include("apply_function.jl")
-include("get_data_value_specialized.jl")
-
-include("step1_specialized_core.jl")
-include("step2_categorical_support.jl")
-include("step3_functions.jl")
-include("step4_interactions.jl")
-
-# Zero-allocation function interactions via metaprogramming
-include("generated_function_interactions.jl")
-
-export test_new_interaction_system
-export compile_formula
-
-################################## Overrides ##################################
-
-include("override_unified.jl")
-export OverrideVector, create_categorical_override, create_scenario_grid
-export DataScenario, create_scenario, create_override_data, create_override_vector
-
-include("modelrow.jl")
+# High-level evaluation interface
+include("evaluation/modelrow.jl")
 export ModelRowEvaluator, modelrow!, modelrow
 
-############################## Derivative system ##############################
+################################## Scenarios ##################################
 
-# include("derivative_step1_foundation.jl")
+# Override and scenario system
+include("scenarios/overrides.jl")
+export create_categorical_override, create_scenario_grid
+export DataScenario, create_scenario, create_override_data, create_override_vector
+
+############################## Development Tools ##############################
+
+# Development utilities (only include in dev builds)
+include("dev/testing_utilities.jl")
+
+############################## Future Features ##############################
+
+# Derivative system (under development)
+# include("derivatives/step1_foundation.jl")
+# include("derivatives/step2_functions.jl")
 # export compile_derivative_formula
-# include("derivative_step2_functions.jl")
-
-################################### Testing ###################################
-
-include("testing.jl")
 
 end # end module
