@@ -1612,8 +1612,8 @@ function execute_operation!(
     # Phase 1: Constants
     execute_complete_constant_operations!(data.constants, output, input_data, row_idx)
     
-    # Phase 2: Continuous
-    execute_complete_continuous_operations!(data.continuous, output, input_data, row_idx)
+    # Phase 2: Continuous (type-stable executor)
+    execute_operation!(data.continuous, op.continuous, output, input_data, row_idx)
     
     # Phase 3: Categoricals
     execute_categorical_operations!(data.categorical, output, input_data, row_idx)

@@ -34,13 +34,13 @@ end
     ContinuousData{N, Cols}
 
 Pre-computed data for continuous variables. N is the number of variables,
-Cols is a compile-time tuple of column symbols.
+Cols is a compile-time tuple of `Val{Column}` instances (one per column).
 """
 struct ContinuousData{N, Cols}
-    columns::Cols  # NTuple{N, Symbol} - compile-time known columns
-    positions::NTuple{N, Int}  # Output positions for each column
+    columns::Cols                 # Tuple of Val{Column} instances
+    positions::NTuple{N, Int}     # Output positions for each column
     
-    function ContinuousData(columns::NTuple{N, Symbol}, positions::NTuple{N, Int}) where N
+    function ContinuousData(columns::Cols, positions::NTuple{N, Int}) where {N, Cols<:Tuple}
         new{N, typeof(columns)}(columns, positions)
     end
 end
@@ -144,9 +144,10 @@ function analyze_continuous_operations(evaluator::CombinedEvaluator)
         return empty_data, ContinuousOp(empty_data)
     end
     
-    # Extract columns and positions
+    # Extract columns as Val{Column} instances and positions
     columns = ntuple(n_ops) do i
-        continuous_ops[i].column
+        op = continuous_ops[i]
+        Val(get_column_symbol(op))
     end
     
     positions = ntuple(n_ops) do i
@@ -178,16 +179,64 @@ end
 
 Execute continuous variable operations.
 """
-function execute_operation!(data::ContinuousData{N, Cols}, op::ContinuousOp{N, Cols}, 
-                           output, input_data, row_idx) where {N, Cols}
-    
-    @inbounds for i in 1:N
-        col = data.columns[i]
-        pos = data.positions[i]
-        val = get_data_value_specialized(input_data, col, row_idx)
+function execute_operation!(data::ContinuousData{1, Cols}, op::ContinuousOp{1, Cols}, 
+                           output, input_data, row_idx) where {Cols}
+    @inbounds begin
+        colval = data.columns[1]
+        pos = data.positions[1]
+        val = get_data_value_type_stable(input_data, colval, row_idx)
         output[pos] = Float64(val)
     end
-    
+    return nothing
+end
+
+function execute_operation!(data::ContinuousData{2, Cols}, op::ContinuousOp{2, Cols}, 
+                           output, input_data, row_idx) where {Cols}
+    @inbounds begin
+        # First
+        colval1 = data.columns[1]
+        pos1 = data.positions[1]
+        val1 = get_data_value_type_stable(input_data, colval1, row_idx)
+        output[pos1] = Float64(val1)
+        # Second
+        colval2 = data.columns[2]
+        pos2 = data.positions[2]
+        val2 = get_data_value_type_stable(input_data, colval2, row_idx)
+        output[pos2] = Float64(val2)
+    end
+    return nothing
+end
+
+function execute_operation!(data::ContinuousData{3, Cols}, op::ContinuousOp{3, Cols}, 
+                           output, input_data, row_idx) where {Cols}
+    @inbounds begin
+        # First
+        colval1 = data.columns[1]
+        pos1 = data.positions[1]
+        val1 = get_data_value_type_stable(input_data, colval1, row_idx)
+        output[pos1] = Float64(val1)
+        # Second
+        colval2 = data.columns[2]
+        pos2 = data.positions[2]
+        val2 = get_data_value_type_stable(input_data, colval2, row_idx)
+        output[pos2] = Float64(val2)
+        # Third
+        colval3 = data.columns[3]
+        pos3 = data.positions[3]
+        val3 = get_data_value_type_stable(input_data, colval3, row_idx)
+        output[pos3] = Float64(val3)
+    end
+    return nothing
+end
+
+function execute_operation!(data::ContinuousData{N, Cols}, op::ContinuousOp{N, Cols}, 
+                           output, input_data, row_idx) where {N, Cols}
+    @inbounds for i in 1:N
+        colval = data.columns[i]
+        pos = data.positions[i]
+        val = get_data_value_type_stable(input_data, colval, row_idx)
+        output[pos] = Float64(val)
+    end
     return nothing
 end
 
