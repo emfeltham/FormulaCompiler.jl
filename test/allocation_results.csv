@@ -1,0 +1,35 @@
+category,name,model_type,model_size,memory_bytes,time_ns,status
+LM,Intercept only,LinearModel,1,0,4.833,✅ PASS
+LM,No intercept,LinearModel,1,16,73.88923076923076,❌ BIG FAIL
+LM,Simple continuous,LinearModel,2,16,72.81006160164272,❌ BIG FAIL
+LM,Simple categorical,LinearModel,3,0,39.60786290322581,✅ PASS
+LM,Multiple continuous,LinearModel,3,32,141.0,❌ BIG FAIL
+LM,Multiple categorical,LinearModel,6,0,73.48406988694758,✅ PASS
+LM,Mixed,LinearModel,4,16,106.94516129032257,❌ BIG FAIL
+LM,Simple interaction,LinearModel,6,112,369.7378640776699,❌ BIG FAIL
+LM,Interaction w/o main,LinearModel,4,144,373.18840579710144,❌ BIG FAIL
+LM,Function,LinearModel,2,32,101.72872340425532,❌ BIG FAIL
+LM,Three-way interaction,LinearModel,12,320,1003.0,❌ BIG FAIL
+LM,Four-way interaction,LinearModel,48,896,3786.5,❌ BIG FAIL
+LM,Four-way w/ function,LinearModel,48,2416,4446.428571428572,❌ BIG FAIL
+LM,Complex interaction,LinearModel,19,896,1712.5,❌ BIG FAIL
+GLM,Logistic: simple,GeneralizedLinearModel,2,16,72.52102564102564,❌ BIG FAIL
+GLM,Logistic: mixed,GeneralizedLinearModel,4,16,108.45784418356457,❌ BIG FAIL
+GLM,Logistic: interaction,GeneralizedLinearModel,6,112,357.0574162679426,❌ BIG FAIL
+GLM,Logistic: function,GeneralizedLinearModel,4,32,142.55324074074073,❌ BIG FAIL
+GLM,Logistic: complex,GeneralizedLinearModel,16,352,1162.5,❌ BIG FAIL
+GLM,Poisson: simple,GeneralizedLinearModel,2,16,73.17386831275721,❌ BIG FAIL
+GLM,Poisson: mixed,GeneralizedLinearModel,4,16,111.14055793991416,❌ BIG FAIL
+GLM,Poisson: interaction,GeneralizedLinearModel,6,112,368.56038647342996,❌ BIG FAIL
+GLM,Gamma: mixed,GeneralizedLinearModel,4,16,112.25189189189189,❌ BIG FAIL
+GLM,Gaussian: mixed,GeneralizedLinearModel,4,16,112.38702702702703,❌ BIG FAIL
+LMM,Random intercept,LinearMixedModel,2,16,72.43589743589743,❌ BIG FAIL
+LMM,Mixed + categorical,LinearMixedModel,4,16,112.07243243243244,❌ BIG FAIL
+LMM,Random slope,LinearMixedModel,2,16,73.08744855967078,❌ BIG FAIL
+LMM,Random slope + cat,LinearMixedModel,4,16,110.46478873239437,❌ BIG FAIL
+LMM,Multiple random,LinearMixedModel,2,16,73.24820512820513,❌ BIG FAIL
+LMM,Interaction + random,LinearMixedModel,6,112,363.5637254901961,❌ BIG FAIL
+GLMM,Logistic: 1,GeneralizedLinearMixedModel,2,16,73.7841726618705,❌ BIG FAIL
+GLMM,Logistic: 2,GeneralizedLinearMixedModel,4,16,111.06559139784946,❌ BIG FAIL
+GLMM,Poisson: 1,GeneralizedLinearMixedModel,2,16,71.96512820512821,❌ BIG FAIL
+GLMM,Poisson: 2,GeneralizedLinearMixedModel,4,16,110.63490364025697,❌ BIG FAIL
