@@ -100,6 +100,8 @@ end
 results_df
 CSV.write("test/allocation_results.csv", results_df)
 
+show(results_df; allrows= true)
+
 # # Complex cases
 # complex_cases = [
 #     ("Complex", "Complex interaction", @formula(continuous_response ~ x * y * group3 + log(z) * group4), lm),
