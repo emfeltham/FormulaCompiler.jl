@@ -17,7 +17,6 @@ SIMPLIFIED FIX: Handle nested functions by treating them as intermediate operati
 function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_allocator::TempAllocator)
     operations = LinearizedOperation[]
     
-    # # println("DEBUG: Decomposing function with $(length(func_eval.arg_evaluators)) args, final position $(func_eval.position)")
     
     # Step 1: Process all argument evaluators
     arg_inputs = Union{Symbol, Int, Float64, ScratchPosition}[]
@@ -25,15 +24,12 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
     for arg_eval in func_eval.arg_evaluators
         if arg_eval isa ConstantEvaluator
             push!(arg_inputs, arg_eval.value)
-            # # println("DEBUG:   Arg: constant $(arg_eval.value)")
             
         elseif arg_eval isa ContinuousEvaluator
             push!(arg_inputs, arg_eval.column)
-            # # println("DEBUG:   Arg: column $(arg_eval.column)")
             
         elseif arg_eval isa FunctionEvaluator
             # FIXED: Nested function - create intermediate operations and use scratch
-            # # println("DEBUG:   Arg: nested function with $(length(arg_eval.arg_evaluators)) args")
             
             # Create a scratch position for the nested function result
             nested_scratch_pos = allocate_temp!(temp_allocator)
@@ -44,7 +40,6 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
             
             # Use scratch position as input to outer function
             push!(arg_inputs, ScratchPosition(nested_scratch_pos))
-            # # println("DEBUG:   Nested function writes to scratch[$nested_scratch_pos]")
             
         else
             error("Unsupported argument evaluator type: $(typeof(arg_eval))")
@@ -56,7 +51,6 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
     
     if n_args == 1
         # Unary function
-        # # println("DEBUG: Main unary operation: $(func_eval.func)($(arg_inputs[1])) → position $(func_eval.position)")
         push!(operations, LinearizedOperation(
             :unary,
             func_eval.func,
@@ -67,7 +61,6 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
         
     elseif n_args == 2
         # Binary function
-        # # println("DEBUG: Main binary operation: $(func_eval.func)($(arg_inputs[1]), $(arg_inputs[2])) → position $(func_eval.position)")
         push!(operations, LinearizedOperation(
             :final_binary,
             func_eval.func,
@@ -78,7 +71,6 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
         
     else
         # N-ary function - decompose into binary sequence
-        # # println("DEBUG: Main n-ary operation with $(n_args) args")
         
         for i in 2:n_args
             if i == 2
@@ -90,7 +82,6 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
             
             if i == n_args
                 # Final operation
-                # # println("DEBUG:   Final n-ary step: $(func_eval.func)($(inputs[1]), $(inputs[2])) → position $(func_eval.position)")
                 push!(operations, LinearizedOperation(
                     :final_binary,
                     func_eval.func,
@@ -101,7 +92,6 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
             else
                 # Intermediate operation
                 scratch_pos = allocate_temp!(temp_allocator)
-                # # println("DEBUG:   Intermediate n-ary step: $(func_eval.func)($(inputs[1]), $(inputs[2])) → scratch[$scratch_pos]")
                 push!(operations, LinearizedOperation(
                     :intermediate_binary,
                     func_eval.func,
@@ -125,7 +115,6 @@ Instead of creating :intermediate_unary and converting to binary, create proper 
 function decompose_function_tree_as_intermediate(func_eval::FunctionEvaluator, target_scratch::Int, temp_allocator::TempAllocator)
     operations = LinearizedOperation[]
     
-    # # println("DEBUG: FIXED decompose_as_intermediate with $(length(func_eval.arg_evaluators)) args → scratch[$target_scratch]")
     
     # Process arguments (same logic as main function)
     arg_inputs = Union{Symbol, Int, Float64, ScratchPosition}[]
@@ -152,7 +141,6 @@ function decompose_function_tree_as_intermediate(func_eval::FunctionEvaluator, t
     if n_args == 1
         # FIXED: For unary functions, convert to intermediate binary with dummy second input
         # This ensures consistent handling in the execution logic
-        # # println("DEBUG:   Fixed intermediate unary: $(func_eval.func)($(arg_inputs[1]), 1.0) → scratch[$target_scratch]")
         push!(operations, LinearizedOperation(
             :intermediate_binary,  # Use binary type with dummy input
             func_eval.func,
@@ -163,7 +151,6 @@ function decompose_function_tree_as_intermediate(func_eval::FunctionEvaluator, t
         
     elseif n_args == 2
         # Binary intermediate
-        # # println("DEBUG:   Intermediate binary: $(func_eval.func)($(arg_inputs[1]), $(arg_inputs[2])) → scratch[$target_scratch]")
         push!(operations, LinearizedOperation(
             :intermediate_binary,
             func_eval.func,
@@ -184,7 +171,6 @@ function decompose_function_tree_as_intermediate(func_eval::FunctionEvaluator, t
             
             if i == n_args
                 # Final step of n-ary intermediate writes to target_scratch
-                # # println("DEBUG:   Final intermediate n-ary: $(func_eval.func)($(inputs[1]), $(inputs[2])) → scratch[$target_scratch]")
                 push!(operations, LinearizedOperation(
                     :intermediate_binary,
                     func_eval.func,
@@ -195,7 +181,6 @@ function decompose_function_tree_as_intermediate(func_eval::FunctionEvaluator, t
             else
                 # Regular intermediate step
                 scratch_pos = allocate_temp!(temp_allocator)
-                # # println("DEBUG:   Intermediate n-ary step: $(func_eval.func)($(inputs[1]), $(inputs[2])) → scratch[$scratch_pos]")
                 push!(operations, LinearizedOperation(
                     :intermediate_binary,
                     func_eval.func,
@@ -279,7 +264,6 @@ function execute_operation!(
     
     input_val = get_input_value_zero_alloc(data.input_source, output, scratch, input_data, row_idx)
     
-    # # println("DEBUG: Unary operation $(F) on input_val=$(input_val) from $(data.input_source)")
     
     # Use specialized function application
     result = if F === typeof(log)
@@ -301,7 +285,6 @@ function execute_operation!(
     # Unary functions always write to output (never intermediate)
     output[data.position] = result
     
-    # # println("DEBUG: Unary operation $(F) wrote result=$(result) to output[$(data.position)]")
     
     return nothing
 end
@@ -393,7 +376,6 @@ function execute_operation!(
     # ALWAYS write to scratch - no branching
     scratch[data.scratch_position] = result
     
-    # # println("DEBUG: Intermediate operation $(F) wrote $(result) to scratch[$(data.scratch_position)]")
     
     return nothing
 end
@@ -409,7 +391,6 @@ function execute_operation!(
     val1 = get_input_value_zero_alloc(data.input1, output, scratch, input_data, row_idx)
     val2 = get_input_value_zero_alloc(data.input2, output, scratch, input_data, row_idx)
     
-    # # println("DEBUG: Final binary operation $(F) on val1=$(val1) ($(data.input1)), val2=$(val2) ($(data.input2))")
     
     # Specialized function execution (identical logic to intermediate)
     result = if F === typeof(+)
@@ -445,7 +426,6 @@ function execute_operation!(
     # ALWAYS write to output - no branching
     output[data.output_position] = result
     
-    # # println("DEBUG: Final binary operation $(F) wrote result=$(result) to output[$(data.output_position)]")
     
     return nothing
 end
@@ -471,7 +451,6 @@ function execute_operation!(
     row_idx::Int
 ) where {UT, IT, FT, N, M, K}
     
-    # # println("DEBUG: FIXED execute_operation! called with $(N) unary, $(M) intermediate, $(K) final")
     
     # FIXED EXECUTION ORDER: Dependencies first!
     # 1. Intermediate operations first (they write to scratch for others to read)
@@ -599,18 +578,14 @@ function analyze_function_operations_linear(evaluator::CombinedEvaluator)
     function_evaluators = evaluator.function_evaluators
     n_funcs = length(function_evaluators)
     
-    # println("DEBUG: analyze_function_operations_linear called with $n_funcs functions")
     
-    # DEBUG: Log all function positions
     for (i, func_eval) in enumerate(function_evaluators)
-        # println("DEBUG: Function $i ($(func_eval.func)) writes to position $(func_eval.position)")
     end
     
     ##### END DEBUG
     
     if n_funcs == 0
         empty_data = SpecializedFunctionData((), (), ())
-        # # println("DEBUG: Returning empty SpecializedFunctionData with 3 tuples")
         return empty_data, FunctionOp(0, 0, 0)
     end
     
@@ -621,7 +596,6 @@ function analyze_function_operations_linear(evaluator::CombinedEvaluator)
     for func_eval in function_evaluators
         ops = decompose_function_tree_zero_alloc(func_eval, temp_allocator)
         append!(all_operations, ops)
-        # # println("DEBUG: Function created $(length(ops)) operations")
     end
     
     # Separate operations
@@ -643,7 +617,6 @@ function analyze_function_operations_linear(evaluator::CombinedEvaluator)
         push!(intermediate_ops, converted_op)
     end
     
-    # # println("DEBUG: Operations breakdown: $(length(unary_ops)) unary, $(length(intermediate_ops)) intermediate, $(length(final_ops)) final")
     
     # Create data structures
     unary_data = create_unary_tuple(unary_ops)
@@ -653,7 +626,6 @@ function analyze_function_operations_linear(evaluator::CombinedEvaluator)
     specialized_data = SpecializedFunctionData(unary_data, intermediate_data, final_data)
     function_op = FunctionOp(length(unary_ops), length(intermediate_ops), length(final_ops))
     
-    # # println("DEBUG: Created NEW SpecializedFunctionData with 3 tuples: $(typeof(specialized_data))")
     
     return specialized_data, function_op
 end
@@ -789,17 +761,14 @@ function calculate_max_function_scratch_needed(evaluator::CombinedEvaluator)
     function_evaluators = evaluator.function_evaluators
     
     if isempty(function_evaluators)
-        # # println("DEBUG: No function evaluators, returning 0 scratch")
         return 0
     end
     
-    # # println("DEBUG: Calculating scratch for $(length(function_evaluators)) functions")
     
     # Simulate the actual decomposition process to get accurate scratch requirements
     max_scratch_position = 0
     
     for (idx, func_eval) in enumerate(function_evaluators)
-        # # println("DEBUG: Processing function $idx: $(func_eval.func) with $(length(func_eval.arg_evaluators)) args")
         
         # Create a temporary allocator to simulate decomposition
         temp_allocator = TempAllocator(1)
@@ -807,25 +776,21 @@ function calculate_max_function_scratch_needed(evaluator::CombinedEvaluator)
         # Run the same decomposition logic as analyze_function_operations_linear
         try
             operations = decompose_function_tree_zero_alloc(func_eval, temp_allocator)
-            # # println("DEBUG: Function $idx created $(length(operations)) operations")
             
             # Find the maximum scratch position used in this decomposition
             for (op_idx, op) in enumerate(operations)
                 if op.scratch_position !== nothing
-                    # # println("DEBUG: Operation $op_idx uses scratch position $(op.scratch_position)")
                     max_scratch_position = max(max_scratch_position, op.scratch_position)
                 end
                 
                 # Also check any ScratchPosition inputs
                 for (inp_idx, input) in enumerate(op.inputs)
                     if input isa ScratchPosition
-                        # # println("DEBUG: Operation $op_idx input $inp_idx reads from scratch position $(input.position)")
                         max_scratch_position = max(max_scratch_position, input.position)
                     end
                 end
             end
             
-            # # println("DEBUG: Function $idx max scratch position: $max_scratch_position")
             
         catch e
             # If decomposition fails, use a conservative estimate
@@ -834,17 +799,14 @@ function calculate_max_function_scratch_needed(evaluator::CombinedEvaluator)
             n_args = length(func_eval.arg_evaluators)
             conservative_estimate = n_args * 3  # Very conservative
             max_scratch_position = max(max_scratch_position, conservative_estimate)
-            # # println("DEBUG: Using conservative estimate: $conservative_estimate")
         end
     end
     
     # SAFETY: Ensure we have at least some scratch space if there are any functions
     if max_scratch_position == 0 && !isempty(function_evaluators)
         max_scratch_position = 10  # Conservative fallback
-        # # println("DEBUG: Using safety fallback: $max_scratch_position")
     end
     
-    # # println("DEBUG: Final calculated max function scratch needed: $max_scratch_position")
     return max_scratch_position
 end
 
@@ -861,13 +823,11 @@ function simulate_function_decomposition_for_scratch(evaluator::CombinedEvaluato
         return 0
     end
     
-    # # println("DEBUG: Simulating decomposition for scratch calculation...")
     
     # Track all scratch positions that will be allocated
     all_scratch_positions = Int[]
     
     for (idx, func_eval) in enumerate(function_evaluators)
-        # # println("DEBUG: Simulating function $idx with $(length(func_eval.arg_evaluators)) args")
         
         # Create temp allocator starting from where previous functions left off
         start_position = isempty(all_scratch_positions) ? 1 : maximum(all_scratch_positions) + 1
@@ -877,12 +837,9 @@ function simulate_function_decomposition_for_scratch(evaluator::CombinedEvaluato
         scratch_positions = simulate_single_function_scratch(func_eval, temp_allocator)
         append!(all_scratch_positions, scratch_positions)
         
-        # # println("DEBUG: Function $idx uses scratch positions: $scratch_positions")
     end
     
     max_scratch = isempty(all_scratch_positions) ? 0 : maximum(all_scratch_positions)
-    # # println("DEBUG: Total scratch positions used: $all_scratch_positions")
-    # # println("DEBUG: Maximum scratch position: $max_scratch")
     
     return max_scratch
 end

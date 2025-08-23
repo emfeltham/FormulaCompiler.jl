@@ -1573,43 +1573,31 @@ end
 Validate that schema-based compilation produced correct interaction components.
 """
 function validate_schema_based_interactions(evaluator::CombinedEvaluator)
-    # # println("DEBUG: === VALIDATING SCHEMA-BASED INTERACTIONS ===")
     
     interaction_evaluators = evaluator.interaction_evaluators
-    # # println("DEBUG: Found $(length(interaction_evaluators)) interaction evaluators")
     
     for (idx, interaction_eval) in enumerate(interaction_evaluators)
-        # # println("DEBUG: \nValidating interaction $idx:")
         
         components = interaction_eval.components
         for (comp_idx, comp) in enumerate(components)
             if comp isa CategoricalEvaluator
-                # println("DEBUG:   Categorical component $comp_idx ($(comp.column)):")
                 
                 contrast_size = size(comp.contrast_matrix)
                 n_levels = comp.n_levels
                 
-                # println("DEBUG:     Levels: $n_levels")
-                # println("DEBUG:     Contrast matrix: $contrast_size")
                 
                 # Check if contrasts look reasonable
                 if contrast_size[2] == n_levels
-                    # println("DEBUG:     ✅ FullDummyCoding detected (good for interactions)")
                 elseif contrast_size[2] == n_levels - 1
-                    # println("DEBUG:     ✅ DummyCoding detected (good for main effects)")
                 else
-                    # println("DEBUG:     ⚠️  Unusual contrast dimensions")
                 end
                 
                 # Check level codes
                 if !isempty(comp.level_codes)
-                    # println("DEBUG:     Level codes: $(length(comp.level_codes)) extracted")
                 else
-                    # println("DEBUG:     ❌ No level codes found")
                 end
                 
             else
-                # println("DEBUG:   Non-categorical component $comp_idx: $(typeof(comp))")
             end
         end
         
@@ -1618,13 +1606,10 @@ function validate_schema_based_interactions(evaluator::CombinedEvaluator)
         actual_width = length(interaction_eval.positions)
         
         if expected_width == actual_width
-            # println("DEBUG:   ✅ Interaction width consistent: $actual_width")
         else
-            # println("DEBUG:   ❌ Interaction width mismatch: expected $expected_width, got $actual_width")
         end
     end
     
-    # println("DEBUG: === VALIDATION COMPLETE ===")
 end
 
 """

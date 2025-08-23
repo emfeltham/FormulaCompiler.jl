@@ -254,8 +254,6 @@ function execute_single_categorical!(
     output
 ) where {N, Positions}
 
-    # println("DEBUG: level=$level, contrast_matrix size=$(size(cat_data.contrast_matrix))")
-    # println("DEBUG: contrast row for level $level: $(cat_data.contrast_matrix[level, :])")
     
     # Level is already clamped by the caller
     # Just do the matrix lookup and assignment
