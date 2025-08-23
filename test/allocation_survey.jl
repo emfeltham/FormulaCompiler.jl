@@ -54,12 +54,6 @@ function benchmark_model!(results_df, category, name, model, model_type)
     ))
 end
 
-# Run benchmarks
-for fx in test_formulas.lm
-    model = lm(fx.formula, df)
-    benchmark_model!(results_df, "LM", fx.name, model, "LinearModel")
-end
-
 ## example - proper measurement without artifacts
 function example_run!(compiled, data)
     buffer = Vector{Float64}(undef, length(compiled))
@@ -79,6 +73,11 @@ model = lm(fx.formula, df)
 compiled = compile_formula(model, data)
 example_run!(compiled, data)
 ##
+
+for fx in test_formulas.lm
+    model = lm(fx.formula, df)
+    benchmark_model!(results_df, "LM", fx.name, model, "LinearModel")
+end
 
 for fx in test_formulas.glm
     model = glm(fx.formula, df, fx.distribution, fx.link)
