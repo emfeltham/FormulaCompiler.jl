@@ -126,6 +126,7 @@ linear_formulas = [
     LMTest("Simple interaction", @formula(continuous_response ~ x * group3)),
     LMTest("Interaction w/o main", @formula(continuous_response ~ x & group3)),
     LMTest("Function", @formula(continuous_response ~ log(z))),
+    LMTest("Function in interaction", @formula(continuous_response ~ exp(x) * y)),
     LMTest("Three-way interaction", @formula(continuous_response ~ x * y * group3)),
     LMTest("Four-way interaction", @formula(continuous_response ~ x * y * group3 * group4)),
     LMTest("Four-way w/ function", @formula(continuous_response ~ exp(x) * y * group3 * group4)),
