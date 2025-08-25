@@ -3,6 +3,9 @@
 
 using CategoricalArrays
 
+# Threshold for switching from recursion to @generated
+const RECURSION_LIMIT = 35  # Below Julia's ~40 element specialization limit
+
 # Main execution function - zero allocation
 function (f::UnifiedCompiled{Ops, S, O})(
     output::AbstractVector{Float64}, 
@@ -17,11 +20,54 @@ function (f::UnifiedCompiled{Ops, S, O})(
     return nothing
 end
 
-# Recursive tuple execution (compile-time unrolled)
-@inline execute_ops(::Tuple{}, scratch, data, row_idx) = nothing
+# ============================================================================
+# Generated functions for large tuples (force complete specialization)
+# ============================================================================
+
+# Generated execution for operations - forces complete unrolling
+@generated function execute_ops_generated(
+    ops::Tuple{Vararg{Any,N}}, 
+    scratch::AbstractVector{Float64}, 
+    data::NamedTuple, 
+    row_idx::Int
+) where N
+    # Build expressions for each operation
+    exprs = Expr[]
+    for i in 1:N
+        push!(exprs, :(execute_op(ops[$i], scratch, data, row_idx)))
+    end
+    
+    # Return block with all operations unrolled
+    return quote
+        $(exprs...)
+        nothing
+    end
+end
+
+# ============================================================================
+# Hybrid dispatch strategy
+# ============================================================================
+
+# Smart dispatch based on tuple size
 @inline function execute_ops(ops::Tuple, scratch, data, row_idx)
+    if length(ops) <= RECURSION_LIMIT
+        # Use recursion for small tuples (better for compiler)
+        execute_ops_recursive(ops, scratch, data, row_idx)
+    else
+        # Use generated for large tuples (force specialization)
+        execute_ops_generated(ops, scratch, data, row_idx)
+    end
+end
+
+# ============================================================================
+# Original recursive implementation
+# ============================================================================
+
+# Recursive tuple execution (compile-time unrolled for small tuples)
+@inline execute_ops_recursive(::Tuple{}, scratch, data, row_idx) = nothing
+@inline function execute_ops_recursive(ops::Tuple, scratch, data, row_idx)
     execute_op(first(ops), scratch, data, row_idx)
-    execute_ops(Base.tail(ops), scratch, data, row_idx)
+    execute_ops_recursive(Base.tail(ops), scratch, data, row_idx)
 end
 
 # Individual operation execution (all inlined for zero overhead)
@@ -119,11 +165,51 @@ end
     return nothing
 end
 
-# Copy outputs from operations
-@inline copy_outputs_from_ops!(::Tuple{}, output, scratch) = nothing
+# ============================================================================
+# Generated copy function for large tuples
+# ============================================================================
+
+# Generated function for copy operations - forces complete unrolling
+@generated function copy_outputs_generated!(
+    ops::Tuple{Vararg{Any,N}}, 
+    output::AbstractVector{Float64}, 
+    scratch::AbstractVector{Float64}
+) where N
+    exprs = Expr[]
+    for i in 1:N
+        push!(exprs, :(copy_single_output!(ops[$i], output, scratch)))
+    end
+    
+    return quote
+        $(exprs...)
+        nothing
+    end
+end
+
+# ============================================================================
+# Hybrid copy dispatch
+# ============================================================================
+
+# Smart dispatch for copy operations based on tuple size
 @inline function copy_outputs_from_ops!(ops::Tuple, output, scratch)
+    if length(ops) <= RECURSION_LIMIT
+        # Use recursion for small tuples
+        copy_outputs_recursive!(ops, output, scratch)
+    else
+        # Use generated for large tuples
+        copy_outputs_generated!(ops, output, scratch)
+    end
+end
+
+# ============================================================================
+# Original recursive copy implementation
+# ============================================================================
+
+# Recursive copy operations
+@inline copy_outputs_recursive!(::Tuple{}, output, scratch) = nothing
+@inline function copy_outputs_recursive!(ops::Tuple, output, scratch)
     copy_single_output!(first(ops), output, scratch)
-    copy_outputs_from_ops!(Base.tail(ops), output, scratch)
+    copy_outputs_recursive!(Base.tail(ops), output, scratch)
 end
 
 # Handle CopyOp operations
