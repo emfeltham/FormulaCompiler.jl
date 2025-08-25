@@ -9,6 +9,8 @@ using StatsModels, BenchmarkTools, CSV
 using FormulaCompiler: make_test_data, test_formulas
 using Random
 
+include("../src/unified/compilation.jl")
+
 Random.seed!(08540)
 
 # Setup
@@ -28,7 +30,7 @@ results_df = DataFrame(
 
 # Benchmark function with proper warmup and measurement
 function benchmark_model!(results_df, category, name, model, model_type)
-    compiled = compile_formula(model, data)
+    compiled = compile_formula_unified(model, data)
     buffer = Vector{Float64}(undef, length(compiled))
     
     # Extensive warmup to ensure compilation is complete
@@ -77,8 +79,8 @@ end;
 i = 2
 fx = test_formulas.lm[i]
 model = lm(fx.formula, df)
-compiled = compile_formula(model, data)
-example_run!(compiled, data)
+compiled = compile_formula_unified(model, data)
+# example_run!(compiled, data)
 
 buffer = Vector{Float64}(undef, length(compiled))
 @btime compiled($buffer, $data, 1);
@@ -107,32 +109,7 @@ end
 # CHECK RESULTS
 
 results_df
-CSV.write("test/allocation_results.csv", results_df)
+CSV.write("test/allocation_results.csv", results_df);
 println("WRITTEN: test/allocation_results.csv")
 
 show(results_df; allrows= true)
-
-# # Complex cases
-# complex_cases = [
-#     ("Complex", "Complex interaction", @formula(continuous_response ~ x * y * group3 + log(z) * group4), lm),
-#     ("Complex", "Complex logistic", @formula(logistic_response ~ x * y * group3 + log(z) * group4), (f, d) -> glm(f, d, Binomial(), LogitLink())),
-# ]
-
-# for (category, name, formula, model_func) in complex_cases
-#     model = model_func(formula, df)
-#     benchmark_model!(results_df, category, name, model, string(typeof(model).name.name))
-# end
-
-# # Analysis
-# successful = filter(r -> r.memory_bytes >= 0, results_df)
-# worst = sort(successful, :memory_bytes, rev=true)[1:min(10, end), :]
-# best = sort(successful, :memory_bytes)[1:min(10, end), :]
-
-# println("🚨 WORST ALLOCATORS:")
-# println(worst[:, [:category, :name, :model_size, :memory_bytes, :status]])
-# println("\n✅ BEST PERFORMERS:")
-# println(best[:, [:category, :name, :model_size, :memory_bytes, :status]])
-
-# # Export
-# CSV.write("test/allocation_results.csv", results_df)
-# results_df
