@@ -1,5 +1,6 @@
 # test/runtests.jl
 # Main test runner for FormulaCompiler.jl
+# julia --project="." test/runtests.jl > test/tests.txt 2>&1
 
 using Revise
 using Test
@@ -17,10 +18,8 @@ Random.seed!(06515)
 
 @testset "FormulaCompiler.jl Tests" begin
     
-    # Core functionality tests
-    
-    # these are dignostic rather than formal tests
-    # include("test_position_mapping.jl")
+    # Core functionality
+    include("test_position_mapping.jl") # Position mapping system
     
     # Models
     include("test_allocations.jl") # performance
