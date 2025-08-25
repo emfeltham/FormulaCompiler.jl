@@ -19,14 +19,15 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
     
     
     # Step 1: Process all argument evaluators
-    arg_inputs = Union{Symbol, Int, Float64, ScratchPosition}[]
+    arg_inputs = Union{Val, Int, Float64, ScratchPosition}[]
     
     for arg_eval in func_eval.arg_evaluators
         if arg_eval isa ConstantEvaluator
             push!(arg_inputs, arg_eval.value)
             
         elseif arg_eval isa ContinuousEvaluator
-            push!(arg_inputs, arg_eval.column)
+            # Use typed column identity from the evaluator type parameter
+            push!(arg_inputs, Val(get_column_symbol(arg_eval)))
             
         elseif arg_eval isa FunctionEvaluator
             # FIXED: Nested function - create intermediate operations and use scratch
@@ -54,7 +55,7 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
         push!(operations, LinearizedOperation(
             :unary,
             func_eval.func,
-            Union{Symbol, Int, Float64, ScratchPosition}[arg_inputs[1]],
+            Union{Val, Int, Float64, ScratchPosition}[arg_inputs[1]],
             func_eval.position,
             nothing
         ))
@@ -64,7 +65,7 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
         push!(operations, LinearizedOperation(
             :final_binary,
             func_eval.func,
-            Union{Symbol, Int, Float64, ScratchPosition}[arg_inputs[1], arg_inputs[2]],
+            Union{Val, Int, Float64, ScratchPosition}[arg_inputs[1], arg_inputs[2]],
             func_eval.position,
             nothing
         ))
@@ -74,10 +75,10 @@ function decompose_function_tree_zero_alloc(func_eval::FunctionEvaluator, temp_a
         
         for i in 2:n_args
             if i == 2
-                inputs = Union{Symbol, Int, Float64, ScratchPosition}[arg_inputs[1], arg_inputs[2]]
+                inputs = Union{Val, Int, Float64, ScratchPosition}[arg_inputs[1], arg_inputs[2]]
             else
                 prev_scratch = ScratchPosition(temp_allocator.next_temp - 1)
-                inputs = Union{Symbol, Int, Float64, ScratchPosition}[prev_scratch, arg_inputs[i]]
+                inputs = Union{Val, Int, Float64, ScratchPosition}[prev_scratch, arg_inputs[i]]
             end
             
             if i == n_args
@@ -117,13 +118,13 @@ function decompose_function_tree_as_intermediate(func_eval::FunctionEvaluator, t
     
     
     # Process arguments (same logic as main function)
-    arg_inputs = Union{Symbol, Int, Float64, ScratchPosition}[]
+    arg_inputs = Union{Val, Int, Float64, ScratchPosition}[]
     
     for arg_eval in func_eval.arg_evaluators
         if arg_eval isa ConstantEvaluator
             push!(arg_inputs, arg_eval.value)
         elseif arg_eval isa ContinuousEvaluator
-            push!(arg_inputs, arg_eval.column)
+            push!(arg_inputs, Val(get_column_symbol(arg_eval)))
         elseif arg_eval isa FunctionEvaluator
             # Nested-nested function
             nested_scratch_pos = allocate_temp!(temp_allocator)
@@ -144,7 +145,7 @@ function decompose_function_tree_as_intermediate(func_eval::FunctionEvaluator, t
         push!(operations, LinearizedOperation(
             :intermediate_binary,  # Use binary type with dummy input
             func_eval.func,
-            Union{Symbol, Int, Float64, ScratchPosition}[arg_inputs[1], 1.0],  # Add dummy 1.0
+            Union{Val, Int, Float64, ScratchPosition}[arg_inputs[1], 1.0],  # Add dummy 1.0
             target_scratch,
             target_scratch
         ))
@@ -154,7 +155,7 @@ function decompose_function_tree_as_intermediate(func_eval::FunctionEvaluator, t
         push!(operations, LinearizedOperation(
             :intermediate_binary,
             func_eval.func,
-            Union{Symbol, Int, Float64, ScratchPosition}[arg_inputs[1], arg_inputs[2]],
+            Union{Val, Int, Float64, ScratchPosition}[arg_inputs[1], arg_inputs[2]],
             target_scratch,
             target_scratch
         ))
@@ -163,10 +164,10 @@ function decompose_function_tree_as_intermediate(func_eval::FunctionEvaluator, t
         # N-ary intermediate - all steps are intermediate, last writes to target_scratch
         for i in 2:n_args
             if i == 2
-                inputs = Union{Symbol, Int, Float64, ScratchPosition}[arg_inputs[1], arg_inputs[2]]
+                inputs = Union{Val, Int, Float64, ScratchPosition}[arg_inputs[1], arg_inputs[2]]
             else
                 prev_scratch = ScratchPosition(temp_allocator.next_temp - 1)
-                inputs = Union{Symbol, Int, Float64, ScratchPosition}[prev_scratch, arg_inputs[i]]
+                inputs = Union{Val, Int, Float64, ScratchPosition}[prev_scratch, arg_inputs[i]]
             end
             
             if i == n_args
@@ -218,8 +219,8 @@ No runtime branching - uses method dispatch instead.
 end
 
 # Column references - compile-time dispatch  
-@inline function get_input_value_zero_alloc(input::Symbol, output, scratch, input_data, row_idx)
-    return Float64(get_data_value_specialized(input_data, input, row_idx))
+@inline function get_input_value_zero_alloc(input::Val{column}, output, scratch, input_data, row_idx) where column
+    return Float64(get_data_value_type_stable(input_data, input, row_idx))
 end
 
 # Output positions - compile-time dispatch
