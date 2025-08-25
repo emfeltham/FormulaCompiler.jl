@@ -10,7 +10,7 @@ using StatsModels, BenchmarkTools
 using FormulaCompiler: make_test_data, test_formulas
 using Random
 
-include("../src/unified/compilation.jl")
+include("../src/compilation/compilation.jl")
 
 @testset "Zero Allocation Survey" begin
     Random.seed!(08540)
@@ -22,7 +22,7 @@ include("../src/unified/compilation.jl")
     
     # Helper function to test allocation with proper warmup
     function test_zero_allocation(model, model_name)
-        compiled = compile_formula_unified(model, data)
+        compiled = compile_formula(model, data)
         buffer = Vector{Float64}(undef, length(compiled))
         
         # Extensive warmup to ensure compilation is complete
@@ -46,7 +46,7 @@ include("../src/unified/compilation.jl")
                 memory_bytes, time_ns = test_zero_allocation(model, fx.name)
                 
                 # Additional sanity checks
-                @test length(compile_formula_unified(model, data)) > 0
+                @test length(compile_formula(model, data)) > 0
                 @test time_ns > 0
             end
         end
@@ -59,7 +59,7 @@ include("../src/unified/compilation.jl")
                 memory_bytes, time_ns = test_zero_allocation(model, fx.name)
                 
                 # Additional sanity checks
-                @test length(compile_formula_unified(model, data)) > 0
+                @test length(compile_formula(model, data)) > 0
                 @test time_ns > 0
             end
         end
@@ -72,7 +72,7 @@ include("../src/unified/compilation.jl")
                 memory_bytes, time_ns = test_zero_allocation(model, fx.name)
                 
                 # Additional sanity checks
-                @test length(compile_formula_unified(model, data)) > 0
+                @test length(compile_formula(model, data)) > 0
                 @test time_ns > 0
             end
         end
@@ -85,7 +85,7 @@ include("../src/unified/compilation.jl")
                 memory_bytes, time_ns = test_zero_allocation(model, fx.name)
                 
                 # Additional sanity checks
-                @test length(compile_formula_unified(model, data)) > 0
+                @test length(compile_formula(model, data)) > 0
                 @test time_ns > 0
             end
         end

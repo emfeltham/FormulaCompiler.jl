@@ -28,7 +28,7 @@ end
 include("../integration/mixed_models.jl")
 
 # Primary API: Compile from model (has schema-applied formula)
-function compile_formula_unified(model, data_example::NamedTuple)
+function compile_formula(model, data_example::NamedTuple)
     # Extract schema-applied formula using standard API
     # For MixedModels, this extracts only fixed effects
     formula = get_fixed_effects_formula(model)
@@ -50,7 +50,7 @@ function compile_formula_unified(model, data_example::NamedTuple)
 end
 
 # Secondary API: Direct formula compilation (for testing)
-function compile_formula_unified(formula::FormulaTerm, data_example::NamedTuple)
+function compile_formula(formula::FormulaTerm, data_example::NamedTuple)
     # Warning: This formula may not have schema applied
     # Better to create a model first for proper schema application
     ops_vec, scratch_size, output_size = decompose_formula(formula, data_example)
@@ -60,8 +60,8 @@ end
 
 # Alternative entry point that matches current API
 function compile_unified(model, data::NamedTuple)
-    return compile_formula_unified(model, data)
+    return compile_formula(model, data)
 end
 
 # Export main functions
-export UnifiedCompiled, compile_formula_unified, compile_unified
+export UnifiedCompiled, compile_formula, compile_unified
