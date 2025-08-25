@@ -44,3 +44,40 @@
 ## Risks & Mitigations
 - Signature changes: confine to Step 4 execution helpers; keep public API stable.
 - Cross‑step coupling: document the scratch contract in code comments; add small unit tests around accessor behavior.
+
+---
+
+## Feasibility Assessment (Updated)
+
+Status: Highly feasible and already partially implemented.
+
+- Existing infrastructure:
+  - Scratch types exist: `ScratchPosition{P}` (Step 3) and `InteractionScratchPosition{P}` (Step 4).
+  - Typed access exists: Val{Column} dispatch in both Step 3 and Step 4.
+  - Separate scratch spaces already present on `CompleteFormulaData`.
+- Partially aligned today:
+  - Function pre‑evals for interactions are being promoted to the global function phase.
+  - Interaction data creation now empties pre‑eval tuples (per‑interaction pre‑evals removed).
+
+What remains minimal:
+1) Add `FunctionScratchPosition{P}` (mirror of `InteractionScratchPosition{P}`).
+2) Add accessor overload to read from `function_scratch` for `FunctionScratchPosition{P}`.
+3) Update interaction analysis to emit `FunctionScratchPosition{P}` instead of any lingering pre‑eval use.
+4) Clean up any remaining pre‑eval references and ensure Step 4 execution reads function outputs from `function_scratch`.
+
+Effort: 1–2 hours. Risk: low. Performance: improves (removes remaining allocations) while keeping execution fully typed.
+
+## Actionable Checklist (Files)
+- Types & accessors:
+  - Add `FunctionScratchPosition{P}` in `src/compilation/pipeline/step3/types.jl` (or shared types).
+  - Add `get_value_from_source(::FunctionScratchPosition{P}, ...)` in `src/compilation/pipeline/step4/main.jl` (or `evaluation/data_access.jl`) to read `function_scratch[P]`.
+- Analysis:
+  - `src/compilation/pipeline/step4/main.jl`: in interaction analysis, emit `FunctionScratchPosition{P}` for any function‑derived input (P comes from Step 3’s mapping for that function node).
+- Execution:
+  - Ensure `execute_interaction_operations!` (and callees) receive access to `function_scratch` (already present via `CompleteFormulaData`).
+  - Interactions must not create/execute per‑interaction pre‑evals; they must only multiply typed sources (`Val{Column}`, `FunctionScratchPosition{P}`, constants) and write to `interaction_scratch`/output.
+
+## Quick Verification Path
+1) Add the type + accessor (compile & run smoke test).
+2) Switch just the new “Function in interaction” survey case to use `FunctionScratchPosition{P}` → verify 0 bytes.
+3) Apply the same mapping in n‑way interactions → re‑run full survey and confirm LM four‑way/complex rows drop to 0 bytes.
