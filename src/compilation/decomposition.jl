@@ -5,7 +5,93 @@ using StatsModels
 using MixedModels: RandomEffectsTerm
 using StandardizedPredictors: ZScoredTerm
 
-# Main decomposition entry point
+"""
+    decompose_formula(formula::FormulaTerm, data_example::NamedTuple) -> (operations, scratch_size, output_size)
+
+**Core Position Mapping Engine**: Converts StatsModels formulas into typed operations with position mappings.
+
+## Position Mapping Algorithm
+
+This function implements the heart of the position mapping system through a multi-stage process:
+
+### Stage 1: Context Initialization
+- Creates `CompilationContext` with empty position map and operation list
+- Initializes `next_position = 1` for scratch space allocation
+- Prepares `output_positions` to track final model matrix columns
+
+### Stage 2: Term Decomposition & Position Allocation  
+- Recursively processes each formula term using `decompose_term!`
+- **Position Caching**: Reuses positions for identical terms (e.g., `x` appears in `x + x*z`)  
+- **Smart Allocation**: 
+  - Single terms → single position (`Term(:x)` → position 3)
+  - Multi-output terms → consecutive positions (`CategoricalTerm` → positions [4,5,6])
+- **Dependency Tracking**: Child terms allocated before parent operations
+
+### Stage 3: Output Position Mapping
+- Maps scratch positions to final model matrix columns in order
+- Creates `CopyOp{scratch_pos, output_idx}` for each output column
+- Ensures output matches `modelmatrix(model)` column ordering
+
+### Stage 4: Operation Ordering
+The function maintains **execution order invariants**:
+1. **Leaf operations first**: Data loads and constants
+2. **Dependency respect**: Operations use only previously computed positions  
+3. **Copy operations last**: Transfer from scratch to output
+
+## Position Allocation Examples
+
+```julia
+# Formula: y ~ 1 + x + log(z) + x*group
+# 
+# Term Processing Order & Position Allocation:
+# 1. InterceptTerm{true}()     → pos=1  (ConstantOp{1.0, 1})
+# 2. Term(:x)                  → pos=2  (LoadOp{:x, 2})  
+# 3. Term(:z)                  → pos=3  (LoadOp{:z, 3})
+# 4. FunctionTerm(log, [:z])   → pos=4  (UnaryOp{:log, 3, 4})
+# 5. CategoricalTerm(:group)   → pos=[5,6] (ContrastOp{:group, (5,6)})
+# 6. InteractionTerm([x,group])→ pos=7  (BinaryOp{:*, 2, 5, 7})
+#
+# Output Position Mapping:
+# output[1] = scratch[1]  (CopyOp{1, 1}) - intercept
+# output[2] = scratch[2]  (CopyOp{2, 2}) - x  
+# output[3] = scratch[4]  (CopyOp{4, 3}) - log(z)
+# output[4] = scratch[5]  (CopyOp{5, 4}) - group level 1
+# output[5] = scratch[6]  (CopyOp{6, 5}) - group level 2  
+# output[6] = scratch[7]  (CopyOp{7, 6}) - x*group
+```
+
+## Position Caching & Reuse
+
+The position map (`ctx.position_map`) implements intelligent caching:
+
+```julia
+# Formula: y ~ x + x^2 + log(x)
+# 
+# First encounter: Term(:x) → allocates position 1, caches {:x → 1}
+# Second encounter: Term(:x) → returns cached position 1 (no new allocation)  
+# Third encounter: Term(:x) → returns cached position 1 (no new allocation)
+#
+# Result: Only 1 LoadOp{:x, 1} created, reused by all dependent operations
+```
+
+## Arguments
+
+- `formula`: StatsModels FormulaTerm (potentially schema-applied)
+- `data_example`: Sample data for categorical level inference and validation
+
+## Returns
+
+- `operations::Vector{AbstractOp}`: Ordered list of typed operations
+- `scratch_size::Int`: Maximum scratch position used (buffer size needed)  
+- `output_size::Int`: Number of model matrix columns (output vector size)
+
+## Invariants Maintained
+
+1. **No position conflicts**: Each scratch position used by exactly one operation
+2. **Dependency satisfaction**: Operations only reference previously computed positions  
+3. **Output completeness**: Every output position has exactly one copy operation
+4. **Cache correctness**: Identical terms always map to identical positions
+"""
 function decompose_formula(formula::FormulaTerm, data_example::NamedTuple)
     ctx = CompilationContext()
     
