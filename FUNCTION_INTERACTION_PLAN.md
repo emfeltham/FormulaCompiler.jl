@@ -45,8 +45,6 @@
 - Signature changes: confine to Step 4 execution helpers; keep public API stable.
 - Cross‑step coupling: document the scratch contract in code comments; add small unit tests around accessor behavior.
 
----
-
 ## Feasibility Assessment (Updated)
 
 Status: Highly feasible and already partially implemented.
