@@ -1,4 +1,7 @@
 # allocation_survey.jl
+
+# julia --project="." test/allocation_survey.jl > allocation_survey_output.txt 2>&1
+
 # Comprehensive allocation survey - clean version
 using FormulaCompiler
 using DataFrames, GLM, Tables, CategoricalArrays, MixedModels

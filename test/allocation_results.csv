@@ -1,35 +1,35 @@
 category,name,model_type,model_size,memory_bytes,time_ns,status
 LM,Intercept only,LinearModel,1,0,4.833,✅ PASS
-LM,No intercept,LinearModel,1,0,5.25,✅ PASS
-LM,Simple continuous,LinearModel,2,0,4.833,✅ PASS
-LM,Simple categorical,LinearModel,3,0,36.17019133937563,✅ PASS
-LM,Multiple continuous,LinearModel,3,0,5.25,✅ PASS
-LM,Multiple categorical,LinearModel,6,0,67.89014373716633,✅ PASS
-LM,Mixed,LinearModel,4,0,36.25377643504532,✅ PASS
-LM,Simple interaction,LinearModel,6,96,253.55113636363637,❌ BIG FAIL
-LM,Interaction w/o main,LinearModel,4,144,313.48068669527896,❌ BIG FAIL
-LM,Function,LinearModel,2,32,96.17400419287212,❌ BIG FAIL
-LM,Three-way interaction,LinearModel,12,288,797.1938775510204,❌ BIG FAIL
-LM,Four-way interaction,LinearModel,48,864,3281.25,❌ BIG FAIL
-LM,Four-way w/ function,LinearModel,48,2400,4125.0,❌ BIG FAIL
-LM,Complex interaction,LinearModel,19,864,1533.3,❌ BIG FAIL
-GLM,Logistic: simple,GeneralizedLinearModel,2,0,5.291,✅ PASS
-GLM,Logistic: mixed,GeneralizedLinearModel,4,0,36.25377643504532,✅ PASS
-GLM,Logistic: interaction,GeneralizedLinearModel,6,96,253.53972602739725,❌ BIG FAIL
-GLM,Logistic: function,GeneralizedLinearModel,4,32,130.846408839779,❌ BIG FAIL
-GLM,Logistic: complex,GeneralizedLinearModel,16,320,936.5238095238095,❌ BIG FAIL
-GLM,Poisson: simple,GeneralizedLinearModel,2,0,5.291,✅ PASS
-GLM,Poisson: mixed,GeneralizedLinearModel,4,0,36.878024193548384,✅ PASS
-GLM,Poisson: interaction,GeneralizedLinearModel,6,96,257.0422535211268,❌ BIG FAIL
-GLM,Gamma: mixed,GeneralizedLinearModel,4,0,36.332661290322584,✅ PASS
-GLM,Gaussian: mixed,GeneralizedLinearModel,4,0,36.463242698892245,✅ PASS
-LMM,Random intercept,LinearMixedModel,2,0,6.083,✅ PASS
-LMM,Mixed + categorical,LinearMixedModel,4,0,35.618951612903224,✅ PASS
+LM,No intercept,LinearModel,1,0,5.291,✅ PASS
+LM,Simple continuous,LinearModel,2,0,5.25,✅ PASS
+LM,Simple categorical,LinearModel,3,0,37.046370967741936,✅ PASS
+LM,Multiple continuous,LinearModel,3,0,5.291,✅ PASS
+LM,Multiple categorical,LinearModel,6,0,69.54405737704919,✅ PASS
+LM,Mixed,LinearModel,4,0,37.172379032258064,✅ PASS
+LM,Simple interaction,LinearModel,6,96,255.8676056338028,❌ BIG FAIL
+LM,Interaction w/o main,LinearModel,4,144,317.01666666666665,❌ BIG FAIL
+LM,Function,LinearModel,2,32,96.35109717868339,❌ BIG FAIL
+LM,Three-way interaction,LinearModel,12,288,828.804347826087,❌ BIG FAIL
+LM,Four-way interaction,LinearModel,48,864,3302.125,❌ BIG FAIL
+LM,Four-way w/ function,LinearModel,48,2400,4047.714285714286,❌ BIG FAIL
+LM,Complex interaction,LinearModel,19,864,1520.8,❌ BIG FAIL
+GLM,Logistic: simple,GeneralizedLinearModel,2,0,4.833,✅ PASS
+GLM,Logistic: mixed,GeneralizedLinearModel,4,0,37.29838709677419,✅ PASS
+GLM,Logistic: interaction,GeneralizedLinearModel,6,96,260.5685131195335,❌ BIG FAIL
+GLM,Logistic: function,GeneralizedLinearModel,4,32,132.9787234042553,❌ BIG FAIL
+GLM,Logistic: complex,GeneralizedLinearModel,16,320,951.7368421052631,❌ BIG FAIL
+GLM,Poisson: simple,GeneralizedLinearModel,2,0,5.25,✅ PASS
+GLM,Poisson: mixed,GeneralizedLinearModel,4,0,37.382056451612904,✅ PASS
+GLM,Poisson: interaction,GeneralizedLinearModel,6,96,262.5988023952096,❌ BIG FAIL
+GLM,Gamma: mixed,GeneralizedLinearModel,4,0,37.512588116817724,✅ PASS
+GLM,Gaussian: mixed,GeneralizedLinearModel,4,0,37.3031218529708,✅ PASS
+LMM,Random intercept,LinearMixedModel,2,0,5.25,✅ PASS
+LMM,Mixed + categorical,LinearMixedModel,4,0,37.257056451612904,✅ PASS
 LMM,Random slope,LinearMixedModel,2,0,5.25,✅ PASS
-LMM,Random slope + cat,LinearMixedModel,4,0,36.967774420946625,✅ PASS
-LMM,Multiple random,LinearMixedModel,2,0,5.25,✅ PASS
-LMM,Interaction + random,LinearMixedModel,6,96,255.52486187845304,❌ BIG FAIL
+LMM,Random slope + cat,LinearMixedModel,4,0,37.09264853977845,✅ PASS
+LMM,Multiple random,LinearMixedModel,2,0,4.833,✅ PASS
+LMM,Interaction + random,LinearMixedModel,6,96,261.3208092485549,❌ BIG FAIL
 GLMM,Logistic: 1,GeneralizedLinearMixedModel,2,0,5.25,✅ PASS
-GLMM,Logistic: 2,GeneralizedLinearMixedModel,4,0,36.37399193548387,✅ PASS
-GLMM,Poisson: 1,GeneralizedLinearMixedModel,2,0,5.291,✅ PASS
-GLMM,Poisson: 2,GeneralizedLinearMixedModel,4,0,37.046370967741936,✅ PASS
+GLMM,Logistic: 2,GeneralizedLinearMixedModel,4,0,37.33971774193548,✅ PASS
+GLMM,Poisson: 1,GeneralizedLinearMixedModel,2,0,5.25,✅ PASS
+GLMM,Poisson: 2,GeneralizedLinearMixedModel,4,0,37.38670694864048,✅ PASS

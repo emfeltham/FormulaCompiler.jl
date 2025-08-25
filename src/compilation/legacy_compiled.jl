@@ -43,14 +43,14 @@ end
 ###############################################################################
 
 """
-    _compile_formula(model, data::NamedTuple) -> CompiledFormula
+    compile_formula_complete(model, data::NamedTuple) -> CompiledFormula
 
 Compile formula using schema-based categorical extraction.
 Uses fitted model's schema for categorical contrasts.
 
-Internal method, used as intermediate step for `compile_formula()`
+Complete compilation that handles all formula parsing and analysis.
 """
-function _compile_formula(model, data::NamedTuple)
+function compile_formula_complete(model, data::NamedTuple)
     rhs = fixed_effects_form(model).rhs
     column_names = extract_all_columns(rhs)
     
