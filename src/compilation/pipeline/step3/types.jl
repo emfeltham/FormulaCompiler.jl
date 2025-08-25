@@ -113,7 +113,7 @@ Updated to support intermediate vs final distinction.
 struct LinearizedOperation
     operation_type::Symbol  # :unary, :intermediate_binary, or :final_binary
     func::Function
-    inputs::Vector{Union{Symbol, Int, Float64, ScratchPosition}}  # Updated to include ScratchPosition
+    inputs::Vector{Union{Val, Int, Float64, ScratchPosition}}  # Typed inputs: Val{Column}, positions, constants, scratch
     output_position::Int
     scratch_position::Union{Int, Nothing}  # For intermediate operations only
 end
