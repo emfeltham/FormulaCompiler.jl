@@ -30,7 +30,7 @@ fx = @formula(response ~ exp(x) * group)
 model = lm(fx, df)  # Schema application happens here
 
 # 3. Compile from model
-compiled = compile_formula_unified(model, data)
+compiled = compile_formula(model, data)
 
 # 4. Execute with zero allocations
 output = zeros(length(compiled))
@@ -301,7 +301,7 @@ end
 
 ```julia
 # Primary API: Compile from model (has schema-applied formula)
-function compile_formula_unified(model, data_example::NamedTuple)
+function compile_formula(model, data_example::NamedTuple)
     # Extract schema-applied formula using standard API
     formula = StatsModels.formula(model)
     
@@ -322,7 +322,7 @@ function compile_formula_unified(model, data_example::NamedTuple)
 end
 
 # Secondary API: Direct formula compilation (for testing)
-function compile_formula_unified(formula::FormulaTerm, data_example::NamedTuple)
+function compile_formula(formula::FormulaTerm, data_example::NamedTuple)
     # Warning: This formula may not have schema applied
     # Better to create a model first for proper schema application
     ops, scratch_size, output_map = decompose_formula(formula, data_example)
@@ -398,7 +398,7 @@ get_outputs(op::MultiOutputOp{T, I, O}) where {T, I, O} = O
 - [ ] Handle multi-output operations
 
 ### Step 5: Integration & Testing (Day 5)
-- [ ] Create `compile_formula_unified` entry point
+- [ ] Create `compile_formula` entry point
 - [ ] Test with allocation survey cases
 - [ ] Verify zero allocations for all formulas
 - [ ] Benchmark against current implementation
@@ -416,7 +416,7 @@ src/unified/
 ├── types.jl           # Operation type definitions
 ├── execution.jl       # execute_op dispatch methods
 ├── decomposition.jl   # Term → Operations conversion
-├── compilation.jl     # Main compile_formula_unified
+├── compilation.jl     # Main compile_formula
 ├── optimization.jl    # Optional optimization passes
 └── scratch.jl         # Thread-local scratch management
 ```
@@ -442,7 +442,7 @@ for formula_expr in test_cases
     model = lm(formula_expr, df)
     
     # Compile from model (has schema-applied formula)
-    compiled = compile_formula_unified(model, data)
+    compiled = compile_formula(model, data)
     
     # Test zero allocations
     output = zeros(length(compiled))
@@ -645,7 +645,7 @@ function test_generated_execution()
     
     # Four-way interaction (41 ops)
     model = lm(@formula(y ~ x * y * z * w), df)
-    compiled = compile_formula_unified(model, data)
+    compiled = compile_formula(model, data)
     buffer = Vector{Float64}(undef, length(compiled))
     
     # Warm up (includes compilation of @generated)

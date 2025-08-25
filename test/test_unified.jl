@@ -22,7 +22,7 @@ include("../src/unified/compilation.jl")
     @testset "Simple formulas" begin
         # Test intercept only
         formula = @formula(response ~ 1)
-        compiled = compile_formula_unified(formula, data)
+        compiled = compile_formula(formula, data)
         # Note: Formula creates duplicate constant for some reason, need 2 outputs
         output = zeros(2)
         compiled(output, data, 1)
@@ -30,7 +30,7 @@ include("../src/unified/compilation.jl")
         
         # Test single variable
         formula = @formula(response ~ x)
-        compiled = compile_formula_unified(formula, data)
+        compiled = compile_formula(formula, data)
         output = zeros(2)
         compiled(output, data, 1)
         @test output[1] ≈ 1.0  # Intercept
@@ -38,7 +38,7 @@ include("../src/unified/compilation.jl")
         
         # Test multiple variables
         formula = @formula(response ~ x + y)
-        compiled = compile_formula_unified(formula, data)
+        compiled = compile_formula(formula, data)
         output = zeros(3)
         compiled(output, data, 2)
         @test output[1] ≈ 1.0  # Intercept
@@ -49,7 +49,7 @@ include("../src/unified/compilation.jl")
     @testset "Function terms" begin
         # Test exp function
         formula = @formula(response ~ exp(x))
-        compiled = compile_formula_unified(formula, data)
+        compiled = compile_formula(formula, data)
         output = zeros(2)
         compiled(output, data, 1)
         @test output[1] ≈ 1.0      # Intercept
@@ -57,7 +57,7 @@ include("../src/unified/compilation.jl")
         
         # Test log function
         formula = @formula(response ~ log(x))
-        compiled = compile_formula_unified(formula, data)
+        compiled = compile_formula(formula, data)
         output = zeros(2)
         compiled(output, data, 3)
         @test output[1] ≈ 1.0      # Intercept
@@ -67,7 +67,7 @@ include("../src/unified/compilation.jl")
     @testset "Interactions" begin
         # Test simple interaction
         formula = @formula(response ~ x * y)
-        compiled = compile_formula_unified(formula, data)
+        compiled = compile_formula(formula, data)
         output = zeros(4)
         compiled(output, data, 1)
         @test output[1] ≈ 1.0      # Intercept
@@ -77,7 +77,7 @@ include("../src/unified/compilation.jl")
         
         # Test function in interaction (the problematic case!)
         formula = @formula(response ~ exp(x) * y)
-        compiled = compile_formula_unified(formula, data)
+        compiled = compile_formula(formula, data)
         output = zeros(4)
         compiled(output, data, 1)
         @test output[1] ≈ 1.0          # Intercept
@@ -89,7 +89,7 @@ include("../src/unified/compilation.jl")
     @testset "Zero allocations" begin
         # The key test - function in interaction should be zero allocation
         formula = @formula(response ~ exp(x) * y)
-        compiled = compile_formula_unified(formula, data)
+        compiled = compile_formula(formula, data)
         output = zeros(4)
         
         # Warm up
@@ -101,7 +101,7 @@ include("../src/unified/compilation.jl")
         
         # Test more complex case
         formula = @formula(response ~ exp(x) * log(z))
-        compiled = compile_formula_unified(formula, data)
+        compiled = compile_formula(formula, data)
         output = zeros(4)
         
         # Warm up

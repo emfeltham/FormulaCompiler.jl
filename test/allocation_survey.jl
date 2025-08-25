@@ -9,7 +9,7 @@ using StatsModels, BenchmarkTools, CSV
 using FormulaCompiler: make_test_data, test_formulas
 using Random
 
-include("../src/unified/compilation.jl")
+include("../src/compilation/compilation.jl")
 
 Random.seed!(08540)
 
@@ -30,7 +30,7 @@ results_df = DataFrame(
 
 # Benchmark function with proper warmup and measurement
 function benchmark_model!(results_df, category, name, model, model_type)
-    compiled = compile_formula_unified(model, data)
+    compiled = compile_formula(model, data)
     buffer = Vector{Float64}(undef, length(compiled))
     
     # Extensive warmup to ensure compilation is complete
@@ -79,7 +79,7 @@ end;
 i = 2
 fx = test_formulas.lm[i]
 model = lm(fx.formula, df)
-compiled = compile_formula_unified(model, data)
+compiled = compile_formula(model, data)
 # example_run!(compiled, data)
 
 buffer = Vector{Float64}(undef, length(compiled))
