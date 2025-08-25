@@ -241,7 +241,7 @@ function modelrow_scenarios!(
     compiled::UnifiedCompiled{Ops, S, O},
     scenarios::Vector{DataScenario},
     row_idx::Int
-) where {D, O}
+) where {Ops, S, O}
     @assert size(matrix, 1) >= length(scenarios) "Matrix height insufficient for scenarios"
     @assert size(matrix, 2) == length(compiled) "Matrix width mismatch"
     
@@ -361,7 +361,7 @@ function modelrow(
     compiled::UnifiedCompiled{Ops, S, O}, 
     data, 
     row_idx::Int
-) where {D, O}
+) where {Ops, S, O}
     row_vec = Vector{Float64}(undef, length(compiled))
     compiled(row_vec, data, row_idx)
     return row_vec
@@ -382,7 +382,7 @@ function modelrow(
     compiled::UnifiedCompiled{Ops, S, O}, 
     data, 
     row_indices::AbstractVector{Int}
-) where {D, O}
+) where {Ops, S, O}
     matrix = Matrix{Float64}(undef, length(row_indices), length(compiled))
     modelrow_batch!(matrix, compiled, data, row_indices)
     return matrix
@@ -405,7 +405,7 @@ end
 
 Evaluate model row using a data scenario with UnifiedCompiled (allocating version).
 """
-function modelrow(compiled::UnifiedCompiled{Ops, S, O}, scenario::DataScenario, row_idx::Int) where {D, O}
+function modelrow(compiled::UnifiedCompiled{Ops, S, O}, scenario::DataScenario, row_idx::Int) where {Ops, S, O}
     row_vec = Vector{Float64}(undef, length(compiled))
     compiled(row_vec, scenario.data, row_idx)
     return row_vec

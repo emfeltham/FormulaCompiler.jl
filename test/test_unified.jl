@@ -1,12 +1,11 @@
+# test_unified.jl
 # Test UnifiedCompiler
+
 using Test
 using DataFrames
 using GLM
 using StatsModels
 using Tables
-
-# Include the unified compiler
-include("../src/unified/compilation.jl")
 
 @testset "UnifiedCompiler Basic Tests" begin
     
