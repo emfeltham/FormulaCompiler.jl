@@ -541,4 +541,156 @@ The UnifiedCompiler is ready for production use. Consider:
 1. Migrating existing code to use UnifiedCompiler
 2. Adding more comprehensive test coverage
 3. Documenting the simple API for users
-4. Potentially exploring `@generated` functions for four-way interactions (low priority)
+4. Implementing `@generated` optimization for large formulas (see plan below)
+
+## Phase 6: @generated Optimization for Large Formulas
+
+### Problem Statement
+Julia's compiler has a hard limit on tuple specialization - beyond ~40 elements, it stops fully specializing recursive tuple operations, causing 272-336 byte allocations for our four-way interaction formulas (which have 41-49 operations).
+
+### Solution: Surgical Use of @generated
+
+This is a "last-mile" optimization that only affects the execution dispatch mechanism, leaving 99% of the codebase unchanged.
+
+### Implementation Plan
+
+#### Step 1: Create Generated Execution Function
+
+```julia
+# In src/unified/execution.jl
+
+# Generated function that forces complete unrolling
+@generated function execute_ops_generated(
+    ops::Tuple{Vararg{Any,N}}, 
+    scratch::AbstractVector{Float64}, 
+    data::NamedTuple, 
+    row_idx::Int
+) where N
+    # Build expressions for each operation
+    exprs = Expr[]
+    for i in 1:N
+        push!(exprs, :(execute_op(ops[$i], scratch, data, row_idx)))
+    end
+    
+    # Return block with all operations unrolled
+    return quote
+        $(exprs...)
+        nothing
+    end
+end
+
+# Similar for copy operations
+@generated function copy_outputs_generated!(
+    ops::Tuple{Vararg{Any,N}}, 
+    output::AbstractVector{Float64}, 
+    scratch::AbstractVector{Float64}
+) where N
+    exprs = Expr[]
+    for i in 1:N
+        push!(exprs, :(copy_single_output!(ops[$i], output, scratch)))
+    end
+    
+    return quote
+        $(exprs...)
+        nothing
+    end
+end
+```
+
+#### Step 2: Hybrid Dispatch Strategy
+
+```julia
+# Smart dispatch based on tuple size
+const RECURSION_LIMIT = 35  # Below Julia's specialization limit
+
+@inline function execute_ops(ops::Tuple, scratch, data, row_idx)
+    if length(ops) <= RECURSION_LIMIT
+        # Use recursion for small tuples (better compiler optimization)
+        execute_ops_recursive(ops, scratch, data, row_idx)
+    else
+        # Use generated for large tuples (force specialization)
+        execute_ops_generated(ops, scratch, data, row_idx)
+    end
+end
+
+# Keep original recursive implementation renamed
+@inline execute_ops_recursive(::Tuple{}, scratch, data, row_idx) = nothing
+@inline function execute_ops_recursive(ops::Tuple, scratch, data, row_idx)
+    execute_op(first(ops), scratch, data, row_idx)
+    execute_ops_recursive(Base.tail(ops), scratch, data, row_idx)
+end
+
+# Same pattern for copy operations
+@inline function copy_outputs_from_ops!(ops::Tuple, output, scratch)
+    if length(ops) <= RECURSION_LIMIT
+        copy_outputs_recursive!(ops, output, scratch)
+    else
+        copy_outputs_generated!(ops, output, scratch)
+    end
+end
+```
+
+#### Step 3: Testing Strategy
+
+```julia
+# Test that generated version maintains zero allocations
+function test_generated_execution()
+    # Create a formula with 45+ operations
+    df = make_test_data(n=500)
+    data = Tables.columntable(df)
+    
+    # Four-way interaction (41 ops)
+    model = lm(@formula(y ~ x * y * z * w), df)
+    compiled = compile_formula_unified(model, data)
+    buffer = Vector{Float64}(undef, length(compiled))
+    
+    # Warm up (includes compilation of @generated)
+    for i in 1:10
+        compiled(buffer, data, 1)
+    end
+    
+    # Test allocation
+    @test (@allocated compiled(buffer, data, 1)) == 0
+end
+```
+
+### Why This Approach is Optimal
+
+1. **Minimal Code Change**: Only ~30 lines of new code
+2. **Surgical Precision**: Only affects formulas with 35+ operations
+3. **No API Changes**: Completely transparent to users
+4. **Preserves Performance**: Small formulas still use optimal recursion
+5. **Solves the Problem**: Should eliminate all remaining allocations
+
+### Expected Outcomes
+
+- **Four-way interactions**: 0 bytes (down from 272-336)
+- **All 35 test formulas**: 100% zero allocation
+- **Compile time**: Slight increase on first execution of large formulas
+- **Runtime performance**: Same or better than current
+
+### Risks and Mitigations
+
+| Risk | Mitigation |
+|------|------------|
+| Long compile times | Only use for 35+ operations |
+| Method size limits | Monitor generated code size |
+| Debugging difficulty | Keep recursive version for debugging |
+| Julia version compatibility | Test across Julia versions |
+
+### Implementation Priority
+
+This is **medium priority** because:
+- Current system already achieves 94% success
+- Only affects extreme edge cases
+- 272 bytes for four-way interactions is acceptable
+- But implementing would achieve 100% zero allocation goal
+
+### Testing Checklist
+
+- [ ] Verify zero allocations for all 35 test formulas
+- [ ] Benchmark compile time for @generated functions  
+- [ ] Test with formulas up to 100 operations
+- [ ] Ensure no regression for small formulas
+- [ ] Test thread safety of generated functions
+- [ ] Verify performance across different Julia versions
