@@ -20,9 +20,9 @@ Zero-allocation input value access mirroring get_input_value exactly.
     return input
 end
 
-# Column references - compile-time dispatch  
-@inline function get_interaction_value(input::Symbol, output, scratch, input_data, row_idx)
-    return Float64(get_data_value_specialized(input_data, input, row_idx))
+# Column references - compile-time dispatch
+@inline function get_interaction_value(input::Val{column}, output, scratch, input_data, row_idx) where column
+    return Float64(get_data_value_type_stable(input_data, input, row_idx))
 end
 
 # Output positions - compile-time dispatch
@@ -240,17 +240,31 @@ Get value from input source, handling all source types with type dispatch.
     return source
 end
 
-# Column sources (continuous/categorical variables)
 @inline function get_value_from_source(
-    source::Symbol, 
-    component::AbstractEvaluator, 
-    index::Int, 
-    input_data::NamedTuple, 
-    row_idx::Int, 
-    output::AbstractVector{Float64}, 
+    source::Val{column},
+    component::AbstractEvaluator,
+    index::Int,
+    input_data::NamedTuple,
+    row_idx::Int,
+    output::AbstractVector{Float64},
+    scratch::AbstractVector{Float64}
+) where column
+    if index != 1
+        error("Typed column source is scalar but got index=$index (must be 1)")
+    end
+    return Float64(get_data_value_type_stable(input_data, source, row_idx))
+end
+
+# Fallback for symbol sources (categoricals or legacy paths)
+@inline function get_value_from_source(
+    source::Symbol,
+    component::AbstractEvaluator,
+    index::Int,
+    input_data::NamedTuple,
+    row_idx::Int,
+    output::AbstractVector{Float64},
     scratch::AbstractVector{Float64}
 )
-    # Always use component-based access, don't re-access raw data
     return get_component_interaction_value(component, index, input_data, row_idx, output, scratch)
 end
 
@@ -433,8 +447,8 @@ struct LinearizedInteractionOperation
     operation_type::Symbol  # :intermediate_interaction or :final_interaction
     component1::AbstractEvaluator
     component2::AbstractEvaluator
-    input1_source::Union{Symbol, Int, Float64, InteractionScratchPosition}
-    input2_source::Union{Symbol, Int, Float64, InteractionScratchPosition}
+    input1_source::Union{Val, Symbol, Int, Float64, InteractionScratchPosition}
+    input2_source::Union{Val, Symbol, Int, Float64, InteractionScratchPosition}
     output_positions::Vector{Int}
     scratch_position::Union{Int, Nothing}  # For intermediate operations only
     function_pre_evals::Vector{FunctionPreEvalOperation}  # Will be converted to tuple
@@ -495,7 +509,7 @@ function get_component_input_source(component::AbstractEvaluator)
     if component isa ConstantEvaluator
         return component.value
     elseif component isa ContinuousEvaluator
-        return component.column
+        return Val(get_column_symbol(component))
     elseif component isa CategoricalEvaluator
         return component.column
     elseif component isa FunctionEvaluator
@@ -621,7 +635,7 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
             if comp isa CategoricalEvaluator
                 push!(processed_input_sources, comp.column)
             elseif comp isa ContinuousEvaluator
-                push!(processed_input_sources, comp.column)
+                push!(processed_input_sources, Val(get_column_symbol(comp)))
             elseif comp isa ConstantEvaluator
                 push!(processed_input_sources, comp.value)
             else
