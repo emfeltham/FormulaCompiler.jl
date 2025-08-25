@@ -593,8 +593,11 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
                 else
                     ntuple(length(intermediate_ops)) do j
                         op = intermediate_ops[j]
-                        input1 = length(op.inputs) > 0 ? op.inputs[1] : Symbol()
-                        input2 = length(op.inputs) > 1 ? op.inputs[2] : Symbol()
+                        if length(op.inputs) == 0
+                            error("Function intermediate op missing inputs")
+                        end
+                        input1 = op.inputs[1]
+                        input2 = length(op.inputs) > 1 ? op.inputs[2] : 1.0
                         IntermediateBinaryFunctionData(op.func, input1, input2, op.scratch_position)
                     end
                 end
@@ -604,8 +607,11 @@ function decompose_interaction_tree_zero_alloc(interaction_eval::InteractionEval
                 else
                     ntuple(length(final_ops)) do j
                         op = final_ops[j]
-                        input1 = length(op.inputs) > 0 ? op.inputs[1] : Symbol()
-                        input2 = length(op.inputs) > 1 ? op.inputs[2] : Symbol()
+                        if length(op.inputs) == 0
+                            error("Function final op missing inputs")
+                        end
+                        input1 = op.inputs[1]
+                        input2 = length(op.inputs) > 1 ? op.inputs[2] : 1.0
                         FinalBinaryFunctionData(op.func, input1, input2, op.output_position)
                     end
                 end
@@ -745,14 +751,8 @@ function create_intermediate_interaction_data(op::LinearizedInteractionOperation
     # FIXED: Create pattern as tuple
     pattern_tuple = compute_interaction_pattern_tuple(width1, width2)
     
-    # FIXED: Convert pre-evals vector to tuple
-    pre_evals_tuple = if isempty(op.function_pre_evals)
-        ()
-    else
-        ntuple(length(op.function_pre_evals)) do i
-            op.function_pre_evals[i]
-        end
-    end
+    # Pre-evals now run in global function phase; keep empty here
+    pre_evals_tuple = ()
     
     return IntermediateInteractionData(
         op.component1,
@@ -763,7 +763,7 @@ function create_intermediate_interaction_data(op::LinearizedInteractionOperation
         width2,
         pattern_tuple,      # Now a tuple
         op.scratch_position,
-        pre_evals_tuple     # Now a tuple
+        pre_evals_tuple     # Empty; pre-evals handled globally
     )
 end
 
@@ -804,14 +804,8 @@ function create_final_interaction_data(op::LinearizedInteractionOperation)
     
     output_position = length(op.output_positions) > 0 ? op.output_positions[1] : 1
     
-    # FIXED: Convert pre-evals vector to tuple
-    pre_evals_tuple = if isempty(op.function_pre_evals)
-        ()
-    else
-        ntuple(length(op.function_pre_evals)) do i
-            op.function_pre_evals[i]
-        end
-    end
+    # Pre-evals now run in global function phase; keep empty here
+    pre_evals_tuple = ()
     
     return FinalInteractionData(
         op.component1,
@@ -822,7 +816,7 @@ function create_final_interaction_data(op::LinearizedInteractionOperation)
         width2,
         pattern_tuple,      # Now a tuple
         output_position,
-        pre_evals_tuple     # Now a tuple
+        pre_evals_tuple     # Empty; pre-evals handled globally
     )
 end
 
@@ -1148,7 +1142,9 @@ function analyze_interaction_operations_linear(evaluator::CombinedEvaluator)
     
     if n_interactions == 0
         empty_data = SpecializedInteractionData(())
-        return empty_data, InteractionOp(0, 0)
+        empty_fd = SpecializedFunctionData((), (), ())
+        empty_fop = FunctionOp(0, 0, 0)
+        return empty_data, InteractionOp(0, 0), empty_fd, empty_fop
     end
     
     temp_allocator = TempAllocator(1)
@@ -1158,6 +1154,11 @@ function analyze_interaction_operations_linear(evaluator::CombinedEvaluator)
     total_intermediate = 0
     total_final = 0
     
+    # Accumulate function pre-evals from interactions to run globally in Step 3 phase
+    extra_unary = ()
+    extra_intermediate = ()
+    extra_final = ()
+
     for (idx, interaction_eval) in enumerate(interaction_evaluators)
         operations = decompose_interaction_tree_zero_alloc(interaction_eval, temp_allocator)
         
@@ -1165,7 +1166,19 @@ function analyze_interaction_operations_linear(evaluator::CombinedEvaluator)
         intermediate_ops = filter(op -> op.operation_type == :intermediate_interaction, operations)
         final_ops = filter(op -> op.operation_type in [:final_interaction, :specialized_interaction], operations)
         
-        # Store for ntuple construction
+        # Collect function pre-evals from these operations for global Step 3 execution
+        for op in operations
+            if !isempty(op.function_pre_evals)
+                for pre in op.function_pre_evals
+                    fd = pre.function_data
+                    extra_unary = (extra_unary..., fd.unary_functions...)
+                    extra_intermediate = (extra_intermediate..., fd.intermediate_binaries...)
+                    extra_final = (extra_final..., fd.final_binaries...)
+                end
+            end
+        end
+
+        # Store for ntuple construction (pre-evals will be empty in data objects)
         all_decomposed_interactions[idx] = (intermediate_ops, final_ops, idx)
         total_intermediate += length(intermediate_ops)
         total_final += length(final_ops)
@@ -1191,7 +1204,11 @@ function analyze_interaction_operations_linear(evaluator::CombinedEvaluator)
     specialized_data = SpecializedInteractionData(complete_tuple)
     interaction_op = InteractionOp(total_intermediate, total_final)
     
-    return specialized_data, interaction_op
+    # Build extra function data/op from accumulated pre-evals
+    extra_function_data = SpecializedFunctionData(extra_unary, extra_intermediate, extra_final)
+    extra_function_op = FunctionOp(length(extra_unary), length(extra_intermediate), length(extra_final))
+
+    return specialized_data, interaction_op, extra_function_data, extra_function_op
 end
 
 ###############################################################################
@@ -1508,7 +1525,14 @@ function analyze_evaluator(evaluator::AbstractEvaluator)
         continuous_data, continuous_op = analyze_continuous_operations(evaluator)
         categorical_data, categorical_op = analyze_categorical_operations(evaluator)
         function_data, function_op = analyze_function_operations_linear(evaluator)
-        interaction_data, interaction_op = analyze_interaction_operations_linear(evaluator)
+        interaction_data, interaction_op, extra_fd, extra_fop = analyze_interaction_operations_linear(evaluator)
+
+        # Merge function data/op with interaction pre-evals promoted to global function phase
+        merged_unary = (function_data.unary_functions..., extra_fd.unary_functions...)
+        merged_intermediate = (function_data.intermediate_binaries..., extra_fd.intermediate_binaries...)
+        merged_final = (function_data.final_binaries..., extra_fd.final_binaries...)
+        function_data = SpecializedFunctionData(merged_unary, merged_intermediate, merged_final)
+        function_op = FunctionOp(length(merged_unary), length(merged_intermediate), length(merged_final))
         
         max_function_scratch = calculate_max_function_scratch_needed(evaluator)
         max_interaction_scratch = calculate_max_interaction_scratch_needed(evaluator)
