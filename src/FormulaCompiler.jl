@@ -86,30 +86,17 @@ using StandardizedPredictors: ZScoredTerm
 include("core/utilities.jl")
 export not, OverrideVector
 
-################################# Compilation #################################
+################################# Integration #################################
 
 # External package integration
 include("integration/mixed_models.jl")
 
-# Evaluation system (needed by compilation)
-include("evaluation/evaluators.jl")
-include("evaluation/data_access.jl")
-include("evaluation/function_ops.jl")
+################################# Compilation #################################
 
-# Compilation system
-include("compilation/term_compiler.jl")
-include("compilation/legacy_compiled.jl")
-export compile_formula_
+# Compilation system (unified)
+include("compilation/compilation.jl")
 
-# Specialized compilation pipeline
-include("compilation/pipeline/step1_constants.jl")
-include("compilation/pipeline/step2_categorical.jl")
-include("compilation/pipeline/step3_functions.jl")
-include("compilation/pipeline/step4_interactions.jl")
-include("compilation/pipeline/step4_function_interactions.jl")
-
-export test_new_interaction_system
-export compile_formula, compile_formula_complete
+export compile_formula, compile_unified
 
 ################################## Scenarios ##################################
 
@@ -128,6 +115,7 @@ export ModelRowEvaluator, modelrow!, modelrow
 
 # Development utilities (only include in dev builds)
 include("dev/testing_utilities.jl")
+export test_correctness, test_data, make_test_data
 
 ############################## Future Features ##############################
 

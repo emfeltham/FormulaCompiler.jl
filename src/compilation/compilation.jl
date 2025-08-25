@@ -24,8 +24,7 @@ function get_fixed_effects_formula(model)
     end
 end
 
-# Import the fixed_effects_form function
-include("../integration/mixed_models.jl")
+# The fixed_effects_form function is imported at the module level
 
 # Primary API: Compile from model (has schema-applied formula)
 function compile_formula(model, data_example::NamedTuple)

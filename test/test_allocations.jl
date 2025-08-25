@@ -1,7 +1,7 @@
-# test_allocation_survey.jl
+# test_allocations.jl
 # Formal test suite for zero-allocation verification
 
-# julia --project="." test/test_allocation_survey.jl > test/test_allocation_survey_output.txt 2>&1
+# julia --project="." test/test_allocations.jl > test/test_allocations.txt 2>&1
 
 using Test
 using FormulaCompiler
@@ -9,8 +9,6 @@ using DataFrames, GLM, Tables, CategoricalArrays, MixedModels
 using StatsModels, BenchmarkTools
 using FormulaCompiler: make_test_data, test_formulas
 using Random
-
-include("../src/compilation/compilation.jl")
 
 @testset "Zero Allocation Survey" begin
     Random.seed!(08540)
