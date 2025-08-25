@@ -1,35 +1,36 @@
 category,name,model_type,model_size,memory_bytes,time_ns,status
-LM,Intercept only,LinearModel,1,0,4.833,✅ PASS
+LM,Intercept only,LinearModel,1,0,4.375,✅ PASS
 LM,No intercept,LinearModel,1,0,5.25,✅ PASS
 LM,Simple continuous,LinearModel,2,0,5.25,✅ PASS
-LM,Simple categorical,LinearModel,3,0,37.80563947633434,✅ PASS
+LM,Simple categorical,LinearModel,3,0,34.54024144869215,✅ PASS
 LM,Multiple continuous,LinearModel,3,0,5.25,✅ PASS
-LM,Multiple categorical,LinearModel,6,0,74.07407407407408,✅ PASS
-LM,Mixed,LinearModel,4,0,38.97883064516129,✅ PASS
-LM,Simple interaction,LinearModel,6,0,101.24734607218684,✅ PASS
-LM,Interaction w/o main,LinearModel,4,0,95.57264050901378,✅ PASS
-LM,Function,LinearModel,2,0,7.042,✅ PASS
-LM,Three-way interaction,LinearModel,12,0,228.62391304347827,✅ PASS
-LM,Four-way interaction,LinearModel,48,0,1637.5,✅ PASS
-LM,Four-way w/ function,LinearModel,48,1680,2731.4444444444443,❌ BIG FAIL
-LM,Complex interaction,LinearModel,19,544,818.6120689655172,❌ BIG FAIL
-GLM,Logistic: simple,GeneralizedLinearModel,2,0,5.25,✅ PASS
-GLM,Logistic: mixed,GeneralizedLinearModel,4,0,38.100704934541795,✅ PASS
-GLM,Logistic: interaction,GeneralizedLinearModel,6,0,102.12765957446808,✅ PASS
-GLM,Logistic: function,GeneralizedLinearModel,4,0,43.305751765893035,✅ PASS
-GLM,Logistic: complex,GeneralizedLinearModel,16,0,262.83174603174604,✅ PASS
+LM,Multiple categorical,LinearModel,6,0,65.09387755102041,✅ PASS
+LM,Mixed,LinearModel,4,0,34.40785498489426,✅ PASS
+LM,Simple interaction,LinearModel,6,0,91.75392670157068,✅ PASS
+LM,Interaction w/o main,LinearModel,4,0,87.86102403343783,✅ PASS
+LM,Function,LinearModel,2,0,7.25,✅ PASS
+LM,Function in interaction,LinearModel,4,176,125.59779005524862,❌ BIG FAIL
+LM,Three-way interaction,LinearModel,12,0,201.2,✅ PASS
+LM,Four-way interaction,LinearModel,48,0,1550.0,✅ PASS
+LM,Four-way w/ function,LinearModel,48,1104,2407.4444444444443,❌ BIG FAIL
+LM,Complex interaction,LinearModel,19,544,761.3931623931624,❌ BIG FAIL
+GLM,Logistic: simple,GeneralizedLinearModel,2,0,4.833,✅ PASS
+GLM,Logistic: mixed,GeneralizedLinearModel,4,0,34.414486921529175,✅ PASS
+GLM,Logistic: interaction,GeneralizedLinearModel,6,0,91.91945606694561,✅ PASS
+GLM,Logistic: function,GeneralizedLinearModel,4,0,39.4803229061554,✅ PASS
+GLM,Logistic: complex,GeneralizedLinearModel,16,0,240.31476997578693,✅ PASS
 GLM,Poisson: simple,GeneralizedLinearModel,2,0,5.25,✅ PASS
-GLM,Poisson: mixed,GeneralizedLinearModel,4,0,38.85181451612903,✅ PASS
-GLM,Poisson: interaction,GeneralizedLinearModel,6,0,103.12166488794024,✅ PASS
-GLM,Gamma: mixed,GeneralizedLinearModel,4,0,38.306451612903224,✅ PASS
-GLM,Gaussian: mixed,GeneralizedLinearModel,4,0,38.80726538849647,✅ PASS
+GLM,Poisson: mixed,GeneralizedLinearModel,4,0,34.74320241691843,✅ PASS
+GLM,Poisson: interaction,GeneralizedLinearModel,6,0,92.11215932914047,✅ PASS
+GLM,Gamma: mixed,GeneralizedLinearModel,4,0,34.700906344410875,✅ PASS
+GLM,Gaussian: mixed,GeneralizedLinearModel,4,0,34.700906344410875,✅ PASS
 LMM,Random intercept,LinearMixedModel,2,0,5.25,✅ PASS
-LMM,Mixed + categorical,LinearMixedModel,4,0,39.650201612903224,✅ PASS
-LMM,Random slope,LinearMixedModel,2,0,5.375,✅ PASS
-LMM,Random slope + cat,LinearMixedModel,4,0,39.69254032258065,✅ PASS
+LMM,Mixed + categorical,LinearMixedModel,4,0,34.414486921529175,✅ PASS
+LMM,Random slope,LinearMixedModel,2,0,5.25,✅ PASS
+LMM,Random slope + cat,LinearMixedModel,4,0,34.74320241691843,✅ PASS
 LMM,Multiple random,LinearMixedModel,2,0,5.25,✅ PASS
-LMM,Interaction + random,LinearMixedModel,6,0,102.83970276008493,✅ PASS
-GLMM,Logistic: 1,GeneralizedLinearMixedModel,2,0,5.25,✅ PASS
-GLMM,Logistic: 2,GeneralizedLinearMixedModel,4,0,39.48439073514602,✅ PASS
+LMM,Interaction + random,LinearMixedModel,6,0,92.05968586387435,✅ PASS
+GLMM,Logistic: 1,GeneralizedLinearMixedModel,2,0,4.833,✅ PASS
+GLMM,Logistic: 2,GeneralizedLinearMixedModel,4,0,34.70191339375629,✅ PASS
 GLMM,Poisson: 1,GeneralizedLinearMixedModel,2,0,5.25,✅ PASS
-GLMM,Poisson: 2,GeneralizedLinearMixedModel,4,0,39.020161290322584,✅ PASS
+GLMM,Poisson: 2,GeneralizedLinearMixedModel,4,0,34.700906344410875,✅ PASS
