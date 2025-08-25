@@ -1,36 +1,36 @@
 category,name,model_type,model_size,memory_bytes,time_ns,status
 LM,Intercept only,LinearModel,1,0,2.833,✅ PASS
-LM,No intercept,LinearModel,1,0,3.083,✅ PASS
-LM,Simple continuous,LinearModel,2,0,4.583,✅ PASS
+LM,No intercept,LinearModel,1,0,3.041,✅ PASS
+LM,Simple continuous,LinearModel,2,0,4.541,✅ PASS
 LM,Simple categorical,LinearModel,3,0,5.041,✅ PASS
 LM,Multiple continuous,LinearModel,3,0,4.833,✅ PASS
-LM,Multiple categorical,LinearModel,6,0,7.25,✅ PASS
+LM,Multiple categorical,LinearModel,6,0,7.041,✅ PASS
 LM,Mixed,LinearModel,4,0,5.708,✅ PASS
-LM,Simple interaction,LinearModel,5,0,6.208,✅ PASS
-LM,Interaction w/o main,LinearModel,2,0,5.917,✅ PASS
-LM,Function,LinearModel,2,0,6.625,✅ PASS
-LM,Function in interaction,LinearModel,4,0,9.25,✅ PASS
-LM,Three-way interaction,LinearModel,9,0,8.584,✅ PASS
-LM,Four-way interaction,LinearModel,19,272,3552.125,❌ BIG FAIL
-LM,Four-way w/ function,LinearModel,19,336,5354.166666666667,❌ BIG FAIL
+LM,Simple interaction,LinearModel,5,0,6.375,✅ PASS
+LM,Interaction w/o main,LinearModel,2,0,6.208,✅ PASS
+LM,Function,LinearModel,2,0,6.833,✅ PASS
+LM,Function in interaction,LinearModel,4,0,9.25925925925926,✅ PASS
+LM,Three-way interaction,LinearModel,9,0,8.258258258258259,✅ PASS
+LM,Four-way interaction,LinearModel,19,0,16.74248496993988,✅ PASS
+LM,Four-way w/ function,LinearModel,19,0,28.865461847389557,✅ PASS
 LM,Complex interaction,LinearModel,14,0,14.014014014014014,✅ PASS
-GLM,Logistic: simple,GeneralizedLinearModel,2,0,3.5,✅ PASS
-GLM,Logistic: mixed,GeneralizedLinearModel,4,0,5.75,✅ PASS
-GLM,Logistic: interaction,GeneralizedLinearModel,5,0,6.166,✅ PASS
+GLM,Logistic: simple,GeneralizedLinearModel,2,0,4.5,✅ PASS
+GLM,Logistic: mixed,GeneralizedLinearModel,4,0,5.708,✅ PASS
+GLM,Logistic: interaction,GeneralizedLinearModel,5,0,6.375,✅ PASS
 GLM,Logistic: function,GeneralizedLinearModel,4,0,8.591591591591591,✅ PASS
-GLM,Logistic: complex,GeneralizedLinearModel,13,0,12.054054054054054,✅ PASS
-GLM,Poisson: simple,GeneralizedLinearModel,2,0,3.5,✅ PASS
-GLM,Poisson: mixed,GeneralizedLinearModel,4,0,5.541,✅ PASS
+GLM,Logistic: complex,GeneralizedLinearModel,13,0,12.387387387387387,✅ PASS
+GLM,Poisson: simple,GeneralizedLinearModel,2,0,4.583,✅ PASS
+GLM,Poisson: mixed,GeneralizedLinearModel,4,0,5.709,✅ PASS
 GLM,Poisson: interaction,GeneralizedLinearModel,5,0,6.375,✅ PASS
 GLM,Gamma: mixed,GeneralizedLinearModel,4,0,5.708,✅ PASS
-GLM,Gaussian: mixed,GeneralizedLinearModel,4,0,5.792,✅ PASS
+GLM,Gaussian: mixed,GeneralizedLinearModel,4,0,5.75,✅ PASS
 LMM,Random intercept,LinearMixedModel,2,0,4.583,✅ PASS
-LMM,Mixed + categorical,LinearMixedModel,4,0,5.75,✅ PASS
-LMM,Random slope,LinearMixedModel,2,0,3.5,✅ PASS
-LMM,Random slope + cat,LinearMixedModel,4,0,5.75,✅ PASS
-LMM,Multiple random,LinearMixedModel,2,0,4.583,✅ PASS
+LMM,Mixed + categorical,LinearMixedModel,4,0,5.708,✅ PASS
+LMM,Random slope,LinearMixedModel,2,0,4.583,✅ PASS
+LMM,Random slope + cat,LinearMixedModel,4,0,5.708,✅ PASS
+LMM,Multiple random,LinearMixedModel,2,0,3.541,✅ PASS
 LMM,Interaction + random,LinearMixedModel,5,0,6.375,✅ PASS
 GLMM,Logistic: 1,GeneralizedLinearMixedModel,2,0,4.583,✅ PASS
 GLMM,Logistic: 2,GeneralizedLinearMixedModel,4,0,5.708,✅ PASS
-GLMM,Poisson: 1,GeneralizedLinearMixedModel,2,0,3.5,✅ PASS
-GLMM,Poisson: 2,GeneralizedLinearMixedModel,4,0,5.542,✅ PASS
+GLMM,Poisson: 1,GeneralizedLinearMixedModel,2,0,4.583,✅ PASS
+GLMM,Poisson: 2,GeneralizedLinearMixedModel,4,0,5.75,✅ PASS
