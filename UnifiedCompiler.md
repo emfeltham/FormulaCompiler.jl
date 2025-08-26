@@ -498,7 +498,7 @@ The Phase 6 @generated optimization successfully addressed Julia's tuple special
 The last remaining allocation (96 bytes in "Logistic: complex") was solved by recognizing that Julia's tuple specialization is heuristic-based with no guaranteed cutoff:
 
 - Problem: Complex formulas (~26-35 operations) hit Julia's unpredictable specialization zone
-- Solution: Lowered `RECURSION_LIMIT` from 35 → 25 for reliable specialization  
+- Solution: Lowered `RECURSION_LIMIT` from 35 to 25 for reliable specialization  
 - Result: 100% zero allocation across all 105 test cases
 - Learning: Conservative empirical tuning > theoretical limits for robust performance
 
