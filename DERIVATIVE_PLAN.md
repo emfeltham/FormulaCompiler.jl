@@ -93,6 +93,7 @@
 5. M4: FD fallback backend (central differences) using the same wrappers; implement discrete contrasts API.
 6. M5: Batch interfaces (multiple rows) with in-place Jacobian blocks; ensure memory reuse.
 7. M6: Docs and examples (marginal effects via `Δη = J * β`; GLM `μ` extension outline) and comprehensive tests.
+8. M7: Polish pass — docs (docstrings, guide examples, FAQ), broaden tests (LM/GLM/LMM, standardized predictors), assert zero allocations after warmup across scenarios, API surface review (keep helpers internal), short performance section and MixedModels note.
 
 ## Open Questions
 
@@ -100,3 +101,28 @@
 - Default backend: prefer `:fd` for now? Add `method=:auto` to select ForwardDiff when `n_vars` is small and ops are Dual-compatible.
 - Discrete contrast API: return both `Δ` and the “to” row for convenience?
 - Standardized predictors: include chain rule now or defer to v2?
+
+## Current Status
+
+- Executor: Generic over `T<:Real` and Dual-safe; contrasts convert to `T`.
+- ForwardDiff path: Prebuilt overrides and merged data; typed closure/config; no per-call merges; steady-state allocations at/near zero.
+- FD fallback: Central differences; used for cross-checks and robust baseline.
+- Contrasts: Discrete contrasts for categorical variables via row-local overrides (values normalized to CategoricalValue levels).
+- Marginal effects: Helpers for η = Xβ and μ via Identity/Log/Logit.
+
+## Polish Plan
+
+- Docs polish
+  - Add docstrings for: `build_derivative_evaluator`, `derivative_modelrow!`, `derivative_modelrow`, `derivative_modelrow_fd!`, `derivative_modelrow_fd`, `contrast_modelrow!`, `contrast_modelrow`, `continuous_variables`, `marginal_effects_eta/μ`.
+  - Expand guide with GLM(Logit) marginal effects example and a minimal MixedModels fixed-effects example.
+  - Add FAQ: choosing vars (`continuous_variables`), chunk sizing (`Chunk{N}` vs `:auto`), derivatives vs contrasts.
+- Tests polish
+  - LM + GLM(Logit) + MixedModels fixed-effects derivatives/contrasts.
+  - Case with standardized predictors (document chain rule note for v2).
+  - Multi-variate contrasts, zero-allocation assertions after warmup across scenarios.
+- API clarity
+  - Keep `SingleRowOverrideVector` internal; ensure exports match intended surface.
+  - Import `LinearAlgebra.mul!` where used; keep naming consistent with codebase. (DONE, imported in FormulaCompiler.jl)
+- Performance notes
+  - Short section: compile once, zero-alloc steady-state; example benchmark snippet.
+  - MixedModels note: derivatives target fixed effects only.
