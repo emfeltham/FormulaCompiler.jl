@@ -1,5 +1,6 @@
 # test_allocations.jl
 # Formal test suite for zero-allocation verification
+# "allocation_survey.jl" prints allocations to a table.
 
 # julia --project="." test/test_allocations.jl > test/test_allocations.txt 2>&1
 
@@ -11,7 +12,7 @@ using FormulaCompiler: make_test_data, test_formulas, test_zero_allocation
 using Random
 
 @testset "Zero Allocation Survey" begin
-    Random.seed!(08540)
+    Random.seed!(10115)
     
     # Setup test data
     n = 500

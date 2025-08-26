@@ -9,8 +9,6 @@ using StatsModels, BenchmarkTools, CSV
 using FormulaCompiler: make_test_data, test_formulas
 using Random
 
-include("../src/compilation/compilation.jl")
-
 Random.seed!(08540)
 
 # Setup
@@ -111,5 +109,3 @@ end
 results_df
 CSV.write("test/allocation_results.csv", results_df);
 println("WRITTEN: test/allocation_results.csv")
-
-show(results_df; allrows= true)
