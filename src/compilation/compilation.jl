@@ -119,10 +119,5 @@ function compile_formula(formula::FormulaTerm, data_example::NamedTuple)
     return UnifiedCompiled{typeof(ops_tuple), scratch_size, output_size}(ops_tuple)
 end
 
-# Alternative entry point that matches current API
-function compile_unified(model, data::NamedTuple)
-    return compile_formula(model, data)
-end
-
 # Export main functions
 export UnifiedCompiled, compile_formula, compile_unified
