@@ -128,6 +128,15 @@ export DataScenario, create_scenario, create_override_data, create_override_vect
 include("evaluation/modelrow.jl")
 export ModelRowEvaluator, modelrow!, modelrow
 
+################################ Derivatives ################################
+
+# ForwardDiff-based derivative evaluation (zero-alloc after warmup)
+include("evaluation/derivatives.jl")
+export build_derivative_evaluator, derivative_modelrow!, derivative_modelrow
+export derivative_modelrow_fd!, derivative_modelrow_fd
+export contrast_modelrow!, contrast_modelrow
+export continuous_variables
+
 ############################## Development Tools ##############################
 
 # Development utilities (only include in dev builds)

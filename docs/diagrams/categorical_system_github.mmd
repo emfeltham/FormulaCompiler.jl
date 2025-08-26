@@ -1,0 +1,39 @@
+graph TD
+    subgraph "Compilation Phase"
+        A["CategoricalTerm<br>from fitted model"] --> B["Extract Contrast Matrix<br>term.contrasts.matrix"]
+        B --> C["Determine Levels<br>term.contrasts.levels"]
+        C --> D["Map to Output Positions<br>position specialization"]
+    end
+    
+    subgraph "Runtime Phase"  
+        E["Data Row Access"] --> F["Extract Level Code<br>levelcode(categorical_data[idx])"]
+        F --> G["Apply Contrast Row<br>contrast_matrix[level_code, :]"]
+        G --> H["Store in Output Positions<br>zero allocations"]
+    end
+    
+    subgraph "Interaction Handling"
+        I["Component 1<br>group1: 4 levels → 3 contrast cols"]
+        J["Component 2<br>group2: 3 levels → 2 contrast cols"]
+        
+        I --> K["Kronecker Product<br>3 × 2 = 6 interaction columns"]
+        J --> K
+        
+        K --> L["StatsModels Compatible Ordering<br>First component varies fast"]
+    end
+    
+    subgraph "Scenario Integration"
+        M["Categorical Override"] --> N["Validate Level Exists<br>Error if invalid"]
+        N --> O["Create OverrideVector<br>Constant categorical level"]
+        O --> P["Same Performance<br>As original data"]
+    end
+    
+    D --> E
+    H --> Output["Final Output Vector<br>Ready for analysis"]
+    L --> Output
+    P --> F
+    
+    style B fill:#f3e5f5
+    style F fill:#e8f5e8
+    style K fill:#fff3e0
+    style O fill:#f3e5f5
+    style Output fill:#e8f5e8

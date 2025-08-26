@@ -1,0 +1,40 @@
+graph TB
+    subgraph "External Ecosystem"
+        GLM["GLM.jl<br>Linear Models"]
+        MM["MixedModels.jl<br>Mixed Effects"]
+        Data["Tables.jl<br>Data Sources"]
+        Cat["CategoricalArrays.jl<br>Categorical Data"]
+    end
+    
+    subgraph "FormulaCompiler Core"
+        Comp["Compilation System<br>Position Mapping"]
+        Exec["Runtime System<br>Zero Allocation Execution"]
+        Scen["Scenario System<br>Memory Efficient Overrides"]
+        Utils["Core Utilities<br>OverrideVector, helpers"]
+    end
+    
+    subgraph "Performance Results"
+        Perf1["~50ns per row"]
+        Perf2["Zero allocations"] 
+        Perf3[">99% memory savings"]
+    end
+    
+    GLM --> Comp
+    MM --> Comp
+    Data --> Comp
+    Cat --> Comp
+    Comp --> Exec
+    Data --> Scen
+    Utils --> Scen
+    Scen --> Exec
+    
+    Exec --> Perf1
+    Exec --> Perf2
+    Scen --> Perf3
+    
+    style Comp fill:#f3e5f5
+    style Exec fill:#e8f5e8  
+    style Scen fill:#e1f5fe
+    style Perf1 fill:#e8f5e8
+    style Perf2 fill:#e8f5e8
+    style Perf3 fill:#e8f5e8

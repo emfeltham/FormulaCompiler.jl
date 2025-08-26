@@ -84,7 +84,7 @@ formulas into zero-allocation execution plans. The system works in three phases:
 
 ## Returns
 
-`UnifiedCompiled{OpsTuple, ScratchSize, OutputSize}` containing:
+`UnifiedCompiled{T, OpsTuple, ScratchSize, OutputSize}` containing:
 - Type-specialized operation tuple
 - Pre-allocated scratch buffer  
 - Position mappings embedded in operation types
@@ -100,8 +100,8 @@ function compile_formula(model, data_example::NamedTuple)
     # Convert to tuple for type stability
     ops_tuple = Tuple(ops_vec)
     
-    # Create specialized compiled formula
-    return UnifiedCompiled{typeof(ops_tuple), scratch_size, output_size}(ops_tuple)
+    # Create specialized compiled formula (Float64 by default)
+    return UnifiedCompiled{Float64, typeof(ops_tuple), scratch_size, output_size}(ops_tuple)
 end
 
 # Export main functions

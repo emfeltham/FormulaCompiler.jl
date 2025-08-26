@@ -240,18 +240,18 @@ for row_idx in 1:nrows
 end
 ```
 """
-struct UnifiedCompiled{OpsTuple, ScratchSize, OutputSize}
-    ops::OpsTuple  # NTuple of operations
-    scratch::Vector{Float64}  # Pre-allocated scratch buffer of exact size
+struct UnifiedCompiled{T, OpsTuple, ScratchSize, OutputSize}
+    ops::OpsTuple              # NTuple of operations
+    scratch::Vector{T}         # Pre-allocated scratch buffer of exact size
     
-    function UnifiedCompiled{OpsTuple, ScratchSize, OutputSize}(ops::OpsTuple) where {OpsTuple, ScratchSize, OutputSize}
-        scratch = Vector{Float64}(undef, ScratchSize)
-        new{OpsTuple, ScratchSize, OutputSize}(ops, scratch)
+    function UnifiedCompiled{T, OpsTuple, ScratchSize, OutputSize}(ops::OpsTuple) where {T, OpsTuple, ScratchSize, OutputSize}
+        scratch = Vector{T}(undef, ScratchSize)
+        new{T, OpsTuple, ScratchSize, OutputSize}(ops, scratch)
     end
 end
 
 # Get the output size of the compiled formula
-Base.length(::UnifiedCompiled{OpsTuple, ScratchSize, OutputSize}) where {OpsTuple, ScratchSize, OutputSize} = OutputSize
+Base.length(::UnifiedCompiled{T, OpsTuple, ScratchSize, OutputSize}) where {T, OpsTuple, ScratchSize, OutputSize} = OutputSize
 
 """
     CompilationContext

@@ -81,14 +81,14 @@ ops = (
 ## Returns
 `nothing` (results written to `output` argument)
 """
-function (f::UnifiedCompiled{Ops, S, O})(
-    output::AbstractVector{Float64}, 
+function (f::UnifiedCompiled{T, Ops, S, O})(
+    output::AbstractVector{T}, 
     data::NamedTuple, 
     row_idx::Int
-) where {Ops, S, O}
+) where {T, Ops, S, O}
     # Use the formula's own pre-allocated scratch
     scratch = f.scratch
-    fill!(scratch, 0.0)  # Clear scratch
+    fill!(scratch, zero(T))  # Clear scratch
     execute_ops(f.ops, scratch, data, row_idx)  # Execute main operations
     copy_outputs_from_ops!(f.ops, output, scratch)  # Execute copy operations
     return nothing
@@ -101,10 +101,10 @@ end
 # Generated execution for operations - forces complete unrolling
 @generated function execute_ops_generated(
     ops::Tuple{Vararg{Any,N}}, 
-    scratch::AbstractVector{Float64}, 
+    scratch::AbstractVector{T}, 
     data::NamedTuple, 
     row_idx::Int
-) where N
+) where {N, T}
     # Build expressions for each operation
     exprs = Expr[]
     for i in 1:N
@@ -221,12 +221,12 @@ LoadOp{:group, 7}()  →  scratch[7] = Float64(data.group[row_idx])
 - Direct memory access with compile-time indices
 """
 @inline function execute_op(::LoadOp{Col, Out}, scratch, data, row_idx) where {Col, Out}
-    scratch[Out] = Float64(getproperty(data, Col)[row_idx])
+    scratch[Out] = convert(eltype(scratch), getproperty(data, Col)[row_idx])
 end
 
 # Constant value
 @inline function execute_op(::ConstantOp{Val, Out}, scratch, data, row_idx) where {Val, Out}
-    scratch[Out] = Val
+    scratch[Out] = convert(eltype(scratch), Val)
 end
 
 # Unary operations
@@ -358,7 +358,7 @@ end
     
     # Apply contrast matrix (stored as field)
     for (i, pos) in enumerate(Positions)
-        scratch[pos] = op.contrast_matrix[level, i]
+        scratch[pos] = convert(eltype(scratch), op.contrast_matrix[level, i])
     end
 end
 
@@ -376,9 +376,9 @@ end
 # Generated function for copy operations - forces complete unrolling
 @generated function copy_outputs_generated!(
     ops::Tuple{Vararg{Any,N}}, 
-    output::AbstractVector{Float64}, 
-    scratch::AbstractVector{Float64}
-) where N
+    output::AbstractVector{T}, 
+    scratch::AbstractVector{T}
+) where {N, T}
     exprs = Expr[]
     for i in 1:N
         push!(exprs, :(copy_single_output!(ops[$i], output, scratch)))

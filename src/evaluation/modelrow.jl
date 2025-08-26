@@ -55,10 +55,10 @@ modelrow!(row_vec, compiled, data, 1)  # Zero allocations
 """
 function modelrow!(
     row_vec::AbstractVector{Float64}, 
-    compiled::UnifiedCompiled{Ops, S, O}, 
+    compiled::UnifiedCompiled{T, Ops, S, O}, 
     data, 
     row_idx::Int
-) where {Ops, S, O}
+) where {T, Ops, S, O}
     @assert length(row_vec) >= length(compiled) "Vector too small: need $(length(compiled)), got $(length(row_vec))"
     @assert 1 <= row_idx <= length(first(data)) "Invalid row index: $row_idx (data has $(length(first(data))) rows)"
 
@@ -129,8 +129,8 @@ struct ModelRowEvaluator{Ops, S, O}
         row_vec = Vector{Float64}(undef, length(compiled))
         
         Ops = typeof(compiled.ops)
-        S = typeof(compiled).parameters[2]  # ScratchSize
-        O = typeof(compiled).parameters[3]  # OutputSize
+        S = typeof(compiled).parameters[3]  # ScratchSize (after T added)
+        O = typeof(compiled).parameters[4]  # OutputSize
         
         new{Ops, S, O}(compiled, data, row_vec)
     end
@@ -140,8 +140,8 @@ struct ModelRowEvaluator{Ops, S, O}
         row_vec = Vector{Float64}(undef, length(compiled))
         
         Ops = typeof(compiled.ops)
-        S = typeof(compiled).parameters[2]  # ScratchSize
-        O = typeof(compiled).parameters[3]  # OutputSize
+        S = typeof(compiled).parameters[3]  # ScratchSize (after T added)
+        O = typeof(compiled).parameters[4]  # OutputSize
         
         new{Ops, S, O}(compiled, data, row_vec)
     end
@@ -178,10 +178,10 @@ Batch evaluation using compiled formulas.
 """
 function modelrow_batch!(
     matrix::AbstractMatrix{Float64}, 
-    compiled::UnifiedCompiled{Ops, S, O}, 
+    compiled::UnifiedCompiled{T, Ops, S, O}, 
     data, 
     row_indices::AbstractVector{Int}
-) where {Ops, S, O}
+) where {T, Ops, S, O}
     @assert size(matrix, 1) >= length(row_indices) "Matrix height insufficient"
     @assert size(matrix, 2) == length(compiled) "Matrix width mismatch"
     
@@ -393,10 +393,10 @@ row_values = modelrow(compiled, data, 1)  # Returns Vector{Float64}
 ```
 """
 function modelrow(
-    compiled::UnifiedCompiled{Ops, S, O}, 
+    compiled::UnifiedCompiled{T, Ops, S, O}, 
     data, 
     row_idx::Int
-) where {Ops, S, O}
+) where {T, Ops, S, O}
     row_vec = Vector{Float64}(undef, length(compiled))
     compiled(row_vec, data, row_idx)
     return row_vec
@@ -414,10 +414,10 @@ matrix = modelrow(compiled, data, [1, 5, 10])  # Returns Matrix{Float64}
 ```
 """
 function modelrow(
-    compiled::UnifiedCompiled{Ops, S, O}, 
+    compiled::UnifiedCompiled{T, Ops, S, O}, 
     data, 
     row_indices::AbstractVector{Int}
-) where {Ops, S, O}
+) where {T, Ops, S, O}
     matrix = Matrix{Float64}(undef, length(row_indices), length(compiled))
     modelrow_batch!(matrix, compiled, data, row_indices)
     return matrix
@@ -440,7 +440,7 @@ end
 
 Evaluate model row using a data scenario with UnifiedCompiled (allocating version).
 """
-function modelrow(compiled::UnifiedCompiled{Ops, S, O}, scenario::DataScenario, row_idx::Int) where {Ops, S, O}
+function modelrow(compiled::UnifiedCompiled{T, Ops, S, O}, scenario::DataScenario, row_idx::Int) where {T, Ops, S, O}
     row_vec = Vector{Float64}(undef, length(compiled))
     compiled(row_vec, scenario.data, row_idx)
     return row_vec
