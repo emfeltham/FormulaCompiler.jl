@@ -96,7 +96,7 @@ include("integration/mixed_models.jl")
 # Compilation system (unified)
 include("compilation/compilation.jl")
 
-export compile_formula, compile_unified
+export compile_formula
 
 ################################## Scenarios ##################################
 
