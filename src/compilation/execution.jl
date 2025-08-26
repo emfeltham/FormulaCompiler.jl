@@ -2,6 +2,7 @@
 # Zero-allocation execution through compile-time dispatch
 
 using CategoricalArrays
+using FormulaCompiler: OverrideVector  # For scenario support
 
 # Threshold for switching from recursion to @generated
 const RECURSION_LIMIT = 35  # Below Julia's ~40 element specialization limit
@@ -297,25 +298,55 @@ end
     scratch[Out] = scratch[In1] ^ scratch[In2]
 end
 
-# Categorical contrast operation (multi-output)
+###############################################################################
+# DYNAMIC CATEGORICAL LEVEL EXTRACTION (From restart branch)
+###############################################################################
+
+"""
+    extract_level_code_zero_alloc(column_data, row_idx::Int) -> Int
+
+Extract level code with zero allocations using type-stable dispatch.
+Handles both regular CategoricalVector and OverrideVector for scenarios.
+"""
+@inline function extract_level_code_zero_alloc(column_data::CategoricalVector, row_idx::Int)
+    return Int(levelcode(column_data[row_idx]))
+end
+
+@inline function extract_level_code_zero_alloc(column_data::OverrideVector{<:CategoricalValue}, row_idx::Int)
+    # For OverrideVector, all rows have the same value - extract once, no allocation
+    return Int(levelcode(column_data.override_value))
+end
+
+@inline function extract_level_code_zero_alloc(column_data::AbstractVector, row_idx::Int)
+    # Fallback for other vector types that contain categorical values
+    cat_value = column_data[row_idx]
+    if isa(cat_value, CategoricalValue)
+        return Int(levelcode(cat_value))
+    elseif isa(cat_value, Integer)
+        return Int(cat_value)
+    elseif hasproperty(cat_value, :level)
+        return Int(cat_value.level)
+    else
+        error("Cannot extract level code from $(typeof(cat_value))")
+    end
+end
+
+# Categorical contrast operation (multi-output) with dynamic level extraction
 @inline function execute_op(
     op::ContrastOp{Col, Positions}, 
     scratch, 
     data, 
     row_idx
 ) where {Col, Positions}
-    # Get categorical level
-    cat_value = getproperty(data, Col)[row_idx]
+    # Get categorical column data
+    column_data = getproperty(data, Col)
     
-    # Extract level code properly
-    level = if isa(cat_value, Integer)
-        cat_value
-    elseif hasproperty(cat_value, :level)
-        Int(cat_value.level)
-    else
-        # For CategoricalValue from CategoricalArrays
-        Int(CategoricalArrays.levelcode(cat_value))
-    end
+    # Extract level code dynamically with zero allocations
+    level = extract_level_code_zero_alloc(column_data, row_idx)
+    
+    # Clamp to valid range (safety check)
+    n_levels = size(op.contrast_matrix, 1)
+    level = clamp(level, 1, n_levels)
     
     # Apply contrast matrix (stored as field)
     for (i, pos) in enumerate(Positions)
