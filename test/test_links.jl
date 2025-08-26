@@ -28,7 +28,7 @@ using LinearAlgebra: dot
         # Warm path
         marginal_effects_mu!(gμ, de, β, 3; link=L)
         allocs = @allocated marginal_effects_mu!(gμ, de, β, 4; link=L)
-        @test allocs <= 768
+        @test allocs <= 256  # Tightened from 768 to reflect optimized preallocated buffers
         @test all(isfinite, gμ)
     end
 

@@ -30,9 +30,9 @@ using BenchmarkTools
     derivative_modelrow!(J, de, 1)
     derivative_modelrow!(J, de, 2)
 
-    # Zero-allocation check after warmup
+    # Strict allocation check after warmup - only ForwardDiff internals should allocate
     allocs = @allocated derivative_modelrow!(J, de, 3)
-    @test allocs <= 256
+    @test allocs <= 112  # Tightened from 256 to reflect ForwardDiff internal minimum
 
     # FD fallback comparison
     J_fd = similar(J)
