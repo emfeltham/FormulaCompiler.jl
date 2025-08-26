@@ -2,22 +2,22 @@
 
 ## Executive Summary
 
-This is a complete reimplementation of FormulaCompiler's core compilation system that **successfully achieves zero allocations** for statistical formula evaluation. It solves the critical function×interaction allocation problem that motivated this work, achieving **0 bytes allocated for `exp(x) * y`** (down from 176 bytes in the previous architecture).
+This is a complete reimplementation of FormulaCompiler's core compilation system that successfully achieves zero allocations for statistical formula evaluation. It solves the critical function×interaction allocation problem that motivated this work, achieving 0 bytes allocated for `exp(x) * y` (down from 176 bytes in the previous architecture).
 
 ### Performance Results (Final - All Tests Pass)
-- **All 105 allocation tests**: Perfect zero allocations ✅ (100%)
-- **Final challenge solved**: "Logistic: complex" formula fixed by RECURSION_LIMIT=25
-- **Four-way interactions**: 0 bytes (was 272-336 bytes) ✅  
-- **Original problem solved**: Function×interaction formulas now have zero allocations ✅
-- **Empirical tuning**: Julia's heuristic specialization handled via conservative threshold ✅
+- All 105 allocation tests: Perfect zero allocations  (100%)
+- Final challenge solved: "Logistic: complex" formula fixed by RECURSION_LIMIT=25
+- Four-way interactions: 0 bytes (was 272-336 bytes)   
+- Original problem solved: Function×interaction formulas now have zero allocations 
+- Empirical tuning: Julia's heuristic specialization handled via conservative threshold 
 
 ## Design Principles
 
-1. **Single scratch space**: All operations write to positions in a unified scratch array
-2. **Uniform operations**: Every computation is an operation with inputs and output positions
-3. **Compile-time specialization**: Operations are tuple-encoded for zero runtime allocation
-4. **No phases or steps**: Just build operations → execute directly (no complex coordination)
-5. **Schema-aware compilation**: Always work with schema-applied formulas from models
+1. Single scratch space: All operations write to positions in a unified scratch array
+2. Uniform operations: Every computation is an operation with inputs and output positions
+3. Compile-time specialization: Operations are tuple-encoded for zero runtime allocation
+4. No phases or steps: Just build operations → execute directly (no complex coordination)
+5. Schema-aware compilation: Always work with schema-applied formulas from models
 
 ## Standard Workflow
 
@@ -38,7 +38,7 @@ output = zeros(length(compiled))
 compiled(output, data, row_idx)
 ```
 
-The model creation step is **essential** because it:
+The model creation step is essential because it:
 - Applies the data schema to the formula
 - Identifies categorical variables and their levels
 - Selects appropriate contrast matrices
@@ -454,17 +454,17 @@ end
 
 ## Current Implementation Status
 
-### ✅ Completed Features
-- **Core infrastructure**: All operation types implemented and tested
-- **Schema-aware compilation**: Properly extracts and uses schema-applied formulas from models
-- **Term decomposition**: Handles all StatsModels term types including:
+###  Completed Features
+- Core infrastructure: All operation types implemented and tested
+- Schema-aware compilation: Properly extracts and uses schema-applied formulas from models
+- Term decomposition: Handles all StatsModels term types including:
   - Basic terms (Term, ContinuousTerm, InterceptTerm)
   - Categorical terms with contrast matrices
   - Function terms (exp, log, sqrt, etc.)
   - Interaction terms (including function×categorical)
   - MatrixTerm wrapper from model formulas
-- **Mixed models support**: Extracts fixed effects from MixedModels formulas
-- **Exact scratch allocation**: Each formula gets precisely sized scratch buffer
+- Mixed models support: Extracts fixed effects from MixedModels formulas
+- Exact scratch allocation: Each formula gets precisely sized scratch buffer
 
 ### 📊 Performance Results
 
@@ -472,17 +472,17 @@ From comprehensive allocation test suite (105 test cases):
 
 | Model Type | Test Cases | Zero Allocations | Notes |
 |------------|------------|------------------|-------|
-| Linear Models | 15 | ✅ 15 (100%) | All formula types |
-| GLM | 10 | ✅ 10 (100%) | Including "Logistic: complex" |
-| Mixed Models | 6 | ✅ 6 (100%) | Fixed effects extracted |
-| GLMM | 4 | ✅ 4 (100%) | All distributions |
-| **Total** | **105** | **✅ 105 (100%)** | **Perfect achievement** |
+| Linear Models | 15 |  15 (100%) | All formula types |
+| GLM | 10 |  10 (100%) | Including "Logistic: complex" |
+| Mixed Models | 6 |  6 (100%) | Fixed effects extracted |
+| GLMM | 4 |  4 (100%) | All distributions |
+| Total | 105 |  105 (100%) | Perfect achievement |
 
-**Final Achievements**: 
-- **Logistic: complex** formula: 0 bytes (was 96 bytes) ✅
-- `exp(x) * y` interactions: 0 bytes (was 176 bytes) ✅  
-- Four-way interactions: 0 bytes (was 272-336 bytes) ✅
-- **100% zero allocation** across all model types and complexities
+Final Achievements: 
+- Logistic: complex formula: 0 bytes (was 96 bytes) 
+- `exp(x) * y` interactions: 0 bytes (was 176 bytes)   
+- Four-way interactions: 0 bytes (was 272-336 bytes) 
+- 100% zero allocation across all model types and complexities
 
 ### 🔬 @generated Solution Implementation
 
@@ -495,59 +495,59 @@ The Phase 6 @generated optimization successfully addressed Julia's tuple special
 
 ### 🎯 Final Fix: RECURSION_LIMIT Tuning
 
-The last remaining allocation (96 bytes in "Logistic: complex") was solved by recognizing that **Julia's tuple specialization is heuristic-based** with no guaranteed cutoff:
+The last remaining allocation (96 bytes in "Logistic: complex") was solved by recognizing that Julia's tuple specialization is heuristic-based with no guaranteed cutoff:
 
-- **Problem**: Complex formulas (~26-35 operations) hit Julia's unpredictable specialization zone
-- **Solution**: Lowered `RECURSION_LIMIT` from 35 → 25 for reliable specialization  
-- **Result**: 100% zero allocation across all 105 test cases
-- **Learning**: Conservative empirical tuning > theoretical limits for robust performance
+- Problem: Complex formulas (~26-35 operations) hit Julia's unpredictable specialization zone
+- Solution: Lowered `RECURSION_LIMIT` from 35 → 25 for reliable specialization  
+- Result: 100% zero allocation across all 105 test cases
+- Learning: Conservative empirical tuning > theoretical limits for robust performance
 
 ## Success Criteria - Fully Achieved
 
-1. **Zero allocations**: ✅ Achieved for 100% of formulas (105/105 test cases pass)
-2. **Generality**: ✅ Handles any valid StatsModels formula across all model types  
-3. **Performance**: ✅ ~50ns per row evaluation, 10-100x faster than modelmatrix()
-4. **Robustness**: ✅ Handles Julia's heuristic specialization via empirical tuning
-5. **Maintainability**: ✅ Clear, uniform code structure with documented thresholds
+1. Zero allocations:  Achieved for 100% of formulas (105/105 test cases pass)
+2. Generality:  Handles any valid StatsModels formula across all model types  
+3. Performance:  ~50ns per row evaluation, 10-100x faster than modelmatrix()
+4. Robustness:  Handles Julia's heuristic specialization via empirical tuning
+5. Maintainability:  Clear, uniform code structure with documented thresholds
 
 ## Key Advantages Over Current Design
 
-1. **No coordination complexity**: No step interactions or registries needed
-2. **Natural function handling**: Functions in interactions "just work"
-3. **Automatic sharing**: Duplicate subexpressions naturally share scratch positions
-4. **Easier debugging**: Linear operation list vs hierarchical steps
-5. **Future-proof**: New operation types just add new `AbstractOp` subtypes
+1. No coordination complexity: No step interactions or registries needed
+2. Natural function handling: Functions in interactions "just work"
+3. Automatic sharing: Duplicate subexpressions naturally share scratch positions
+4. Easier debugging: Linear operation list vs hierarchical steps
+5. Future-proof: New operation types just add new `AbstractOp` subtypes
 
 ## Code to Reuse from Current Implementation
 
-- **Formula parsing**: StatsModels integration (if it makes sense)
-- **Contrast matrices**: Categorical handling logic
-- **Type-stable data access**: `get_data_value_type_stable` pattern
-- **Thread-local patterns**: Scratch pool management approach
-- **Test suite**: Same test cases, same expected results
+- Formula parsing: StatsModels integration (if it makes sense)
+- Contrast matrices: Categorical handling logic
+- Type-stable data access: `get_data_value_type_stable` pattern
+- Thread-local patterns: Scratch pool management approach
+- Test suite: Same test cases, same expected results
 
 ## Code to Discard
 
-- **Previous multi-step specialization pipeline**
-- **Multiple scratch spaces**: function_scratch, interaction_scratch
-- **Evaluator hierarchy**: Replace with uniform operations
-- **Cross-step coordination**: Not needed with unified model
-- **Special-case handling**: Function×interaction workarounds
+- Previous multi-step specialization pipeline
+- Multiple scratch spaces: function_scratch, interaction_scratch
+- Evaluator hierarchy: Replace with uniform operations
+- Cross-step coordination: Not needed with unified model
+- Special-case handling: Function×interaction workarounds
 
 ## Summary
 
-The UnifiedCompiler is a **fully successful** clean-slate reimplementation that:
-1. **Solves the original problem**: Function×interaction formulas now have zero allocations
-2. **Achieves perfect performance**: 100% of formulas execute with zero allocations
-3. **Simplifies the architecture**: No complex step coordination or special cases
-4. **Handles all formulas uniformly**: Single consistent approach for all term types
-5. **Minimizes code complexity**: ~500 lines total (less than current implementation!)
+The UnifiedCompiler is a fully successful clean-slate reimplementation that:
+1. Solves the original problem: Function×interaction formulas now have zero allocations
+2. Achieves perfect performance: 100% of formulas execute with zero allocations
+3. Simplifies the architecture: No complex step coordination or special cases
+4. Handles all formulas uniformly: Single consistent approach for all term types
+5. Minimizes code complexity: ~500 lines total (less than current implementation!)
 
 ### Implementation Timeline
-- **Phase 1-3**: Core implementation, decomposition, schema support - **Completed**
-- **Phase 4**: Dependency resolution - Not needed (operations naturally ordered)
-- **Phase 5**: Integration & testing - **Completed** with allocation survey
-- **Phase 6**: @generated optimization - **Completed** with perfect results
+- Phase 1-3: Core implementation, decomposition, schema support - Completed
+- Phase 4: Dependency resolution - Not needed (operations naturally ordered)
+- Phase 5: Integration & testing - Completed with allocation survey
+- Phase 6: @generated optimization - Completed with perfect results
 
 ### Next Steps
 The UnifiedCompiler is complete and ready for production use:
@@ -556,14 +556,14 @@ The UnifiedCompiler is complete and ready for production use:
 3. Documenting the simple API for users
 4. Performance profiling for additional optimization opportunities
 
-## Phase 6: @generated Optimization for Large Formulas ✅ COMPLETED
+## Phase 6: @generated Optimization for Large Formulas  COMPLETED
 
 ### Problem Statement (Solved)
 Julia's compiler has a hard limit on tuple specialization - beyond ~40 elements, it stops fully specializing recursive tuple operations, causing 272-336 byte allocations for our four-way interaction formulas (which have 41-49 operations).
 
 ### Solution: Surgical Use of @generated
 
-This "last-mile" optimization only affected the execution dispatch mechanism, leaving 99% of the codebase unchanged. **Successfully implemented and tested.**
+This "last-mile" optimization only affected the execution dispatch mechanism, leaving 99% of the codebase unchanged. Successfully implemented and tested.
 
 ### Implementation Plan
 
@@ -669,18 +669,18 @@ end
 
 ### Why This Approach is Optimal
 
-1. **Minimal Code Change**: Only ~30 lines of new code
-2. **Surgical Precision**: Only affects formulas with 35+ operations
-3. **No API Changes**: Completely transparent to users
-4. **Preserves Performance**: Small formulas still use optimal recursion
-5. **Solves the Problem**: Should eliminate all remaining allocations
+1. Minimal Code Change: Only ~30 lines of new code
+2. Surgical Precision: Only affects formulas with 35+ operations
+3. No API Changes: Completely transparent to users
+4. Preserves Performance: Small formulas still use optimal recursion
+5. Solves the Problem: Should eliminate all remaining allocations
 
-### Actual Outcomes ✅
+### Actual Outcomes 
 
-- **Four-way interactions**: 0 bytes (down from 272-336) ✅
-- **All 35 test formulas**: 100% zero allocation ✅
-- **Compile time**: Minimal impact (only affects first call) ✅
-- **Runtime performance**: Same excellent performance maintained ✅
+- Four-way interactions: 0 bytes (down from 272-336) 
+- All 35 test formulas: 100% zero allocation 
+- Compile time: Minimal impact (only affects first call) 
+- Runtime performance: Same excellent performance maintained 
 
 ### Risks and Mitigations
 
@@ -693,7 +693,7 @@ end
 
 ### Implementation Status
 
-**COMPLETED** - This optimization has been successfully implemented:
+COMPLETED - This optimization has been successfully implemented:
 - Achieved 100% zero allocation goal
 - No performance regressions detected
 - Transparent to users
@@ -701,9 +701,9 @@ end
 
 ### Testing Results
 
-- [x] Verified zero allocations for all 35 test formulas ✅
-- [x] Compile time impact is minimal (only on first call) ✅
-- [x] Tested with four-way interactions (41-49 operations) ✅
-- [x] No regression for small formulas (still use recursion) ✅
-- [x] Hybrid dispatch working correctly ✅
-- [x] Performance maintained across test suite ✅
+- [x] Verified zero allocations for all 35 test formulas 
+- [x] Compile time impact is minimal (only on first call) 
+- [x] Tested with four-way interactions (41-49 operations) 
+- [x] No regression for small formulas (still use recursion) 
+- [x] Hybrid dispatch working correctly 
+- [x] Performance maintained across test suite 
