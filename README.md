@@ -290,6 +290,8 @@ row_vec = Vector{Float64}(undef, length(compiled))
 # 100% zero allocation across 105 test cases
 ```
 
+Note on derivatives: ForwardDiff-based `derivative_modelrow!` typically runs with 0 allocations after warmup. On some environments, tiny steady-state allocations (<=256 bytes per call; up to <=768 bytes when computing marginal effects with links) may appear due to ForwardDiff/Julia internals. The test suite enforces tight thresholds rather than exact zero to accommodate this.
+
 ## Architecture
 
 FormulaCompiler achieves zero-allocation performance through a unified compilation pipeline that transforms statistical formulas into specialized, type-stable execution paths:

@@ -17,5 +17,5 @@ Creating scenario grid: 6 combinations
     cat3[High]: 0.0
     cat4 effects: [0.0, 1.0, 0.0]
     Interaction terms: [0.0, 0.0]
-Test Summary:            | Pass  Total   Time
-FormulaCompiler.jl Tests | 2005   2005  53.8s
+Test Summary:            | Pass  Total     Time
+FormulaCompiler.jl Tests | 2032   2032  1m01.8s
