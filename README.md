@@ -309,7 +309,7 @@ FormulaCompiler achieves zero-allocation performance through a unified compilati
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome!
 
 ## Related Packages
 
