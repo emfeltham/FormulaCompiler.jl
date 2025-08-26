@@ -15,7 +15,7 @@ High-performance, zero-allocation model matrix evaluation for Julia statistical 
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/yourusername/FormulaCompiler.jl")
+Pkg.add(url="https://github.com/emfeltham/FormulaCompiler.jl")
 ```
 
 ## Quick Start
