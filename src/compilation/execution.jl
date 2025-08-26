@@ -4,9 +4,19 @@
 using CategoricalArrays
 using FormulaCompiler: OverrideVector  # For scenario support
 
-# Threshold for switching from recursion to @generated
-# N.B., this limit seems ambiguous
-const RECURSION_LIMIT = 25  # Below Julia's ~40 element specialization limit
+"""
+    RECURSION_LIMIT = 25
+
+Threshold for switching between recursive and @generated execution strategies.
+
+Julia's tuple specialization is heuristic-based with no guaranteed cutoff. This value
+was empirically determined by lowering from 35 until zero-allocation was achieved
+across all test cases.
+
+- **≤25 ops**: Recursive execution (empirically reliable)
+- **>25 ops**: @generated execution (forced specialization)
+"""
+const RECURSION_LIMIT = 25
 
 """
     (compiled::UnifiedCompiled)(output, data, row_idx) -> nothing
