@@ -1,0 +1,49 @@
+The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.darwin14. You currently have `1.11.2+0.aarch64.apple.darwin14` installed. Run:
+
+  juliaup update
+
+in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
+Precompiling FormulaCompiler...
+   3942.8 ms  ✓ FormulaCompiler
+  1 dependency successfully precompiled in 4 seconds. 239 already precompiled.
+ERROR: LoadError: Some tests did not pass: 104 passed, 1 failed, 0 errored, 0 broken.
+in expression starting at /Users/emf/.julia/dev/FormulaCompiler/test/test_allocations.jl:32
+Logistic: complex: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_allocations.jl:27
+  Expression: memory_bytes == 0
+   Evaluated: 96 == 0
+
+Stacktrace:
+ [1] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+ [2] test_zero_allocation(model::StatsModels.TableRegressionModel{GeneralizedLinearModel{GLM.GlmResp{Vector{Float64}, Binomial{Float64}, LogitLink}, GLM.DensePredChol{Float64, LinearAlgebra.CholeskyPivoted{Float64, Matrix{Float64}, Vector{Int64}}}}, Matrix{Float64}}, data::@NamedTuple{x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, w::Vector{Float64}, t::Vector{Float64}, group3::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, group4::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, binary::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, group5::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, subject::CategoricalVector{Int64, UInt32, Int64, CategoricalValue{Int64, UInt32}, Union{}}, cluster::CategoricalVector{Int64, UInt32, Int64, CategoricalValue{Int64, UInt32}, Union{}}, flag::Vector{Bool}, continuous_response::Vector{Float64}, binary_response::Vector{Int64}, count_response::Vector{Int64}, linear_predictor::Vector{Float64}, logistic_response::Vector{Int64}})
+   @ Main ~/.julia/dev/FormulaCompiler/test/test_allocations.jl:27
+ [3] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_allocations.jl:59 [inlined]
+ [4] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [5] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_allocations.jl:58 [inlined]
+ [6] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [7] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_allocations.jl:56 [inlined]
+ [8] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [9] top-level scope
+   @ ~/.julia/dev/FormulaCompiler/test/test_allocations.jl:33
+Test Summary:                            | Pass  Fail  Total   Time
+Zero Allocation Survey                   |  104     1    105  39.5s
+  Linear Models (LM)                     |   45           45  18.1s
+  Generalized Linear Models (GLM)        |   29     1     30   9.8s
+    Logistic: simple                     |    3            3   1.1s
+    Logistic: mixed                      |    3            3   0.7s
+    Logistic: interaction                |    3            3   0.7s
+    Logistic: function                   |    3            3   1.2s
+    Logistic: complex                    |    2     1      3   2.2s
+    Poisson: simple                      |    3            3   0.9s
+    Poisson: mixed                       |    3            3   0.7s
+    Poisson: interaction                 |    3            3   0.7s
+    Gamma: mixed                         |    3            3   0.9s
+    Gaussian: mixed                      |    3            3   0.8s
+  Linear Mixed Models (LMM)              |   18           18   6.8s
+  Generalized Linear Mixed Models (GLMM) |   12           12   4.7s

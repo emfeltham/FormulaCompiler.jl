@@ -36,7 +36,7 @@ end
 # Helper function to test allocation performance
 function test_allocation_performance(compiled, output_compiled, data)
     # Warmup
-    for i in 1:10
+    for _ in 1:10
         compiled(output_compiled, data, 1)
     end
     
@@ -60,10 +60,8 @@ function test_allocation_performance(compiled, output_compiled, data)
     return allocs_per_call
 end
 
-# Set consistent random seed for reproducible tests
-Random.seed!(06515)
-
 @testset "Position Mapping Tests" begin
+    Random.seed!(06515)
     
     # Setup test data
     df, data = test_data(n=200)
