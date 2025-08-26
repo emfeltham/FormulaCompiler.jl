@@ -104,7 +104,37 @@ function test_data(; n = 200)
     return df, data
 end
 
-export test_cases, test_correctness, test_data
+# Helper function to test correctness against modelmatrix
+function test_model_correctness(model, data, n)
+    compiled = compile_formula(model, data)
+    output = Vector{Float64}(undef, length(compiled))
+    expected_matrix = modelmatrix(model)
+    
+    # Test correctness against modelmatrix on multiple test rows
+    test_rows = [1, 10, 50, 100, min(n, 250), n]
+    for test_row in test_rows
+        compiled(output, data, test_row)
+        expected = expected_matrix[test_row, :]
+        @test isapprox(output, expected, rtol=1e-10)  # Relaxed tolerance for numerical stability
+    end
+    
+    # Test modelrow functionality (allocating version)
+    for test_row in [1, 25, n÷2, n]
+        output_modelrow = modelrow(compiled, data, test_row)
+        expected = expected_matrix[test_row, :]
+        @test isapprox(output_modelrow, expected, rtol=1e-10)  # Relaxed tolerance
+    end
+    
+    # Test modelrow! functionality (in-place version)
+    output_inplace = Vector{Float64}(undef, length(compiled))
+    for test_row in [1, 10, n]
+        modelrow!(output_inplace, compiled, data, test_row)
+        expected = expected_matrix[test_row, :]
+        @test isapprox(output_inplace, expected, rtol=1e-10)  # Relaxed tolerance
+    end
+    
+    return true
+end
 
 ###############################################################################
 # MODEL SCENARIOS
