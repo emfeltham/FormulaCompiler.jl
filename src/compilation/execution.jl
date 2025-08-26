@@ -5,7 +5,8 @@ using CategoricalArrays
 using FormulaCompiler: OverrideVector  # For scenario support
 
 # Threshold for switching from recursion to @generated
-const RECURSION_LIMIT = 35  # Below Julia's ~40 element specialization limit
+# N.B., this limit seems ambiguous
+const RECURSION_LIMIT = 25  # Below Julia's ~40 element specialization limit
 
 """
     (compiled::UnifiedCompiled)(output, data, row_idx) -> nothing
