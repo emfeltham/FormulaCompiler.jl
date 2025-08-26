@@ -1,5 +1,4 @@
-using ForwardDiff
-using GLM
+# derivatives.jl
 
 # Single-row override vector: returns replacement at `row`, base elsewhere (unused)
 mutable struct SingleRowOverrideVector <: AbstractVector{Any}
