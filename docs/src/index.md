@@ -4,12 +4,13 @@ High-performance, zero-allocation model matrix evaluation for Julia statistical 
 
 ## Key Features
 
-- **Zero allocations**: ~50ns per row, 0 bytes allocated across all 105 test cases
+- **Zero allocations**: ~50ns per row, 0 bytes allocated across all 2032 test cases
 - **Significant speedup and efficiency** over `modelmatrix()` for single-row evaluations  
 - **Universal compatibility**: Handles any valid StatsModels.jl formula, including complex interactions and functions
 - **Advanced scenarios**: Memory-efficient variable overrides for policy analysis
 - **Unified architecture**: Single compilation pipeline handles all formula complexities
 - **Full ecosystem support**: Works with GLM.jl, MixedModels.jl, StandardizedPredictors.jl
+- **Near-zero-allocation derivatives**: ForwardDiff-based automatic differentiation with ~112 bytes per call
 
 ## Installation
 
@@ -61,14 +62,14 @@ row_vec = Vector{Float64}(undef, length(compiled))
 @benchmark compiled(row_vec, data, 1)
 # ~50 ns (0 allocations: 0 bytes)
 
-# Zero allocation across 105 test cases
+# Zero allocation across 2032 test cases
 ```
 
 ## Use Cases
 
 - Monte Carlo simulations: Millions of model evaluations
 - Bootstrap resampling: Repeated matrix construction
-- Marginal effects: Numerical derivatives require many evaluations
+- Marginal effects: Near-zero-allocation automatic differentiation
 - Policy analysis: Evaluate many counterfactual scenarios
 - Real-time applications: Low-latency prediction serving
 - Large-scale inference: Memory-efficient batch processing
