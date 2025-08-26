@@ -190,3 +190,77 @@ The bug is likely in the scratch space calculation during compilation:
 - Nested function handling: Not accounting for intermediate results properly
 
 This is a much more targeted fix than symbol fallback - it's a scratch space accounting bug in the compilation phase.
+
+## Plan to Resolve Scratch Space Allocation Issue
+
+### Step 1: Identify the Failing Test Case
+1. **Run the allocation test suite** and capture which specific formula fails
+2. **Examine the failing formula** to understand its complexity:
+   - Is it a nested function? (`sqrt(abs(x))`)
+   - Function with arithmetic? (`log(x + y)`)
+   - Function in interaction? (`log(z) * group`)
+3. **Measure the actual allocation amount** to confirm it's scratch-space-sized (~32-64 bytes)
+
+### Step 2: Trace Scratch Space Calculation
+1. **Find scratch space calculation code** in the compilation pipeline:
+   - Look in `src/compilation/scratch.jl`
+   - Check Step 3 function compilation in `src/compilation/`
+   - Review `SpecializedFunctionData` type definitions
+2. **Add debug output** to see scratch space requirements vs. allocated:
+   ```julia
+   println("Function: $func, Calculated scratch: $calc_scratch, Actual needed: $actual")
+   ```
+3. **Compare simple vs complex cases** to see where calculation diverges
+
+### Step 3: Fix the Scratch Space Accounting
+Likely fixes based on common undercounting scenarios:
+
+#### **Nested Function Fix**
+```julia
+# Current (wrong): Only counts final result
+scratch_needed = 1
+
+# Fixed: Counts all intermediate results  
+scratch_needed = count_intermediate_steps(nested_function)
+```
+
+#### **Function + Interaction Coordination Fix**
+```julia
+# Current (wrong): Function and interaction calculated separately
+function_scratch = calc_function_scratch(func)
+interaction_scratch = calc_interaction_scratch(terms)
+
+# Fixed: Account for coordination overhead
+total_scratch = function_scratch + interaction_scratch + coordination_overhead
+```
+
+#### **Complex Expression Fix**
+```julia
+# Current (wrong): Assumes simple column access
+scratch_for_log_x = 1
+
+# Fixed: Accounts for expression evaluation
+scratch_for_log_x_plus_y = 2  # One for (x+y), one for log result
+```
+
+### Step 4: Implement and Test
+1. **Apply the fix** to the scratch space calculation
+2. **Run allocation tests** to confirm the failing case now passes
+3. **Verify no regressions** - ensure other tests still pass
+4. **Add specific test** for the complex case that was failing
+
+### Step 5: Validate the Architecture
+1. **Confirm zero allocations** across all test formulas
+2. **Add stress tests** for other complex function patterns:
+   - `sqrt(abs(log(x)))`  (deeply nested)
+   - `log(x * y) * group` (expression + interaction)
+   - `exp(x + y + z)`     (multi-argument expression)
+3. **Document the fix** and update scratch space calculation guidelines
+
+### Expected Outcome
+- **All allocation tests pass** (achieve true zero-allocation goal)
+- **Targeted fix** without architectural changes
+- **Robust scratch space accounting** for complex function scenarios
+- **Clear path forward** for any future scratch space coordination issues
+
+This approach treats it as a **compilation-time accounting bug** rather than a fundamental architectural problem, which aligns with the selective failure pattern observed.
