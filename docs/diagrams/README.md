@@ -11,16 +11,16 @@ This directory contains Mermaid diagrams illustrating the design and usage of Fo
 
 ```mermaid
 flowchart TD
-    A[Fit Statistical Model<br/>GLM.lm, MixedModels.fit] --> B[Prepare Data<br/>Tables.columntable]
-    B --> C[Compile Formula<br/>compile_formula] 
-    C --> D[Create Output Vector<br/>Vector{Float64}]
-    D --> E[Evaluate Rows<br/>compiled(output, data, idx)]
-    E --> F[Process Results<br/>~50ns per row, 0 allocations]
+    A["Fit Statistical Model<br>GLM.lm, MixedModels.fit"] --> B["Prepare Data<br>Tables.columntable"]
+    B --> C["Compile Formula<br>compile_formula"] 
+    C --> D["Create Output Vector<br>Vector{Float64}"]
+    D --> E["Evaluate Rows<br>compiled(output, data, idx)"]
+    E --> F["Process Results<br>~50ns per row, 0 allocations"]
     
-    style A fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    style C fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style E fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
-    style F fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style A fill:#e1f5fe
+    style C fill:#f3e5f5
+    style E fill:#e8f5e8
+    style F fill:#fff3e0
 ```
 
 ### System Architecture
@@ -61,23 +61,23 @@ To preview diagrams locally, you can use:
 
 ```mermaid
 flowchart TD
-    A[Compiled Formula] --> B{Analysis Type?}
-    B -->|Single Override| C[create_scenario]
-    B -->|Parameter Grid| D[create_scenario_grid]
+    A["Compiled Formula"] --> B{Analysis Type?}
+    B -->|Single Override| C["create_scenario"]
+    B -->|Parameter Grid| D["create_scenario_grid"]
     
-    C --> E[Override Variables]
-    D --> F[Multiple Combinations]
+    C --> E["Override Variables"]
+    D --> F["Multiple Combinations"]
     
-    E --> G[Evaluate Scenario]
-    F --> H[Batch Evaluation]
+    E --> G["Evaluate Scenario"]
+    F --> H["Batch Evaluation"]
     
-    G --> I[Policy Insights]
+    G --> I["Policy Insights"]
     H --> I
     
-    style A fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    style C fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style D fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style I fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style A fill:#e1f5fe
+    style C fill:#f3e5f5
+    style D fill:#f3e5f5
+    style I fill:#fff3e0
 ```
 
 ### Categorical System
