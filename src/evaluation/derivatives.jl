@@ -89,14 +89,23 @@ end
 Base.length(de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged}) where {T, Ops, S, O, NTBase, NTMerged} = de.compiled_base |> length
 
 """
-    build_derivative_evaluator(compiled, data; vars, chunk=:auto)
+    build_derivative_evaluator(compiled, data; vars, chunk=:auto) -> DerivativeEvaluator
 
-Prepare a ForwardDiff-based derivative evaluator for a fixed set of variables.
+Build a ForwardDiff-based derivative evaluator for a fixed set of variables.
 
-- compiled: `UnifiedCompiled` returned by `compile_formula`
-- data: base NamedTuple (column table)
-- vars: Vector{Symbol} of continuous variables to differentiate w.r.t.
-- chunk: ForwardDiff chunk size or `:auto` (default)
+Arguments:
+- `compiled::UnifiedCompiled`: Result of `compile_formula(model, data)`.
+- `data::NamedTuple`: Column-table data (e.g., `Tables.columntable(df)`).
+- `vars::Vector{Symbol}`: Variables to differentiate with respect to (typically continuous predictors).
+- `chunk`: `ForwardDiff.Chunk{N}()` or `:auto` (uses `Chunk{length(vars)}`).
+
+Returns:
+- `DerivativeEvaluator`: Prebuilt evaluator object reusable across rows.
+
+Notes:
+- Compile once per model + variable set; reuse across calls.
+- Zero allocations in steady state after warmup (typed closure + config; no per-call merges).
+- Keep `vars` fixed for best specialization.
 """
 function build_derivative_evaluator(
     compiled::UnifiedCompiled{T, Ops, S, O},
@@ -134,10 +143,21 @@ function build_derivative_evaluator(
 end
 
 """
-    derivative_modelrow!(J, deval, row)
+    derivative_modelrow!(J, deval, row) -> AbstractMatrix{Float64}
 
-Fill `J::Matrix{Float64}` with the Jacobian of the model row at `row` w.r.t. `deval.vars`.
-Orientation: `size(J) == (n_terms, n_vars)`.
+Fill `J` with the Jacobian of one model row with respect to `deval.vars`.
+
+Arguments:
+- `J::AbstractMatrix{Float64}`: Preallocated buffer of size `(n_terms, n_vars)`.
+- `deval::DerivativeEvaluator`: Built by `build_derivative_evaluator`.
+- `row::Int`: Row index (1-based).
+
+Returns:
+- The same `J` buffer, with `J[i, j] = ∂X[i]/∂vars[j]` for the given row.
+
+Notes:
+- Orientation is `(n_terms, n_vars)`; `n_terms == length(compiled)`.
+- Zero allocations in steady state after warmup.
 """
 function derivative_modelrow!(J::AbstractMatrix{Float64}, de::DerivativeEvaluator, row::Int)
     @assert size(J, 1) == length(de) "Jacobian row mismatch: expected $(length(de)) terms"
@@ -154,7 +174,7 @@ end
 """
     derivative_modelrow(deval, row) -> Matrix{Float64}
 
-Allocating convenience wrapper that returns the Jacobian.
+Allocating convenience wrapper that returns the Jacobian for one row.
 """
 function derivative_modelrow(de::DerivativeEvaluator, row::Int)
     J = Matrix{Float64}(undef, length(de), length(de.vars))
@@ -167,8 +187,18 @@ end
 """
     derivative_modelrow_fd!(J, compiled, data, row; vars, step=:auto)
 
-Finite-difference Jacobian for a single row. Central differences with adaptive step.
-Orientation: `size(J) == (n_terms, n_vars)`.
+Finite-difference Jacobian for a single row using central differences.
+
+Arguments:
+- `J::AbstractMatrix{Float64}`: Preallocated `(n_terms, n_vars)` buffer.
+- `compiled::UnifiedCompiled`: Result of `compile_formula`.
+- `data::NamedTuple`: Column-table data.
+- `row::Int`: Row index.
+- `vars::Vector{Symbol}`: Variables to differentiate with respect to.
+- `step`: Numeric step size or `:auto` (`eps()^(1/3) * max(1, |x|)`).
+
+Notes:
+- Two evaluations per variable; useful as a robust fallback and for cross-checks.
 """
 function derivative_modelrow_fd!(
     J::AbstractMatrix{Float64},
@@ -230,8 +260,18 @@ end
 """
     contrast_modelrow!(Δ, compiled, data, row; var, from, to)
 
-Compute discrete contrast for a single variable at a single row: Δ = X(to) − X(from).
-Works for categorical variables and discrete states; uses row-local override.
+Compute a discrete contrast at one row for a single variable: `Δ = X(to) − X(from)`.
+
+Arguments:
+- `Δ::AbstractVector{Float64}`: Preallocated buffer of length `n_terms`.
+- `compiled::UnifiedCompiled`: Result of `compile_formula`.
+- `data::NamedTuple`: Column-table data.
+- `row::Int`: Row index.
+- `var::Symbol`: Variable to change (e.g., `:group3`).
+- `from`, `to`: Values to contrast (level names or `CategoricalValue` for categorical; numbers for discrete).
+
+Notes:
+- Uses a row-local override; for categorical columns, values are normalized to the column’s levels.
 """
 function contrast_modelrow!(
     Δ::AbstractVector{Float64},
