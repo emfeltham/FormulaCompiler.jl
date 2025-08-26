@@ -1,6 +1,6 @@
 # FormulaCompiler.jl
 
-High-performance, zero-allocation model matrix evaluation for Julia statistical models. Achieves **100% zero-allocation** performance across all formula types through advanced compile-time specialization.
+High-performance, zero-allocation model matrix evaluation for Julia statistical models. Works across all formula types through advanced compile-time specialization.
 
 ## Key Features
 
