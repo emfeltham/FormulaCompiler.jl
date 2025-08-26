@@ -12,13 +12,32 @@ using StandardizedPredictors: ZScoredTerm
 """
     compute_interaction_pattern(width1::Int, width2::Int) -> Vector{Tuple{Int,Int}}
 
-Generate interaction pattern for Kronecker product expansion.
-Matches StatsModels convention: kron(b, a) means a varies fast, b varies slow.
+Generate interaction pattern for two-way Kronecker product expansion following StatsModels.jl conventions.
 
-For example, x * group3 where group3 has 2 contrasts:
+## StatsModels.jl Kronecker Convention
+
+This function implements the standard mathematical convention where `kron(B, A)` means:
+- **A varies FAST** (inner loop, first component)
+- **B varies SLOW** (outer loop, second component)
+
+This produces the ordering: A₁B₁, A₂B₁, A₁B₂, A₂B₂, ... where the first component
+cycles through all values before the second component advances.
+
+## Parameters
+- `width1`: Width of first component (varies fast)
+- `width2`: Width of second component (varies slow)
+
+## Example
+For `x * group3` where group3 has 2 contrasts:
 - width1 = 1 (x is scalar)
-- width2 = 2 (group3 has 2 contrast columns)
+- width2 = 2 (group3 has 2 contrast columns)  
 - Returns: [(1,1), (1,2)]
+
+For `continuous * categorical` with widths [2, 3]:
+- Returns: [(1,1), (2,1), (1,2), (2,2), (1,3), (2,3)]
+
+## See Also
+- [`compute_all_interaction_combinations`](@ref): Multi-way extension using recursive Kronecker expansion
 """
 function compute_interaction_pattern(width1::Int, width2::Int)
     if width1 <= 0 || width2 <= 0
@@ -38,11 +57,47 @@ end
 """
     compute_all_interaction_combinations(component_positions::Vector{Vector{Int}}) -> Vector{Vector{Int}}
 
-Compute all combinations for multi-way interactions using recursive Kronecker expansion.
+Compute all combinations for multi-way interactions using recursive Kronecker expansion following StatsModels.jl conventions.
 
-For x * y * group3 where group3 has positions [4,5]:
-- component_positions = [[1], [2], [4,5]]
-- Returns: [[1,2,4], [1,2,5]]
+## StatsModels.jl Multi-Way Kronecker Convention
+
+This function recursively applies the Kronecker product ordering where the **first component varies FASTEST**
+and subsequent components vary progressively slower. This matches StatsModels.jl's convention for 
+multi-way interactions like `A * B * C * D`.
+
+The ordering ensures that:
+1. First component cycles through all values before second component advances
+2. First two components cycle through all combinations before third component advances  
+3. And so on for higher-order interactions
+
+## Algorithm
+Uses recursive decomposition:
+1. Split into first component and rest of components
+2. Recursively compute combinations for rest of components  
+3. For each rest combination, cycle through all first component values
+4. This produces the correct "first varies fastest" ordering
+
+## Parameters
+- `component_positions`: Vector where each element contains the positions for one component
+
+## Examples
+
+### Three-way: `x * y * group3`
+```julia
+component_positions = [[1], [2], [4,5]]  # x=pos1, y=pos2, group3=pos4,5
+# Returns: [[1,2,4], [1,2,5]]
+# Order: x₁y₁group3₁, x₁y₁group3₂
+```
+
+### Four-way: `x * y * group3 * group4`  
+```julia
+component_positions = [[1], [2], [4,5], [7,8,9]]
+# Returns: [[1,2,4,7], [1,2,4,8], [1,2,4,9], [1,2,5,7], [1,2,5,8], [1,2,5,9]]
+# Order: All combinations with first component varying fastest, last varying slowest
+```
+
+## See Also
+- [`compute_interaction_pattern`](@ref): Two-way version using the same Kronecker convention
 """
 function compute_all_interaction_combinations(component_positions::Vector{Vector{Int}})
     if length(component_positions) == 0
