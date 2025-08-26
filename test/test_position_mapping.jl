@@ -18,7 +18,7 @@ Random.seed!(06515)
     df, data = test_data(n=200)
     
     # Helper function to test position mapping correctness
-    function test_formula_correctness(formula, df, data, description)
+    function test_formula_correctness(formula, df, data)
         model = fit(LinearModel, formula, df)
         compiled = compile_formula(model, data)
         output_compiled = Vector{Float64}(undef, length(compiled))
@@ -42,7 +42,7 @@ Random.seed!(06515)
     end
     
     # Helper function to test allocation performance
-    function test_allocation_performance(compiled, output_compiled, data, description)
+    function test_allocation_performance(compiled, output_compiled, data)
         # Warmup
         for i in 1:10
             compiled(output_compiled, data, 1)
@@ -72,7 +72,7 @@ Random.seed!(06515)
         @testset "Simple continuous variable" begin
             formula = @formula(response ~ x)
             compiled, output = test_formula_correctness(formula, df, data, "Simple continuous")
-            allocs = test_allocation_performance(compiled, output, data, "Simple continuous")
+            allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 2  # Intercept + x
         end
@@ -80,7 +80,7 @@ Random.seed!(06515)
         @testset "Simple categorical variable" begin
             formula = @formula(response ~ group3)
             compiled, output = test_formula_correctness(formula, df, data, "Simple categorical")
-            allocs = test_allocation_performance(compiled, output, data, "Simple categorical")
+            allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 3  # Intercept + 2 contrast columns for 3-level factor
         end
@@ -88,7 +88,7 @@ Random.seed!(06515)
         @testset "Multiple continuous variables" begin
             formula = @formula(response ~ x + y)
             compiled, output = test_formula_correctness(formula, df, data, "Multiple continuous")
-            allocs = test_allocation_performance(compiled, output, data, "Multiple continuous")
+            allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 3  # Intercept + x + y
         end
@@ -98,7 +98,7 @@ Random.seed!(06515)
         @testset "Simple 2-way continuous interaction" begin
             formula = @formula(response ~ x * y)
             compiled, output = test_formula_correctness(formula, df, data, "2-way continuous interaction")
-            allocs = test_allocation_performance(compiled, output, data, "2-way continuous interaction")
+            allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 4  # Intercept + x + y + x:y
         end
@@ -106,7 +106,7 @@ Random.seed!(06515)
         @testset "Continuous × Categorical interaction" begin
             formula = @formula(response ~ x * group3)
             compiled, output = test_formula_correctness(formula, df, data, "Continuous × Categorical")
-            allocs = test_allocation_performance(compiled, output, data, "Continuous × Categorical")
+            allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 6  # Intercept + x + group3 (2 cols) + x:group3 (2 cols)
         end
@@ -114,7 +114,7 @@ Random.seed!(06515)
         @testset "3-way interaction" begin
             formula = @formula(response ~ x * y * group3)
             compiled, output = test_formula_correctness(formula, df, data, "3-way interaction")
-            allocs = test_allocation_performance(compiled, output, data, "3-way interaction")
+            allocs = test_allocation_performance(compiled, output, data)
             
             # Intercept + x + y + group3 (2) + x:y + x:group3 (2) + y:group3 (2) + x:y:group3 (2)
             @test length(compiled) == 12
@@ -123,7 +123,7 @@ Random.seed!(06515)
         @testset "4-way interaction (Kronecker ordering test)" begin
             formula = @formula(response ~ x * y * group3 * group4)  
             compiled, output = test_formula_correctness(formula, df, data, "4-way interaction")
-            allocs = test_allocation_performance(compiled, output, data, "4-way interaction")
+            allocs = test_allocation_performance(compiled, output, data)
             
             # This tests the Kronecker product ordering fix
             @test length(compiled) > 20  # Complex interaction should have many terms
@@ -134,7 +134,7 @@ Random.seed!(06515)
         @testset "Simple function" begin
             formula = @formula(response ~ log(z))
             compiled, output = test_formula_correctness(formula, df, data, "Simple function")
-            allocs = test_allocation_performance(compiled, output, data, "Simple function")
+            allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 2  # Intercept + log(z)
         end
@@ -142,7 +142,7 @@ Random.seed!(06515)
         @testset "Function × Categorical interaction" begin
             formula = @formula(response ~ log(z) * group4)
             compiled, output = test_formula_correctness(formula, df, data, "Function × Categorical")
-            allocs = test_allocation_performance(compiled, output, data, "Function × Categorical")
+            allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 8  # Intercept + log(z) + group4 (3) + log(z):group4 (3)
         end
@@ -152,7 +152,7 @@ Random.seed!(06515)
         @testset "Complex mixed formula" begin
             formula = @formula(response ~ x * y * group3 + log(z) * group4)
             compiled, output = test_formula_correctness(formula, df, data, "Complex mixed formula")
-            allocs = test_allocation_performance(compiled, output, data, "Complex mixed formula")
+            allocs = test_allocation_performance(compiled, output, data)
             
             # Should handle both 3-way interactions and function interactions correctly
             @test length(compiled) > 15  # Complex formula with many terms
@@ -163,7 +163,7 @@ Random.seed!(06515)
         @testset "Intercept only" begin
             formula = @formula(response ~ 1)
             compiled, output = test_formula_correctness(formula, df, data, "Intercept only")
-            allocs = test_allocation_performance(compiled, output, data, "Intercept only")
+            allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 1  # Only intercept
         end
@@ -171,7 +171,7 @@ Random.seed!(06515)
         @testset "No intercept" begin
             formula = @formula(response ~ 0 + x)
             compiled, output = test_formula_correctness(formula, df, data, "No intercept")
-            allocs = test_allocation_performance(compiled, output, data, "No intercept")
+            allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 1  # Only x
         end
