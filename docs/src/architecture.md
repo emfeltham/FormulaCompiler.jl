@@ -11,7 +11,83 @@ Move expensive work to compile time; keep runtime simple and type‑stable.
 - Memory reuse: Preallocate once; reuse across evaluations
 - Position mapping: Address everything by compile‑time positions, not names
 
+## System Overview
+
+```mermaid
+graph TB
+    subgraph "External Ecosystem"
+        GLM["GLM.jl<br>Linear Models"]
+        MM["MixedModels.jl<br>Mixed Effects"]
+        Data["Tables.jl<br>Data Sources"]
+        Cat["CategoricalArrays.jl<br>Categorical Data"]
+    end
+    
+    subgraph "FormulaCompiler Core"
+        Comp["Compilation System<br>Position Mapping"]
+        Exec["Runtime System<br>Zero Allocation Execution"]
+        Scen["Scenario System<br>Memory Efficient Overrides"]
+        Utils["Core Utilities<br>OverrideVector, helpers"]
+    end
+    
+    subgraph "Performance Results"
+        Perf1["~50ns per row"]
+        Perf2["Zero allocations"] 
+        Perf3[">99% memory savings"]
+    end
+    
+    GLM --> Comp
+    MM --> Comp
+    Data --> Comp
+    Cat --> Comp
+    Comp --> Exec
+    Data --> Scen
+    Utils --> Scen
+    Scen --> Exec
+    
+    Exec --> Perf1
+    Exec --> Perf2
+    Scen --> Perf3
+    
+    style Comp fill:#f3e5f5
+    style Exec fill:#e8f5e8  
+    style Scen fill:#e1f5fe
+    style Perf1 fill:#e8f5e8
+    style Perf2 fill:#e8f5e8
+    style Perf3 fill:#e8f5e8
+```
+
 ## Unified Compilation Pipeline
+
+The compilation process transforms statistical formulas into optimized evaluators:
+
+```mermaid
+flowchart TD
+    A["Statistical Model<br>GLM/MixedModel with fitted formula"] --> B["Extract Formula<br>model.mf.f"]
+    B --> C["Decompose Terms<br>identify and classify components"]
+    
+    C --> D{Term Classification}
+    D -->|Constants| E["Constant Operation<br>Fixed values in output"]
+    D -->|Continuous| F["Continuous Operation<br>Direct column access"]
+    D -->|Categorical| G["Categorical Operation<br>Contrast matrix application"]
+    D -->|Functions| H["Function Operation<br>log, exp, sqrt, etc."]
+    D -->|Interactions| I["Interaction Operation<br>Kronecker product patterns"]
+    
+    E --> J["Position Analysis<br>Determine output locations"]
+    F --> J
+    G --> J
+    H --> J
+    I --> J
+    
+    J --> K["Memory Layout Planning<br>Scratch space allocation"]
+    K --> L["Type Specialization<br>Embed positions in operation types"]
+    L --> M["Code Generation<br>Create type-stable evaluator"]
+    M --> N["Compiled Evaluator<br>Zero-allocation callable object"]
+    
+    style A fill:#e1f5fe
+    style N fill:#e8f5e8
+    style J fill:#f3e5f5
+    style L fill:#fff3e0
+```
 
 Compilation produces a single position‑mapped evaluator (`UnifiedCompiled`) in four steps:
 

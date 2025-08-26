@@ -316,6 +316,12 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 - [StandardizedPredictors.jl](https://github.com/beacon-biosignals/StandardizedPredictors.jl): Standardized predictors
 - [StatsModels.jl](https://github.com/JuliaStats/StatsModels.jl): Formula interface
 
+## Documentation
+
+- **[DIAGRAMS.md](DIAGRAMS.md)**: Complete visual guide with system architecture, technical implementation, and usage workflows
+- **[categorical_handling.md](categorical_handling.md)**: Detailed explanation of categorical variable and interaction handling
+- **[docs/diagrams/](docs/diagrams/)**: Individual diagram files for embedding in documentation
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.

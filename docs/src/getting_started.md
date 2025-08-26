@@ -13,6 +13,24 @@ Pkg.add(url="https://github.com/emfeltham/FormulaCompiler.jl")
 
 Once installed, you can load the package:
 
+## Workflow Overview
+
+Here's how FormulaCompiler.jl works from start to finish:
+
+```mermaid
+flowchart TD
+    A["Fit Statistical Model<br>GLM.lm, MixedModels.fit"] --> B["Prepare Data<br>Tables.columntable"]
+    B --> C["Compile Formula<br>compile_formula"] 
+    C --> D["Create Output Vector<br>Vector{Float64}"]
+    D --> E["Evaluate Rows<br>compiled(output, data, idx)"]
+    E --> F["Process Results<br>~50ns per row, 0 allocations"]
+    
+    style A fill:#e1f5fe
+    style C fill:#f3e5f5
+    style E fill:#e8f5e8
+    style F fill:#fff3e0
+```
+
 ```julia
 using FormulaCompiler
 ```
