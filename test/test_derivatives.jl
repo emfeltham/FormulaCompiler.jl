@@ -1,3 +1,6 @@
+# test_derivatives.jl
+# julia --project="." test/test_derivatives.jl > test/test_derivatives.txt 2>&1
+
 using Test
 using FormulaCompiler
 using DataFrames, Tables, GLM, CategoricalArrays
@@ -41,8 +44,9 @@ using BenchmarkTools
     row = 5
     contrast_modelrow!(Δ, compiled, data, row; var=:group3, from="A", to="B")
     # Validate against manual override with OverrideVector
-    data_from = FormulaCompiler.create_override_data(data, Dict(:group3 => FormulaCompiler.create_override_vector("A", data.group3)))
-    data_to = FormulaCompiler.create_override_data(data, Dict(:group3 => FormulaCompiler.create_override_vector("B", data.group3)))
+    # Pass raw override values; create_override_data will wrap appropriately
+    data_from = FormulaCompiler.create_override_data(data, Dict{Symbol,Any}(:group3 => "A"))
+    data_to   = FormulaCompiler.create_override_data(data, Dict{Symbol,Any}(:group3 => "B"))
     y_from = modelrow(compiled, data_from, row)
     y_to = modelrow(compiled, data_to, row)
     @test isapprox(Δ, y_to .- y_from; rtol=0, atol=0)
