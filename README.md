@@ -6,7 +6,7 @@ High-performance, zero-allocation model matrix evaluation for Julia statistical 
 
 - **Zero allocations**: ~50ns per row, 0 bytes allocated across all 105 test cases
 - **Significant speedup and efficiency** over `modelmatrix()` for single-row evaluations  
-- **Universal compatibility**: Handles any valid StatsModels.jl formula including complex interactions
+- **Universal compatibility**: Handles any valid StatsModels.jl formula, including complex interactions and functions
 - **Advanced scenarios**: Memory-efficient variable overrides for policy analysis
 - **Unified architecture**: Single compilation pipeline handles all formula complexities
 - **Full ecosystem support**: Works with GLM.jl, MixedModels.jl, StandardizedPredictors.jl
