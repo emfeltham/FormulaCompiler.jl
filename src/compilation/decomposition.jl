@@ -5,6 +5,82 @@ using StatsModels
 using MixedModels: RandomEffectsTerm
 using StandardizedPredictors: ZScoredTerm
 
+###############################################################################
+# KRONECKER PRODUCT EXPANSION FOR INTERACTIONS (From restart branch)
+###############################################################################
+
+"""
+    compute_interaction_pattern(width1::Int, width2::Int) -> Vector{Tuple{Int,Int}}
+
+Generate interaction pattern for Kronecker product expansion.
+Matches StatsModels convention: kron(b, a) means a varies fast, b varies slow.
+
+For example, x * group3 where group3 has 2 contrasts:
+- width1 = 1 (x is scalar)
+- width2 = 2 (group3 has 2 contrast columns)
+- Returns: [(1,1), (1,2)]
+"""
+function compute_interaction_pattern(width1::Int, width2::Int)
+    if width1 <= 0 || width2 <= 0
+        error("Invalid component widths: width1=$width1, width2=$width2 (both must be > 0)")
+    end
+    
+    pattern = Vector{Tuple{Int,Int}}()
+    for j in 1:width2  # Second component (varies slow)
+        for i in 1:width1  # First component (varies fast)
+            push!(pattern, (i, j))
+        end
+    end
+    
+    return pattern
+end
+
+"""
+    compute_all_interaction_combinations(component_positions::Vector{Vector{Int}}) -> Vector{Vector{Int}}
+
+Compute all combinations for multi-way interactions using recursive Kronecker expansion.
+
+For x * y * group3 where group3 has positions [4,5]:
+- component_positions = [[1], [2], [4,5]]
+- Returns: [[1,2,4], [1,2,5]]
+"""
+function compute_all_interaction_combinations(component_positions::Vector{Vector{Int}})
+    if length(component_positions) == 0
+        return Vector{Vector{Int}}()
+    end
+    
+    if length(component_positions) == 1
+        # Single component - return each position as a separate combination
+        return [[p] for p in component_positions[1]]
+    end
+    
+    # Recursive Kronecker product
+    first_positions = component_positions[1]
+    rest_combinations = compute_all_interaction_combinations(component_positions[2:end])
+    
+    result = Vector{Vector{Int}}()
+    for p1 in first_positions
+        for rest_combo in rest_combinations
+            push!(result, vcat(p1, rest_combo))
+        end
+    end
+    
+    return result
+end
+
+"""
+    get_component_width(positions::Union{Int, Vector{Int}}) -> Int
+
+Get the width (number of columns) for a component's positions.
+"""
+function get_component_width(positions::Union{Int, Vector{Int}})
+    if isa(positions, Int)
+        return 1
+    else
+        return length(positions)
+    end
+end
+
 """
     decompose_formula(formula::FormulaTerm, data_example::NamedTuple) -> (operations, scratch_size, output_size)
 
@@ -250,43 +326,55 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
     return out_pos
 end
 
-# Handle interaction terms
+# Handle interaction terms with proper Kronecker expansion
 function decompose_term!(ctx::CompilationContext, term::InteractionTerm, data_example)
     # Check cache
     if haskey(ctx.position_map, term)
         return ctx.position_map[term]
     end
     
-    # Get positions for all component terms
-    positions = Int[]
+    # Get positions for all component terms, properly handling multi-output terms
+    component_positions = Vector{Vector{Int}}()
     for t in term.terms
         pos = decompose_term!(ctx, t, data_example)
         if isa(pos, Int)
-            push!(positions, pos)
+            push!(component_positions, [pos])  # Convert scalar to vector
         else
-            # For multi-output terms (categorical), use first position for now
-            # TODO: Handle categorical×continuous properly
-            push!(positions, pos[1])
+            push!(component_positions, pos)  # Already a vector (categorical)
         end
     end
     
-    # Generate multiplication operations
-    if length(positions) == 2
-        out_pos = allocate_position!(ctx)
-        push!(ctx.operations, BinaryOp{:*, positions[1], positions[2], out_pos}())
-        ctx.position_map[term] = out_pos
-        return out_pos
-    else
-        # Multi-way interaction: cascade multiplications
-        current = positions[1]
-        for i in 2:length(positions)
+    # Compute all interaction combinations using Kronecker expansion
+    interaction_combinations = compute_all_interaction_combinations(component_positions)
+    
+    # Generate multiplication operations for each combination
+    output_positions = Int[]
+    
+    for position_combo in interaction_combinations
+        if length(position_combo) == 1
+            # Shouldn't happen in interactions, but handle gracefully
+            push!(output_positions, position_combo[1])
+        elseif length(position_combo) == 2
+            # Binary interaction
             out_pos = allocate_position!(ctx)
-            push!(ctx.operations, BinaryOp{:*, current, positions[i], out_pos}())
-            current = out_pos
+            push!(ctx.operations, BinaryOp{:*, position_combo[1], position_combo[2], out_pos}())
+            push!(output_positions, out_pos)
+        else
+            # Multi-way interaction: cascade multiplications
+            current = position_combo[1]
+            for i in 2:length(position_combo)
+                out_pos = allocate_position!(ctx)
+                push!(ctx.operations, BinaryOp{:*, current, position_combo[i], out_pos}())
+                current = out_pos
+            end
+            push!(output_positions, current)
         end
-        ctx.position_map[term] = current
-        return current
     end
+    
+    # Cache and return (single position if only one output, vector otherwise)
+    result = length(output_positions) == 1 ? output_positions[1] : output_positions
+    ctx.position_map[term] = result
+    return result
 end
 
 # Handle categorical terms
