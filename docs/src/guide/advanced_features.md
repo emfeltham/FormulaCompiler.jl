@@ -143,6 +143,43 @@ using BenchmarkTools
 @benchmark compile_formula($model, $data)
 ```
 
+## Derivatives and Contrasts
+
+Compute per-row derivatives of the model row with respect to selected variables.
+
+ForwardDiff-based (zero-alloc after warmup):
+
+```julia
+using ForwardDiff
+
+compiled = compile_formula(model, data)
+vars = [:x, :z]  # choose continuous vars
+de = build_derivative_evaluator(compiled, data; vars=vars)
+
+J = Matrix{Float64}(undef, length(compiled), length(vars))
+derivative_modelrow!(J, de, 1)
+
+# Marginal effects η = Xβ
+β = coef(model)
+g_eta = marginal_effects_eta(de, β, 1)  # g = J' * β
+
+# GLM mean μ = g⁻¹(η):
+using GLM
+g_mu = marginal_effects_mu(de, β, 1; link=LogitLink())
+```
+
+Finite-difference fallback (simple and robust):
+
+```julia
+J_fd = derivative_modelrow_fd(compiled, data, 1; vars=vars)
+```
+
+Discrete contrasts for categorical variables:
+
+```julia
+Δ = contrast_modelrow(compiled, data, 1; var=:group3, from="A", to="B")
+```
+
 ## Complex Formula Support
 
 ### Nested Functions

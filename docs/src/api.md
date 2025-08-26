@@ -24,6 +24,23 @@ DataScenario
 create_scenario
 ```
 
+## Derivatives and Contrasts
+
+```@docs
+build_derivative_evaluator
+derivative_modelrow!
+derivative_modelrow
+derivative_modelrow_fd!
+derivative_modelrow_fd
+contrast_modelrow!
+contrast_modelrow
+continuous_variables
+marginal_effects_eta!
+marginal_effects_eta
+marginal_effects_mu!
+marginal_effects_mu
+```
+
 ---
 
 ## Function Details
