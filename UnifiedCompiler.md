@@ -1,8 +1,8 @@
-# UnifiedCompiler: Clean-Slate Zero-Allocation Formula Compilation
+# Unified approach to formula compilation
 
 ## Executive Summary
 
-The UnifiedCompiler is a complete reimplementation of FormulaCompiler's core compilation system that **successfully achieves zero allocations** for statistical formula evaluation. It solves the critical function×interaction allocation problem that motivated this work, achieving **0 bytes allocated for `exp(x) * y`** (down from 176 bytes in the previous architecture).
+This is a complete reimplementation of FormulaCompiler's core compilation system that **successfully achieves zero allocations** for statistical formula evaluation. It solves the critical function×interaction allocation problem that motivated this work, achieving **0 bytes allocated for `exp(x) * y`** (down from 176 bytes in the previous architecture).
 
 ### Performance Results (Final - All Tests Pass)
 - **All 105 allocation tests**: Perfect zero allocations ✅ (100%)
@@ -21,7 +21,7 @@ The UnifiedCompiler is a complete reimplementation of FormulaCompiler's core com
 
 ## Standard Workflow
 
-The UnifiedCompiler is designed to work with the standard modeling workflow:
+This compiler is designed to work with the standard modeling workflow:
 
 ```julia
 # 1. Define formula
