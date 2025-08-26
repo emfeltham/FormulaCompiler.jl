@@ -19,4 +19,7 @@ Random.seed!(06515)
     # Override and scenario system
     include("test_overrides.jl") # Override and scenario functionality
     include("test_categorical_correctness.jl") # Detailed categorical override correctness
+    
+    # Derivatives
+    include("test_derivatives.jl")
 end
