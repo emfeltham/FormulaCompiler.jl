@@ -135,6 +135,102 @@ The failing case is probably something like:
 
 This selective failure indicates the allocation isn't systematic across all functions, but rather triggered by specific compilation contexts or expression complexity. The failure represents a **boundary condition** where the optimization breaks down.
 
+## Targeted Fix Plan - Actual Root Cause Identified
+
+### Investigation Results
+
+Through systematic testing, we've identified the exact allocation issue:
+
+#### **Test Case Analysis**
+- **Failing formula**: `logistic_response ~ x * y * group3 + log(abs(z)) + group4` → **96 bytes**
+- **Working variant**: `logistic_response ~ x * y * group4 + log(abs(z)) + group3` → **0 bytes**
+
+#### **Key Discoveries**
+1. **NOT scratch space undercounting** - scratch allocation is correct (20 positions)
+2. **NOT systematic function/interaction issues** - individual components work fine:
+   - 3-way interactions alone: 0 bytes ✅
+   - Functions alone: 0 bytes ✅  
+   - All combinations except the exact failing case: 0 bytes ✅
+3. **Specific categorical dimension issue**:
+   - `group3`: 3 levels → 2 contrast columns
+   - `group4`: 4 levels → 3 contrast columns
+   - **Swapping them fixes the allocation!**
+
+#### **Operation Count Anomaly**
+- **Failing case**: 33 operations, 96 bytes ❌
+- **Working case**: 40 operations, 0 bytes ✅
+
+The working version has **more operations**, suggesting the failing case takes a "shortcut" optimization that causes allocation.
+
+### Root Cause Analysis
+
+The 96-byte allocation is caused by a **type inference failure** or **memory allocation in ContrastOp execution** for specific categorical dimension combinations during complex formula compilation.
+
+#### **Evidence Points To:**
+1. **ContrastOp execution path** - categorical contrast operations
+2. **Dimensional interaction** - specific combination of 2-column + 3-column categoricals  
+3. **Compilation optimization bug** - certain patterns trigger fallback allocation path
+4. **Type instability** - 96 bytes suggests vector allocation during contrast computation
+
+### Targeted Fix Strategy
+
+#### **Step 1: Locate the Allocation Source**
+1. **Profile the exact failing case** with allocation tracking
+2. **Examine ContrastOp execution** in `src/compilation/execution.jl:336-350`
+3. **Check categorical dimension handling** in interaction compilation
+4. **Look for type instability** in contrast matrix operations
+
+#### **Step 2: Identify the Compilation Path Difference**  
+```julia
+# Why does this fail?
+x * y * group3 + log(abs(z)) + group4  # 33 ops, 96 bytes
+
+# But this works?  
+x * y * group4 + log(abs(z)) + group3  # 40 ops, 0 bytes
+```
+
+**Hypothesis**: The compilation system has different optimization paths based on categorical ordering/dimensions that cause one path to allocate.
+
+#### **Step 3: Fix the Type Instability**
+Likely locations for the fix:
+
+1. **ContrastOp execution** (`src/compilation/execution.jl:336`):
+   ```julia
+   # Current (potentially allocating):
+   column_data = getproperty(data, Col)
+   level = extract_level_code_zero_alloc(column_data, row_idx)
+   
+   # May need type stabilization for specific dimension combinations
+   ```
+
+2. **Categorical interaction compilation** (`src/compilation/decomposition.jl`):
+   - Check interaction pattern generation for dimensional edge cases
+   - Ensure consistent `Val{Column}` dispatch patterns
+
+3. **Operation sequence generation**:
+   - Fix the "shortcut" optimization that reduces operations but causes allocation
+   - Ensure the full zero-allocation path is always taken
+
+#### **Step 4: Implementation Plan**
+1. **Add type annotations** to ensure stable ContrastOp execution
+2. **Fix categorical dimension handling** in interaction compilation
+3. **Remove problematic optimization** that causes the operation count reduction
+4. **Add regression test** for the specific failing categorical dimension combination
+
+#### **Step 5: Validation**
+1. **Failing test passes**: `x * y * group3 + log(abs(z)) + group4` → 0 bytes
+2. **No regressions**: All other allocation tests remain at 0 bytes
+3. **Operation consistency**: Both variants should have similar operation counts
+4. **Add stress tests**: Various categorical dimension combinations
+
+### Expected Outcome
+- **True zero-allocation achievement**: All 105 allocation tests pass
+- **Robust categorical handling**: No dimension-specific allocation issues  
+- **Consistent compilation**: Similar optimization paths regardless of categorical ordering
+- **Clear understanding**: Document the categorical dimension interaction patterns that caused the issue
+
+This represents the final allocation issue blocking true zero-allocation performance across all formula types.
+
 
 ## Scratch space allocation?
 
