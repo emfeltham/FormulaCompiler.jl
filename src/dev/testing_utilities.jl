@@ -101,12 +101,8 @@ function test_allocation_performance(compiled, output_compiled, data)
     
     allocs_per_call = compiled_allocs / 100
     
-    # Test allocation levels (allowing for current known issues)
-    if occursin("function", lowercase(description)) || occursin("interaction", lowercase(description))
-        @test allocs_per_call <= 1000  # More lenient for functions and complex interactions
-    else
-        @test allocs_per_call == 0  # Expect zero for simple cases
-    end
+    # Test allocation levels
+    @test allocs_per_call == 0
     
     return allocs_per_call
 end
