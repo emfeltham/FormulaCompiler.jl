@@ -14,31 +14,7 @@ FormulaCompiler.jl achieves zero-allocation performance through:
 
 Here's what happens during each ~50ns evaluation:
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant Compiled as Compiled Evaluator
-    participant Data as Data Table
-    participant Output as Output Vector
-    
-    Note over User,Output: Single Row Evaluation (~50ns total)
-    
-    User->>Compiled: compiled(output, data, row_idx)
-    Note over Compiled: Type-stable dispatch<br>All positions embedded in types
-    
-    loop For each operation in chain
-        Compiled->>Data: Access column value
-        Note over Data: Val{Column} dispatch<br>Compile-time column resolution
-        Data-->>Compiled: Type-stable value
-        
-        Note over Compiled: Apply operation<br>Position-mapped<br>Zero allocations
-        Compiled->>Output: Store result at position
-        Note over Output: Direct memory write
-    end
-    
-    Output-->>User: Populated vector
-    Note over User: Ready for analysis
-```
+![Diagram](../../diagrams/generated/src_guide_performance_diagram_4.svg)
 
 ## Pre-compilation Best Practices
 
@@ -473,4 +449,3 @@ Key performance guidelines:
 3. **Use column tables**: Convert DataFrames to `Tables.columntable` format
 4. **Profile regularly**: Monitor for performance regressions
 5. **Batch when possible**: Use `modelrow!` for multiple rows
-6. **Check allocations**: Verify zero-allocation with `@allocated` or BenchmarkTools

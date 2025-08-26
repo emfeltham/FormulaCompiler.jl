@@ -17,19 +17,7 @@ Once installed, you can load the package:
 
 Here's how FormulaCompiler.jl works from start to finish:
 
-```mermaid
-flowchart TD
-    A["Fit Statistical Model<br>GLM.lm, MixedModels.fit"] --> B["Prepare Data<br>Tables.columntable"]
-    B --> C["Compile Formula<br>compile_formula"] 
-    C --> D["Create Output Vector<br>Vector{Float64}"]
-    D --> E["Evaluate Rows<br>compiled(output, data, idx)"]
-    E --> F["Process Results<br>~50ns per row, 0 allocations"]
-    
-    style A fill:#e1f5fe
-    style C fill:#f3e5f5
-    style E fill:#e8f5e8
-    style F fill:#fff3e0
-```
+![Diagram](../diagrams/generated/src_getting_started_diagram_8.svg)
 
 ```julia
 using FormulaCompiler

@@ -15,28 +15,7 @@ All with minimal memory allocation using the `OverrideVector` system.
 
 ## Scenario Workflow
 
-```mermaid
-flowchart TD
-    A["Compiled Formula<br>from basic compilation"] --> B{Analysis Type?}
-    B -->|Single Override| C["create_scenario"]
-    B -->|Parameter Grid| D["create_scenario_grid"]
-    
-    C --> E["Override Variables<br>x = 2.0, group = Treatment"]
-    D --> F["Multiple Combinations<br>x: [1,2,3] × group: [A,B]"]
-    
-    E --> G["Evaluate Scenario<br>compiled(output, scenario.data, idx)"]
-    F --> H["Batch Evaluation<br>6 scenarios (3×2)"]
-    
-    G --> I["Policy Insights<br>>99% memory savings"]
-    H --> I
-    
-    style A fill:#e1f5fe
-    style C fill:#f3e5f5
-    style D fill:#f3e5f5
-    style G fill:#e8f5e8
-    style H fill:#e8f5e8
-    style I fill:#fff3e0
-```
+![Diagram](../../diagrams/generated/src_guide_scenarios_diagram_5.svg)
 
 ## Basic Scenario Creation
 
@@ -422,4 +401,3 @@ println("Savings: $(round(full_data_memory / total_scenario_memory))x")
 - Always compare to appropriate baselines
 - Account for uncertainty in treatment effect estimates
 - Consider interaction effects in scenario design
-- Validate scenario assumptions with domain experts

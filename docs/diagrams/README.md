@@ -9,19 +9,7 @@ This directory contains Mermaid diagrams illustrating the design and usage of Fo
 **Purpose**: Shows the standard user journey from model fitting to evaluation  
 **Target audience**: New users learning the package
 
-```mermaid
-flowchart TD
-    A["Fit Statistical Model<br>GLM.lm, MixedModels.fit"] --> B["Prepare Data<br>Tables.columntable"]
-    B --> C["Compile Formula<br>compile_formula"] 
-    C --> D["Create Output Vector<br>Vector{Float64}"]
-    D --> E["Evaluate Rows<br>compiled(output, data, idx)"]
-    E --> F["Process Results<br>~50ns per row, 0 allocations"]
-    
-    style A fill:#e1f5fe
-    style C fill:#f3e5f5
-    style E fill:#e8f5e8
-    style F fill:#fff3e0
-```
+![Diagram](generated/diagrams_README_diagram_1.svg)
 
 ### System Architecture
 **File**: `system_architecture.mmd`  
@@ -59,26 +47,7 @@ To preview diagrams locally, you can use:
 **Purpose**: Illustrate the scenario/override system usage  
 **Target audience**: Users doing sensitivity analysis
 
-```mermaid
-flowchart TD
-    A["Compiled Formula"] --> B{Analysis Type?}
-    B -->|Single Override| C["create_scenario"]
-    B -->|Parameter Grid| D["create_scenario_grid"]
-    
-    C --> E["Override Variables"]
-    D --> F["Multiple Combinations"]
-    
-    E --> G["Evaluate Scenario"]
-    F --> H["Batch Evaluation"]
-    
-    G --> I["Policy Insights"]
-    H --> I
-    
-    style A fill:#e1f5fe
-    style C fill:#f3e5f5
-    style D fill:#f3e5f5
-    style I fill:#fff3e0
-```
+![Diagram](generated/diagrams_README_diagram_3.svg)
 
 ### Categorical System
 **File**: `categorical_system.mmd`  
@@ -98,4 +67,3 @@ flowchart TD
 - Advanced scenario features
 - Codebase structure navigation
 
-See `../../MERMAID.md` for the complete diagram plan.
