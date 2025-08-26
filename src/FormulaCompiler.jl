@@ -3,62 +3,80 @@
 
 High-performance, zero-allocation statistical formula evaluation for Julia.
 
-## Two-Phase Compilation Architecture
+## Overview
 
-FormulaCompiler uses a sophisticated two-phase compilation system to achieve maximum performance:
+FormulaCompiler transforms Julia statistical models into specialized, type-stable evaluators 
+that achieve zero-allocation performance (~50ns per row) through compile-time specialization 
+and position mapping.
 
-### Phase 1: Complete Compilation (CompiledFormula)
-- **Function**: `compile_formula_complete(model, data)`
-- **Result**: `CompiledFormula` - evaluator tree-based representation
-- **Purpose**: Complete formula parsing, analysis, and validation
-- **Performance**: Good (~100ns per row)
-- **Use case**: When you need the intermediate representation or debugging
+## Key Features
 
-### Phase 2: Performance Optimization (SpecializedFormula)  
-- **Function**: `compile_formula_optimized(compiled_formula)`
-- **Result**: `SpecializedFormula` - tuple-based specialized representation
-- **Purpose**: Maximum runtime performance through type specialization
-- **Performance**: Exceptional (~50ns per row, zero allocations)
-- **Use case**: Production code where speed is critical
+- **Zero allocations**: Evaluates model matrices without any runtime allocations
+- **Universal compatibility**: Works with any StatsModels.jl formula
+- **Ecosystem integration**: Supports GLM.jl, MixedModels.jl, StandardizedPredictors.jl
+- **Scenario analysis**: Memory-efficient variable overrides for counterfactuals
+- **Type specialization**: All operations resolved at compile time
 
-### Main API
-- **`compile_formula(model, data)`**: Complete + optimization in one call (recommended)
+## Architecture
 
-## Key Design Principles
+The package uses a **position mapping system** that converts statistical formulas into 
+type-specialized operations:
 
-1. **CompiledFormula is the foundation**: It handles all the complex parsing and creates 
-   a complete, functional evaluator tree representation.
+1. **Formula decomposition**: Extracts terms from fitted models with applied schemas
+2. **Position allocation**: Maps terms to scratch/output positions at compile time  
+3. **Type specialization**: Embeds positions in operation types for zero-allocation execution
 
-2. **SpecializedFormula is the optimization**: It analyzes the CompiledFormula structure 
-   and creates specialized, type-stable execution paths.
+## Main API
 
-3. **Both systems are fully functional**: You can execute either representation, 
-   but SpecializedFormula provides superior performance.
+```julia
+# Compile a fitted model
+compiled = compile_formula(model, data)
+
+# Zero-allocation evaluation  
+output = Vector{Float64}(undef, length(compiled))
+compiled(output, data, row_idx)  # ~50ns, 0 allocations
+```
 
 ## Example Usage
 
 ```julia
 using FormulaCompiler, GLM, DataFrames, Tables
 
-# Your data
-df = DataFrame(x = randn(1000), group = rand(["A", "B"], 1000))
-df.y = df.x + randn(1000)
-model = lm(@formula(y ~ x * group), df)
+# Fit a model
+df = DataFrame(
+    y = randn(1000),
+    x = randn(1000), 
+    group = rand(["A", "B", "C"], 1000)
+)
+model = lm(@formula(y ~ x * group + log(abs(x))), df)
+
+# Compile for fast evaluation
 data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+row_vec = Vector{Float64}(undef, length(compiled))
 
-# Option 1: Two-phase compilation (for when you need intermediate form)
-compiled = compile_formula_complete(model, data)  # CompiledFormula
-specialized = compile_formula(compiled)           # SpecializedFormula
+# Evaluate rows with zero allocations
+compiled(row_vec, data, 1)     # First row
+compiled(row_vec, data, 500)   # 500th row
 
-# Option 2: Direct compilation (recommended for most use cases)
-formula = compile_formula(model, data)            # SpecializedFormula directly
-
-# High-performance execution (zero allocations)
-output = Vector{Float64}(undef, length(formula))
-for i in 1:nrow(df)
-    formula(output, data, i)  # ~50ns, 0 allocations
-end
+# Scenario analysis with overrides
+scenario = create_scenario("policy", data; x = 2.0, group = "A")
+compiled(row_vec, scenario.data, 1)  # Evaluate with overrides
 ```
+
+## Supported Formulas
+
+- Basic terms: `x`, `log(z)`, `x^2`
+- Categorical variables with all contrast types
+- Interactions: `x * group`, `x * y * z`
+- Functions: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`
+- Complex formulas: `x * log(z) * group + sqrt(abs(y))`
+
+## Performance
+
+- Single row: ~50ns, 0 allocations
+- 10-100x faster than `modelmatrix()[row, :]`
+- Memory efficient: O(1) for scenarios vs O(n) for data copies
 """
 module FormulaCompiler
 
