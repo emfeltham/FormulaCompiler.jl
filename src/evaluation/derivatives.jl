@@ -2,8 +2,8 @@ using ForwardDiff
 using GLM
 
 # Single-row override vector: returns replacement at `row`, base elsewhere (unused)
-mutable struct SingleRowOverrideVector{V}
-    base::V
+mutable struct SingleRowOverrideVector
+    base::Any
     row::Int
     replacement::Any
 end
@@ -13,13 +13,13 @@ end
 Base.size(v::SingleRowOverrideVector) = size(v.base)
 Base.length(v::SingleRowOverrideVector) = length(v.base)
 Base.IndexStyle(::Type{<:SingleRowOverrideVector}) = IndexLinear()
-Base.eltype(::Type{SingleRowOverrideVector{V}}) where {V} = Any
+Base.eltype(::Type{SingleRowOverrideVector}) = Any
 Base.getindex(v::SingleRowOverrideVector, i::Int) = (i == v.row ? v.replacement : getindex(v.base, i))
 
 # Build a NamedTuple overriding selected variables with SingleRowOverrideVector wrappers
 function build_row_override_data(base::NamedTuple, vars::Vector{Symbol}, row::Int)
     overrides = NamedTuple()
-    override_vecs = Vector{SingleRowOverrideVector{Any}}(undef, length(vars))
+    override_vecs = Vector{SingleRowOverrideVector}(undef, length(vars))
     # Construct override vectors and merge into NamedTuple shadowing base
     pairs = Pair{Symbol,Any}[]
     for (i, s) in enumerate(vars)
@@ -52,10 +52,10 @@ function (g::DerivClosure)(x::AbstractVector)
     row_vec = get!(de.rowvec_cache, Tx) do
         Vector{Tx}(undef, length(de))
     end
-    # Get or build override data and vectors for Tx
-    data_T, overrides_T = get!(de.data_cache, Tx) do
-        data_over, over_vecs = build_row_override_data(de.base_data, de.vars, de.row)
-        ((data_over, over_vecs))
+    # Build or reuse override vectors for Tx; build merged data each call
+    overrides_T = get!(de.data_cache, Tx) do
+        _, over_vecs = build_row_override_data(de.base_data, de.vars, de.row)
+        over_vecs
     end
     # Ensure current row and replacements are set
     for i in eachindex(de.vars)
@@ -63,20 +63,26 @@ function (g::DerivClosure)(x::AbstractVector)
         ov.row = de.row
         ov.replacement = x[i]
     end
+    # Build merged data NamedTuple for this call
+    pairs = Pair{Symbol,Any}[]
+    for (i, s) in enumerate(de.vars)
+        push!(pairs, s => overrides_T[i])
+    end
+    data_over = (; de.base_data..., pairs...)
     # Evaluate compiled into row_vec
-    compiled_T(row_vec, data_T, de.row)
+    compiled_T(row_vec, data_over, de.row)
     return row_vec
 end
 
 Base.length(de::DerivClosure) = length(de.de)
 
-struct DerivativeEvaluator{T, Ops, S, O, NT}
+mutable struct DerivativeEvaluator{T, Ops, S, O, NT}
     compiled_base::UnifiedCompiled{T, Ops, S, O}
     base_data::NT
     vars::Vector{Symbol}
     xbuf::Vector{Float64}
-    g::DerivClosure{DerivativeEvaluator{T, Ops, S, O, NT}}
-    cfg
+    g::Any
+    cfg::Any
     # Caches keyed by element type (Float64, Dual{…})
     compiled_cache::Dict{DataType, Any}
     data_cache::Dict{DataType, Any}      # maps T -> (data_T::NamedTuple, overrides_T::Vector)

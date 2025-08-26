@@ -34,9 +34,11 @@
 
 - ForwardDiff (FDiff) [Primary]
   - Approach: Use Dual numbers on the row’s selected variables and compute the Jacobian of a closure that writes the model row into a reusable buffer.
-  - Zero-allocation path: `ForwardDiff.jacobian!` with a prebuilt `JacobianConfig`, preallocated `J` and `x`, and a fixed variable set per derivative evaluator.
+  - Zero-allocation path: `ForwardDiff.jacobian!` with a prebuilt and concretely-typed `JacobianConfig`, preallocated `J` and `x`, and a fixed variable set per derivative evaluator.
   - Enablement: make compiled execution generic over element type `T<:Real` (parametric scratch; eliminate hard `Float64` casts). Convert contrast values via `convert(T, val)`.
-  - Data injection: row-local wrapper that returns a Dual at the target row for selected columns; primal values otherwise.
+  - Data injection (no per-call merges): prebuild and store per-eltype override vectors and merged `data_over` NamedTuples once; the AD closure only mutates `row` and `replacement` fields and calls compiled.
+  - Typed caches (no Dict lookups on hot path): store `compiled_dual`, `rowvec_dual`, `overrides_dual`, `data_over_dual` as concretely-typed fields initialized once.
+  - Typed closure: `g::DerivClosure{<:DerivativeEvaluator}` created post-init; `cfg::ForwardDiff.JacobianConfig{…}` concretely typed and reused.
   - Chunking: use `ForwardDiff.Chunk{N}` where `N = length(vars)`; allow `chunk=:auto`.
 
 - Finite Difference (FD) [Fallback]
@@ -56,6 +58,8 @@
 - Reuse buffers: one output vector per evaluation; reuse contrast/derivative scratch where possible.
 - Minimize wrapper overhead: pre-create row-local override objects per variable and reuse across steps/h calls.
 - Optional parallelism later: parallelize across variables for FD when many continuous vars; ForwardDiff chunking already vectorizes directions.
+- No per-call merges: never rebuild the merged `data_over` NamedTuple during evaluation; mutate prebuilt override vectors only.
+- Typed fields end-to-end: avoid `Any`/`Dict{DataType,Any}` on hot paths; keep closure and config concretely typed.
 - Benchmarks: report allocations (target ~0 per evaluation path) and timings vs model size.
 
 ## Integration Points
@@ -84,8 +88,8 @@
 
 1. M0: Confirm API (orientation, names, options) and variable selection semantics.
 2. M1: Generic-typing pass for compiled execution (parametric `T` scratch; remove `Float64` casts; `convert(T, val)` for contrasts).
-3. M2: Row-local wrappers (SingleRowOverrideVector, RowDataWrapper) and ForwardDiff-based `DerivativeEvaluator` with prebuilt `JacobianConfig` and reusable buffers; implement `derivative_modelrow!` (FDiff).
-4. M3: Zero-allocation verification and performance benchmarks; fix stragglers.
+3. M2: ForwardDiff-based `DerivativeEvaluator` with row-local wrappers and concretely-typed fields; prebuild per-eltype overrides + merged `data_over`; typed closure + `JacobianConfig`; implement `derivative_modelrow!` (FDiff) without per-call merges.
+4. M3: Zero-allocation verification and performance benchmarks; eliminate residual allocations in the AD path.
 5. M4: FD fallback backend (central differences) using the same wrappers; implement discrete contrasts API.
 6. M5: Batch interfaces (multiple rows) with in-place Jacobian blocks; ensure memory reuse.
 7. M6: Docs and examples (marginal effects via `Δη = J * β`; GLM `μ` extension outline) and comprehensive tests.
