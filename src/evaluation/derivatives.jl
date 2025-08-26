@@ -2,7 +2,7 @@ using ForwardDiff
 using GLM
 
 # Single-row override vector: returns replacement at `row`, base elsewhere (unused)
-mutable struct SingleRowOverrideVector
+mutable struct SingleRowOverrideVector <: AbstractVector{Any}
     base::Any
     row::Int
     replacement::Any
@@ -33,64 +33,61 @@ end
 
 # Callable closure for ForwardDiff that writes into a reusable buffer
 struct DerivClosure{DE}
-    de::DE
+    de_ref::Base.RefValue{DE}
 end
 
 function (g::DerivClosure)(x::AbstractVector)
-    de = g.de
-    # Determine element type for this call (Float64 or Dual)
+    de = g.de_ref[]
     Tx = eltype(x)
-    # Get or build compiled instance for Tx
-    compiled_T = get!(de.compiled_cache, Tx) do
-        UB = typeof(de.compiled_base)
-        OpsT = UB.parameters[2]
-        ST = UB.parameters[3]
-        OT = UB.parameters[4]
-        UnifiedCompiled{Tx, OpsT, ST, OT}(de.compiled_base.ops)
+    # Select compiled + buffer (initialize dual on first use)
+    if Tx === Float64
+        compiled_T = de.compiled_base
+        row_vec = de.rowvec_float
+    else
+        if de.compiled_dual === nothing
+            UB = typeof(de.compiled_base)
+            OpsT = UB.parameters[2]
+            ST = UB.parameters[3]
+            OT = UB.parameters[4]
+            de.compiled_dual = UnifiedCompiled{Tx, OpsT, ST, OT}(de.compiled_base.ops)
+            de.rowvec_dual = Vector{Tx}(undef, length(de))
+        end
+        compiled_T = de.compiled_dual
+        row_vec = de.rowvec_dual
     end
-    # Get or build row buffer for Tx
-    row_vec = get!(de.rowvec_cache, Tx) do
-        Vector{Tx}(undef, length(de))
-    end
-    # Build or reuse override vectors for Tx; build merged data each call
-    overrides_T = get!(de.data_cache, Tx) do
-        _, over_vecs = build_row_override_data(de.base_data, de.vars, de.row)
-        over_vecs
-    end
-    # Ensure current row and replacements are set
+    # Update overrides
     for i in eachindex(de.vars)
-        ov = overrides_T[i]
+        ov = de.overrides[i]
         ov.row = de.row
         ov.replacement = x[i]
     end
-    # Build merged data NamedTuple for this call
-    pairs = Pair{Symbol,Any}[]
-    for (i, s) in enumerate(de.vars)
-        push!(pairs, s => overrides_T[i])
-    end
-    data_over = (; de.base_data..., pairs...)
-    # Evaluate compiled into row_vec
-    compiled_T(row_vec, data_over, de.row)
+    # Evaluate using prebuilt merged data
+    compiled_T(row_vec, de.data_over, de.row)
     return row_vec
 end
 
-Base.length(de::DerivClosure) = length(de.de)
+Base.length(g::DerivClosure) = length(g.de_ref[])
 
-mutable struct DerivativeEvaluator{T, Ops, S, O, NT}
+mutable struct DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged}
     compiled_base::UnifiedCompiled{T, Ops, S, O}
-    base_data::NT
+    base_data::NTBase
     vars::Vector{Symbol}
     xbuf::Vector{Float64}
+    # Prebuilt row-local overrides and merged data (shared for Float64 and Dual)
+    overrides::Vector{SingleRowOverrideVector}
+    data_over::NTMerged
+    # Row buffers
+    rowvec_float::Vector{Float64}
+    rowvec_dual::Any
+    # Compiled dual instance
+    compiled_dual::Any
+    # AD closure and config
     g::Any
     cfg::Any
-    # Caches keyed by element type (Float64, Dual{…})
-    compiled_cache::Dict{DataType, Any}
-    data_cache::Dict{DataType, Any}      # maps T -> (data_T::NamedTuple, overrides_T::Vector)
-    rowvec_cache::Dict{DataType, Any}
     row::Int
 end
 
-Base.length(de::DerivativeEvaluator{T, Ops, S, O, NT}) where {T, Ops, S, O, NT} = de.compiled_base |> length
+Base.length(de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged}) where {T, Ops, S, O, NTBase, NTMerged} = de.compiled_base |> length
 
 """
     build_derivative_evaluator(compiled, data; vars, chunk=:auto)
@@ -110,40 +107,30 @@ function build_derivative_evaluator(
 ) where {T, Ops, S, O}
     nvars = length(vars)
     xbuf = Vector{Float64}(undef, nvars)
-    # Build evaluator with empty caches; closure references it
-    compiled_cache = Dict{DataType, Any}()
-    data_cache = Dict{DataType, Any}()
-    rowvec_cache = Dict{DataType, Any}()
-    # Initialize with dummy row 1; caller sets actual row
-    de = DerivativeEvaluator{T, Ops, S, O, typeof(data)}(
-        compiled,
-        data,
-        vars,
-        xbuf,
-        nothing, # g placeholder
-        nothing, # cfg placeholder
-        compiled_cache,
-        data_cache,
-        rowvec_cache,
-        1,
-    )
-    g = DerivClosure(de)
-    # Choose chunk
+    # Prebuild overrides + merged data (float path)
+    data_over, overrides = build_row_override_data(data, vars, 1)
+    rowvec_float = Vector{Float64}(undef, length(compiled))
+    # Two-phase initialization to keep types concrete
+    de_ref = Base.RefValue{DerivativeEvaluator{T, Ops, S, O, typeof(data), typeof(data_over)}}()
+    g = DerivClosure(de_ref)
+    # Choose chunk and build config using typed closure
     ch = chunk === :auto ? ForwardDiff.Chunk{nvars}() : chunk
     cfg = ForwardDiff.JacobianConfig(g, xbuf, ch)
-    # Finalize evaluator with closure and config
-    de = DerivativeEvaluator{T, Ops, S, O, typeof(data)}(
+    de = DerivativeEvaluator{T, Ops, S, O, typeof(data), typeof(data_over)}(
         compiled,
         data,
         vars,
         xbuf,
+        overrides,
+        data_over,
+        rowvec_float,
+        nothing,   # rowvec_dual
+        nothing,   # compiled_dual
         g,
         cfg,
-        compiled_cache,
-        data_cache,
-        rowvec_cache,
         1,
     )
+    de_ref[] = de
     return de
 end
 

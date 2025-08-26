@@ -339,6 +339,7 @@ end
     end
 end
 
+
 # Categorical contrast operation (multi-output) with dynamic level extraction
 @inline function execute_op(
     op::ContrastOp{Col, Positions}, 
