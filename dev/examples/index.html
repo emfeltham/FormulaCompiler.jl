@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Examples · FormulaCompiler.jl</title><meta name="title" content="Examples · FormulaCompiler.jl"/><meta property="og:title" content="Examples · FormulaCompiler.jl"/><meta property="twitter:title" content="Examples · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/examples/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/examples/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/examples/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../guide/basic_usage/">Basic Usage</a></li><li><a class="tocitem" href="../guide/advanced_features/">Advanced Features</a></li><li><a class="tocitem" href="../guide/scenarios/">Scenario Analysis</a></li><li><a class="tocitem" href="../guide/performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../integration/glm/">GLM.jl</a></li><li><a class="tocitem" href="../integration/mixed_models/">MixedModels.jl</a></li><li><a class="tocitem" href="../integration/standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../architecture/">Architecture</a></li><li><a class="tocitem" href="../api/">API Reference</a></li><li class="is-active"><a class="tocitem" href>Examples</a><ul class="internal"><li><a class="tocitem" href="#Monte-Carlo-Simulation"><span>Monte Carlo Simulation</span></a></li><li><a class="tocitem" href="#Bootstrap-Confidence-Intervals"><span>Bootstrap Confidence Intervals</span></a></li><li><a class="tocitem" href="#Policy-Impact-Analysis"><span>Policy Impact Analysis</span></a></li><li><a class="tocitem" href="#Marginal-Effects-Calculation"><span>Marginal Effects Calculation</span></a></li><li><a class="tocitem" href="#High-Frequency-Trading-Model"><span>High-Frequency Trading Model</span></a></li><li><a class="tocitem" href="#Medical-Research:-Clinical-Trial-Simulation"><span>Medical Research: Clinical Trial Simulation</span></a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Examples</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Examples</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/examples.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Examples"><a class="docs-heading-anchor" href="#Examples">Examples</a><a id="Examples-1"></a><a class="docs-heading-anchor-permalink" href="#Examples" title="Permalink"></a></h1><p>Real-world examples demonstrating FormulaCompiler.jl in action.</p><h2 id="Monte-Carlo-Simulation"><a class="docs-heading-anchor" href="#Monte-Carlo-Simulation">Monte Carlo Simulation</a><a id="Monte-Carlo-Simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Monte-Carlo-Simulation" title="Permalink"></a></h2><p>High-performance Monte Carlo simulation using zero-allocation evaluation:</p><pre><code class="language-julia hljs">using FormulaCompiler, GLM, DataFrames, Tables, Random
+using BenchmarkTools, Statistics
+
+function monte_carlo_simulation(n_sims=1_000_000, n_obs=1000)
+    # Generate base dataset
+    Random.seed!(123)
+    df = DataFrame(
+        y = randn(n_obs),
+        x = randn(n_obs),
+        z = abs.(randn(n_obs)) .+ 0.1,
+        treatment = rand(Bool, n_obs),
+        group = categorical(rand([&quot;A&quot;, &quot;B&quot;, &quot;C&quot;], n_obs))
+    )
+    
+    # Fit model
+    model = lm(@formula(y ~ x * treatment + log(z) + group), df)
+    data = Tables.columntable(df)
+    
+    # Compile for zero-allocation evaluation
+    compiled = compile_formula(model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    # Pre-allocate results
+    results = Vector{Float64}(undef, n_sims)
+    
+    println(&quot;Running $n_sims Monte Carlo simulations...&quot;)
+    @time begin
+        for sim in 1:n_sims
+            # Random row selection
+            row_idx = rand(1:n_obs)
+            
+            # Zero-allocation evaluation
+            compiled(row_vec, data, row_idx)
+            
+            # Calculate linear predictor
+            results[sim] = dot(coef(model), row_vec)
+        end
+    end
+    
+    return results
+end
+
+# Run simulation
+mc_results = monte_carlo_simulation(1_000_000, 1000)
+
+println(&quot;Monte Carlo Results:&quot;)
+println(&quot;Mean: $(round(mean(mc_results), digits=4))&quot;)
+println(&quot;Std:  $(round(std(mc_results), digits=4))&quot;)
+println(&quot;Min:  $(round(minimum(mc_results), digits=4))&quot;)  
+println(&quot;Max:  $(round(maximum(mc_results), digits=4))&quot;)</code></pre><h2 id="Bootstrap-Confidence-Intervals"><a class="docs-heading-anchor" href="#Bootstrap-Confidence-Intervals">Bootstrap Confidence Intervals</a><a id="Bootstrap-Confidence-Intervals-1"></a><a class="docs-heading-anchor-permalink" href="#Bootstrap-Confidence-Intervals" title="Permalink"></a></h2><p>Efficient bootstrap resampling for coefficient confidence intervals:</p><pre><code class="language-julia hljs">using Random
+
+function bootstrap_confidence_intervals(model, data, n_bootstrap=1000, confidence=0.95)
+    compiled = compile_formula(model, data)
+    n_obs = Tables.rowcount(data)
+    n_coefs = length(compiled)
+    
+    # Get response variable
+    y_name = Symbol(model.mf.f.lhs)
+    y = data[y_name]
+    
+    # Pre-allocate
+    bootstrap_coefs = Matrix{Float64}(undef, n_bootstrap, n_coefs)
+    row_vec = Vector{Float64}(undef, n_coefs)
+    X_bootstrap = Matrix{Float64}(undef, n_obs, n_coefs)
+    y_bootstrap = Vector{Float64}(undef, n_obs)
+    
+    println(&quot;Computing $n_bootstrap bootstrap samples...&quot;)
+    @time begin
+        for b in 1:n_bootstrap
+            # Generate bootstrap sample indices
+            sample_indices = rand(1:n_obs, n_obs)
+            
+            # Build design matrix for bootstrap sample (zero allocations)
+            for (i, idx) in enumerate(sample_indices)
+                compiled(row_vec, data, idx)
+                X_bootstrap[i, :] .= row_vec
+                y_bootstrap[i] = y[idx]
+            end
+            
+            # Compute bootstrap coefficients
+            bootstrap_coefs[b, :] = X_bootstrap \ y_bootstrap
+        end
+    end
+    
+    # Calculate confidence intervals
+    α = 1 - confidence
+    lower_percentile = 100 * (α/2)
+    upper_percentile = 100 * (1 - α/2)
+    
+    coef_names = coefnames(model)
+    original_coefs = coef(model)
+    
+    println(&quot;\n$(Int(confidence*100))% Bootstrap Confidence Intervals:&quot;)
+    println(&quot;─&quot;^60)
+    
+    for (i, name) in enumerate(coef_names)
+        boot_coefs_i = bootstrap_coefs[:, i]
+        lower = percentile(boot_coefs_i, lower_percentile)
+        upper = percentile(boot_coefs_i, upper_percentile)
+        
+        println(&quot;$name:&quot;)
+        println(&quot;  Original: $(round(original_coefs[i], digits=4))&quot;)
+        println(&quot;  Bootstrap: [$(round(lower, digits=4)), $(round(upper, digits=4))]&quot;)
+        println(&quot;  Bootstrap SE: $(round(std(boot_coefs_i), digits=4))&quot;)
+    end
+    
+    return bootstrap_coefs
+end
+
+# Example usage
+df = DataFrame(
+    y = randn(500),
+    x = randn(500),
+    treatment = rand(Bool, 500),
+    age = rand(20:80, 500)
+)
+
+model = lm(@formula(y ~ x * treatment + age), df)
+data = Tables.columntable(df)
+
+boot_coefs = bootstrap_confidence_intervals(model, data, 1000, 0.95)</code></pre><h2 id="Policy-Impact-Analysis"><a class="docs-heading-anchor" href="#Policy-Impact-Analysis">Policy Impact Analysis</a><a id="Policy-Impact-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Policy-Impact-Analysis" title="Permalink"></a></h2><p>Comprehensive policy scenario analysis using the scenario system:</p><pre><code class="language-julia hljs">function policy_impact_analysis()
+    # Simulate policy-relevant dataset
+    Random.seed!(456)
+    n_individuals = 10000
+    
+    df = DataFrame(
+        # Outcome: earnings (thousands)
+        earnings = max.(0, randn(n_individuals) * 15 .+ 45),
+        
+        # Demographics
+        age = rand(22:65, n_individuals),
+        education_years = rand(10:18, n_individuals),
+        experience = rand(0:30, n_individuals),
+        
+        # Geographic
+        region = categorical(rand([&quot;North&quot;, &quot;South&quot;, &quot;East&quot;, &quot;West&quot;], n_individuals)),
+        urban = rand(Bool, n_individuals),
+        
+        # Current programs
+        job_training = rand(Bool, n_individuals),
+        healthcare_access = rand(Bool, n_individuals)
+    )
+    
+    # Fit earnings model
+    model = lm(@formula(earnings ~ age + education_years + experience + 
+                                 region + urban + job_training * healthcare_access), df)
+    
+    data = Tables.columntable(df)
+    compiled = compile_formula(model, data)
+    
+    # Define policy scenarios
+    scenarios = Dict(
+        &quot;status_quo&quot; =&gt; create_scenario(&quot;status_quo&quot;, data),
+        
+        &quot;universal_training&quot; =&gt; create_scenario(&quot;universal_training&quot;, data;
+            job_training = true
+        ),
+        
+        &quot;universal_healthcare&quot; =&gt; create_scenario(&quot;universal_healthcare&quot;, data;
+            healthcare_access = true  
+        ),
+        
+        &quot;combined_programs&quot; =&gt; create_scenario(&quot;combined&quot;, data;
+            job_training = true,
+            healthcare_access = true
+        ),
+        
+        &quot;education_boost&quot; =&gt; create_scenario(&quot;education_boost&quot;, data;
+            education_years = mean(df.education_years) + 2  # +2 years education
+        ),
+        
+        &quot;comprehensive_policy&quot; =&gt; create_scenario(&quot;comprehensive&quot;, data;
+            job_training = true,
+            healthcare_access = true, 
+            education_years = mean(df.education_years) + 1,
+            urban = true  # Urbanization investment
+        )
+    )
+    
+    # Evaluate policy impacts
+    results = Dict{String, NamedTuple}()
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    println(&quot;Policy Impact Analysis Results:&quot;)
+    println(&quot;=&quot;^50)
+    
+    for (policy_name, scenario) in scenarios
+        predictions = Vector{Float64}(undef, n_individuals)
+        
+        # Calculate predictions for all individuals under this policy
+        for i in 1:n_individuals
+            compiled(row_vec, scenario.data, i)
+            predictions[i] = dot(coef(model), row_vec)
+        end
+        
+        # Calculate impacts vs status quo
+        if policy_name != &quot;status_quo&quot;
+            status_quo_preds = Vector{Float64}(undef, n_individuals)
+            for i in 1:n_individuals
+                compiled(row_vec, scenarios[&quot;status_quo&quot;].data, i)
+                status_quo_preds[i] = dot(coef(model), row_vec)
+            end
+            
+            individual_impacts = predictions .- status_quo_preds
+            
+            results[policy_name] = (
+                mean_earnings = mean(predictions),
+                mean_impact = mean(individual_impacts),
+                median_impact = median(individual_impacts),
+                impact_std = std(individual_impacts),
+                percent_helped = 100 * mean(individual_impacts .&gt; 0),
+                total_cost = sum(max.(0, individual_impacts)) * 1000  # Total $ impact
+            )
+        else
+            results[policy_name] = (
+                mean_earnings = mean(predictions),
+                mean_impact = 0.0,
+                median_impact = 0.0,
+                impact_std = 0.0,
+                percent_helped = 0.0,
+                total_cost = 0.0
+            )
+        end
+    end
+    
+    # Display results
+    baseline_earnings = results[&quot;status_quo&quot;].mean_earnings
+    
+    for (policy, stats) in results
+        if policy == &quot;status_quo&quot;
+            println(&quot;$policy (baseline):&quot;)
+            println(&quot;  Mean earnings: \$$(round(Int, stats.mean_earnings))k&quot;)
+        else
+            println(&quot;\n$policy:&quot;)
+            println(&quot;  Mean earnings: \$$(round(Int, stats.mean_earnings))k&quot;)
+            println(&quot;  Mean impact: \$$(round(Int, stats.mean_impact))k per person&quot;)
+            println(&quot;  Median impact: \$$(round(Int, stats.median_impact))k per person&quot;) 
+            println(&quot;  % individuals helped: $(round(stats.percent_helped, digits=1))%&quot;)
+            println(&quot;  Total economic impact: \$$(round(Int, stats.total_cost/1000))M&quot;)
+            
+            # Cost-effectiveness (simplified)
+            if policy == &quot;universal_training&quot;
+                cost_per_person = 5000  # $5k per person for training
+            elseif policy == &quot;universal_healthcare&quot;
+                cost_per_person = 8000  # $8k per person for healthcare
+            elseif policy == &quot;combined_programs&quot;  
+                cost_per_person = 12000  # $12k for both
+            elseif policy == &quot;education_boost&quot;
+                cost_per_person = 15000  # $15k for education
+            else
+                cost_per_person = 20000  # $20k comprehensive
+            end
+            
+            total_program_cost = cost_per_person * n_individuals / 1000  # In thousands
+            net_benefit = stats.total_cost - total_program_cost
+            roi = (net_benefit / total_program_cost) * 100
+            
+            println(&quot;  Program cost: \$$(round(Int, total_program_cost/1000))M&quot;)
+            println(&quot;  Net benefit: \$$(round(Int, net_benefit/1000))M&quot;)
+            println(&quot;  ROI: $(round(roi, digits=1))%&quot;)
+        end
+    end
+    
+    return results, scenarios
+end
+
+# Run the analysis
+policy_results, policy_scenarios = policy_impact_analysis()</code></pre><h2 id="Marginal-Effects-Calculation"><a class="docs-heading-anchor" href="#Marginal-Effects-Calculation">Marginal Effects Calculation</a><a id="Marginal-Effects-Calculation-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects-Calculation" title="Permalink"></a></h2><p>Efficient numerical derivatives for marginal effects:</p><pre><code class="language-julia hljs">function marginal_effects_analysis(model, data, variables=nothing; delta=0.01)
+    compiled = compile_formula(model, data)
+    n_obs = Tables.rowcount(data)
+    n_coefs = length(compiled)
+    
+    # Default to all continuous variables
+    if variables === nothing
+        variables = [:age, :experience, :education_years]  # Adjust as needed
+    end
+    
+    results = Dict{Symbol, Matrix{Float64}}()
+    row_vec_orig = Vector{Float64}(undef, n_coefs)
+    row_vec_pert = Vector{Float64}(undef, n_coefs)
+    
+    for var in variables
+        println(&quot;Computing marginal effects for $var...&quot;)
+        
+        # Get original values
+        original_values = data[var]
+        perturbed_values = original_values .+ delta
+        perturbed_data = (; data..., var =&gt; perturbed_values)
+        
+        marginal_effects = Matrix{Float64}(undef, n_obs, n_coefs)
+        
+        @time begin
+            for i in 1:n_obs
+                # Original prediction
+                compiled(row_vec_orig, data, i)
+                
+                # Perturbed prediction  
+                compiled(row_vec_pert, perturbed_data, i)
+                
+                # Marginal effects for each coefficient
+                marginal_effects[i, :] .= (row_vec_pert .- row_vec_orig) ./ delta
+            end
+        end
+        
+        results[var] = marginal_effects
+    end
+    
+    # Summarize results
+    coef_names = coefnames(model)
+    println(&quot;\nMarginal Effects Summary:&quot;)
+    println(&quot;=&quot;^40)
+    
+    for var in variables
+        println(&quot;\nVariable: $var&quot;)
+        me_matrix = results[var]
+        
+        for (j, coef_name) in enumerate(coef_names)
+            me_col = me_matrix[:, j]
+            println(&quot;  $coef_name:&quot;)
+            println(&quot;    Mean ME: $(round(mean(me_col), digits=6))&quot;)
+            println(&quot;    Std ME:  $(round(std(me_col), digits=6))&quot;)
+            println(&quot;    Range:   [$(round(minimum(me_col), digits=6)), $(round(maximum(me_col), digits=6))]&quot;)
+        end
+    end
+    
+    return results
+end
+
+# Example: marginal effects for policy model
+marginal_results = marginal_effects_analysis(model, data, [:age, :education_years, :experience])</code></pre><h2 id="High-Frequency-Trading-Model"><a class="docs-heading-anchor" href="#High-Frequency-Trading-Model">High-Frequency Trading Model</a><a id="High-Frequency-Trading-Model-1"></a><a class="docs-heading-anchor-permalink" href="#High-Frequency-Trading-Model" title="Permalink"></a></h2><p>Real-time prediction serving with microsecond latency requirements:</p><pre><code class="language-julia hljs">using Dates
+
+function high_frequency_trading_example()
+    # Simulate high-frequency financial data
+    Random.seed!(789)
+    n_ticks = 100_000
+    
+    # Generate realistic financial time series
+    returns = cumsum(randn(n_ticks) * 0.001)  # Random walk returns
+    
+    df = DataFrame(
+        # Price features
+        return_1min = returns,
+        return_5min = lag(returns, 5),
+        return_15min = lag(returns, 15),
+        
+        # Volume features  
+        volume = abs.(randn(n_ticks)) .+ 1,
+        volume_ratio = rand(0.5:0.01:2.0, n_ticks),
+        
+        # Market microstructure
+        spread = abs.(randn(n_ticks)) * 0.01 .+ 0.001,
+        market_impact = rand(0.001:0.0001:0.01, n_ticks),
+        
+        # Time features
+        hour = repeat(9:16, inner=div(n_ticks, 8))[1:n_ticks],
+        minute = repeat(0:59, inner=div(n_ticks, 60))[1:n_ticks],
+        
+        # Target: next minute return
+        next_return = lead(returns, 1)
+    )
+    
+    # Remove missing values from lags/leads
+    df = df[16:(end-1), :]
+    
+    # Fit high-frequency prediction model
+    model = lm(@formula(next_return ~ return_1min + return_5min + return_15min + 
+                                    log(volume) + volume_ratio + spread + 
+                                    market_impact + hour), df)
+    
+    data = Tables.columntable(df)
+    compiled = compile_formula(model, data)
+    
+    # Simulate real-time prediction serving
+    println(&quot;High-Frequency Trading Model Performance:&quot;)
+    println(&quot;Model coefficients: &quot;, length(compiled))
+    
+    # Pre-allocate for zero-allocation serving
+    row_vec = Vector{Float64}(undef, length(compiled))
+    n_predictions = 10_000
+    
+    # Benchmark prediction latency
+    prediction_times = Vector{Float64}(undef, n_predictions)
+    predictions = Vector{Float64}(undef, n_predictions)
+    
+    println(&quot;Serving $n_predictions real-time predictions...&quot;)
+    
+    for i in 1:n_predictions
+        tick_idx = rand(1:nrow(df))
+        
+        start_time = time_ns()
+        compiled(row_vec, data, tick_idx)
+        prediction = dot(coef(model), row_vec)
+        end_time = time_ns()
+        
+        prediction_times[i] = (end_time - start_time) / 1000  # Convert to microseconds
+        predictions[i] = prediction
+    end
+    
+    # Latency analysis
+    println(&quot;\nLatency Analysis:&quot;)
+    println(&quot;Mean latency: $(round(mean(prediction_times), digits=2)) μs&quot;)
+    println(&quot;Median latency: $(round(median(prediction_times), digits=2)) μs&quot;) 
+    println(&quot;95th percentile: $(round(quantile(prediction_times, 0.95), digits=2)) μs&quot;)
+    println(&quot;99th percentile: $(round(quantile(prediction_times, 0.99), digits=2)) μs&quot;)
+    println(&quot;Max latency: $(round(maximum(prediction_times), digits=2)) μs&quot;)
+    
+    # Trading performance metrics
+    actual_returns = [data.next_return[rand(1:nrow(df))] for _ in 1:n_predictions]
+    
+    # Simple trading strategy: long if predicted return &gt; 0
+    positions = sign.(predictions)
+    strategy_returns = positions .* actual_returns
+    
+    println(&quot;\nTrading Strategy Performance:&quot;)
+    println(&quot;Total predictions: $n_predictions&quot;)
+    println(&quot;Accuracy (direction): $(round(100 * mean(sign.(predictions) .== sign.(actual_returns)), digits=1))%&quot;)
+    println(&quot;Mean strategy return: $(round(mean(strategy_returns) * 10000, digits=2)) bps&quot;)
+    println(&quot;Strategy Sharpe ratio: $(round(mean(strategy_returns) / std(strategy_returns), digits=3))&quot;)
+    println(&quot;Max drawdown: $(round(minimum(cumsum(strategy_returns)) * 100, digits=2))%&quot;)
+    
+    return (latencies = prediction_times, predictions = predictions, returns = strategy_returns)
+end
+
+# Run high-frequency trading example
+hft_results = high_frequency_trading_example()</code></pre><h2 id="Medical-Research:-Clinical-Trial-Simulation"><a class="docs-heading-anchor" href="#Medical-Research:-Clinical-Trial-Simulation">Medical Research: Clinical Trial Simulation</a><a id="Medical-Research:-Clinical-Trial-Simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Medical-Research:-Clinical-Trial-Simulation" title="Permalink"></a></h2><p>Simulating clinical trial outcomes with patient heterogeneity:</p><pre><code class="language-julia hljs">function clinical_trial_simulation()
+    # Simulate diverse patient population
+    Random.seed!(101112)
+    n_patients = 5000
+    
+    df = DataFrame(
+        # Patient demographics
+        age = rand(18:85, n_patients),
+        sex = categorical(rand([&quot;Male&quot;, &quot;Female&quot;], n_patients)),
+        bmi = max.(15, randn(n_patients) * 5 .+ 25),
+        
+        # Baseline health
+        baseline_severity = rand(1:10, n_patients),
+        comorbidities = rand(0:5, n_patients),
+        
+        # Treatment assignment (randomized)
+        treatment = categorical(rand([&quot;Placebo&quot;, &quot;Low_Dose&quot;, &quot;High_Dose&quot;], n_patients)),
+        
+        # Compliance (realistic patterns)
+        compliance_rate = min.(1.0, max.(0.0, randn(n_patients) * 0.2 .+ 0.8)),
+        
+        # Outcome: improvement score (0-100)
+        improvement = max.(0, min.(100, 
+            randn(n_patients) * 15 .+ 
+            (df.treatment .== &quot;High_Dose&quot;) * 20 .+
+            (df.treatment .== &quot;Low_Dose&quot;) * 10 .-
+            df.baseline_severity * 2 .+
+            df.compliance_rate * 15
+        ))
+    )
+    
+    # Clinical model
+    model = lm(@formula(improvement ~ age + sex + bmi + baseline_severity + 
+                                    comorbidities + treatment * compliance_rate), df)
+    
+    data = Tables.columntable(df)
+    compiled = compile_formula(model, data)
+    
+    # Define clinical scenarios
+    scenarios = Dict(
+        &quot;real_world&quot; =&gt; create_scenario(&quot;real_world&quot;, data),
+        
+        &quot;perfect_compliance&quot; =&gt; create_scenario(&quot;perfect_compliance&quot;, data;
+            compliance_rate = 1.0
+        ),
+        
+        &quot;elderly_subgroup&quot; =&gt; create_scenario(&quot;elderly&quot;, data;
+            age = 70,  # All patients age 70
+            compliance_rate = 0.9
+        ),
+        
+        &quot;high_risk_patients&quot; =&gt; create_scenario(&quot;high_risk&quot;, data;
+            baseline_severity = 8,
+            comorbidities = 3,
+            bmi = 30
+        ),
+        
+        &quot;optimal_candidates&quot; =&gt; create_scenario(&quot;optimal&quot;, data;
+            age = 45,
+            baseline_severity = 5,
+            comorbidities = 1,
+            bmi = 23,
+            compliance_rate = 1.0
+        )
+    )
+    
+    # Analyze treatment effects across scenarios
+    println(&quot;Clinical Trial Scenario Analysis:&quot;)
+    println(&quot;=&quot;^50)
+    
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    for (scenario_name, scenario) in scenarios
+        println(&quot;\nScenario: $scenario_name&quot;)
+        
+        # Calculate outcomes by treatment group
+        treatment_groups = [&quot;Placebo&quot;, &quot;Low_Dose&quot;, &quot;High_Dose&quot;]
+        group_results = Dict{String, Float64}()
+        
+        for treatment_group in treatment_groups
+            # Create scenario with specific treatment
+            treatment_scenario = create_scenario(&quot;temp&quot;, scenario.data;
+                treatment = treatment_group
+            )
+            
+            # Predict outcomes for all patients under this treatment
+            outcomes = Vector{Float64}(undef, n_patients)
+            for i in 1:n_patients
+                compiled(row_vec, treatment_scenario.data, i)
+                outcomes[i] = dot(coef(model), row_vec)
+            end
+            
+            group_results[treatment_group] = mean(outcomes)
+        end
+        
+        # Calculate treatment effects
+        placebo_effect = group_results[&quot;Placebo&quot;]
+        low_dose_effect = group_results[&quot;Low_Dose&quot;] - placebo_effect
+        high_dose_effect = group_results[&quot;High_Dose&quot;] - placebo_effect
+        dose_response = high_dose_effect - low_dose_effect
+        
+        println(&quot;  Placebo response: $(round(placebo_effect, digits=1))&quot;)
+        println(&quot;  Low dose effect: $(round(low_dose_effect, digits=1)) (vs placebo)&quot;)
+        println(&quot;  High dose effect: $(round(high_dose_effect, digits=1)) (vs placebo)&quot;)
+        println(&quot;  Dose response: $(round(dose_response, digits=1))&quot;)
+        
+        # Calculate number needed to treat (simplified)
+        if high_dose_effect &gt; 0
+            nnt = round(Int, 100 / high_dose_effect)  # Assume 100-point scale
+            println(&quot;  Number needed to treat: $nnt&quot;)
+        end
+    end
+    
+    return scenarios, group_results
+end
+
+# Run clinical trial analysis
+clinical_scenarios, clinical_results = clinical_trial_simulation()</code></pre><p>These examples demonstrate FormulaCompiler.jl&#39;s versatility across:</p><ul><li><strong>High-performance computing</strong>: Monte Carlo simulations with millions of evaluations</li><li><strong>Statistical inference</strong>: Bootstrap confidence intervals with zero-allocation resampling  </li><li><strong>Policy analysis</strong>: Complex scenario modeling for decision support</li><li><strong>Real-time systems</strong>: Microsecond-latency prediction serving</li><li><strong>Medical research</strong>: Clinical trial simulation and subgroup analysis</li></ul><p>Each example leverages FormulaCompiler.jl&#39;s core strengths: zero-allocation performance, flexible scenario system, and seamless integration with the Julia statistical ecosystem.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../api/">« API Reference</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Tuesday 26 August 2025 15:14">Tuesday 26 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

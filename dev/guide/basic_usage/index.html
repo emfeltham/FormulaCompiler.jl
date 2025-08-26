@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Basic Usage · FormulaCompiler.jl</title><meta name="title" content="Basic Usage · FormulaCompiler.jl"/><meta property="og:title" content="Basic Usage · FormulaCompiler.jl"/><meta property="twitter:title" content="Basic Usage · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/basic_usage/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/basic_usage/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/guide/basic_usage/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li class="is-active"><a class="tocitem" href>Basic Usage</a><ul class="internal"><li><a class="tocitem" href="#Core-Interfaces"><span>Core Interfaces</span></a></li><li><a class="tocitem" href="#Compilation-Options"><span>Compilation Options</span></a></li><li><a class="tocitem" href="#Batch-Operations"><span>Batch Operations</span></a></li><li><a class="tocitem" href="#Data-Format-Considerations"><span>Data Format Considerations</span></a></li><li><a class="tocitem" href="#Supported-Formula-Features"><span>Supported Formula Features</span></a></li><li><a class="tocitem" href="#Error-Handling"><span>Error Handling</span></a></li><li><a class="tocitem" href="#Memory-Management"><span>Memory Management</span></a></li><li><a class="tocitem" href="#Integration-with-Other-Packages"><span>Integration with Other Packages</span></a></li></ul></li><li><a class="tocitem" href="../advanced_features/">Advanced Features</a></li><li><a class="tocitem" href="../scenarios/">Scenario Analysis</a></li><li><a class="tocitem" href="../performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../../integration/glm/">GLM.jl</a></li><li><a class="tocitem" href="../../integration/mixed_models/">MixedModels.jl</a></li><li><a class="tocitem" href="../../integration/standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../../architecture/">Architecture</a></li><li><a class="tocitem" href="../../api/">API Reference</a></li><li><a class="tocitem" href="../../examples/">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">User Guide</a></li><li class="is-active"><a href>Basic Usage</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Basic Usage</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/guide/basic_usage.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Basic-Usage"><a class="docs-heading-anchor" href="#Basic-Usage">Basic Usage</a><a id="Basic-Usage-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Usage" title="Permalink"></a></h1><p>This page covers the core functionality of FormulaCompiler.jl with practical examples.</p><h2 id="Core-Interfaces"><a class="docs-heading-anchor" href="#Core-Interfaces">Core Interfaces</a><a id="Core-Interfaces-1"></a><a class="docs-heading-anchor-permalink" href="#Core-Interfaces" title="Permalink"></a></h2><p>FormulaCompiler.jl provides three main interfaces for different use cases:</p><h3 id="1.-Zero-Allocation-Interface-(Fastest)"><a class="docs-heading-anchor" href="#1.-Zero-Allocation-Interface-(Fastest)">1. Zero-Allocation Interface (Fastest)</a><a id="1.-Zero-Allocation-Interface-(Fastest)-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Zero-Allocation-Interface-(Fastest)" title="Permalink"></a></h3><p>This is the primary interface for performance-critical applications:</p><pre><code class="language-julia hljs">using FormulaCompiler, GLM, DataFrames, Tables
+
+# Setup
+df = DataFrame(x = randn(1000), y = randn(1000), group = rand([&quot;A&quot;, &quot;B&quot;], 1000))
+model = lm(@formula(y ~ x * group), df)
+data = Tables.columntable(df)
+
+# Compile once
+compiled = compile_formula(model, data)
+row_vec = Vector{Float64}(undef, length(compiled))
+
+# Use many times (zero allocations)
+compiled(row_vec, data, 1)    # ~50ns, 0 allocations
+compiled(row_vec, data, 100)  # ~50ns, 0 allocations</code></pre><h3 id="2.-Convenient-Interface-(Allocating)"><a class="docs-heading-anchor" href="#2.-Convenient-Interface-(Allocating)">2. Convenient Interface (Allocating)</a><a id="2.-Convenient-Interface-(Allocating)-1"></a><a class="docs-heading-anchor-permalink" href="#2.-Convenient-Interface-(Allocating)" title="Permalink"></a></h3><p>For quick prototyping or when allocation isn&#39;t critical:</p><pre><code class="language-julia hljs"># Single row (returns new vector)
+row_1 = modelrow(model, data, 1)
+
+# Multiple rows (returns matrix)
+rows_subset = modelrow(model, data, [1, 10, 50, 100])
+
+# Range of rows
+rows_range = modelrow(model, data, 1:10)</code></pre><h3 id="3.-Object-Based-Interface"><a class="docs-heading-anchor" href="#3.-Object-Based-Interface">3. Object-Based Interface</a><a id="3.-Object-Based-Interface-1"></a><a class="docs-heading-anchor-permalink" href="#3.-Object-Based-Interface" title="Permalink"></a></h3><p>Create a reusable evaluator object:</p><pre><code class="language-julia hljs">evaluator = ModelRowEvaluator(model, df)
+
+# Allocating version
+result = evaluator(1)
+
+# Zero-allocation version
+row_vec = Vector{Float64}(undef, length(evaluator))
+evaluator(row_vec, 1)</code></pre><h2 id="Compilation-Options"><a class="docs-heading-anchor" href="#Compilation-Options">Compilation Options</a><a id="Compilation-Options-1"></a><a class="docs-heading-anchor-permalink" href="#Compilation-Options" title="Permalink"></a></h2><h3 id="Two-Phase-Compilation-(Explicit)"><a class="docs-heading-anchor" href="#Two-Phase-Compilation-(Explicit)">Two-Phase Compilation (Explicit)</a><a id="Two-Phase-Compilation-(Explicit)-1"></a><a class="docs-heading-anchor-permalink" href="#Two-Phase-Compilation-(Explicit)" title="Permalink"></a></h3><p>For analysis or debugging, you can access both compilation phases:</p><pre><code class="language-julia hljs"># Phase 1: Complete compilation
+compiled_complete = compile_formula_complete(model, data)
+
+# Phase 2: Specialization
+specialized = compile_formula(compiled_complete)
+
+# Both phases in one call (recommended)
+compiled = compile_formula(model, data)</code></pre><h3 id="Understanding-Compiled-Objects"><a class="docs-heading-anchor" href="#Understanding-Compiled-Objects">Understanding Compiled Objects</a><a id="Understanding-Compiled-Objects-1"></a><a class="docs-heading-anchor-permalink" href="#Understanding-Compiled-Objects" title="Permalink"></a></h3><p>Compiled formulas contain important information:</p><pre><code class="language-julia hljs">compiled = compile_formula(model, data)
+
+# Number of terms in the model matrix
+length(compiled)  # e.g., 4 for intercept + x + group_B + x_group_B
+
+# You can call it like a function
+row_vec = Vector{Float64}(undef, length(compiled))
+compiled(row_vec, data, row_index)</code></pre><h2 id="Batch-Operations"><a class="docs-heading-anchor" href="#Batch-Operations">Batch Operations</a><a id="Batch-Operations-1"></a><a class="docs-heading-anchor-permalink" href="#Batch-Operations" title="Permalink"></a></h2><h3 id="Multiple-Row-Evaluation"><a class="docs-heading-anchor" href="#Multiple-Row-Evaluation">Multiple Row Evaluation</a><a id="Multiple-Row-Evaluation-1"></a><a class="docs-heading-anchor-permalink" href="#Multiple-Row-Evaluation" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Pre-allocate matrix for multiple rows
+n_rows = 100
+matrix = Matrix{Float64}(undef, n_rows, length(compiled))
+
+# Evaluate multiple rows efficiently
+modelrow!(matrix, compiled, data, 1:n_rows)
+
+# Or specific rows
+specific_rows = [1, 5, 10, 50, 100]
+matrix_subset = Matrix{Float64}(undef, length(specific_rows), length(compiled))
+modelrow!(matrix_subset, compiled, data, specific_rows)</code></pre><h3 id="Working-with-Views"><a class="docs-heading-anchor" href="#Working-with-Views">Working with Views</a><a id="Working-with-Views-1"></a><a class="docs-heading-anchor-permalink" href="#Working-with-Views" title="Permalink"></a></h3><p>For memory efficiency, you can work with matrix views:</p><pre><code class="language-julia hljs">big_matrix = Matrix{Float64}(undef, 1000, length(compiled))
+
+# Fill specific rows using views
+for i in 1:10
+    row_view = view(big_matrix, i, :)
+    compiled(row_view, data, i)
+end</code></pre><h2 id="Data-Format-Considerations"><a class="docs-heading-anchor" href="#Data-Format-Considerations">Data Format Considerations</a><a id="Data-Format-Considerations-1"></a><a class="docs-heading-anchor-permalink" href="#Data-Format-Considerations" title="Permalink"></a></h2><h3 id="Column-Tables-(Recommended)"><a class="docs-heading-anchor" href="#Column-Tables-(Recommended)">Column Tables (Recommended)</a><a id="Column-Tables-(Recommended)-1"></a><a class="docs-heading-anchor-permalink" href="#Column-Tables-(Recommended)" title="Permalink"></a></h3><p>For best performance, convert DataFrames to column tables:</p><pre><code class="language-julia hljs"># Convert once, reuse many times
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)</code></pre><h3 id="Working-with-DataFrames-Directly"><a class="docs-heading-anchor" href="#Working-with-DataFrames-Directly">Working with DataFrames Directly</a><a id="Working-with-DataFrames-Directly-1"></a><a class="docs-heading-anchor-permalink" href="#Working-with-DataFrames-Directly" title="Permalink"></a></h3><p>You can work with DataFrames, but column tables are more efficient:</p><pre><code class="language-julia hljs"># This works but is slower
+compiled = compile_formula(model, df)
+compiled(row_vec, df, 1)
+
+# This is faster
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+compiled(row_vec, data, 1)</code></pre><h2 id="Supported-Formula-Features"><a class="docs-heading-anchor" href="#Supported-Formula-Features">Supported Formula Features</a><a id="Supported-Formula-Features-1"></a><a class="docs-heading-anchor-permalink" href="#Supported-Formula-Features" title="Permalink"></a></h2><p>FormulaCompiler.jl handles all standard StatsModels.jl formula syntax:</p><h3 id="Basic-Terms"><a class="docs-heading-anchor" href="#Basic-Terms">Basic Terms</a><a id="Basic-Terms-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Terms" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Continuous variables
+@formula(y ~ x + z)
+
+# Transformations
+@formula(y ~ log(x) + sqrt(z) + x^2)
+
+# Boolean conditions
+@formula(y ~ (x &gt; 0) + (z &lt; mean(z)))</code></pre><h3 id="Categorical-Variables"><a class="docs-heading-anchor" href="#Categorical-Variables">Categorical Variables</a><a id="Categorical-Variables-1"></a><a class="docs-heading-anchor-permalink" href="#Categorical-Variables" title="Permalink"></a></h3><pre><code class="language-julia hljs">using CategoricalArrays
+
+df.group = categorical(df.group)
+@formula(y ~ x + group)  # Automatic contrast coding</code></pre><h3 id="Interactions"><a class="docs-heading-anchor" href="#Interactions">Interactions</a><a id="Interactions-1"></a><a class="docs-heading-anchor-permalink" href="#Interactions" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Two-way interactions
+@formula(y ~ x * group)  # Expands to: x + group + x:group
+
+# Three-way interactions
+@formula(y ~ x * y * z)
+
+# Function interactions
+@formula(y ~ log(x) * group)</code></pre><h3 id="Complex-Formulas"><a class="docs-heading-anchor" href="#Complex-Formulas">Complex Formulas</a><a id="Complex-Formulas-1"></a><a class="docs-heading-anchor-permalink" href="#Complex-Formulas" title="Permalink"></a></h3><pre><code class="language-julia hljs">@formula(y ~ x * group + log(z) * treatment + sqrt(abs(w)) + (x &gt; mean(x)))</code></pre><h2 id="Error-Handling"><a class="docs-heading-anchor" href="#Error-Handling">Error Handling</a><a id="Error-Handling-1"></a><a class="docs-heading-anchor-permalink" href="#Error-Handling" title="Permalink"></a></h2><p>FormulaCompiler.jl provides clear error messages:</p><pre><code class="language-julia hljs"># Invalid row index
+try
+    compiled(row_vec, data, 1001)  # Only 1000 rows
+catch BoundsError
+    println(&quot;Row index out of bounds&quot;)
+end
+
+# Mismatched output vector size
+try
+    wrong_size = Vector{Float64}(undef, 3)  # Should be length(compiled)
+    compiled(wrong_size, data, 1)
+catch DimensionMismatch
+    println(&quot;Output vector has wrong size&quot;)
+end</code></pre><h2 id="Memory-Management"><a class="docs-heading-anchor" href="#Memory-Management">Memory Management</a><a id="Memory-Management-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Management" title="Permalink"></a></h2><h3 id="Pre-allocation-Best-Practices"><a class="docs-heading-anchor" href="#Pre-allocation-Best-Practices">Pre-allocation Best Practices</a><a id="Pre-allocation-Best-Practices-1"></a><a class="docs-heading-anchor-permalink" href="#Pre-allocation-Best-Practices" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Good: Pre-allocate and reuse
+row_vec = Vector{Float64}(undef, length(compiled))
+for i in 1:1000
+    compiled(row_vec, data, i)
+    # Process row_vec...
+end
+
+# Bad: Allocate each time
+for i in 1:1000
+    row_vec = modelrow(model, data, i)  # Allocates!
+    # Process row_vec...
+end</code></pre><h3 id="Large-Dataset-Considerations"><a class="docs-heading-anchor" href="#Large-Dataset-Considerations">Large Dataset Considerations</a><a id="Large-Dataset-Considerations-1"></a><a class="docs-heading-anchor-permalink" href="#Large-Dataset-Considerations" title="Permalink"></a></h3><pre><code class="language-julia hljs"># For very large datasets, process in chunks
+chunk_size = 1000
+n_chunks = div(nrow(df), chunk_size)
+
+results = Matrix{Float64}(undef, nrow(df), length(compiled))
+
+for chunk in 1:n_chunks
+    start_idx = (chunk - 1) * chunk_size + 1
+    end_idx = min(chunk * chunk_size, nrow(df))
+    
+    chunk_results = view(results, start_idx:end_idx, :)
+    modelrow!(chunk_results, compiled, data, start_idx:end_idx)
+end</code></pre><h2 id="Integration-with-Other-Packages"><a class="docs-heading-anchor" href="#Integration-with-Other-Packages">Integration with Other Packages</a><a id="Integration-with-Other-Packages-1"></a><a class="docs-heading-anchor-permalink" href="#Integration-with-Other-Packages" title="Permalink"></a></h2><p>FormulaCompiler.jl works seamlessly with the Julia statistical ecosystem:</p><pre><code class="language-julia hljs">using GLM, MixedModels, StandardizedPredictors
+
+# GLM models
+glm_model = glm(@formula(y ~ x), df, Normal(), IdentityLink())
+compiled_glm = compile_formula(glm_model, data)
+
+# Mixed models (extracts fixed effects only)
+mixed_model = fit(MixedModel, @formula(y ~ x + (1|group)), df)
+compiled_mixed = compile_formula(mixed_model, data)
+
+# Standardized predictors
+contrasts = Dict(:x =&gt; ZScore())
+std_model = lm(@formula(y ~ x), df, contrasts=contrasts)
+compiled_std = compile_formula(std_model, data)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../getting_started/">« Getting Started</a><a class="docs-footer-nextpage" href="../advanced_features/">Advanced Features »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Tuesday 26 August 2025 15:14">Tuesday 26 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
