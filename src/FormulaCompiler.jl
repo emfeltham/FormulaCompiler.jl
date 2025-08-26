@@ -115,7 +115,7 @@ export ModelRowEvaluator, modelrow!, modelrow
 
 # Development utilities (only include in dev builds)
 include("dev/testing_utilities.jl")
-export test_correctness, test_data, make_test_data, test_model_correctness
+# (Don't export functions here, import as needed)
 
 ############################## Future Features ##############################
 

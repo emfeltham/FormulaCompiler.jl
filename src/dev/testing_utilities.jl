@@ -41,50 +41,6 @@ end
 # TESTING
 ###############################################################################
 
-function test_cases(cases, df, data)
-    if typeof(cases) <: Tuple
-        cases = [cases]
-    end
-    println("Model scenario testing")
-    for (f, nm) in cases
-        # fit
-        model = fit(LinearModel, f, df);
-        # allocate output
-        output_after = Vector{Float64}(undef, size(modelmatrix(model), 2));
-        # compile
-        compiled_after = compile_formula(model, data);
-        compiled_after(output_after, data, 1);
-
-        println("Case: " * nm)
-        @btime $compiled_after($output_after, $data, $1);
-    end
-end
-
-function test_correctness(cases, df, data; i = 1)
-    # normalize to a Vector
-    cases = isa(cases, Tuple) ? [cases] : collect(cases)
-
-    @testset "Model-scenario testing" begin
-        for (f, nm) in cases
-            @testset "$nm" begin
-                # fit the model
-                model = fit(LinearModel, f, df)
-                mm = modelmatrix(model);
-                mr = mm[i, :]
-                # prepare your “after” vector
-                output_after = Vector{Float64}(undef, size(mm, 2))
-                # compile
-                compiled_after = compile_formula(model, data)
-                
-                # run it
-                compiled_after(output_after, data, i)
-                # now the actual test
-                @test isapprox(mr, output_after; atol = 1e-5)
-            end
-        end
-    end
-end
-
 function test_data(; n = 200)
     # Create test data with all variable types
     df = DataFrame(
@@ -102,6 +58,76 @@ function test_data(; n = 200)
     )
     data = Tables.columntable(df)
     return df, data
+end
+
+# Helper function to test position mapping correctness
+function test_formula_correctness(formula, df, data)
+    model = fit(LinearModel, formula, df)
+    compiled = compile_formula(model, data)
+    output_compiled = Vector{Float64}(undef, length(compiled))
+    mm = modelmatrix(model)
+    
+    # Test correctness on multiple rows
+    test_rows = [1, 2, 5, 10, 25, 50]
+    for test_row in test_rows
+        if test_row > size(mm, 1)
+            continue  # Skip if test row exceeds data size
+        end
+        
+        fill!(output_compiled, NaN)
+        compiled(output_compiled, data, test_row)
+        expected_row = mm[test_row, :]
+        
+        @test isapprox(output_compiled, expected_row, rtol=1e-12)
+    end
+    
+    return compiled, output_compiled
+end
+
+# Helper function to test allocation performance
+function test_allocation_performance(compiled, output_compiled, data)
+    # Warmup
+    for _ in 1:10
+        compiled(output_compiled, data, 1)
+    end
+    
+    # Measure allocation
+    compiled_allocs = @allocated begin
+        for i in 1:100
+            row_idx = ((i-1) % 200) + 1
+            compiled(output_compiled, data, row_idx)
+        end
+    end
+    
+    allocs_per_call = compiled_allocs / 100
+    
+    # Test allocation levels (allowing for current known issues)
+    if occursin("function", lowercase(description)) || occursin("interaction", lowercase(description))
+        @test allocs_per_call <= 1000  # More lenient for functions and complex interactions
+    else
+        @test allocs_per_call == 0  # Expect zero for simple cases
+    end
+    
+    return allocs_per_call
+end
+
+# Helper function to test allocation with proper warmup
+function test_zero_allocation(model, data)
+    compiled = compile_formula(model, data)
+    buffer = Vector{Float64}(undef, length(compiled))
+    
+    # Extensive warmup to ensure compilation is complete
+    for _ in 1:100
+        compiled(buffer, data, 1)
+    end
+    
+    # Benchmark for accurate allocation measurement
+    benchmark_result = @benchmark $compiled($buffer, $data, 1) samples=1000 seconds=2
+    memory_bytes = minimum(benchmark_result.memory)
+    
+    @test memory_bytes == 0
+    
+    return memory_bytes, minimum(benchmark_result.times)
 end
 
 # Helper function to test correctness against modelmatrix
