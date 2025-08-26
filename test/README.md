@@ -1,6 +1,6 @@
-# EfficientModelMatrices.jl Test Suite
+# FormulaCompiler.jl Test Suite
 
-This directory contains a comprehensive test suite for EfficientModelMatrices.jl, organized for easy maintenance and development.
+This directory contains a comprehensive test suite for FormulaCompiler.jl, organized for easy maintenance and development.
 
 ## Test Structure
 
@@ -52,7 +52,7 @@ make test-quick
 julia --project=test -e "using Pkg; Pkg.instantiate(); include(\"test/runtests.jl\")"
 
 # Run specific test file
-julia --project=test -e "using Test; using EfficientModelMatrices; include(\"test/test_evaluators.jl\")"
+julia --project=test -e "using Test; using FormulaCompiler; include(\"test/test_evaluators.jl\")"
 ```
 
 ### Development workflow
@@ -192,7 +192,7 @@ Provides utility functions for testing:
 ### Usage Example
 
 ```julia
-using EfficientModelMatrices
+using FormulaCompiler
 include("test/test_helpers.jl")
 
 # Create test data

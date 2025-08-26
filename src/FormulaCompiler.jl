@@ -1,70 +1,127 @@
+"""
+    FormulaCompiler
+
+High-performance, zero-allocation statistical formula evaluation for Julia.
+
+## Two-Phase Compilation Architecture
+
+FormulaCompiler uses a sophisticated two-phase compilation system to achieve maximum performance:
+
+### Phase 1: Complete Compilation (CompiledFormula)
+- **Function**: `compile_formula_complete(model, data)`
+- **Result**: `CompiledFormula` - evaluator tree-based representation
+- **Purpose**: Complete formula parsing, analysis, and validation
+- **Performance**: Good (~100ns per row)
+- **Use case**: When you need the intermediate representation or debugging
+
+### Phase 2: Performance Optimization (SpecializedFormula)  
+- **Function**: `compile_formula_optimized(compiled_formula)`
+- **Result**: `SpecializedFormula` - tuple-based specialized representation
+- **Purpose**: Maximum runtime performance through type specialization
+- **Performance**: Exceptional (~50ns per row, zero allocations)
+- **Use case**: Production code where speed is critical
+
+### Main API
+- **`compile_formula(model, data)`**: Complete + optimization in one call (recommended)
+
+## Key Design Principles
+
+1. **CompiledFormula is the foundation**: It handles all the complex parsing and creates 
+   a complete, functional evaluator tree representation.
+
+2. **SpecializedFormula is the optimization**: It analyzes the CompiledFormula structure 
+   and creates specialized, type-stable execution paths.
+
+3. **Both systems are fully functional**: You can execute either representation, 
+   but SpecializedFormula provides superior performance.
+
+## Example Usage
+
+```julia
+using FormulaCompiler, GLM, DataFrames, Tables
+
+# Your data
+df = DataFrame(x = randn(1000), group = rand(["A", "B"], 1000))
+df.y = df.x + randn(1000)
+model = lm(@formula(y ~ x * group), df)
+data = Tables.columntable(df)
+
+# Option 1: Two-phase compilation (for when you need intermediate form)
+compiled = compile_formula_complete(model, data)  # CompiledFormula
+specialized = compile_formula(compiled)           # SpecializedFormula
+
+# Option 2: Direct compilation (recommended for most use cases)
+formula = compile_formula(model, data)            # SpecializedFormula directly
+
+# High-performance execution (zero allocations)
+output = Vector{Float64}(undef, length(formula))
+for i in 1:nrow(df)
+    formula(output, data, i)  # ~50ns, 0 allocations
+end
+```
+"""
 module FormulaCompiler
 
-# ============================================================================
-# Deps.
-# ============================================================================
+################################ Dependencies ################################
 
-using Random # testing
-using Test
+# Development dependencies (remove from production builds)
+using Random, Test, BenchmarkTools
+
+# Core dependencies
+using Dates: now
+using Statistics
+using StatsModels, GLM, CategoricalArrays, Tables, DataFrames
+using LinearAlgebra: dot, I
 using ForwardDiff
-using StatsModels, GLM, CategoricalArrays, Tables, DataFrames, Random
+using Base.Iterators: product # -> compute_kronecker_pattern
 
+# External package integration
 import MixedModels
 using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
-
-# Support for StandardizedPredictors.jl
 using StandardizedPredictors: ZScoredTerm
 
-# useful for booleans in formulas
-not(x::Bool) = !x
-# N.B., this is dangerous -- does not clearly fail when x outside [0,1]
-not(x::T) where {T<:Real} = one(x) - x
-export not
+################################# Core System #################################
 
-# Include files in dependency order
-include("fixed_helpers.jl")     # No dependencies
-export fixed_effects_form
-include("evaluators.jl")        # Uses fixed_helpers
-include("CompiledFormula.jl")   # Defines key structs and methods - NOW INCLUDES DERIVATIVES
-export compile_formula, CompiledFormula, test_complete
-# Derivatives
-export compile_derivative_formula, CompiledDerivativeFormula
-export clear_derivative_cache!, list_compiled_derivatives
+# Core utilities and types
+include("core/utilities.jl")
+export not, OverrideVector
 
-include("evaluator_trees.jl")
-export extract_root_evaluator, get_evaluator_tree, has_evaluator_access
-export count_evaluator_nodes, get_variable_dependencies, get_evaluator_summary
-export print_evaluator_tree, test_evaluator_storage
-include("generators.jl")        # Uses evaluators + fixed_helpers
+################################# Integration #################################
 
-include("modelrow!.jl")
-include("modelrow.jl")
-# export modelrow!
-export modelrow
-export clear_model_cache!, test_modelrow_interface
-export ModelRowEvaluator
+# External package integration
+include("integration/mixed_models.jl")
 
-include("override.jl")
-export OverrideVector, create_categorical_override
+################################# Compilation #################################
+
+# Compilation system (unified)
+include("compilation/compilation.jl")
+
+export compile_formula, compile_unified
+
+################################## Scenarios ##################################
+
+# Override and scenario system (needed by modelrow)
+include("scenarios/overrides.jl")
+export create_categorical_override, create_scenario_grid
 export DataScenario, create_scenario, create_override_data, create_override_vector
-export ScenarioCollection, create_scenario_grid, create_scenario_combinations
-export get_scenario_by_name, list_scenarios
-export modelrow!, modelrow_scenarios!
-export test_scenario_foundation, example_scenario_usage
 
-include("derivative_evaluators.jl")
-include("CompiledDerivativeFormula.jl")   # Defines key structs and methods - NOW INCLUDES DERIVATIVES
-include("derivative_generators.jl")
-include("derivative_modelrow.jl")
-export compute_derivative_evaluator, compute_interaction_derivative_recursive
-export compute_nary_product_derivative, compute_division_derivative, compute_power_derivative
-export is_zero_evaluator
-export marginal_effects!
+################################# Evaluation #################################
 
-export ScaledEvaluator, ProductEvaluator
-export ChainRuleEvaluator, ProductRuleEvaluator, ForwardDiffEvaluator
-export get_standard_derivative_function, is_zero_derivative, validate_derivative_evaluator
+# High-level evaluation interface
+include("evaluation/modelrow.jl")
+export ModelRowEvaluator, modelrow!, modelrow
 
-include("testing.jl")
+############################## Development Tools ##############################
 
-end # module
+# Development utilities (only include in dev builds)
+include("dev/testing_utilities.jl")
+# (Don't export functions here, import as needed)
+
+############################## Future Features ##############################
+
+# Derivative system (under development)
+# include("derivatives/step1_foundation.jl")
+# include("derivatives/step2_functions.jl")
+# export compile_derivative_formula
+
+end # end module
