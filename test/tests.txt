@@ -3,7 +3,7 @@ The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.d
   juliaup update
 
 in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
-ERROR: LoadError: Some tests did not pass: 735 passed, 5 failed, 0 errored, 0 broken.
+ERROR: LoadError: Some tests did not pass: 739 passed, 1 failed, 0 errored, 0 broken.
 in expression starting at /Users/emf/.julia/dev/FormulaCompiler/test/runtests.jl:19
 Logistic: complex: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_allocations.jl:35
   Expression: memory_bytes == 0
@@ -36,119 +36,11 @@ Summary:
 - Generalized Linear Mixed Models (GLMM): 4 formulas
 - Total: 35 formulas
 - All formulas achieved zero allocations ✅
-Four-way interaction: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_models.jl:31
-  Expression: isapprox(output, expected, rtol = 1.0e-10)
-   Evaluated: isapprox([1.0, -0.13528126879775632, -0.9216769319600101, 1.0, 0.0, 0.0, 1.0, 0.0, 0.12468562477717349, -0.13528126879775632  …  -0.0, -0.0, -0.0, -0.0, 0.0, 0.12468562477717349, 0.0, 0.0, 0.0, 0.0], [1.0, -0.13528126879775632, -0.9216769319600101, 1.0, 0.0, 0.0, 1.0, 0.0, 0.12468562477717349, -0.13528126879775632  …  -0.9216769319600101, -0.0, -0.0, -0.0, 0.0, 0.0, 0.12468562477717349, 0.0, 0.0, 0.0]; rtol = 1.0e-10)
-
-Stacktrace:
-  [1] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
-  [2] (::var"#test_model_correctness#2"{@NamedTuple{x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, w::Vector{Float64}, t::Vector{Float64}, group3::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, group4::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, binary::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, group5::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, subject::CategoricalVector{Int64, UInt32, Int64, CategoricalValue{Int64, UInt32}, Union{}}, cluster::CategoricalVector{Int64, UInt32, Int64, CategoricalValue{Int64, UInt32}, Union{}}, flag::Vector{Bool}, continuous_response::Vector{Float64}, binary_response::Vector{Int64}, count_response::Vector{Int64}, linear_predictor::Vector{Float64}, logistic_response::Vector{Int64}}, Int64})(model::StatsModels.TableRegressionModel{LinearModel{GLM.LmResp{Vector{Float64}}, GLM.DensePredChol{Float64, LinearAlgebra.CholeskyPivoted{Float64, Matrix{Float64}, Vector{Int64}}}}, Matrix{Float64}}, model_name::String)
-    @ Main ~/.julia/dev/FormulaCompiler/test/test_models.jl:31
-  [3] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:56 [inlined]
-  [4] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:676 [inlined]
-  [5] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:56 [inlined]
-  [6] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-  [7] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:55 [inlined]
-  [8] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-  [9] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:53 [inlined]
- [10] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
- [11] top-level scope
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:13
-Four-way interaction: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_models.jl:38
-  Expression: isapprox(output_modelrow, expected, rtol = 1.0e-10)
-   Evaluated: isapprox([1.0, -0.13528126879775632, -0.9216769319600101, 1.0, 0.0, 0.0, 1.0, 0.0, 0.12468562477717349, -0.13528126879775632  …  -0.0, -0.0, -0.0, -0.0, 0.0, 0.12468562477717349, 0.0, 0.0, 0.0, 0.0], [1.0, -0.13528126879775632, -0.9216769319600101, 1.0, 0.0, 0.0, 1.0, 0.0, 0.12468562477717349, -0.13528126879775632  …  -0.9216769319600101, -0.0, -0.0, -0.0, 0.0, 0.0, 0.12468562477717349, 0.0, 0.0, 0.0]; rtol = 1.0e-10)
-
-Stacktrace:
-  [1] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
-  [2] (::var"#test_model_correctness#2"{@NamedTuple{x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, w::Vector{Float64}, t::Vector{Float64}, group3::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, group4::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, binary::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, group5::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, subject::CategoricalVector{Int64, UInt32, Int64, CategoricalValue{Int64, UInt32}, Union{}}, cluster::CategoricalVector{Int64, UInt32, Int64, CategoricalValue{Int64, UInt32}, Union{}}, flag::Vector{Bool}, continuous_response::Vector{Float64}, binary_response::Vector{Int64}, count_response::Vector{Int64}, linear_predictor::Vector{Float64}, logistic_response::Vector{Int64}}, Int64})(model::StatsModels.TableRegressionModel{LinearModel{GLM.LmResp{Vector{Float64}}, GLM.DensePredChol{Float64, LinearAlgebra.CholeskyPivoted{Float64, Matrix{Float64}, Vector{Int64}}}}, Matrix{Float64}}, model_name::String)
-    @ Main ~/.julia/dev/FormulaCompiler/test/test_models.jl:38
-  [3] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:56 [inlined]
-  [4] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:676 [inlined]
-  [5] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:56 [inlined]
-  [6] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-  [7] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:55 [inlined]
-  [8] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-  [9] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:53 [inlined]
- [10] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
- [11] top-level scope
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:13
-Four-way w/ function: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_models.jl:31
-  Expression: isapprox(output, expected, rtol = 1.0e-10)
-   Evaluated: isapprox([1.0, 0.8734701972214995, -0.9216769319600101, 1.0, 0.0, 0.0, 1.0, 0.0, -0.8050573315336167, 0.8734701972214995  …  -0.0, -0.0, -0.0, -0.0, -0.0, -0.8050573315336167, -0.0, -0.0, -0.0, -0.0], [1.0, 0.8734701972214995, -0.9216769319600101, 1.0, 0.0, 0.0, 1.0, 0.0, -0.8050573315336167, 0.8734701972214995  …  -0.9216769319600101, -0.0, -0.0, -0.0, -0.0, -0.0, -0.8050573315336167, -0.0, -0.0, -0.0]; rtol = 1.0e-10)
-
-Stacktrace:
-  [1] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
-  [2] (::var"#test_model_correctness#2"{@NamedTuple{x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, w::Vector{Float64}, t::Vector{Float64}, group3::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, group4::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, binary::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, group5::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, subject::CategoricalVector{Int64, UInt32, Int64, CategoricalValue{Int64, UInt32}, Union{}}, cluster::CategoricalVector{Int64, UInt32, Int64, CategoricalValue{Int64, UInt32}, Union{}}, flag::Vector{Bool}, continuous_response::Vector{Float64}, binary_response::Vector{Int64}, count_response::Vector{Int64}, linear_predictor::Vector{Float64}, logistic_response::Vector{Int64}}, Int64})(model::StatsModels.TableRegressionModel{LinearModel{GLM.LmResp{Vector{Float64}}, GLM.DensePredChol{Float64, LinearAlgebra.CholeskyPivoted{Float64, Matrix{Float64}, Vector{Int64}}}}, Matrix{Float64}}, model_name::String)
-    @ Main ~/.julia/dev/FormulaCompiler/test/test_models.jl:31
-  [3] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:56 [inlined]
-  [4] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:676 [inlined]
-  [5] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:56 [inlined]
-  [6] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-  [7] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:55 [inlined]
-  [8] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-  [9] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:53 [inlined]
- [10] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
- [11] top-level scope
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:13
-Four-way w/ function: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_models.jl:38
-  Expression: isapprox(output_modelrow, expected, rtol = 1.0e-10)
-   Evaluated: isapprox([1.0, 0.8734701972214995, -0.9216769319600101, 1.0, 0.0, 0.0, 1.0, 0.0, -0.8050573315336167, 0.8734701972214995  …  -0.0, -0.0, -0.0, -0.0, -0.0, -0.8050573315336167, -0.0, -0.0, -0.0, -0.0], [1.0, 0.8734701972214995, -0.9216769319600101, 1.0, 0.0, 0.0, 1.0, 0.0, -0.8050573315336167, 0.8734701972214995  …  -0.9216769319600101, -0.0, -0.0, -0.0, -0.0, -0.0, -0.8050573315336167, -0.0, -0.0, -0.0]; rtol = 1.0e-10)
-
-Stacktrace:
-  [1] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
-  [2] (::var"#test_model_correctness#2"{@NamedTuple{x::Vector{Float64}, y::Vector{Float64}, z::Vector{Float64}, w::Vector{Float64}, t::Vector{Float64}, group3::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, group4::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, binary::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, group5::CategoricalVector{String, UInt32, String, CategoricalValue{String, UInt32}, Union{}}, subject::CategoricalVector{Int64, UInt32, Int64, CategoricalValue{Int64, UInt32}, Union{}}, cluster::CategoricalVector{Int64, UInt32, Int64, CategoricalValue{Int64, UInt32}, Union{}}, flag::Vector{Bool}, continuous_response::Vector{Float64}, binary_response::Vector{Int64}, count_response::Vector{Int64}, linear_predictor::Vector{Float64}, logistic_response::Vector{Int64}}, Int64})(model::StatsModels.TableRegressionModel{LinearModel{GLM.LmResp{Vector{Float64}}, GLM.DensePredChol{Float64, LinearAlgebra.CholeskyPivoted{Float64, Matrix{Float64}, Vector{Int64}}}}, Matrix{Float64}}, model_name::String)
-    @ Main ~/.julia/dev/FormulaCompiler/test/test_models.jl:38
-  [3] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:56 [inlined]
-  [4] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:676 [inlined]
-  [5] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:56 [inlined]
-  [6] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-  [7] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:55 [inlined]
-  [8] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-  [9] macro expansion
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:53 [inlined]
- [10] macro expansion
-    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
- [11] top-level scope
-    @ ~/.julia/dev/FormulaCompiler/test/test_models.jl:13
 Test Summary:                              | Pass  Fail  Total   Time
-FormulaCompiler.jl Tests                   |  735     5    740  44.2s
+FormulaCompiler.jl Tests                   |  739     1    740  44.2s
   Zero Allocation Survey                   |  109     1    110  40.9s
     Linear Models (LM)                     |   45           45  18.7s
-    Generalized Linear Models (GLM)        |   29     1     30  10.0s
+    Generalized Linear Models (GLM)        |   29     1     30   9.9s
       Logistic: simple                     |    3            3   1.1s
       Logistic: mixed                      |    3            3   0.7s
       Logistic: interaction                |    3            3   0.7s
@@ -162,27 +54,4 @@ FormulaCompiler.jl Tests                   |  735     5    740  44.2s
     Linear Mixed Models (LMM)              |   18           18   6.8s
     Generalized Linear Mixed Models (GLMM) |   12           12   4.8s
     Summary Statistics                     |    5            5   0.0s
-  Model Correctness Tests                  |  626     4    630   2.8s
-    Linear Models (LM)                     |  236     4    240   0.2s
-      Intercept only                       |   16           16   0.1s
-      No intercept                         |   16           16   0.0s
-      Simple continuous                    |   16           16   0.0s
-      Simple categorical                   |   16           16   0.0s
-      Multiple continuous                  |   16           16   0.0s
-      Multiple categorical                 |   16           16   0.0s
-      Mixed                                |   16           16   0.0s
-      Simple interaction                   |   16           16   0.0s
-      Interaction w/o main                 |   16           16   0.0s
-      Function                             |   16           16   0.0s
-      Function in interaction              |   16           16   0.0s
-      Three-way interaction                |   16           16   0.0s
-      Four-way interaction                 |   14     2     16   0.0s
-      Four-way w/ function                 |   14     2     16   0.0s
-      Complex interaction                  |   16           16   0.0s
-    Generalized Linear Models (GLM)        |  160          160   0.2s
-    Linear Mixed Models (LMM)              |   96           96   0.0s
-    Generalized Linear Mixed Models (GLMM) |   64           64   0.1s
-    Complex Interaction Correctness        |   42           42   1.4s
-    ModelRow Interface Tests               |   13           13   0.4s
-    Scenario Integration Correctness       |    6            6   0.1s
-    Edge Case Correctness                  |    9            9   0.3s
+  Model Correctness Tests                  |  630          630   2.8s

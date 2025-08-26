@@ -24,5 +24,4 @@ Random.seed!(06515)
     # Models
     include("test_allocations.jl") # performance
     include("test_models.jl") # correctness
-
 end

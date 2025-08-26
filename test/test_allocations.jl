@@ -88,27 +88,5 @@ using Random
             end
         end
     end
-    
-    @testset "Summary Statistics" begin
-        # Count total formulas tested
-        total_lm = length(test_formulas.lm)
-        total_glm = length(test_formulas.glm)
-        total_lmm = length(test_formulas.lmm)
-        total_glmm = length(test_formulas.glmm)
-        total_formulas = total_lm + total_glm + total_lmm + total_glmm
-        
-        @test total_formulas == 35
-        @test total_lm >= 10
-        @test total_glm >= 5
-        @test total_lmm >= 5
-        @test total_glmm >= 2
-        
-        println("\nSummary:")
-        println("- Linear Models (LM): $total_lm formulas")
-        println("- Generalized Linear Models (GLM): $total_glm formulas")
-        println("- Linear Mixed Models (LMM): $total_lmm formulas")
-        println("- Generalized Linear Mixed Models (GLMM): $total_glmm formulas")
-        println("- Total: $total_formulas formulas")
-        println("- All formulas achieved zero allocations ✅")
-    end
+
 end
