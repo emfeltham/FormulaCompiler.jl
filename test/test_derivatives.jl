@@ -32,7 +32,7 @@ using BenchmarkTools
 
     # Zero-allocation check after warmup
     allocs = @allocated derivative_modelrow!(J, de, 3)
-    @test allocs <= 2048  # small stable overhead acceptable in steady-state
+    @test allocs == 0
 
     # FD fallback comparison
     J_fd = similar(J)
