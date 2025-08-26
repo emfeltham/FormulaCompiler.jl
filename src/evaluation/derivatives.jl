@@ -10,90 +10,6 @@ end
 
 ########################### Marginal Effects (η, μ) ##########################
 
-"""
-    marginal_effects_eta!(g, deval, beta, row)
-
-Fill `g` with marginal effects of η = Xβ w.r.t. `deval.vars` at `row`.
-Implements: g = J' * β, where J = ∂X/∂vars.
-"""
-function marginal_effects_eta!(
-    g::AbstractVector{Float64},
-    de::DerivativeEvaluator,
-    beta::AbstractVector{<:Real},
-    row::Int,
-)
-    @assert length(g) == length(de.vars)
-    @assert length(beta) == length(de)
-    # Compute J once, then g = J' * beta
-    J = Matrix{Float64}(undef, length(de), length(de.vars))
-    derivative_modelrow!(J, de, row)
-    mul!(g, transpose(J), beta)
-    return g
-end
-
-function marginal_effects_eta(
-    de::DerivativeEvaluator,
-    beta::AbstractVector{<:Real},
-    row::Int,
-)
-    g = Vector{Float64}(undef, length(de.vars))
-    marginal_effects_eta!(g, de, beta, row)
-    return g
-end
-
-@inline _σ(x) = inv(1 + exp(-x))
-
-@inline function _dmu_deta(link::GLM.IdentityLink, η::Real)
-    return 1.0
-end
-
-@inline function _dmu_deta(link::GLM.LogLink, η::Real)
-    return exp(η)  # μ = exp(η)
-end
-
-@inline function _dmu_deta(link::GLM.LogitLink, η::Real)
-    μ = _σ(η)
-    return μ * (1 - μ)  # σ'(η)
-end
-
-"""
-    marginal_effects_mu!(g, deval, beta, row; link)
-
-Compute marginal effects of μ = g⁻¹(η) at `row` via chain rule: dμ/dx = (dμ/dη) * (dη/dx).
-Provide `link` (e.g., `IdentityLink()`, `LogLink()`, `LogitLink()`).
-"""
-function marginal_effects_mu!(
-    g::AbstractVector{Float64},
-    de::DerivativeEvaluator,
-    beta::AbstractVector{<:Real},
-    row::Int;
-    link=GLM.IdentityLink(),
-)
-    # Compute dη/dx
-    gη = Vector{Float64}(undef, length(de.vars))
-    marginal_effects_eta!(gη, de, beta, row)
-    # Compute η at row
-    xrow = Vector{Float64}(undef, length(de))
-    de.compiled_base(xrow, de.base_data, row)
-    η = dot(beta, xrow)
-    scale = _dmu_deta(link, η)
-    @inbounds @fastmath for j in eachindex(gη)
-        g[j] = scale * gη[j]
-    end
-    return g
-end
-
-function marginal_effects_mu(
-    de::DerivativeEvaluator,
-    beta::AbstractVector{<:Real},
-    row::Int;
-    link=GLM.IdentityLink(),
-)
-    g = Vector{Float64}(undef, length(de.vars))
-    marginal_effects_mu!(g, de, beta, row; link=link)
-    return g
-end
-
 Base.size(v::SingleRowOverrideVector) = size(v.base)
 Base.length(v::SingleRowOverrideVector) = length(v.base)
 Base.IndexStyle(::Type{<:SingleRowOverrideVector}) = IndexLinear()
@@ -363,6 +279,92 @@ function contrast_modelrow(
     Δ = Vector{Float64}(undef, length(compiled))
     contrast_modelrow!(Δ, compiled, data, row; var=var, from=from, to=to)
     return Δ
+end
+
+# -- Marginal effects implementations (placed after types are defined) --
+
+"""
+    marginal_effects_eta!(g, deval, beta, row)
+
+Fill `g` with marginal effects of η = Xβ w.r.t. `deval.vars` at `row`.
+Implements: g = J' * β, where J = ∂X/∂vars.
+"""
+function marginal_effects_eta!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+)
+    @assert length(g) == length(de.vars)
+    @assert length(beta) == length(de)
+    # Compute J once, then g = J' * beta
+    J = Matrix{Float64}(undef, length(de), length(de.vars))
+    derivative_modelrow!(J, de, row)
+    mul!(g, transpose(J), beta)
+    return g
+end
+
+function marginal_effects_eta(
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+)
+    g = Vector{Float64}(undef, length(de.vars))
+    marginal_effects_eta!(g, de, beta, row)
+    return g
+end
+
+@inline _σ(x) = inv(1 + exp(-x))
+
+@inline function _dmu_deta(link::GLM.IdentityLink, η::Real)
+    return 1.0
+end
+
+@inline function _dmu_deta(link::GLM.LogLink, η::Real)
+    return exp(η)  # μ = exp(η)
+end
+
+@inline function _dmu_deta(link::GLM.LogitLink, η::Real)
+    μ = _σ(η)
+    return μ * (1 - μ)  # σ'(η)
+end
+
+"""
+    marginal_effects_mu!(g, deval, beta, row; link)
+
+Compute marginal effects of μ = g⁻¹(η) at `row` via chain rule: dμ/dx = (dμ/dη) * (dη/dx).
+Provide `link` (e.g., `IdentityLink()`, `LogLink()`, `LogitLink()`).
+"""
+function marginal_effects_mu!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int;
+    link=GLM.IdentityLink(),
+)
+    # Compute dη/dx
+    gη = Vector{Float64}(undef, length(de.vars))
+    marginal_effects_eta!(gη, de, beta, row)
+    # Compute η at row
+    xrow = Vector{Float64}(undef, length(de))
+    de.compiled_base(xrow, de.base_data, row)
+    η = dot(beta, xrow)
+    scale = _dmu_deta(link, η)
+    @inbounds @fastmath for j in eachindex(gη)
+        g[j] = scale * gη[j]
+    end
+    return g
+end
+
+function marginal_effects_mu(
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int;
+    link=GLM.IdentityLink(),
+)
+    g = Vector{Float64}(undef, length(de.vars))
+    marginal_effects_mu!(g, de, beta, row; link=link)
+    return g
 end
 
 
