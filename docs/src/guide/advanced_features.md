@@ -180,6 +180,11 @@ Discrete contrasts for categorical variables:
 Δ = contrast_modelrow(compiled, data, 1; var=:group3, from="A", to="B")
 ```
 
+Tips:
+- Variable selection: `continuous_variables(compiled, data)` returns a convenient list of continuous symbols present in the compiled ops. Pass a subset to `build_derivative_evaluator` via `vars=...`.
+- Chunking: `build_derivative_evaluator(...; chunk=:auto)` uses `ForwardDiff.Chunk{N}` where `N = length(vars)`. You can pass an explicit `ForwardDiff.Chunk{K}()` if you want to tune performance for larger `N`.
+- Links: `marginal_effects_mu` supports `IdentityLink()`, `LogLink()`, and `LogitLink()`; additional links can be added as needed.
+
 ## Complex Formula Support
 
 ### Nested Functions
