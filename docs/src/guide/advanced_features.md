@@ -150,9 +150,10 @@ using BenchmarkTools
 ### Performance Characteristics
 
 - **Core evaluation**: Exactly 0 allocations (modelrow!, compiled functions)
-- **ForwardDiff derivatives**: ~112 bytes per call (ForwardDiff internals, unavoidable)
-- **Marginal effects**: ~112-256 bytes per call (optimized with preallocated buffers)  
+- **ForwardDiff derivatives**: ≤112 bytes per call (ForwardDiff internals, unavoidable)
+- **Marginal effects**: ≤256 bytes per call (optimized with preallocated buffers)  
 - **Allocation efficiency**: >99.75% compared to naive AD approaches
+- **Validation**: Cross-validated against finite differences for robustness
 
 ### ForwardDiff-Based Derivatives
 

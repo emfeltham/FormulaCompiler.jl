@@ -290,7 +290,7 @@ row_vec = Vector{Float64}(undef, length(compiled))
 # Zero allocation across 105 test cases
 ```
 
-Note on derivatives: ForwardDiff-based `derivative_modelrow!` typically runs with 0 allocations after warmup. On some environments, tiny steady-state allocations (<=256 bytes per call; up to <=768 bytes when computing marginal effects with links) may appear due to ForwardDiff/Julia internals. The test suite enforces tight thresholds rather than exact zero to accommodate this.
+Note on derivatives: ForwardDiff-based `derivative_modelrow!` achieves ≤112 bytes per call (ForwardDiff internal minimum). Marginal effects operations use preallocated buffers achieving ≤256 bytes per call. The test suite validates these tight performance bounds across 27 derivative-specific tests with cross-validation against finite differences.
 
 ## Architecture
 

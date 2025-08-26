@@ -30,9 +30,10 @@ FormulaCompiler.jl provides a sophisticated automatic differentiation system tha
 
 ### Performance Characteristics
 - **Core evaluation**: Exactly 0 allocations  
-- **ForwardDiff derivatives**: ~112 bytes per call (ForwardDiff internal minimum)
-- **Marginal effects**: ~112-256 bytes per call (optimized with preallocated buffers)
+- **ForwardDiff derivatives**: ≤112 bytes per call (ForwardDiff internal minimum)
+- **Marginal effects**: ≤256 bytes per call (optimized with preallocated buffers)
 - **Allocation efficiency**: >99.75% compared to naive AD approaches
+- **Validation**: Cross-validated against finite differences (rtol=1e-6, atol=1e-8)
 
 ```@docs
 build_derivative_evaluator
