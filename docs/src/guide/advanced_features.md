@@ -185,6 +185,36 @@ Tips:
 - Chunking: `build_derivative_evaluator(...; chunk=:auto)` uses `ForwardDiff.Chunk{N}` where `N = length(vars)`. You can pass an explicit `ForwardDiff.Chunk{K}()` if you want to tune performance for larger `N`.
 - Links: `marginal_effects_mu` supports `IdentityLink()`, `LogLink()`, and `LogitLink()`; additional links can be added as needed.
 
+### Mixed Models (Fixed Effects)
+
+Derivatives target the fixed-effects design (random effects are intentionally excluded):
+
+```julia
+using MixedModels
+
+df = DataFrame(y = randn(500), x = randn(500), z = abs.(randn(500)) .+ 0.1,
+               group = categorical(rand(1:20, 500)))
+mm = fit(MixedModel, @formula(y ~ 1 + x + z + (1|group)), df; progress=false)
+
+data = Tables.columntable(df)
+compiled = compile_formula(mm, data)  # fixed-effects only
+vars = [:x, :z]
+de = build_derivative_evaluator(compiled, data; vars=vars)
+
+J = Matrix{Float64}(undef, length(compiled), length(vars))
+derivative_modelrow!(J, de, 1)
+```
+
+### Performance
+
+- Compile once, reuse evaluator and buffers; steady-state ForwardDiff derivatives run with zero allocations after warmup.
+- Example benchmark snippet:
+
+```julia
+using BenchmarkTools
+@benchmark derivative_modelrow!($J, $de, 25)
+```
+
 ## Complex Formula Support
 
 ### Nested Functions
