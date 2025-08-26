@@ -4,7 +4,22 @@ The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.d
 
 in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
 Precompiling FormulaCompiler...
-   3969.2 ms  ✓ FormulaCompiler
-  1 dependency successfully precompiled in 4 seconds. 179 already precompiled.
-Test Summary:                            | Pass  Total  Time
-Derivatives: ForwardDiff and FD fallback |    4      4  3.6s
+   4145.0 ms  ✓ FormulaCompiler
+  1 dependency successfully precompiled in 5 seconds. 179 already precompiled.
+ERROR: LoadError: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
+in expression starting at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives.jl:16
+Derivatives: ForwardDiff and FD fallback: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives.jl:42
+  Expression: allocs <= 112
+   Evaluated: 256 <= 112
+
+Stacktrace:
+ [1] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+ [2] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:42 [inlined]
+ [3] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [4] top-level scope
+   @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:18
+Test Summary:                            | Pass  Fail  Total  Time
+Derivatives: ForwardDiff and FD fallback |    3     1      4  4.4s

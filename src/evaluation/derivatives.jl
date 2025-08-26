@@ -1,6 +1,30 @@
 # derivatives.jl
 
+# TODO(derivatives): See DERIVATIVE_PLAN.md → Typing Checklist & Acceptance Criteria.
+# - Eliminate Any on hot paths (closure/config/dual fields, overrides, column cache).
+# - Prefer gradient-based η path for strict zero-allocation marginal effects.
+# - Keep FD Jacobian as 0-alloc fallback; AD Jacobian 0-alloc may be env-dependent.
+#
+# Contributor TODOs (typing and allocation hygiene):
+# 1) Make evaluator fields concrete
+#    - g::Any             → store concrete closure type (DerivClosure{DE})
+#    - cfg::Any           → store concrete ForwardDiff.JacobianConfig{…}
+#    - rowvec_dual::Any   → Vector{<:ForwardDiff.Dual{…}} with concrete eltype
+#    - compiled_dual::Any → UnifiedCompiled{<:ForwardDiff.Dual{…},Ops,S,O}
+# 2) Column cache
+#    - fd_columns::Vector{Any} → Vector{<:AbstractVector{T}} or NTuple for fixed nvars
+# 3) Overrides
+#    - SingleRowOverrideVector <: AbstractVector{Any}
+#      replace with SingleRowOverrideVector{T} and build per-eltype data_over (Float64 & Dual)
+# 4) Config creation
+#    - Ensure JacobianConfig/GradientConfig are built once with concrete closure
+# 5) Tests
+#    - Tighten FD Jacobian to 0 allocations; η-gradient to 0; gate AD Jacobian per env caps
+
 # Single-row override vector: returns replacement at `row`, base elsewhere (unused)
+# NOTE: Current override wrapper uses eltype Any; this impacts AD typing.
+# TODO(derivatives): Introduce `SingleRowOverrideVector{T}` and per-eltype merged data_over
+# to ensure getindex returns T (Float64/Dual), removing Any from the hot path.
 mutable struct SingleRowOverrideVector <: AbstractVector{Any}
     base::Any
     row::Int
@@ -15,6 +39,19 @@ Base.IndexStyle(::Type{<:SingleRowOverrideVector}) = IndexLinear()
 Base.eltype(::Type{SingleRowOverrideVector}) = Any
 Base.getindex(v::SingleRowOverrideVector, i::Int) = (i == v.row ? v.replacement : getindex(v.base, i))
 
+# Typed single-row override vector that preserves element type T
+mutable struct TypedSingleRowOverrideVector{T} <: AbstractVector{T}
+    base::AbstractVector
+    row::Int
+    replacement::T
+end
+
+Base.size(v::TypedSingleRowOverrideVector) = size(v.base)
+Base.length(v::TypedSingleRowOverrideVector) = length(v.base)
+Base.IndexStyle(::Type{<:TypedSingleRowOverrideVector}) = IndexLinear()
+Base.eltype(::Type{TypedSingleRowOverrideVector{T}}) where {T} = T
+@inline Base.getindex(v::TypedSingleRowOverrideVector{T}, i::Int) where {T} = (i == v.row ? v.replacement : convert(T, getindex(v.base, i)))
+
 # Build a NamedTuple overriding selected variables with SingleRowOverrideVector wrappers
 function build_row_override_data(base::NamedTuple, vars::Vector{Symbol}, row::Int)
     overrides = NamedTuple()
@@ -23,6 +60,20 @@ function build_row_override_data(base::NamedTuple, vars::Vector{Symbol}, row::In
     pairs = Pair{Symbol,Any}[]
     for (i, s) in enumerate(vars)
         ov = SingleRowOverrideVector(getproperty(base, s), row, nothing)
+        override_vecs[i] = ov
+        push!(pairs, s => ov)
+    end
+    data_over = (; base..., pairs...)
+    return data_over, override_vecs
+end
+
+# Build a NamedTuple overriding selected variables using TypedSingleRowOverrideVector{T}
+function build_row_override_data_typed(base::NamedTuple, vars::Vector{Symbol}, row::Int, ::Type{T}) where {T}
+    override_vecs = Vector{TypedSingleRowOverrideVector{T}}(undef, length(vars))
+    pairs = Pair{Symbol,TypedSingleRowOverrideVector{T}}[]
+    for (i, s) in enumerate(vars)
+        col = getproperty(base, s)
+        ov = TypedSingleRowOverrideVector{T}(col, row, zero(T))
         override_vecs[i] = ov
         push!(pairs, s => ov)
     end
@@ -57,19 +108,36 @@ function (g::DerivClosure)(x::AbstractVector)
         compiled_T = de.compiled_dual
         row_vec = de.rowvec_dual
     end
-    # Update overrides
+    # Select overrides and merged data based on element type
+    if Tx === Float64
+        ov_vec = de.overrides
+        data_over = de.data_over
+    else
+        if de.overrides_dual === nothing
+            # Build typed overrides and merged data for Dual element type
+            data_over_dual, overrides_dual = build_row_override_data_typed(de.base_data, de.vars, 1, Tx)
+            de.overrides_dual = overrides_dual
+            de.data_over_dual = data_over_dual
+        end
+        ov_vec = de.overrides_dual
+        data_over = de.data_over_dual
+    end
+    # Update overrides for current row and x
     for i in eachindex(de.vars)
-        ov = de.overrides[i]
+        ov = ov_vec[i]
         ov.row = de.row
         ov.replacement = x[i]
     end
-    # Evaluate using prebuilt merged data
-    compiled_T(row_vec, de.data_over, de.row)
+    # Evaluate using appropriate merged data
+    compiled_T(row_vec, data_over, de.row)
     return row_vec
 end
 
 Base.length(g::DerivClosure) = length(g.de_ref[])
 
+# TODO(derivatives): Several fields are currently `Any` and should be made concrete
+# per DERIVATIVE_PLAN.md typing checklist (g/cfg/compiled_dual/rowvec_dual) to minimize
+# allocations and enable universal type inference on hot paths.
 mutable struct DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged}
     compiled_base::UnifiedCompiled{T, Ops, S, O}
     base_data::NTBase
@@ -78,6 +146,9 @@ mutable struct DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged}
     # Prebuilt row-local overrides and merged data (shared for Float64 and Dual)
     overrides::Vector{SingleRowOverrideVector}
     data_over::NTMerged
+    # Dual-typed overrides and merged data (lazily initialized)
+    overrides_dual::Any
+    data_over_dual::Any
     # Row buffers
     rowvec_float::Vector{Float64}
     rowvec_dual::Any
@@ -92,6 +163,12 @@ mutable struct DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged}
     # Preallocated buffers for marginal effects mu
     eta_gradient_buffer::Vector{Float64}
     xrow_buffer::Vector{Float64}
+    # Zero-allocation finite differences buffers
+    fd_yplus::Vector{Float64}
+    fd_yminus::Vector{Float64}
+    fd_xbase::Vector{Float64}
+    # Pre-cached column references for zero-allocation FD
+    fd_columns::Vector{Any}
 end
 
 Base.length(de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged}) where {T, Ops, S, O, NTBase, NTMerged} = de.compiled_base |> length
@@ -126,6 +203,9 @@ function build_derivative_evaluator(
     # Prebuild overrides + merged data (float path)
     data_over, overrides = build_row_override_data(data, vars, 1)
     rowvec_float = Vector{Float64}(undef, length(compiled))
+    # Pre-cache column references to avoid getproperty allocations
+    fd_columns = [getproperty(data, s) for s in vars]
+    
     # Build derivative evaluator first for concrete types
     de = DerivativeEvaluator{T, Ops, S, O, typeof(data), typeof(data_over)}(
         compiled,
@@ -134,6 +214,8 @@ function build_derivative_evaluator(
         xbuf,
         overrides,
         data_over,
+        nothing,  # overrides_dual
+        nothing,  # data_over_dual
         rowvec_float,
         nothing,   # rowvec_dual
         nothing,   # compiled_dual
@@ -143,6 +225,10 @@ function build_derivative_evaluator(
         Matrix{Float64}(undef, length(compiled), nvars),  # jacobian_buffer
         Vector{Float64}(undef, nvars),                    # eta_gradient_buffer
         Vector{Float64}(undef, length(compiled)),         # xrow_buffer
+        Vector{Float64}(undef, length(compiled)),         # fd_yplus
+        Vector{Float64}(undef, length(compiled)),         # fd_yminus
+        Vector{Float64}(undef, nvars),                    # fd_xbase
+        fd_columns,                                       # fd_columns
     )
     
     # Build closure and config with concrete type
@@ -231,8 +317,8 @@ function derivative_modelrow_fd!(
 ) where {T, Ops, S, O}
     @assert size(J, 1) == length(compiled)
     @assert size(J, 2) == length(vars)
-    # Build row-local override once for all vars
-    data_over, overrides = build_row_override_data(data, vars, row)
+    # Build typed row-local override once for all vars (Float64 path)
+    data_over, overrides = build_row_override_data_typed(data, vars, row, Float64)
     # Buffers
     yplus = Vector{Float64}(undef, length(compiled))
     yminus = Vector{Float64}(undef, length(compiled))
@@ -262,6 +348,105 @@ function derivative_modelrow_fd!(
         end
     end
     return J
+end
+
+######################## η-Gradient (Scalar AD Path) #########################
+
+"""
+    marginal_effects_eta_grad!(g, de, beta, row)
+
+Compute marginal effects on η = Xβ via ForwardDiff.gradient! of the scalar
+function h(x) = dot(β, Xrow(x)). Uses the existing AD closure to evaluate rows.
+"""
+function marginal_effects_eta_grad!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int;
+    chunk=:auto,
+)
+    @assert length(g) == length(de.vars)
+    @assert length(beta) == length(de)
+    # Seed x with base values
+    de.row = row
+    for (i, s) in enumerate(de.vars)
+        de.xbuf[i] = getproperty(de.base_data, s)[row]
+    end
+    # Scalar closure using existing AD row-closure
+    f = (x) -> begin
+        v = de.g(x)
+        return dot(beta, v)
+    end
+    ch = chunk === :auto ? ForwardDiff.Chunk{length(de.vars)}() : chunk
+    cfg = ForwardDiff.GradientConfig(f, de.xbuf, ch)
+    ForwardDiff.gradient!(g, f, de.xbuf, cfg)
+    return g
+end
+
+function marginal_effects_eta_grad(
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int;
+    chunk=:auto,
+)
+    g = Vector{Float64}(undef, length(de.vars))
+    marginal_effects_eta_grad!(g, de, beta, row; chunk=chunk)
+    return g
+end
+
+"""
+    derivative_modelrow_fd!(J, evaluator, row; step=:auto)
+
+ULTIMATE zero-allocation finite differences with compile-time optimization.
+"""
+@generated function derivative_modelrow_fd!(
+    J::AbstractMatrix{Float64}, 
+    de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged}, 
+    row::Int; 
+    step=:auto,
+) where {T, Ops, S, O, NTBase, NTMerged}
+    quote
+        # Direct access to preallocated buffers
+        yplus = de.fd_yplus
+        yminus = de.fd_yminus
+        xbase = de.fd_xbase
+        
+        nvars = length(de.vars)
+        nterms = length(de)
+        
+        # Get base values using pre-cached columns
+        @inbounds for j in 1:nvars
+            xbase[j] = de.fd_columns[j][row]
+        end
+        
+        # Set row for overrides
+        @inbounds for i in 1:nvars
+            de.overrides[i].row = row
+        end
+        
+        # Main finite difference loop - compile-time optimized
+        @inbounds for j in 1:nvars
+            x = xbase[j]
+            # Set all overrides to base values
+            for k in 1:nvars
+                de.overrides[k].replacement = xbase[k]
+            end
+            # Step selection (hardcode eps()^(1/3))
+            h = step === :auto ? (2.220446049250313e-6 * max(1.0, abs(x))) : step
+            # Plus
+            de.overrides[j].replacement = x + h
+            de.compiled_base(yplus, de.data_over, row)
+            # Minus
+            de.overrides[j].replacement = x - h
+            de.compiled_base(yminus, de.data_over, row)
+            # Central difference column with FMA
+            inv_2h = 1.0 / (2.0 * h)
+            @fastmath for i in 1:nterms
+                J[i, j] = (yplus[i] - yminus[i]) * inv_2h
+            end
+        end
+        return J
+    end
 end
 
 function derivative_modelrow_fd(
@@ -383,6 +568,151 @@ function marginal_effects_eta(
 )
     g = Vector{Float64}(undef, length(de.vars))
     marginal_effects_eta!(g, de, beta, row)
+    return g
+end
+
+"""
+    marginal_effects_eta_fd_true_zero!(g, evaluator, beta, row; step=:auto)
+
+ABSOLUTE zero-allocation marginal effects bypassing the override system entirely.
+"""
+@generated function marginal_effects_eta_fd_true_zero!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged},
+    beta::AbstractVector{<:Real},
+    row::Int;
+    step=:auto,
+) where {T, Ops, S, O, NTBase, NTMerged}
+    quote
+        # Direct access to preallocated buffers
+        yplus = de.fd_yplus
+        yminus = de.fd_yminus
+        xbase = de.fd_xbase
+        J = de.jacobian_buffer
+        
+        nvars = length(de.vars)
+        nterms = length(de)
+        
+        # Get base values using pre-cached columns
+        @inbounds for j in 1:nvars
+            xbase[j] = de.fd_columns[j][row]
+        end
+        
+        # BYPASS OVERRIDE SYSTEM: Directly modify data columns!
+        @inbounds for j in 1:nvars
+            x = xbase[j]
+            # Step selection
+            h = step === :auto ? (2.220446049250313e-6 * max(1.0, abs(x))) : step
+            
+            # Directly modify the column (DANGEROUS but zero-allocation!)
+            original_val = de.fd_columns[j][row]
+            
+            # Plus evaluation - modify column directly
+            de.fd_columns[j][row] = x + h
+            de.compiled_base(yplus, de.base_data, row)
+            
+            # Minus evaluation - modify column directly  
+            de.fd_columns[j][row] = x - h
+            de.compiled_base(yminus, de.base_data, row)
+            
+            # Restore original value
+            de.fd_columns[j][row] = original_val
+            
+            # Store Jacobian column
+            inv_2h = 1.0 / (2.0 * h)
+            @fastmath for i in 1:nterms
+                J[i, j] = (yplus[i] - yminus[i]) * inv_2h
+            end
+        end
+        
+        # Matrix multiplication: g = J' * β
+        @inbounds @fastmath for j in 1:nvars
+            sum_val = 0.0
+            for i in 1:nterms
+                sum_val = muladd(J[i, j], beta[i], sum_val)
+            end
+            g[j] = sum_val
+        end
+        
+        return g
+    end
+end
+
+"""
+    marginal_effects_eta_fd!(g, evaluator, beta, row; step=:auto)
+
+Zero-allocation marginal effects using finite differences (with override system).
+"""
+@generated function marginal_effects_eta_fd!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged},
+    beta::AbstractVector{<:Real},
+    row::Int;
+    step=:auto,
+) where {T, Ops, S, O, NTBase, NTMerged}
+    quote
+        # Direct access to preallocated buffers
+        yplus = de.fd_yplus
+        yminus = de.fd_yminus
+        xbase = de.fd_xbase
+        J = de.jacobian_buffer
+        
+        nvars = length(de.vars)
+        nterms = length(de)
+        
+        # Get base values using pre-cached columns (no getproperty)
+        @inbounds for j in 1:nvars
+            xbase[j] = de.fd_columns[j][row]
+        end
+        
+        # Set row for overrides
+        @inbounds for i in 1:nvars
+            de.overrides[i].row = row
+        end
+        
+        # Main finite difference loop - compile-time optimized
+        @inbounds for j in 1:nvars
+            x = xbase[j]
+            # Set all overrides to base values
+            for k in 1:nvars
+                de.overrides[k].replacement = xbase[k]
+            end
+            # Step selection (hardcode eps()^(1/3) to avoid function calls)
+            h = step === :auto ? (2.220446049250313e-6 * max(1.0, abs(x))) : step
+            # Plus
+            de.overrides[j].replacement = x + h
+            de.compiled_base(yplus, de.data_over, row)
+            # Minus  
+            de.overrides[j].replacement = x - h
+            de.compiled_base(yminus, de.data_over, row)
+            # Store Jacobian column with FMA optimization
+            inv_2h = 1.0 / (2.0 * h)
+            @fastmath for i in 1:nterms
+                J[i, j] = (yplus[i] - yminus[i]) * inv_2h
+            end
+        end
+        
+        # Matrix multiplication: g = J' * β (fully optimized with FMA)
+        @inbounds @fastmath for j in 1:nvars
+            sum_val = 0.0
+            for i in 1:nterms
+                sum_val = muladd(J[i, j], beta[i], sum_val)
+            end
+            g[j] = sum_val
+        end
+        
+        return g
+    end
+end
+
+function marginal_effects_eta_fd(
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int;
+    step=:auto,
+)
+    g = Vector{Float64}(undef, length(de.vars))
+    marginal_effects_eta_fd!(g, de, beta, row; step=step)
     return g
 end
 

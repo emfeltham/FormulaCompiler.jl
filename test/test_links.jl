@@ -1,3 +1,6 @@
+# test_links.jl
+# julia --project="." test/test_links.jl > test/test_links.txt 2>&1
+
 using Test
 using FormulaCompiler
 using DataFrames, Tables, GLM, CategoricalArrays
@@ -23,6 +26,9 @@ using LinearAlgebra: dot
         InverseLink(), SqrtLink()
     ]
 
+    # Allocation policy: μ marginal effects reuse η path + link scaling.
+    # Expect 0 alloc for η-gradient path; for AD Jacobian-based path CI caps ≤256 bytes
+    # (see DERIVATIVE_PLAN.md Acceptance Criteria and Environment Matrix).
     for L in links
         gμ = Vector{Float64}(undef, length(vars))
         # Warm path

@@ -24,4 +24,5 @@ Random.seed!(06515)
     include("test_derivatives.jl")
     include("test_derivatives_extended.jl")
     include("test_links.jl")
+    include("test_derivative_allocations.jl")
 end

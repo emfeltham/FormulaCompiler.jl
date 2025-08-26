@@ -18,6 +18,7 @@ using DataFrames, Tables, GLM, MixedModels, CategoricalArrays
     glm_model = glm(@formula(y ~ 1 + x + z + x & group3), df, Binomial(), LogitLink())
     compiled_glm = compile_formula(glm_model, data)
     vars = [:x, :z]
+    # Note: AD Jacobian allocation caps are environment-dependent (see DERIVATIVE_PLAN.md).
     de_glm = build_derivative_evaluator(compiled_glm, data; vars=vars)
     J = Matrix{Float64}(undef, length(compiled_glm), length(vars))
     derivative_modelrow!(J, de_glm, 3)  # warm path

@@ -6,6 +6,13 @@ using FormulaCompiler
 using DataFrames, Tables, GLM, CategoricalArrays
 using BenchmarkTools
 
+##
+## Allocation policy note
+## - ForwardDiff Jacobian: on many Julia/ForwardDiff setups this can be 0 alloc after warmup
+##   with fully concrete evaluator; CI thresholds cap small FD-internal allocations (≤112 bytes).
+## - FD Jacobian: designed to be 0 alloc with concrete types and preallocated buffers.
+## See DERIVATIVE_PLAN.md → Acceptance Criteria, Environment Matrix.
+##
 @testset "Derivatives: ForwardDiff and FD fallback" begin
     # Data and model
     n = 300
