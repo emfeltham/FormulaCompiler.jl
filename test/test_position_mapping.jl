@@ -18,7 +18,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
     @testset "Basic Position Mapping" begin
         @testset "Simple continuous variable" begin
             formula = @formula(response ~ x)
-            compiled, output = test_formula_correctness(formula, df, data, "Simple continuous")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 2  # Intercept + x
@@ -26,7 +26,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
         
         @testset "Simple categorical variable" begin
             formula = @formula(response ~ group3)
-            compiled, output = test_formula_correctness(formula, df, data, "Simple categorical")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 3  # Intercept + 2 contrast columns for 3-level factor
@@ -34,7 +34,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
         
         @testset "Multiple continuous variables" begin
             formula = @formula(response ~ x + y)
-            compiled, output = test_formula_correctness(formula, df, data, "Multiple continuous")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 3  # Intercept + x + y
@@ -44,7 +44,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
     @testset "Interaction Position Mapping" begin
         @testset "Simple 2-way continuous interaction" begin
             formula = @formula(response ~ x * y)
-            compiled, output = test_formula_correctness(formula, df, data, "2-way continuous interaction")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 4  # Intercept + x + y + x:y
@@ -52,7 +52,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
         
         @testset "Continuous × Categorical interaction" begin
             formula = @formula(response ~ x * group3)
-            compiled, output = test_formula_correctness(formula, df, data, "Continuous × Categorical")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 6  # Intercept + x + group3 (2 cols) + x:group3 (2 cols)
@@ -60,7 +60,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
         
         @testset "3-way interaction" begin
             formula = @formula(response ~ x * y * group3)
-            compiled, output = test_formula_correctness(formula, df, data, "3-way interaction")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             # Intercept + x + y + group3 (2) + x:y + x:group3 (2) + y:group3 (2) + x:y:group3 (2)
@@ -69,7 +69,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
         
         @testset "4-way interaction (Kronecker ordering test)" begin
             formula = @formula(response ~ x * y * group3 * group4)  
-            compiled, output = test_formula_correctness(formula, df, data, "4-way interaction")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             # This tests the Kronecker product ordering fix
@@ -80,7 +80,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
     @testset "Function Position Mapping" begin
         @testset "Simple function" begin
             formula = @formula(response ~ log(z))
-            compiled, output = test_formula_correctness(formula, df, data, "Simple function")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 2  # Intercept + log(z)
@@ -88,7 +88,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
         
         @testset "Function × Categorical interaction" begin
             formula = @formula(response ~ log(z) * group4)
-            compiled, output = test_formula_correctness(formula, df, data, "Function × Categorical")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 8  # Intercept + log(z) + group4 (3) + log(z):group4 (3)
@@ -98,7 +98,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
     @testset "Complex Formula Position Mapping" begin
         @testset "Complex mixed formula" begin
             formula = @formula(response ~ x * y * group3 + log(z) * group4)
-            compiled, output = test_formula_correctness(formula, df, data, "Complex mixed formula")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             # Should handle both 3-way interactions and function interactions correctly
@@ -109,7 +109,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
     @testset "Edge Cases" begin
         @testset "Intercept only" begin
             formula = @formula(response ~ 1)
-            compiled, output = test_formula_correctness(formula, df, data, "Intercept only")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 1  # Only intercept
@@ -117,7 +117,7 @@ using FormulaCompiler: test_data, test_formula_correctness, test_allocation_perf
         
         @testset "No intercept" begin
             formula = @formula(response ~ 0 + x)
-            compiled, output = test_formula_correctness(formula, df, data, "No intercept")
+            compiled, output = test_formula_correctness(formula, df, data)
             allocs = test_allocation_performance(compiled, output, data)
             
             @test length(compiled) == 1  # Only x

@@ -2,7 +2,8 @@
 # Main test runner for FormulaCompiler.jl
 # julia --project="." test/runtests.jl > test/tests.txt 2>&1
 
-using Revise
+using Revise, Test
+using Random
 
 # Reproducible tests
 Random.seed!(06515)
