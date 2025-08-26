@@ -55,12 +55,15 @@ function compute_all_interaction_combinations(component_positions::Vector{Vector
     end
     
     # Recursive Kronecker product
+    # CRITICAL: Follow StatsModels convention - first component varies FAST (inner loop)
     first_positions = component_positions[1]
     rest_combinations = compute_all_interaction_combinations(component_positions[2:end])
     
     result = Vector{Vector{Int}}()
-    for p1 in first_positions
-        for rest_combo in rest_combinations
+    # Rest components vary SLOW (outer loop)
+    for rest_combo in rest_combinations
+        # First component varies FAST (inner loop)
+        for p1 in first_positions
             push!(result, vcat(p1, rest_combo))
         end
     end
