@@ -30,7 +30,7 @@ Multiple public discussions and issues in the StatsModels.jl community directly 
 
 **Zero-allocation evaluation**: FormulaCompiler.jl achieves **100% zero-allocation** performance across all 105 test cases, directly solving the allocation issues documented in the StatsModels.jl performance meta-issue[^1].
 
-**Speed improvements**: Single-row evaluation achieves ~50ns vs ~10μs for `modelmatrix()` - a **200x speedup** that addresses the compilation overhead complaints[^2].
+**Speed improvements**: Single-row evaluation achieves ~50ns vs ~10μs for `modelmatrix()` - a efficiency gains that address the compilation overhead complaints[^2].
 
 **Complex formula support**: Successfully handles challenging formulas like `x * y * group3 + log(abs(z)) + group4` with zero allocations, solving the function×interaction problem that was a major bottleneck.
 

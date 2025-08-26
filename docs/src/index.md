@@ -61,7 +61,7 @@ row_vec = Vector{Float64}(undef, length(compiled))
 @benchmark compiled(row_vec, data, 1)
 # ~50 ns (0 allocations: 0 bytes)
 
-# Speedup: ~200x faster, 100% zero allocation across 105 test cases
+# Zero allocation across 105 test cases
 ```
 
 ## Use Cases

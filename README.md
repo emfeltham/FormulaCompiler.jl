@@ -1,15 +1,15 @@
 # FormulaCompiler.jl
 
-High-performance, zero-allocation model matrix evaluation for Julia statistical models. Achieves **100% zero-allocation** performance across all formula types through advanced compile-time specialization.
+High-performance model matrix evaluation for Julia statistical models. Achieves zero-allocation performance across all formula types through compile-time specialization and targeted metaprogramming.
 
 ## Key Features
 
-- **Zero allocations**: ~50ns per row, 0 bytes allocated across all 105 test cases
-- **Significant speedup and efficiency** over `modelmatrix()` for single-row evaluations  
-- **Universal compatibility**: Handles any valid StatsModels.jl formula, including complex interactions and functions
-- **Advanced scenarios**: Memory-efficient variable overrides for policy analysis
-- **Unified architecture**: Single compilation pipeline handles all formula complexities
-- **Full ecosystem support**: Works with GLM.jl, MixedModels.jl, StandardizedPredictors.jl
+- Zero allocations: ~50ns per row, 0 bytes allocated across all 105 test cases
+- Significant speedup and efficiency gain over previous ways to construct `modelmatrix()`
+- Universal compatibility: Handles any valid StatsModels.jl formula, including complex interactions and functions
+- Advanced scenarios: Memory-efficient variable overrides for policy analysis
+- Unified architecture: Single compilation pipeline handles all formula complexities
+- JuliaStats ecosystem support: Works with GLM.jl, MixedModels.jl, StandardizedPredictors.jl
 
 ## Installation
 
@@ -268,19 +268,16 @@ row_vec = Vector{Float64}(undef, length(compiled))
 @benchmark compiled(row_vec, data, 1)
 # ~50 ns (0 allocations: 0 bytes)
 
-# Speedup: ~200x faster, 100% zero allocation across 105 test cases
+# 100% zero allocation across 105 test cases
 ```
 
 ## Architecture
 
-FormulaCompiler achieves zero-allocation performance through a **unified compilation pipeline** that transforms statistical formulas into specialized, type-stable execution paths:
+FormulaCompiler achieves zero-allocation performance through a unified compilation pipeline that transforms statistical formulas into specialized, type-stable execution paths:
 
-- **Position mapping**: All operations use compile-time position specialization
-- **Hybrid dispatch**: Empirically tuned threshold (≤25 ops: recursive, >25 ops: @generated)  
-- **Julia-aware**: Handles Julia's heuristic compilation behavior for robust performance
-- **Universal**: Single system handles all formula complexities without special cases
-
-This approach solved the challenging **function×interaction allocation problem** that motivated the package, achieving 100% zero-allocation across complex formulas like `x * y * group3 + log(abs(z)) + group4`.
+- Position mapping: All operations use compile-time position specialization
+- Hybrid dispatch: Empirically tuned threshold (≤25 ops: recursive, >25 ops: @generated) to handle Julia's heuristic compilation behavior
+- Universal: Single system handles all formula complexities without special cases
 
 ## Use Cases
 
@@ -297,7 +294,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 ## Related Packages
 
-- [Margins.jl](https://github.com/juliangehring/Margins.jl): Marginal effects (uses FormulaCompiler for speed)
+- [Margins.jl](https://github.com/juliangehring/Margins.jl): Marginal effects (built on this package)
 - [GLM.jl](https://github.com/JuliaStats/GLM.jl): Generalized linear models
 - [MixedModels.jl](https://github.com/JuliaStats/MixedModels.jl): Mixed-effects models
 - [StandardizedPredictors.jl](https://github.com/beacon-biosignals/StandardizedPredictors.jl): Standardized predictors
@@ -306,7 +303,3 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-*Built for the Julia statistical ecosystem. Optimized for performance, designed for usability.*
