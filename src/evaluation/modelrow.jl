@@ -35,7 +35,23 @@ end
 """
     modelrow!(row_vec, compiled_formula, data, row_idx)
 
-Model row evaluation using compiled formulas.
+Evaluate a single row of the model matrix in-place (zero-allocation).
+
+# Arguments
+- `row_vec::AbstractVector{Float64}`: Pre-allocated output vector (modified in-place)
+- `compiled_formula`: Compiled formula from `compile_formula`
+- `data`: Data in Tables.jl format (preferably from `Tables.columntable`)
+- `row_idx::Int`: Row index to evaluate
+
+# Returns
+- `row_vec`: The same vector passed in, now containing the evaluated row
+
+# Example
+```julia
+compiled = compile_formula(model, data)
+row_vec = Vector{Float64}(undef, length(compiled))
+modelrow!(row_vec, compiled, data, 1)  # Zero allocations
+```
 """
 function modelrow!(
     row_vec::AbstractVector{Float64}, 
@@ -53,9 +69,28 @@ end
 """
     modelrow!(row_vec, model, data, row_idx; cache=true)
 
-Convenient modelrow! with automatic compilation to compiled formulas.
+Evaluate a single row of the model matrix in-place with automatic compilation.
 
-N.B., this allocates more when cache=false.
+# Arguments
+- `row_vec::AbstractVector{Float64}`: Pre-allocated output vector (modified in-place)
+- `model`: Statistical model (GLM, MixedModel, etc.)
+- `data`: Data in Tables.jl format
+- `row_idx::Int`: Row index to evaluate
+- `cache::Bool`: Whether to cache compiled formula (default: true)
+
+# Returns
+- `row_vec`: The same vector passed in, now containing the evaluated row
+
+# Example
+```julia
+model = lm(@formula(y ~ x + group), df)
+data = Tables.columntable(df)
+row_vec = Vector{Float64}(undef, size(modelmatrix(model), 2))
+modelrow!(row_vec, model, data, 1)
+```
+
+!!! note
+    First call compiles the formula. Subsequent calls reuse cached version when `cache=true`.
 """
 function modelrow!(
     row_vec::AbstractVector{Float64}, 

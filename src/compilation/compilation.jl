@@ -97,12 +97,6 @@ function compile_formula(model, data_example::NamedTuple)
     # Decompose formula to operations (formula has schema info)
     ops_vec, scratch_size, output_size = decompose_formula(formula, data_example)
     
-    # TODO: Dependency resolution
-    # ops_vec = resolve_dependencies(ops_vec)
-    
-    # TODO: Optimization passes
-    # ops_vec = optimize_operations(ops_vec)
-    
     # Convert to tuple for type stability
     ops_tuple = Tuple(ops_vec)
     
@@ -110,14 +104,5 @@ function compile_formula(model, data_example::NamedTuple)
     return UnifiedCompiled{typeof(ops_tuple), scratch_size, output_size}(ops_tuple)
 end
 
-# Secondary API: Direct formula compilation (for testing)
-function compile_formula(formula::FormulaTerm, data_example::NamedTuple)
-    # Warning: This formula may not have schema applied
-    # Better to create a model first for proper schema application
-    ops_vec, scratch_size, output_size = decompose_formula(formula, data_example)
-    ops_tuple = Tuple(ops_vec)
-    return UnifiedCompiled{typeof(ops_tuple), scratch_size, output_size}(ops_tuple)
-end
-
 # Export main functions
-export UnifiedCompiled, compile_formula, compile_unified
+export UnifiedCompiled, compile_formula

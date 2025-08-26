@@ -19,10 +19,41 @@ Base.iterate(v::OverrideVector, state=1) = state > v.length ? nothing : (v.overr
 ###############################################################################
 
 """
-    create_categorical_override(value::T, original_column::CategoricalArray{T}) where T
+    create_categorical_override(value, original_column::CategoricalArray)
 
-Generic method for creating categorical overrides with any element type.
-Handles Bool, Int, Float64, String, and any other categorical element type.
+Create an OverrideVector for categorical variables with proper type preservation.
+
+# Arguments
+- `value`: The override value (can be String, Symbol, Int index, Bool, or CategoricalValue)
+- `original_column::CategoricalArray`: The original categorical column
+
+# Returns
+- `OverrideVector{CategoricalValue}`: Memory-efficient constant vector with proper categorical type
+
+# Supported Value Types
+- `String`/`Symbol`: Must match a valid level name
+- `Int`: Level index (1-based) 
+- `Bool`: For CategoricalArray{Bool}
+- `CategoricalValue`: Preserves all categorical properties
+
+# Example
+```julia
+# Original categorical column
+group = categorical(["A", "B", "A", "C"], levels=["A", "B", "C"])
+
+# Override using string
+override1 = create_categorical_override("B", group)
+
+# Override using level index
+override2 = create_categorical_override(2, group)  # "B" is level 2
+
+# Override using symbol
+override3 = create_categorical_override(:C, group)
+```
+
+!!! warning
+    Value must exist in the categorical levels or an error is thrown.
+    Preserves ordering and all categorical properties from original column.
 """
 function create_categorical_override(value::T, original_column::CategoricalArray{T}) where T
     levels_list = levels(original_column)
@@ -125,29 +156,41 @@ end
 
 """
     create_scenario(name, original_data; overrides...)
+    create_scenario(name, original_data, overrides::Dict)
 
-Create a data scenario with specified variable overrides.
+Create a data scenario with specified variable overrides for counterfactual analysis.
 
 # Arguments
-- `name::String`: Name for this scenario
-- `original_data::NamedTuple`: Original column-table data
-- `overrides...`: Keyword arguments for variable overrides
+- `name::String`: Descriptive name for this scenario
+- `original_data::NamedTuple`: Original data in column-table format (from Tables.columntable)
+- `overrides...`: Keyword arguments for variable overrides (or Dict in second method)
+
+# Returns
+- `DataScenario`: Object containing original data, overrides, and modified data with OverrideVectors
 
 # Example
 ```julia
 data = Tables.columntable(df)
 
-# Override single variable
+# Override single variable to mean
 scenario1 = create_scenario("x_at_mean", data; x = mean(data.x))
 
-# Override multiple variables  
-scenario2 = create_scenario("policy", data; x = 2.5, group = "A")
+# Override multiple variables for policy analysis
+scenario2 = create_scenario("policy", data; x = 2.5, group = "A", treatment = true)
 
-# Use with compiled formula
-compiled = compile_formula(model, scenario.data)
+# Use dictionary for dynamic overrides
+overrides = Dict(:dose => 100.0, :region => "North")
+scenario3 = create_scenario("high_dose_north", data, overrides)
+
+# Evaluate with compiled formula (zero-allocation)
+compiled = compile_formula(model)
 row_vec = Vector{Float64}(undef, length(compiled))
 compiled(row_vec, scenario1.data, row_idx)
 ```
+
+!!! note
+    Uses memory-efficient OverrideVector to avoid data duplication.
+    Each override creates a lazy vector returning the same value for all rows.
 """
 function create_scenario(name::String, original_data::NamedTuple; overrides...)
     override_dict = Dict{Symbol,Any}(overrides)
@@ -176,6 +219,23 @@ end
     create_override_data(original_data, overrides)
 
 Create modified data NamedTuple with variable overrides using OverrideVector.
+
+# Arguments
+- `original_data::NamedTuple`: Base data in column-table format
+- `overrides::Dict{Symbol,Any}`: Variable overrides to apply
+
+# Returns
+- `NamedTuple`: Modified data with OverrideVectors for overridden variables
+
+# Example
+```julia
+data = Tables.columntable(df)
+overrides = Dict(:treatment => true, :dose => 100.0)
+modified = create_override_data(data, overrides)
+```
+
+!!! note
+    Uses memory-efficient OverrideVector to avoid duplicating data.
 """
 function create_override_data(original_data::NamedTuple, overrides::Dict{Symbol,Any})
     # Start with original data
@@ -201,6 +261,23 @@ end
     create_override_vector(value, original_column)
 
 Create appropriate OverrideVector based on original column type.
+
+# Arguments
+- `value`: The override value to apply
+- `original_column::AbstractVector`: The original data column
+
+# Returns
+- `OverrideVector`: Memory-efficient constant vector with appropriate type
+
+# Example
+```julia
+original = df.treatment  # CategoricalVector
+override = create_override_vector("control", original)
+# Returns OverrideVector{CategoricalValue} for all rows
+```
+
+!!! note
+    Automatically handles categorical, boolean, and numeric types appropriately.
 """
 function create_override_vector(value, original_column::AbstractVector)
     if original_column isa CategoricalArray
@@ -341,6 +418,41 @@ Base.iterate(collection::ScenarioCollection, state=1) = state > length(collectio
     create_scenario_grid(collection_name, data, variable_grids::Dict{Symbol, <:AbstractVector})
 
 Create a collection of scenarios for all combinations of variable values.
+
+# Arguments
+- `collection_name::String`: Base name for the scenario collection
+- `data::NamedTuple`: Original data in column-table format
+- `variable_grids::Dict{Symbol, <:AbstractVector}`: Dictionary mapping variables to value grids
+
+# Returns
+- `ScenarioCollection`: Collection containing scenarios for all value combinations
+
+# Example
+```julia
+data = Tables.columntable(df)
+
+# Create 2×3×2 = 12 scenarios
+policy_grid = create_scenario_grid("policy_analysis", data, Dict(
+    :treatment => [false, true],
+    :dose => [50.0, 100.0, 150.0],
+    :region => ["North", "South"]
+))
+
+# Evaluate all scenarios
+compiled = compile_formula(model)
+results = Matrix{Float64}(undef, length(policy_grid), length(compiled))
+for (i, scenario) in enumerate(policy_grid)
+    compiled(view(results, i, :), scenario.data, row_idx)
+end
+
+# Access specific scenario
+baseline = get_scenario_by_name(policy_grid, "policy_analysis_treatment_false_dose_50.0_region_North")
+```
+
+!!! note
+    Creates Cartesian product of all variable values.
+    Scenario names are auto-generated based on variable values.
+    Progress is printed for large grids (>10 combinations).
 """
 function create_scenario_grid(collection_name::String,
                              data::NamedTuple,
