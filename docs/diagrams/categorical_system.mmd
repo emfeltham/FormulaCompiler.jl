@@ -1,0 +1,81 @@
+```mermaid
+graph TD
+    subgraph "Compilation Phase"
+        A[CategoricalTerm<br/>from fitted model] --> B[Extract Contrast Matrix<br/>term.contrasts.matrix]
+        B --> C[Determine Levels<br/>term.contrasts.levels]
+        C --> D[Map to Output Positions<br/>position specialization]
+        
+        B -.-> B1["DummyCoding: k-1 columns<br/>EffectsCoding: sum-to-zero<br/>HelmertCoding: sequential<br/>Custom: user-defined"]
+    end
+    
+    subgraph "Runtime Phase"  
+        E[Data Row Access] --> F[Extract Level Code<br/>levelcode(categorical_data[idx])]
+        F --> G[Apply Contrast Row<br/>contrast_matrix[level_code, :]]
+        G --> H[Store in Output Positions<br/>zero allocations]
+        
+        E -.-> E1["Works with:<br/>• Original data columns<br/>• OverrideVector scenarios<br/>• Any categorical encoding"]
+        F -.-> F1["@inline function for speed<br/>Type-stable dispatch<br/>Handles missing values"]
+    end
+    
+    subgraph "Interaction Handling"
+        I[Component 1<br/>group1: 4 levels → 3 contrast cols]
+        J[Component 2<br/>group2: 3 levels → 2 contrast cols]
+        
+        I --> K[Kronecker Product<br/>3 × 2 = 6 interaction columns]
+        J --> K
+        
+        K --> L[StatsModels Compatible Ordering<br/>First component varies fast]
+        
+        I -.-> I1["Contrast values: [c11, c12, c13]"]
+        J -.-> J1["Contrast values: [c21, c22]"]
+        K -.-> K1["Interaction: [c11×c21, c11×c22,<br/>c12×c21, c12×c22, c13×c21, c13×c22]"]
+    end
+    
+    subgraph "Contrast Type Selection"
+        M{Variable Context?}
+        M -->|Main Effect| N[Use Fitted Contrasts<br/>Exact model compatibility]
+        M -->|Interaction Only| O[May Use FullDummyCoding<br/>Avoid rank deficiency]
+        
+        N --> P[Perfect StatsModels Match<br/>modelmatrix() compatibility]
+        O --> P
+    end
+    
+    subgraph "Scenario Integration"
+        Q[Categorical Override] --> R[Validate Level Exists<br/>Error if invalid]
+        R --> S[Create OverrideVector<br/>Constant categorical level]
+        S --> T[Same Performance<br/>As original data]
+        
+        Q -.-> Q1["create_scenario(data; group = 'Treatment')<br/>Supports: strings, symbols, booleans"]
+        S -.-> S1["OverrideVector{CategoricalValue}<br/>O(1) memory regardless of data size<br/>Type-stable categorical access"]
+    end
+    
+    %% Flow connections
+    D --> E
+    H --> Interaction
+    L --> Output[Final Output Vector<br/>Ready for analysis]
+    
+    %% Context awareness
+    A --> M
+    P --> E
+    
+    %% Scenario system
+    T --> F
+    
+    %% Styling - main components
+    style B fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style F fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    style K fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style P fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    style S fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style Output fill:#e8f5e8,stroke:#388e3c,stroke-width:3px
+    
+    %% Styling - annotations  
+    style B1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
+    style E1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
+    style F1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
+    style I1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
+    style J1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
+    style K1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
+    style Q1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
+    style S1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
+```
