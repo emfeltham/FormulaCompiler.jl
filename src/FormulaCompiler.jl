@@ -89,7 +89,7 @@ using Random, Test, BenchmarkTools
 using Dates: now
 using Statistics
 using StatsModels, GLM, CategoricalArrays, Tables, DataFrames
-using LinearAlgebra: dot, I
+using LinearAlgebra: dot, I, mul!
 using ForwardDiff
 using Base.Iterators: product # -> compute_kronecker_pattern
 

@@ -246,13 +246,27 @@ function contrast_modelrow!(
     @assert length(Δ) == length(compiled)
     # Build override wrapper for just this variable
     data_over, overrides = build_row_override_data(data, [var], row)
+    # If categorical, ensure replacement is a CategoricalValue consistent with column levels
+    base_col = getproperty(data, var)
     y_from = Vector{Float64}(undef, length(compiled))
     y_to = Vector{Float64}(undef, length(compiled))
     # From
-    overrides[1].replacement = from
+    if (Base.find_package("CategoricalArrays") !== nothing) && (base_col isa CategoricalArrays.CategoricalArray)
+        levels_list = levels(base_col)
+        temp = CategoricalArrays.categorical([from], levels=levels_list, ordered=CategoricalArrays.isordered(base_col))
+        overrides[1].replacement = temp[1]
+    else
+        overrides[1].replacement = from
+    end
     compiled(y_from, data_over, row)
     # To
-    overrides[1].replacement = to
+    if (Base.find_package("CategoricalArrays") !== nothing) && (base_col isa CategoricalArrays.CategoricalArray)
+        levels_list = levels(base_col)
+        temp = CategoricalArrays.categorical([to], levels=levels_list, ordered=CategoricalArrays.isordered(base_col))
+        overrides[1].replacement = temp[1]
+    else
+        overrides[1].replacement = to
+    end
     compiled(y_to, data_over, row)
     # Δ
     @inbounds @fastmath for i in 1:length(compiled)
