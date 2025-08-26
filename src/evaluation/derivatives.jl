@@ -35,6 +35,9 @@ struct DerivClosure{DE}
     de_ref::Base.RefValue{DE}
 end
 
+# More specific constructor for better type inference
+DerivClosure(de::DE) where {DE} = DerivClosure{DE}(Base.RefValue{DE}(de))
+
 function (g::DerivClosure)(x::AbstractVector)
     de = g.de_ref[]
     Tx = eltype(x)
@@ -84,6 +87,11 @@ mutable struct DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged}
     g::Any
     cfg::Any
     row::Int
+    # Preallocated Jacobian matrix for marginal effects
+    jacobian_buffer::Matrix{Float64}
+    # Preallocated buffers for marginal effects mu
+    eta_gradient_buffer::Vector{Float64}
+    xrow_buffer::Vector{Float64}
 end
 
 Base.length(de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged}) where {T, Ops, S, O, NTBase, NTMerged} = de.compiled_base |> length
@@ -118,12 +126,7 @@ function build_derivative_evaluator(
     # Prebuild overrides + merged data (float path)
     data_over, overrides = build_row_override_data(data, vars, 1)
     rowvec_float = Vector{Float64}(undef, length(compiled))
-    # Two-phase initialization to keep types concrete
-    de_ref = Base.RefValue{DerivativeEvaluator{T, Ops, S, O, typeof(data), typeof(data_over)}}()
-    g = DerivClosure(de_ref)
-    # Choose chunk and build config using typed closure
-    ch = chunk === :auto ? ForwardDiff.Chunk{nvars}() : chunk
-    cfg = ForwardDiff.JacobianConfig(g, xbuf, ch)
+    # Build derivative evaluator first for concrete types
     de = DerivativeEvaluator{T, Ops, S, O, typeof(data), typeof(data_over)}(
         compiled,
         data,
@@ -134,11 +137,23 @@ function build_derivative_evaluator(
         rowvec_float,
         nothing,   # rowvec_dual
         nothing,   # compiled_dual
-        g,
-        cfg,
+        nothing,   # g (will be set below)
+        nothing,   # cfg (will be set below)
         1,
+        Matrix{Float64}(undef, length(compiled), nvars),  # jacobian_buffer
+        Vector{Float64}(undef, nvars),                    # eta_gradient_buffer
+        Vector{Float64}(undef, length(compiled)),         # xrow_buffer
     )
-    de_ref[] = de
+    
+    # Build closure and config with concrete type
+    g = DerivClosure(de)
+    # Choose chunk and build config using typed closure
+    ch = chunk === :auto ? ForwardDiff.Chunk{nvars}() : chunk
+    cfg = ForwardDiff.JacobianConfig(g, xbuf, ch)
+    
+    # Update the derivative evaluator with closure and config
+    de.g = g
+    de.cfg = cfg
     return de
 end
 
@@ -355,10 +370,9 @@ function marginal_effects_eta!(
 )
     @assert length(g) == length(de.vars)
     @assert length(beta) == length(de)
-    # Compute J once, then g = J' * beta
-    J = Matrix{Float64}(undef, length(de), length(de.vars))
-    derivative_modelrow!(J, de, row)
-    mul!(g, transpose(J), beta)
+    # Use preallocated Jacobian buffer to avoid allocation
+    derivative_modelrow!(de.jacobian_buffer, de, row)
+    mul!(g, transpose(de.jacobian_buffer), beta)
     return g
 end
 
@@ -435,16 +449,14 @@ function marginal_effects_mu!(
     row::Int;
     link=GLM.IdentityLink(),
 )
-    # Compute dη/dx
-    gη = Vector{Float64}(undef, length(de.vars))
-    marginal_effects_eta!(gη, de, beta, row)
-    # Compute η at row
-    xrow = Vector{Float64}(undef, length(de))
-    de.compiled_base(xrow, de.base_data, row)
-    η = dot(beta, xrow)
+    # Compute dη/dx using preallocated buffer
+    marginal_effects_eta!(de.eta_gradient_buffer, de, beta, row)
+    # Compute η at row using preallocated buffer
+    de.compiled_base(de.xrow_buffer, de.base_data, row)
+    η = dot(beta, de.xrow_buffer)
     scale = _dmu_deta(link, η)
-    @inbounds @fastmath for j in eachindex(gη)
-        g[j] = scale * gη[j]
+    @inbounds @fastmath for j in eachindex(de.eta_gradient_buffer)
+        g[j] = scale * de.eta_gradient_buffer[j]
     end
     return g
 end
