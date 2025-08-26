@@ -7,58 +7,7 @@ using FormulaCompiler
 using Statistics
 using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels
-using FormulaCompiler: test_data
-
-# Helper function to test position mapping correctness
-function test_formula_correctness(formula, df, data)
-    model = fit(LinearModel, formula, df)
-    compiled = compile_formula(model, data)
-    output_compiled = Vector{Float64}(undef, length(compiled))
-    mm = modelmatrix(model)
-    
-    # Test correctness on multiple rows
-    test_rows = [1, 2, 5, 10, 25, 50]
-    for test_row in test_rows
-        if test_row > size(mm, 1)
-            continue  # Skip if test row exceeds data size
-        end
-        
-        fill!(output_compiled, NaN)
-        compiled(output_compiled, data, test_row)
-        expected_row = mm[test_row, :]
-        
-        @test isapprox(output_compiled, expected_row, rtol=1e-12)
-    end
-    
-    return compiled, output_compiled
-end
-
-# Helper function to test allocation performance
-function test_allocation_performance(compiled, output_compiled, data)
-    # Warmup
-    for _ in 1:10
-        compiled(output_compiled, data, 1)
-    end
-    
-    # Measure allocation
-    compiled_allocs = @allocated begin
-        for i in 1:100
-            row_idx = ((i-1) % 200) + 1
-            compiled(output_compiled, data, row_idx)
-        end
-    end
-    
-    allocs_per_call = compiled_allocs / 100
-    
-    # Test allocation levels (allowing for current known issues)
-    if occursin("function", lowercase(description)) || occursin("interaction", lowercase(description))
-        @test allocs_per_call <= 1000  # More lenient for functions and complex interactions
-    else
-        @test allocs_per_call == 0  # Expect zero for simple cases
-    end
-    
-    return allocs_per_call
-end
+using FormulaCompiler: test_data, test_formula_correctness, test_allocation_performance
 
 @testset "Position Mapping Tests" begin
     Random.seed!(06515)

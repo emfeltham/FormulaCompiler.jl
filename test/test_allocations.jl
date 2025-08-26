@@ -7,27 +7,8 @@ using Test
 using FormulaCompiler
 using DataFrames, GLM, Tables, CategoricalArrays, MixedModels
 using StatsModels, BenchmarkTools
-using FormulaCompiler: make_test_data, test_formulas
+using FormulaCompiler: make_test_data, test_formulas, test_zero_allocation
 using Random
-
-# Helper function to test allocation with proper warmup
-function test_zero_allocation(model, data)
-    compiled = compile_formula(model, data)
-    buffer = Vector{Float64}(undef, length(compiled))
-    
-    # Extensive warmup to ensure compilation is complete
-    for _ in 1:100
-        compiled(buffer, data, 1)
-    end
-    
-    # Benchmark for accurate allocation measurement
-    benchmark_result = @benchmark $compiled($buffer, $data, 1) samples=1000 seconds=2
-    memory_bytes = minimum(benchmark_result.memory)
-    
-    @test memory_bytes == 0
-    
-    return memory_bytes, minimum(benchmark_result.times)
-end
 
 @testset "Zero Allocation Survey" begin
     Random.seed!(08540)
