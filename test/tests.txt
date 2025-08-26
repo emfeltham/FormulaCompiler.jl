@@ -3,8 +3,19 @@ The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.d
   juliaup update
 
 in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
-Precompiling FormulaCompiler...
-   4372.9 ms  ✓ FormulaCompiler
-  1 dependency successfully precompiled in 5 seconds. 239 already precompiled.
+Creating scenario grid: 6 combinations
+  Progress: 1/6 scenarios created
+  Progress: 2/6 scenarios created
+  Progress: 3/6 scenarios created
+  Progress: 4/6 scenarios created
+  Progress: 5/6 scenarios created
+  Progress: 6/6 scenarios created
+  Model matrix structure:
+    Intercept: 1.0
+    cat2[B]: 1.0
+    cat3[Med]: 0.0
+    cat3[High]: 0.0
+    cat4 effects: [0.0, 1.0, 0.0]
+    Interaction terms: [0.0, 0.0]
 Test Summary:            | Pass  Total   Time
-FormulaCompiler.jl Tests |  838    838  58.0s
+FormulaCompiler.jl Tests | 2005   2005  53.8s
