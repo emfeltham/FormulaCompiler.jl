@@ -6,7 +6,9 @@ makedocs(
     format = Documenter.HTML(
         prettyurls = get(ENV, "CI", "false") == "true",
         canonical = "https://emfeltham.github.io/FormulaCompiler.jl",
-        assets = String[],
+        assets = String[
+            "assets/mermaid.js",
+        ],
     ),
     pages = [
         "Home" => "index.md",
