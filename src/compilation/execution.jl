@@ -1,9 +1,6 @@
 # UnifiedCompiler Execution Engine
 # Zero-allocation execution through compile-time dispatch
 
-using CategoricalArrays
-using FormulaCompiler: OverrideVector  # For scenario support
-
 """
     RECURSION_LIMIT = 25
 

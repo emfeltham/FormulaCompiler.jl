@@ -1,11 +1,6 @@
 # UnifiedCompiler Main Compilation
 # Entry point for unified formula compilation
 
-using StatsModels
-using GLM
-using MixedModels
-using StandardizedPredictors
-
 include("types.jl")
 include("execution.jl")
 include("scratch.jl")

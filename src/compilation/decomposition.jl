@@ -1,10 +1,6 @@
 # UnifiedCompiler Formula Decomposition
 # Convert StatsModels terms to unified operations
 
-using StatsModels
-using MixedModels: RandomEffectsTerm
-using StandardizedPredictors: ZScoredTerm
-
 ###############################################################################
 # KRONECKER PRODUCT EXPANSION FOR INTERACTIONS (From restart branch)
 ###############################################################################

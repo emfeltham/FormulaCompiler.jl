@@ -77,7 +77,7 @@ using Base.Iterators: product # -> compute_kronecker_pattern
 
 # External package integration
 import MixedModels
-using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel
+using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel, RandomEffectsTerm
 using StandardizedPredictors: ZScoredTerm
 
 ################################# Core System #################################
