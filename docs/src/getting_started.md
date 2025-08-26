@@ -120,25 +120,14 @@ matrix = Matrix{Float64}(undef, 10, length(compiled))
 modelrow!(matrix, compiled, data, 1:10)
 ```
 
-## Understanding the Compilation Process
+## How Compilation Works
 
-FormulaCompiler.jl uses a sophisticated two-phase compilation system:
+FormulaCompiler.jl uses a unified compilation pipeline based on position mapping:
 
-### Phase 1: Complete Compilation
-```julia
-compiled_complete = compile_formula_complete(model, data)
-```
-
-This creates a complete evaluator tree that handles all formula complexity. It's already quite fast (~100ns per row).
-
-### Phase 2: Specialization
-```julia
-specialized = compile_formula(compiled_complete)
-```
-
-This creates a specialized, zero-allocation version optimized for maximum performance (~50ns per row).
-
-The single-call `compile_formula(model, data)` performs both phases automatically.
+1. Decompose the formula into primitive operations (load, constant, unary, binary, contrast, copy)
+2. Allocate scratch and output positions for all intermediate and final values
+3. Embed those positions as compile-time type parameters
+4. Return a `UnifiedCompiled` object that evaluates rows with zero allocations
 
 ## Performance Verification
 

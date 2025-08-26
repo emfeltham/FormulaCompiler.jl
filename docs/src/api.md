@@ -28,56 +28,22 @@ create_scenario
 
 ## Function Details
 
-### `compile_formula(model, data) -> SpecializedFormula`
+### `compile_formula(model, data) -> UnifiedCompiled`
 
-Compile a statistical model formula for zero-allocation evaluation.
+Compile a fitted model’s formula into a position-mapped, zero-allocation evaluator.
 
 **Arguments:**
-- `model`: A fitted statistical model (GLM, MixedModel, etc.)
-- `data`: Data in Tables.jl compatible format (preferably column table)
+- `model`: Fitted statistical model (GLM, MixedModel, etc.)
+- `data`: Tables.jl-compatible data (prefer a column table via `Tables.columntable`)
 
 **Returns:**
-- `SpecializedFormula`: Compiled formula object for zero-allocation evaluation
+- `UnifiedCompiled`: Type-specialized evaluator with embedded position mappings
 
 **Example:**
 ```julia
 model = lm(@formula(y ~ x + group), df)
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
-```
-
-### `compile_formula(compiled_complete) -> SpecializedFormula`
-
-Convert a CompiledFormula to SpecializedFormula for maximum performance.
-
-**Arguments:**
-- `compiled_complete`: A CompiledFormula from `compile_formula_complete`
-
-**Returns:**
-- `SpecializedFormula`: High-performance compiled formula
-
-**Example:**
-```julia
-complete = compile_formula_complete(model, data)
-specialized = compile_formula(complete)
-```
-
-### `compile_formula_complete(model, data) -> CompiledFormula`
-
-Create complete evaluator tree representation of the formula.
-
-**Arguments:**
-- `model`: A fitted statistical model
-- `data`: Data in Tables.jl compatible format
-
-**Returns:**
-- `CompiledFormula`: Complete evaluator tree representation
-
-**Example:**
-```julia
-complete = compile_formula_complete(model, data)
-# Use for analysis or debugging, then specialize:
-specialized = compile_formula(complete)
 ```
 
 ### `modelrow(model, data, row_index) -> Vector{Float64}`
@@ -246,26 +212,17 @@ fixed_form = fixed_effects_form(mixed)  # Returns: y ~ x
 #### `length(compiled_formula)`
 Get the number of terms in compiled formula (model matrix columns).
 
-#### `get_column_names(compiled_formula)`  
-Get the column names that would appear in the model matrix.
-
-#### `get_formula_terms(compiled_formula)`
-Get the original formula terms used in compilation.
-
 **Example:**
 ```julia
 compiled = compile_formula(model, data)
 n_terms = length(compiled)           # e.g., 4
-col_names = get_column_names(compiled)  # ["(Intercept)", "x", "groupB", "x:groupB"]
-terms = get_formula_terms(compiled)     # Original StatsModels terms
 ```
 
 ## Type System
 
 ### Core Types
 
-- `SpecializedFormula`: High-performance compiled formula (zero-allocation)
-- `CompiledFormula`: Complete evaluator tree representation  
+- `UnifiedCompiled`: Position-mapped, zero-allocation compiled evaluator
 - `DataScenario`: Scenario with variable overrides
 - `ScenarioCollection`: Collection of related scenarios
 - `OverrideVector{T}`: Memory-efficient constant vector
@@ -273,14 +230,14 @@ terms = get_formula_terms(compiled)     # Original StatsModels terms
 
 ### Internal Types
 
-These types are used internally but may be useful for advanced users:
+Operation types used by the unified compiler:
 
-- `ConstantEvaluator`: Evaluates constant terms
-- `ContinuousEvaluator`: Evaluates continuous variables
-- `CategoricalEvaluator`: Evaluates categorical variables  
-- `FunctionEvaluator`: Evaluates function terms
-- `InteractionEvaluator`: Evaluates interaction terms
-- `CombinedEvaluator`: Combines multiple evaluators
+- `LoadOp{Column, OutPos}`: Load a data column into a scratch position
+- `ConstantOp{Value, OutPos}`: Place a compile-time constant into scratch
+- `UnaryOp{Func, InPos, OutPos}`: Apply a unary function
+- `BinaryOp{Func, InPos1, InPos2, OutPos}`: Apply a binary operation
+- `ContrastOp{Column, OutPositions}`: Expand a categorical column via contrasts
+- `CopyOp{InPos, OutIdx}`: Copy from scratch to final output index
 
 ## Performance Notes
 

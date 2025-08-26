@@ -132,37 +132,7 @@ get_overrides(scenario)  # Dict of current overrides
 
 ## Advanced Compilation Features
 
-### Compilation Introspection
-
-Examine the compiled formula structure:
-
-```julia
-model = lm(@formula(y ~ x * group + log(z)), df)
-compiled = compile_formula(model, data)
-
-# Get information about the compiled formula
-length(compiled)                    # Number of terms
-get_column_names(compiled)         # Column names in model matrix
-get_formula_terms(compiled)        # Original formula terms
-```
-
-### Custom Compilation Strategies
-
-For advanced users, you can access different compilation phases:
-
-```julia
-# Phase 1: Complete compilation (tree-based evaluators)
-complete = compile_formula_complete(model, data)
-
-# Examine the evaluator structure
-get_evaluators(complete)           # List of evaluator objects
-get_scratch_requirements(complete) # Memory requirements
-
-# Phase 2: Specialization (tuple-based, zero-allocation)
-specialized = compile_formula(complete)
-```
-
-### Performance Profiling
+### Introspection and Performance
 
 Profile compilation performance:
 
@@ -171,9 +141,6 @@ using BenchmarkTools
 
 # Benchmark compilation time
 @benchmark compile_formula($model, $data)
-
-# Profile memory allocation during compilation
-@benchmark compile_formula_complete($model, $data)
 ```
 
 ## Complex Formula Support

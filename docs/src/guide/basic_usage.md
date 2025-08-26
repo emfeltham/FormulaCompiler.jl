@@ -57,32 +57,15 @@ row_vec = Vector{Float64}(undef, length(evaluator))
 evaluator(row_vec, 1)
 ```
 
-## Compilation Options
-
-### Two-Phase Compilation (Explicit)
-
-For analysis or debugging, you can access both compilation phases:
-
-```julia
-# Phase 1: Complete compilation
-compiled_complete = compile_formula_complete(model, data)
-
-# Phase 2: Specialization
-specialized = compile_formula(compiled_complete)
-
-# Both phases in one call (recommended)
-compiled = compile_formula(model, data)
-```
-
-### Understanding Compiled Objects
+## Understanding the Compiled Object
 
 Compiled formulas contain important information:
 
 ```julia
 compiled = compile_formula(model, data)
 
-# Number of terms in the model matrix
-length(compiled)  # e.g., 4 for intercept + x + group_B + x_group_B
+# Number of terms in the model matrix (columns)
+length(compiled)  # e.g., 4 for intercept + x + group_B + x:group_B
 
 # You can call it like a function
 row_vec = Vector{Float64}(undef, length(compiled))
