@@ -67,18 +67,13 @@ make dev-test
 
 ## Test Categories
 
-### 1. Core Functionality Tests (`test_evaluators.jl`)
+### 1. Core Functionality Tests
 
-Tests the fundamental evaluator types:
-- `ConstantEvaluator` - constant values
-- `ContinuousEvaluator` - continuous variables
-- `CategoricalEvaluator` - categorical variables with contrasts
-- `FunctionEvaluator` - mathematical functions
-- `InteractionEvaluator` - variable interactions
-- `ZScoreEvaluator` - standardized variables
-- `CombinedEvaluator` - combined terms
-- `ScaledEvaluator` - scaled evaluators
-- `ProductEvaluator` - product operations
+Tests the unified operation pipeline and high-level interfaces:
+- Operation execution (LoadOp, ConstantOp, UnaryOp, BinaryOp, ContrastOp, CopyOp)
+- Formula compilation and position mapping
+- Model row interfaces (`modelrow`, `modelrow!`, `ModelRowEvaluator`)
+- Scenario system and overrides
 
 ### 2. Compilation Tests (`test_compilation.jl`)
 
@@ -123,16 +118,9 @@ Tests data scenario functionality:
 - Integration with modelrow interfaces
 - Memory efficiency
 
-### 6. Evaluator Tree Tests (`test_evaluator_trees.jl`)
+### 6. Structure and Introspection
 
-Tests evaluator tree analysis:
-- Root evaluator access
-- Node counting
-- Variable dependency analysis
-- Evaluator summaries
-- Complexity estimation
-- Pretty printing
-- Recursive structure analysis
+Lightweight checks for compiled structure where applicable (column counts, names) and integration behaviors.
 
 ### 7. Integration Tests (`test_integration.jl`)
 
@@ -311,22 +299,10 @@ The test suite includes performance regression detection:
 
 ### Debugging Tips
 
-```julia
-# Debug specific formula
-formula = @formula(y ~ x * group)
-model = lm(formula, df)
-compiled = compile_formula(model)
-
-# Check evaluator tree
-print_evaluator_tree(compiled)
-
-# Check generated code
-evaluator = extract_root_evaluator(compiled)
-instructions = generate_code_from_evaluator(evaluator)
-for (i, instr) in enumerate(instructions)
-    println("$i: $instr")
-end
-```
+Prefer simple, observable invariants:
+- Compare against `modelmatrix(model)` on sampled rows
+- Use `@allocated compiled(row_vec, data, i)` to confirm zero allocations
+- Inspect operation counts if needed via internal helpers
 
 ## Contributing
 

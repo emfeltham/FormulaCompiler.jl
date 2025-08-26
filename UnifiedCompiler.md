@@ -528,7 +528,7 @@ The last remaining allocation (96 bytes in "Logistic: complex") was solved by re
 
 ## Code to Discard
 
-- **Step-based architecture**: All of step1/2/3/4 separation
+- **Previous multi-step specialization pipeline**
 - **Multiple scratch spaces**: function_scratch, interaction_scratch
 - **Evaluator hierarchy**: Replace with uniform operations
 - **Cross-step coordination**: Not needed with unified model

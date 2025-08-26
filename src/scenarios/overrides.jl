@@ -674,7 +674,7 @@ Evaluate model row across multiple scenarios.
 """
 function modelrow_scenarios!(
     matrix::AbstractMatrix{Float64},
-    compiled,  # CompiledFormula or SpecializedFormula
+    compiled,  # UnifiedCompiled or compatible callable
     scenarios::Vector{DataScenario},
     row_idx::Int
 )
