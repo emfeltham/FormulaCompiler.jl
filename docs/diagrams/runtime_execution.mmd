@@ -1,63 +1,23 @@
-```mermaid
 sequenceDiagram
     participant User
     participant Compiled as Compiled Evaluator
     participant Data as Data Table
     participant Output as Output Vector
-    participant Ops as Operations Chain
     
     Note over User,Output: Single Row Evaluation (~50ns total)
     
     User->>Compiled: compiled(output, data, row_idx)
-    Note over Compiled: Type-stable dispatch<br/>All positions embedded in types
-    
-    Compiled->>Ops: Execute operation chain
-    Note over Ops: Tuple-based recursion<br/>No allocations
+    Note over Compiled: Type-stable dispatch<br>All positions embedded in types
     
     loop For each operation in chain
-        Ops->>Data: Access column value
-        Note over Data: Val{Column} dispatch<br/>Compile-time column resolution
-        Data-->>Ops: Type-stable value
+        Compiled->>Data: Access column value
+        Note over Data: Val{Column} dispatch<br>Compile-time column resolution
+        Data-->>Compiled: Type-stable value
         
-        alt Constant Operation
-            Note over Ops: Direct value write<br/>Position pre-computed
-        else Continuous Operation  
-            Note over Ops: Column access + position write<br/>Single instruction
-        else Categorical Operation
-            Note over Ops: levelcode() + contrast lookup<br/>Pre-computed matrix
-        else Function Operation
-            Note over Ops: Mathematical function<br/>Nested operations
-        else Interaction Operation
-            Note over Ops: Component multiplication<br/>Kronecker pattern
-        end
-        
-        Ops->>Output: Store result at position
-        Note over Output: Direct memory write<br/>No bounds checking needed
+        Note over Compiled: Apply operation<br>Position-mapped<br>Zero allocations
+        Compiled->>Output: Store result at position
+        Note over Output: Direct memory write
     end
     
-    Ops-->>Compiled: Chain complete
-    Compiled-->>User: Evaluation finished
-    
-    Note over User,Output: Performance Characteristics
-    Note over User: • ~50ns per row
-    Note over User: • 0 bytes allocated  
-    Note over User: • Type-stable throughout
-    Note over User: • CPU cache friendly
-    
-    %% Scenario variation
-    rect rgb(240, 248, 255)
-        Note over User,Output: Scenario Variation (Same Performance)
-        User->>Compiled: compiled(output, scenario.data, row_idx)
-        Note over Data: OverrideVector returns<br/>constant values with O(1) access
-        Note over Output: Identical performance<br/>to original data
-    end
-    
-    %% Memory layout annotation
-    rect rgb(248, 255, 248)
-        Note over Output: Memory Layout Optimization
-        Note over Output: • Pre-allocated output vector
-        Note over Output: • Fixed position mapping
-        Note over Output: • No intermediate allocations
-        Note over Output: • SIMD-friendly access patterns
-    end
-```
+    Output-->>User: Populated vector
+    Note over User: Ready for analysis

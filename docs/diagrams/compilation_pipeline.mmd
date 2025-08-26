@@ -1,81 +1,26 @@
-```mermaid
 flowchart TD
-    A[Statistical Model<br/>GLM/MixedModel with fitted formula] --> B[Extract Formula<br/>model.mf.f]
-    B --> C[Decompose Terms<br/>identify and classify components]
+    A["Statistical Model<br>GLM/MixedModel with fitted formula"] --> B["Extract Formula<br>model.mf.f"]
+    B --> C["Decompose Terms<br>identify and classify components"]
     
     C --> D{Term Classification}
-    D -->|Intercept/Constants| E[Constant Operation<br/>Fixed values in output]
-    D -->|Continuous Variables| F[Continuous Operation<br/>Direct column access]
-    D -->|Categorical Variables| G[Categorical Operation<br/>Contrast matrix application]
-    D -->|Mathematical Functions| H[Function Operation<br/>log, exp, sqrt, etc.]
-    D -->|Interaction Terms| I[Interaction Operation<br/>Kronecker product patterns]
+    D -->|Constants| E["Constant Operation<br>Fixed values in output"]
+    D -->|Continuous| F["Continuous Operation<br>Direct column access"]
+    D -->|Categorical| G["Categorical Operation<br>Contrast matrix application"]
+    D -->|Functions| H["Function Operation<br>log, exp, sqrt, etc."]
+    D -->|Interactions| I["Interaction Operation<br>Kronecker product patterns"]
     
-    %% Position mapping phase
-    E --> J[Position Analysis<br/>Determine output locations]
+    E --> J["Position Analysis<br>Determine output locations"]
     F --> J
     G --> J
     H --> J
     I --> J
     
-    J --> K[Memory Layout Planning<br/>Scratch space allocation]
-    K --> L[Type Specialization<br/>Embed positions in operation types]
-    L --> M[Code Generation<br/>Create type-stable evaluator]
-    M --> N[Compiled Evaluator<br/>Zero-allocation callable object]
+    J --> K["Memory Layout Planning<br>Scratch space allocation"]
+    K --> L["Type Specialization<br>Embed positions in operation types"]
+    L --> M["Code Generation<br>Create type-stable evaluator"]
+    M --> N["Compiled Evaluator<br>Zero-allocation callable object"]
     
-    %% Detailed breakdowns
-    subgraph "Term Type Details"
-        E1[Constants: Intercepts, fixed coefficients]
-        F1[Continuous: Direct data column access]
-        G1[Categorical: Contrast matrices from model]
-        H1[Functions: Nested mathematical operations]
-        I1[Interactions: Multi-component Kronecker products]
-    end
-    
-    subgraph "Specialization Details"
-        L1[Position embedding in types]
-        L2[Val{Column} compile-time dispatch]
-        L3[Tuple-based operation chains]
-        L4[Pre-computed memory layouts]
-    end
-    
-    E -.-> E1
-    F -.-> F1
-    G -.-> G1
-    H -.-> H1
-    I -.-> I1
-    
-    L -.-> L1
-    L -.-> L2
-    L -.-> L3
-    L -.-> L4
-    
-    %% Runtime performance annotation
-    N -.-> N1["Runtime Performance:<br/>~50ns per row<br/>0 allocations<br/>Type-stable execution"]
-    
-    %% Styling
-    style A fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    style N fill:#e8f5e8,stroke:#388e3c,stroke-width:3px
-    style J fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style L fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    
-    %% Term type styling
-    style E fill:#e3f2fd,stroke:#1976d2,stroke-width:1px
-    style F fill:#e3f2fd,stroke:#1976d2,stroke-width:1px
-    style G fill:#e3f2fd,stroke:#1976d2,stroke-width:1px
-    style H fill:#e3f2fd,stroke:#1976d2,stroke-width:1px
-    style I fill:#e3f2fd,stroke:#1976d2,stroke-width:1px
-    
-    %% Detail styling
-    style E1 fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray: 3 3
-    style F1 fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray: 3 3
-    style G1 fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray: 3 3
-    style H1 fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray: 3 3
-    style I1 fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray: 3 3
-    
-    style L1 fill:#f9f9f9,stroke:#757575,stroke-dasharray: 3 3
-    style L2 fill:#f9f9f9,stroke:#757575,stroke-dasharray: 3 3
-    style L3 fill:#f9f9f9,stroke:#757575,stroke-dasharray: 3 3
-    style L4 fill:#f9f9f9,stroke:#757575,stroke-dasharray: 3 3
-    
-    style N1 fill:#e8f5e8,stroke:#4caf50,stroke-dasharray: 5 5
-```
+    style A fill:#e1f5fe
+    style N fill:#e8f5e8
+    style J fill:#f3e5f5
+    style L fill:#fff3e0

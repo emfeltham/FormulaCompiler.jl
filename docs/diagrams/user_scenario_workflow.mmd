@@ -1,51 +1,20 @@
-```mermaid
 flowchart TD
-    A[Compiled Formula<br/>from Phase 1] --> B{Analysis Type?}
-    B -->|Single Override| C[create_scenario]
-    B -->|Parameter Grid| D[create_scenario_grid]
+    A["Compiled Formula<br>from Basic Workflow"] --> B{Analysis Type?}
+    B -->|Single Override| C["create_scenario"]
+    B -->|Parameter Grid| D["create_scenario_grid"]
     
-    %% Single scenario path
-    C --> E[Override Variables<br/>x = 2.0, group = "Treatment"]
-    E --> G[Evaluate Scenario<br/>compiled(output, scenario.data, idx)]
+    C --> E["Override Variables<br>x = 2.0, group = Treatment"]
+    D --> F["Multiple Combinations<br>x: [1,2,3] × group: [A,B]"]
     
-    %% Grid scenario path  
-    D --> F[Multiple Combinations<br/>x: [1.0, 2.0, 3.0]<br/>group: ["Control", "Treatment"]]
-    F --> H[Batch Evaluation<br/>6 scenarios (3×2)]
+    E --> G["Evaluate Scenario<br>compiled(output, scenario.data, idx)"]
+    F --> H["Batch Evaluation<br>6 scenarios (3×2)"]
     
-    %% Analysis outcomes
-    G --> I[Single Counterfactual<br/>What-if analysis]
-    H --> J[Sensitivity Analysis<br/>Parameter exploration]
+    G --> I["Policy Insights<br>>99% memory savings"]
+    H --> I
     
-    I --> K[Policy Insights<br/>>99% memory savings]
-    J --> K
-    
-    %% Memory efficiency annotations
-    G -.-> G1["Same performance as original data<br/>~50ns per row, 0 allocations"]
-    H -.-> H1["OverrideVector uses O(1) memory<br/>vs O(n) for data copying"]
-    K -.-> K1["1000 scenarios ≈ 32KB overhead<br/>vs 100GB naive copying"]
-    
-    %% Code examples
-    C -.-> C1["scenario = create_scenario('policy', data;<br/>    x = 2.0, group = 'Treatment')"]
-    D -.-> D1["grid = create_scenario_grid('sensitivity', data,<br/>    Dict(:x => [1,2,3], :group => ['A','B']))"]
-    E -.-> E1["# Validates levels exist<br/># Creates OverrideVector instances<br/># Preserves original data references"]
-    F -.-> F1["# Creates 6 scenarios automatically<br/># Systematic parameter combinations<br/># Efficient memory layout"]
-    
-    %% Styling - main flow
-    style A fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    style C fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style D fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style G fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
-    style H fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
-    style K fill:#fff3e0,stroke:#f57c00,stroke-width:3px
-    
-    %% Styling - annotations
-    style G1 fill:#f5f5f5,stroke:#4caf50,stroke-dasharray: 5 5
-    style H1 fill:#f5f5f5,stroke:#4caf50,stroke-dasharray: 5 5
-    style K1 fill:#f5f5f5,stroke:#ff9800,stroke-dasharray: 5 5
-    
-    %% Styling - code examples
-    style C1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
-    style D1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
-    style E1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
-    style F1 fill:#f8f9fa,stroke:#6c757d,stroke-dasharray: 3 3
-```
+    style A fill:#e1f5fe
+    style C fill:#f3e5f5
+    style D fill:#f3e5f5
+    style G fill:#e8f5e8
+    style H fill:#e8f5e8
+    style I fill:#fff3e0

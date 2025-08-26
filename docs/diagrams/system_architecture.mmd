@@ -1,84 +1,40 @@
-```mermaid
 graph TB
     subgraph "External Ecosystem"
-        GLM[GLM.jl<br/>Linear Models]
-        MM[MixedModels.jl<br/>Mixed Effects]
-        Data[Tables.jl<br/>Data Sources]
-        Cat[CategoricalArrays.jl<br/>Categorical Data]
-        SM[StatsModels.jl<br/>Formula System]
+        GLM["GLM.jl<br>Linear Models"]
+        MM["MixedModels.jl<br>Mixed Effects"]
+        Data["Tables.jl<br>Data Sources"]
+        Cat["CategoricalArrays.jl<br>Categorical Data"]
     end
     
-    subgraph "FormulaCompiler.jl Core"
-        subgraph "Compilation System"
-            Decomp[Formula Decomposition<br/>decomposition.jl]
-            Types[Type Specialization<br/>types.jl]
-            Pos[Position Mapping<br/>compilation.jl]
-            Scratch[Memory Management<br/>scratch.jl]
-        end
-        
-        subgraph "Runtime System"
-            Exec[Zero-Allocation Execution<br/>execution.jl]
-            ModelRow[High-Level API<br/>modelrow.jl]
-        end
-        
-        subgraph "Scenario System"
-            Override[OverrideVector<br/>O(1) Memory]
-            Scenario[DataScenario<br/>Individual Overrides]
-            Grid[ScenarioCollection<br/>Batch Analysis]
-        end
-        
-        subgraph "Integration Layer"
-            Mixed[MixedModels Support<br/>mixed_models.jl]
-            Utils[Core Utilities<br/>utilities.jl]
-        end
+    subgraph "FormulaCompiler Core"
+        Comp["Compilation System<br>Position Mapping"]
+        Exec["Runtime System<br>Zero Allocation Execution"]
+        Scen["Scenario System<br>Memory Efficient Overrides"]
+        Utils["Core Utilities<br>OverrideVector, helpers"]
     end
     
-    subgraph "Performance Characteristics"
-        Perf1[~50ns per row evaluation]
-        Perf2[Zero allocations]
-        Perf3[>99% memory savings for scenarios]
-        Perf4[10-100x faster than modelmatrix]
+    subgraph "Performance Results"
+        Perf1["~50ns per row"]
+        Perf2["Zero allocations"] 
+        Perf3[">99% memory savings"]
     end
     
-    %% External connections
-    GLM --> Pos
-    MM --> Mixed
-    SM --> Decomp
-    Data --> Types
-    Cat --> Types
+    GLM --> Comp
+    MM --> Comp
+    Data --> Comp
+    Cat --> Comp
+    Comp --> Exec
+    Data --> Scen
+    Utils --> Scen
+    Scen --> Exec
     
-    %% Internal flow
-    Decomp --> Types
-    Types --> Pos
-    Pos --> Scratch
-    Scratch --> Exec
-    Exec --> ModelRow
-    
-    %% Scenario system
-    Data --> Override
-    Override --> Scenario
-    Scenario --> Grid
-    Grid --> Exec
-    
-    %% Integration
-    Mixed --> Exec
-    Utils --> Override
-    
-    %% Performance outcomes
     Exec --> Perf1
     Exec --> Perf2
-    Override --> Perf3
-    ModelRow --> Perf4
+    Scen --> Perf3
     
-    %% Styling
-    style Exec fill:#e8f5e8,stroke:#388e3c,stroke-width:3px
-    style Override fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style Pos fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    style ModelRow fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    
-    %% Performance styling
-    style Perf1 fill:#e8f5e8,stroke:#388e3c,stroke-width:1px
-    style Perf2 fill:#e8f5e8,stroke:#388e3c,stroke-width:1px
-    style Perf3 fill:#e8f5e8,stroke:#388e3c,stroke-width:1px
-    style Perf4 fill:#e8f5e8,stroke:#388e3c,stroke-width:1px
-```
+    style Comp fill:#f3e5f5
+    style Exec fill:#e8f5e8  
+    style Scen fill:#e1f5fe
+    style Perf1 fill:#e8f5e8
+    style Perf2 fill:#e8f5e8
+    style Perf3 fill:#e8f5e8
