@@ -106,6 +106,7 @@ marginal_effects_eta!(g, de, beta, row; backend=:ad)  # ~368 bytes, faster
 - Read the [Getting Started](getting_started.md) guide for a detailed walkthrough
 - Explore [Advanced Features](guide/advanced_features.md) for scenario analysis and memory optimization
 - Check out [Examples](examples.md) for real-world use cases
+- Review the [Mathematical Foundation](mathematical_foundation.md) for comprehensive theory and implementation details
 - Review the [API Reference](api.md) for complete function documentation
 
 ---
