@@ -14,7 +14,7 @@ FormulaCompiler.jl achieves zero-allocation performance through:
 
 Here's what happens during each ~50ns evaluation:
 
-![Diagram](../../diagrams/generated/src_guide_performance_diagram_4.svg)
+![Diagram](../assets/src_guide_performance_diagram_4.svg)
 
 ## Pre-compilation Best Practices
 

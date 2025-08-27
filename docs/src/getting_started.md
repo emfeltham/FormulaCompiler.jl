@@ -17,7 +17,7 @@ Once installed, you can load the package:
 
 Here's how FormulaCompiler.jl works from start to finish:
 
-![Diagram](../diagrams/generated/src_getting_started_diagram_8.svg)
+![Diagram](assets/src_getting_started_diagram_8.svg)
 
 ```julia
 using FormulaCompiler

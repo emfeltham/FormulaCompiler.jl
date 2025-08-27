@@ -15,7 +15,7 @@ All with minimal memory allocation using the `OverrideVector` system.
 
 ## Scenario Workflow
 
-![Diagram](../../diagrams/generated/src_guide_scenarios_diagram_5.svg)
+![Diagram](../assets/src_guide_scenarios_diagram_5.svg)
 
 ## Basic Scenario Creation
 

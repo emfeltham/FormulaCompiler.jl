@@ -21,7 +21,7 @@ Pkg.add(url="https://github.com/emfeltham/FormulaCompiler.jl")
 
 ## Quick Start
 
-![Workflow](../diagrams/generated/src_getting_started_diagram_8.svg)
+![Workflow](assets/src_getting_started_diagram_8.svg)
 
 *Figure: Basic FormulaCompiler.jl workflow - from statistical model to zero-allocation evaluation*
 

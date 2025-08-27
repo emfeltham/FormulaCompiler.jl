@@ -13,13 +13,13 @@ Move expensive work to compile time; keep runtime simple and type‑stable.
 
 ## System Overview
 
-![Diagram](../diagrams/generated/src_architecture_diagram_6.svg)
+![Diagram](assets/src_architecture_diagram_6.svg)
 
 ## Unified Compilation Pipeline
 
 The compilation process transforms statistical formulas into optimized evaluators:
 
-![Diagram](../diagrams/generated/src_architecture_diagram_7.svg)
+![Diagram](assets/src_architecture_diagram_7.svg)
 
 Compilation produces a single position‑mapped evaluator (`UnifiedCompiled`) in four steps:
 

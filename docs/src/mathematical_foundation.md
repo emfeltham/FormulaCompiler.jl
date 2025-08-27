@@ -57,7 +57,7 @@ where FormulaCompiler extracts only the fixed effects component $\mathbf{x}_i^T 
 
 FormulaCompiler.jl transforms statistical formulas through a systematic compilation process:
 
-![Compilation Pipeline](../diagrams/generated/src_architecture_diagram_7.svg)
+![Compilation Pipeline](assets/src_architecture_diagram_7.svg)
 
 *Figure 1: The compilation pipeline transforms statistical formulas into position-mapped, type-specialized evaluators through systematic decomposition and analysis.*
 
