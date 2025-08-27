@@ -24,6 +24,7 @@ makedocs(
             "MixedModels.jl" => "integration/mixed_models.md",
             "StandardizedPredictors.jl" => "integration/standardized_predictors.md",
         ],
+        "Mathematical Foundation" => "mathematical_foundation.md",
         "Architecture" => "architecture.md",
         "API Reference" => "api.md",
         "Examples" => "examples.md",

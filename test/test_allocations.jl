@@ -1,7 +1,6 @@
 # test_allocations.jl
 # Formal test suite for zero-allocation verification
 # "allocation_survey.jl" prints allocations to a table.
-
 # julia --project="." test/test_allocations.jl > test/test_allocations.txt 2>&1
 
 using Test

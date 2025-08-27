@@ -5,7 +5,7 @@
 This is a complete reimplementation of FormulaCompiler's core compilation system that successfully achieves zero allocations for statistical formula evaluation. It solves the critical function×interaction allocation problem that motivated this work, achieving 0 bytes allocated for `exp(x) * y` (down from 176 bytes in the previous architecture).
 
 ### Performance Results (Final - All Tests Pass)
-- All 105 allocation tests: Perfect zero allocations  (100%)
+- All 105 allocation tests: Perfect zero allocations
 - Final challenge solved: "Logistic: complex" formula fixed by RECURSION_LIMIT=25
 - Four-way interactions: 0 bytes (was 272-336 bytes)   
 - Original problem solved: Function×interaction formulas now have zero allocations 
@@ -498,7 +498,7 @@ The Phase 6 @generated optimization successfully addressed Julia's tuple special
 The last remaining allocation (96 bytes in "Logistic: complex") was solved by recognizing that Julia's tuple specialization is heuristic-based with no guaranteed cutoff:
 
 - Problem: Complex formulas (~26-35 operations) hit Julia's unpredictable specialization zone
-- Solution: Lowered `RECURSION_LIMIT` from 35 → 25 for reliable specialization  
+- Solution: Lowered `RECURSION_LIMIT` from 35 to 25 for reliable specialization  
 - Result: 100% zero allocation across all 105 test cases
 - Learning: Conservative empirical tuning > theoretical limits for robust performance
 

@@ -1,317 +1,53 @@
-using ForwardDiff
+# derivatives.jl - Main interface for derivative computations
+#
+# High-level public API and exports for the derivative system.
+# The implementation is organized into focused modules in the derivatives/ subdirectory.
 
-# Single-row override vector: returns replacement at `row`, base elsewhere (unused)
-mutable struct SingleRowOverrideVector{V}
-    base::V
-    row::Int
-    replacement::Any
-end
+# TODO(derivatives): See DERIVATIVE_PLAN.md → Typing Checklist & Acceptance Criteria.
+# - Eliminate Any on hot paths (closure/config/dual fields, overrides, column cache).
+# - Prefer gradient-based η path for strict zero-allocation marginal effects.
+# - Keep FD Jacobian as 0-alloc fallback; AD Jacobian 0-alloc may be env-dependent.
+#
+# Contributor TODOs (typing and allocation hygiene):
+# 1) Make evaluator fields concrete
+#    - g::Any             → store concrete closure type (DerivClosure{DE})
+#    - cfg::Any           → store concrete ForwardDiff.JacobianConfig{…}
+#    - rowvec_dual::Any   → Vector{<:ForwardDiff.Dual{…}} with concrete eltype
+#    - compiled_dual::Any → UnifiedCompiled{<:ForwardDiff.Dual{…},Ops,S,O}
+# 2) Column cache
+#    - fd_columns::Vector{Any} → Vector{<:AbstractVector{T}} or NTuple for fixed nvars
+# 3) Overrides
+#    - SingleRowOverrideVector <: AbstractVector{Any}
+#      replace with SingleRowOverrideVector{T} and build per-eltype data_over (Float64 & Dual)
+# 4) Config creation
+#    - Ensure JacobianConfig/GradientConfig are built once with concrete closure
+# 5) Tests
+#    - Tighten FD Jacobian to 0 allocations; η-gradient to 0; gate AD Jacobian per env caps
 
-Base.size(v::SingleRowOverrideVector) = size(v.base)
-Base.length(v::SingleRowOverrideVector) = length(v.base)
-Base.IndexStyle(::Type{<:SingleRowOverrideVector}) = IndexLinear()
-Base.eltype(::Type{SingleRowOverrideVector{V}}) where {V} = Any
-Base.getindex(v::SingleRowOverrideVector, i::Int) = (i == v.row ? v.replacement : getindex(v.base, i))
+# Load all derivative system modules
+include("derivatives/overrides.jl")
+include("derivatives/types.jl") 
+include("derivatives/evaluator.jl")
+include("derivatives/automatic_diff.jl")
+include("derivatives/finite_diff.jl")
+include("derivatives/marginal_effects.jl")
+include("derivatives/contrasts.jl")
+include("derivatives/link_functions.jl")
+include("derivatives/utilities.jl")
 
-# Build a NamedTuple overriding selected variables with SingleRowOverrideVector wrappers
-function build_row_override_data(base::NamedTuple, vars::Vector{Symbol}, row::Int)
-    overrides = NamedTuple()
-    override_vecs = Vector{SingleRowOverrideVector{Any}}(undef, length(vars))
-    # Construct override vectors and merge into NamedTuple shadowing base
-    pairs = Pair{Symbol,Any}[]
-    for (i, s) in enumerate(vars)
-        ov = SingleRowOverrideVector(getproperty(base, s), row, nothing)
-        override_vecs[i] = ov
-        push!(pairs, s => ov)
-    end
-    data_over = (; base..., pairs...)
-    return data_over, override_vecs
-end
-
-# Callable closure for ForwardDiff that writes into a reusable buffer
-struct DerivClosure{DE}
-    de::DE
-end
-
-function (g::DerivClosure)(x::AbstractVector)
-    de = g.de
-    # Determine element type for this call (Float64 or Dual)
-    Tx = eltype(x)
-    # Get or build compiled instance for Tx
-    compiled_T = get!(de.compiled_cache, Tx) do
-        UB = typeof(de.compiled_base)
-        OpsT = UB.parameters[2]
-        ST = UB.parameters[3]
-        OT = UB.parameters[4]
-        UnifiedCompiled{Tx, OpsT, ST, OT}(de.compiled_base.ops)
-    end
-    # Get or build row buffer for Tx
-    row_vec = get!(de.rowvec_cache, Tx) do
-        Vector{Tx}(undef, length(de))
-    end
-    # Get or build override data and vectors for Tx
-    data_T, overrides_T = get!(de.data_cache, Tx) do
-        data_over, over_vecs = build_row_override_data(de.base_data, de.vars, de.row)
-        ((data_over, over_vecs))
-    end
-    # Ensure current row and replacements are set
-    for i in eachindex(de.vars)
-        ov = overrides_T[i]
-        ov.row = de.row
-        ov.replacement = x[i]
-    end
-    # Evaluate compiled into row_vec
-    compiled_T(row_vec, data_T, de.row)
-    return row_vec
-end
-
-Base.length(de::DerivClosure) = length(de.de)
-
-struct DerivativeEvaluator{T, Ops, S, O, NT}
-    compiled_base::UnifiedCompiled{T, Ops, S, O}
-    base_data::NT
-    vars::Vector{Symbol}
-    xbuf::Vector{Float64}
-    g::DerivClosure{DerivativeEvaluator{T, Ops, S, O, NT}}
-    cfg
-    # Caches keyed by element type (Float64, Dual{…})
-    compiled_cache::Dict{DataType, Any}
-    data_cache::Dict{DataType, Any}      # maps T -> (data_T::NamedTuple, overrides_T::Vector)
-    rowvec_cache::Dict{DataType, Any}
-    row::Int
-end
-
-Base.length(de::DerivativeEvaluator{T, Ops, S, O, NT}) where {T, Ops, S, O, NT} = de.compiled_base |> length
-
-"""
-    build_derivative_evaluator(compiled, data; vars, chunk=:auto)
-
-Prepare a ForwardDiff-based derivative evaluator for a fixed set of variables.
-
-- compiled: `UnifiedCompiled` returned by `compile_formula`
-- data: base NamedTuple (column table)
-- vars: Vector{Symbol} of continuous variables to differentiate w.r.t.
-- chunk: ForwardDiff chunk size or `:auto` (default)
-"""
-function build_derivative_evaluator(
-    compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple;
-    vars::Vector{Symbol},
-    chunk=:auto,
-) where {T, Ops, S, O}
-    nvars = length(vars)
-    xbuf = Vector{Float64}(undef, nvars)
-    # Build evaluator with empty caches; closure references it
-    compiled_cache = Dict{DataType, Any}()
-    data_cache = Dict{DataType, Any}()
-    rowvec_cache = Dict{DataType, Any}()
-    # Initialize with dummy row 1; caller sets actual row
-    de = DerivativeEvaluator{T, Ops, S, O, typeof(data)}(
-        compiled,
-        data,
-        vars,
-        xbuf,
-        nothing, # g placeholder
-        nothing, # cfg placeholder
-        compiled_cache,
-        data_cache,
-        rowvec_cache,
-        1,
-    )
-    g = DerivClosure(de)
-    # Choose chunk
-    ch = chunk === :auto ? ForwardDiff.Chunk{nvars}() : chunk
-    cfg = ForwardDiff.JacobianConfig(g, xbuf, ch)
-    # Finalize evaluator with closure and config
-    de = DerivativeEvaluator{T, Ops, S, O, typeof(data)}(
-        compiled,
-        data,
-        vars,
-        xbuf,
-        g,
-        cfg,
-        compiled_cache,
-        data_cache,
-        rowvec_cache,
-        1,
-    )
-    return de
-end
-
-"""
-    derivative_modelrow!(J, deval, row)
-
-Fill `J::Matrix{Float64}` with the Jacobian of the model row at `row` w.r.t. `deval.vars`.
-Orientation: `size(J) == (n_terms, n_vars)`.
-"""
-function derivative_modelrow!(J::AbstractMatrix{Float64}, de::DerivativeEvaluator, row::Int)
-    @assert size(J, 1) == length(de) "Jacobian row mismatch: expected $(length(de)) terms"
-    @assert size(J, 2) == length(de.vars) "Jacobian column mismatch: expected $(length(de.vars)) variables"
-    # Set row and seed x with base values
-    de.row = row
-    for (i, s) in enumerate(de.vars)
-        de.xbuf[i] = getproperty(de.base_data, s)[row]
-    end
-    ForwardDiff.jacobian!(J, de.g, de.xbuf, de.cfg)
-    return J
-end
-
-"""
-    derivative_modelrow(deval, row) -> Matrix{Float64}
-
-Allocating convenience wrapper that returns the Jacobian.
-"""
-function derivative_modelrow(de::DerivativeEvaluator, row::Int)
-    J = Matrix{Float64}(undef, length(de), length(de.vars))
-    derivative_modelrow!(J, de, row)
-    return J
-end
-
-############################# Finite Differences #############################
-
-"""
-    derivative_modelrow_fd!(J, compiled, data, row; vars, step=:auto)
-
-Finite-difference Jacobian for a single row. Central differences with adaptive step.
-Orientation: `size(J) == (n_terms, n_vars)`.
-"""
-function derivative_modelrow_fd!(
-    J::AbstractMatrix{Float64},
-    compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple,
-    row::Int;
-    vars::Vector{Symbol},
-    step=:auto,
-) where {T, Ops, S, O}
-    @assert size(J, 1) == length(compiled)
-    @assert size(J, 2) == length(vars)
-    # Build row-local override once for all vars
-    data_over, overrides = build_row_override_data(data, vars, row)
-    # Buffers
-    yplus = Vector{Float64}(undef, length(compiled))
-    yminus = Vector{Float64}(undef, length(compiled))
-    # Base values for each var at row
-    xbase = similar(yplus, length(vars))
-    for (j, s) in enumerate(vars)
-        xbase[j] = getproperty(data, s)[row]
-    end
-    # Iterate variables
-    for (j, s) in enumerate(vars)
-        x = xbase[j]
-        # Set all other overrides to base
-        for (k, sk) in enumerate(vars)
-            overrides[k].replacement = xbase[k]
-        end
-        # Step selection
-        h = step === :auto ? (eps(Float64)^(1/3) * max(1.0, abs(float(x)))) : step
-        # Plus
-        overrides[j].replacement = x + h
-        compiled(yplus, data_over, row)
-        # Minus
-        overrides[j].replacement = x - h
-        compiled(yminus, data_over, row)
-        # Central difference column
-        @inbounds @fastmath for i in 1:length(compiled)
-            J[i, j] = (yplus[i] - yminus[i]) / (2h)
-        end
-    end
-    return J
-end
-
-function derivative_modelrow_fd(
-    compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple,
-    row::Int;
-    vars::Vector{Symbol},
-    step=:auto,
-) where {T, Ops, S, O}
-    J = Matrix{Float64}(undef, length(compiled), length(vars))
-    derivative_modelrow_fd!(J, compiled, data, row; vars=vars, step=step)
-    return J
-end
-
-############################## Discrete Contrasts ############################
-
-"""
-    contrast_modelrow!(Δ, compiled, data, row; var, from, to)
-
-Compute discrete contrast for a single variable at a single row: Δ = X(to) − X(from).
-Works for categorical variables and discrete states; uses row-local override.
-"""
-function contrast_modelrow!(
-    Δ::AbstractVector{Float64},
-    compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple,
-    row::Int;
-    var::Symbol,
-    from,
-    to,
-) where {T, Ops, S, O}
-    @assert length(Δ) == length(compiled)
-    # Build override wrapper for just this variable
-    data_over, overrides = build_row_override_data(data, [var], row)
-    y_from = Vector{Float64}(undef, length(compiled))
-    y_to = Vector{Float64}(undef, length(compiled))
-    # From
-    overrides[1].replacement = from
-    compiled(y_from, data_over, row)
-    # To
-    overrides[1].replacement = to
-    compiled(y_to, data_over, row)
-    # Δ
-    @inbounds @fastmath for i in 1:length(compiled)
-        Δ[i] = y_to[i] - y_from[i]
-    end
-    return Δ
-end
-
-function contrast_modelrow(
-    compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple,
-    row::Int;
-    var::Symbol,
-    from,
-    to,
-) where {T, Ops, S, O}
-    Δ = Vector{Float64}(undef, length(compiled))
-    contrast_modelrow!(Δ, compiled, data, row; var=var, from=from, to=to)
-    return Δ
-end
-
-
- 
-"""
-    continuous_variables(compiled, data) -> Vector{Symbol}
-
-Return a list of continuous variable symbols present in the compiled ops, excluding
-categoricals detected via ContrastOps. Filters by `eltype(data[sym]) <: Real`.
-"""
-function continuous_variables(compiled::UnifiedCompiled, data::NamedTuple)
-    cont = Set{Symbol}()
-    cats = Set{Symbol}()
-    for op in compiled.ops
-        if op isa LoadOp
-            Col = typeof(op).parameters[1]
-            push!(cont, Col)
-        elseif op isa ContrastOp
-            Col = typeof(op).parameters[1]
-            push!(cats, Col)
-        end
-    end
-    # Remove any categorical columns
-    for c in cats
-        delete!(cont, c)
-    end
-    # Keep only columns that exist in data and are Real-typed
-    vars = Symbol[]
-    for s in cont
-        if hasproperty(data, s)
-            col = getproperty(data, s)
-            if eltype(col) <: Real
-                push!(vars, s)
-            end
-        end
-    end
-    sort!(vars)
-    return vars
-end
+# Export public API
+export build_derivative_evaluator,
+       derivative_modelrow!, derivative_modelrow,
+       derivative_modelrow_fd!, derivative_modelrow_fd, derivative_modelrow_fd_pos!,
+       marginal_effects_eta!, marginal_effects_eta,
+       marginal_effects_mu!, marginal_effects_mu,
+       marginal_effects_eta_grad!, marginal_effects_eta_grad,
+       contrast_modelrow!, contrast_modelrow,
+       continuous_variables,
+       # Single-column FD and parameter gradient functions
+       fd_jacobian_column!, fd_jacobian_column_pos!,
+       me_eta_grad_beta!,
+       me_mu_grad_beta!,
+       # Variance computation primitives
+       delta_method_se,
+       accumulate_ame_gradient!

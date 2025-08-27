@@ -118,8 +118,8 @@ end
 
 Pre-compiled evaluator using compiled formulas only.
 """
-struct ModelRowEvaluator{Ops, S, O}
-    compiled::UnifiedCompiled{Ops, S, O}
+struct ModelRowEvaluator{T, Ops, S, O}
+    compiled::UnifiedCompiled{T, Ops, S, O}
     data::NamedTuple
     row_vec::Vector{Float64}
     
@@ -128,22 +128,24 @@ struct ModelRowEvaluator{Ops, S, O}
         compiled = compile_formula(model, data)
         row_vec = Vector{Float64}(undef, length(compiled))
         
+        T = typeof(compiled).parameters[1]
         Ops = typeof(compiled.ops)
-        S = typeof(compiled).parameters[3]  # ScratchSize (after T added)
+        S = typeof(compiled).parameters[3]  # ScratchSize
         O = typeof(compiled).parameters[4]  # OutputSize
         
-        new{Ops, S, O}(compiled, data, row_vec)
+        new{T, Ops, S, O}(compiled, data, row_vec)
     end
     
     function ModelRowEvaluator(model, data::NamedTuple)
         compiled = compile_formula(model, data)
         row_vec = Vector{Float64}(undef, length(compiled))
         
+        T = typeof(compiled).parameters[1]
         Ops = typeof(compiled.ops)
-        S = typeof(compiled).parameters[3]  # ScratchSize (after T added)
-        O = typeof(compiled).parameters[4]  # OutputSize
+        S = typeof(compiled).parameters[3]
+        O = typeof(compiled).parameters[4]
         
-        new{Ops, S, O}(compiled, data, row_vec)
+        new{T, Ops, S, O}(compiled, data, row_vec)
     end
 end
 
@@ -152,7 +154,7 @@ end
 
 Evaluate model row using compiled formula.
 """
-function (evaluator::ModelRowEvaluator{Ops, S, O})(row_idx::Int) where {Ops, S, O}
+function (evaluator::ModelRowEvaluator{T, Ops, S, O})(row_idx::Int) where {T, Ops, S, O}
     evaluator.compiled(evaluator.row_vec, evaluator.data, row_idx)
     return evaluator.row_vec
 end
@@ -162,7 +164,7 @@ end
 
 Evaluate model row into provided vector.
 """
-function (evaluator::ModelRowEvaluator{Ops, S, O})(row_vec::AbstractVector{Float64}, row_idx::Int) where {Ops, S, O}
+function (evaluator::ModelRowEvaluator{T, Ops, S, O})(row_vec::AbstractVector{Float64}, row_idx::Int) where {T, Ops, S, O}
     evaluator.compiled(row_vec, evaluator.data, row_idx)
     return row_vec
 end
