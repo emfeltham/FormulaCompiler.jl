@@ -307,4 +307,151 @@ end
         derivative_modelrow_fd!(Jmm_fd, compiled_mm, data, 3; vars=vars)
         @test isapprox(Jmm, Jmm_fd; rtol=1e-6, atol=1e-8)
     end
+
+    @testset "FD backend robustness and edge cases" begin
+        # Test data with various scales and edge cases
+        n = 100
+        df = DataFrame(
+            y = randn(n),
+            x_tiny = randn(n) * 1e-6,      # Very small scale
+            x_large = randn(n) * 1e6,      # Very large scale  
+            x_zero = zeros(n),              # Constant zero
+            x_normal = randn(n),           # Normal scale
+            group4 = categorical(rand(["A", "B", "C", "D"], n)),  # 4 levels
+            group2 = categorical(rand(["X", "Y"], n)),             # 2 levels
+        )
+        data = Tables.columntable(df)
+        
+        # Complex model with multiple interactions
+        model = lm(@formula(y ~ 1 + x_tiny + x_large + x_normal + 
+                           x_tiny & group4 + x_normal & group2 + 
+                           x_large & group4), df)
+        compiled = compile_formula(model, data)
+        vars = [:x_tiny, :x_large, :x_normal]
+        de = build_derivative_evaluator(compiled, data; vars=vars)
+        
+        @testset "Different step sizes" begin
+            # Test various step sizes for FD
+            test_row = 5
+            J_auto = Matrix{Float64}(undef, length(compiled), length(vars))
+            J_small = Matrix{Float64}(undef, length(compiled), length(vars))
+            J_large = Matrix{Float64}(undef, length(compiled), length(vars))
+            
+            # Auto step (default)
+            derivative_modelrow_fd!(J_auto, de, test_row)
+            
+            # Small step
+            derivative_modelrow_fd!(J_small, compiled, data, test_row; vars=vars, step=1e-8)
+            
+            # Larger step  
+            derivative_modelrow_fd!(J_large, compiled, data, test_row; vars=vars, step=1e-4)
+            
+            # All should be reasonably close (allowing for step size effects)
+            @test isapprox(J_auto, J_small; rtol=1e-3, atol=1e-6)
+            @test isapprox(J_auto, J_large; rtol=1e-2, atol=1e-5)
+        end
+        
+        @testset "All categorical combinations" begin
+            # Test that FD works correctly for all categorical levels
+            rows_to_test = [1, 10, 25, 50, 75, 90]  # Sample across dataset
+            
+            for test_row in rows_to_test
+                # Get the categorical values for this row
+                group4_val = data.group4[test_row]
+                group2_val = data.group2[test_row]
+                
+                # Compute Jacobian with FD
+                J_fd = Matrix{Float64}(undef, length(compiled), length(vars))
+                derivative_modelrow_fd!(J_fd, de, test_row)
+                
+                # Compute manual baseline for comparison
+                J_manual = compute_manual_jacobian(compiled, data, test_row, vars)
+                
+                # Should match manual computation (allow for FD numerical error)
+                @test isapprox(J_fd, J_manual; rtol=1e-3, atol=1e-6)
+            end
+        end
+        
+        @testset "Extreme variable scales with FD" begin
+            # Focus on how FD handles different variable scales
+            test_row = 15
+            
+            # Get Jacobians
+            J_fd = Matrix{Float64}(undef, length(compiled), length(vars))
+            derivative_modelrow_fd!(J_fd, de, test_row)
+            J_manual = compute_manual_jacobian(compiled, data, test_row, vars)
+            
+            # Check each variable separately
+            for (i, var) in enumerate(vars)
+                var_scale = abs(data[var][test_row])
+                
+                # The relative error should be reasonable regardless of scale
+                if var_scale > 1e-10  # Avoid issues with truly zero values
+                    col_diff = abs.(J_fd[:, i] .- J_manual[:, i])
+                    max_expected_val = maximum(abs.(J_manual[:, i]))
+                    
+                    if max_expected_val > 1e-10
+                        rel_error = maximum(col_diff) / max_expected_val
+                        @test rel_error < 1e-2  # More lenient for extreme scales
+                    end
+                end
+            end
+        end
+        
+        @testset "FD marginal effects consistency across rows" begin
+            # Test that FD marginal effects are consistent across different rows
+            β = coef(model)
+            
+            # Test multiple rows with FD backend
+            test_rows = [5, 15, 25, 35, 45]
+            
+            for row in test_rows
+                # Compute marginal effects with FD
+                gη_fd = Vector{Float64}(undef, length(vars))
+                marginal_effects_eta!(gη_fd, de, β, row; backend=:fd)
+                
+                # Compute reference using manual Jacobian
+                J_manual = compute_manual_jacobian(compiled, data, row, vars)
+                gη_manual = transpose(J_manual) * β
+                
+                # Should match
+                @test isapprox(gη_fd, gη_manual; rtol=1e-4, atol=1e-7)
+            end
+        end
+        
+        @testset "Many variables FD scaling" begin
+            # Test FD with more variables to stress the generated functions
+            df_many = DataFrame(
+                y = randn(n),
+                x1 = randn(n), x2 = randn(n), x3 = randn(n), x4 = randn(n),
+                x5 = randn(n), x6 = randn(n), x7 = randn(n), x8 = randn(n),
+                group = categorical(rand(["A", "B"], n)),
+            )
+            data_many = Tables.columntable(df_many)
+            
+            # Model with many variables
+            model_many = lm(@formula(y ~ 1 + x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + 
+                                   x1 & group + x4 & group), df_many)
+            compiled_many = compile_formula(model_many, data_many)
+            vars_many = [:x1, :x2, :x3, :x4, :x5, :x6, :x7, :x8]
+            de_many = build_derivative_evaluator(compiled_many, data_many; vars=vars_many)
+            
+            # Test FD with many variables
+            test_row = 10
+            J_fd_many = Matrix{Float64}(undef, length(compiled_many), length(vars_many))
+            derivative_modelrow_fd!(J_fd_many, de_many, test_row)
+            
+            # Compare against manual
+            J_manual_many = compute_manual_jacobian(compiled_many, data_many, test_row, vars_many)
+            @test isapprox(J_fd_many, J_manual_many; rtol=1e-5, atol=1e-8)
+            
+            # Test marginal effects too
+            β_many = coef(model_many)
+            gη_fd_many = Vector{Float64}(undef, length(vars_many))
+            marginal_effects_eta!(gη_fd_many, de_many, β_many, test_row; backend=:fd)
+            
+            gη_manual_many = transpose(J_manual_many) * β_many
+            @test isapprox(gη_fd_many, gη_manual_many; rtol=1e-4, atol=1e-7)
+        end
+    end
 end

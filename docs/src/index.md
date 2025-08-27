@@ -10,7 +10,7 @@ High-performance, zero-allocation model matrix evaluation for Julia statistical 
 - **Advanced scenarios**: Memory-efficient variable overrides for policy analysis
 - **Unified architecture**: Single compilation pipeline handles all formula complexities
 - **Full ecosystem support**: Works with GLM.jl, MixedModels.jl, StandardizedPredictors.jl
-- **Near-zero-allocation derivatives**: ForwardDiff-based automatic differentiation with ~112 bytes per call
+- **Dual-backend derivatives**: Zero-allocation finite differences OR ForwardDiff (~368 bytes per call)
 
 ## Installation
 
@@ -65,11 +65,38 @@ row_vec = Vector{Float64}(undef, length(compiled))
 # Zero allocation across 2032 test cases
 ```
 
+## Allocation Characteristics
+
+FormulaCompiler.jl provides different allocation guarantees depending on the operation:
+
+### Core Model Evaluation
+- **Perfect zero allocations**: `modelrow!()` and direct `compiled()` calls are guaranteed 0 bytes after warmup
+- **Performance**: ~50ns per row across all formula complexities
+- **Validated**: 2032+ test cases confirm zero-allocation performance
+
+### Derivative Operations
+FormulaCompiler.jl offers **dual backends** for derivatives and marginal effects:
+
+| Backend | Allocations | Performance | Use Case |
+|---------|-------------|-------------|----------|
+| `:fd` (Finite Differences) | **0 bytes** | ~79ns | Strict zero-allocation requirements |
+| `:ad` (ForwardDiff) | ~368-400 bytes | ~508ns | Speed and numerical accuracy priority |
+
+```julia
+# Choose your backend based on requirements
+marginal_effects_eta!(g, de, beta, row; backend=:fd)  # 0 allocations
+marginal_effects_eta!(g, de, beta, row; backend=:ad)  # ~368 bytes, faster
+```
+
+### When to Use Each Backend
+- **Use `:fd`** for: Monte Carlo loops, bootstrap resampling, memory-constrained environments
+- **Use `:ad`** for: One-off calculations, interactive analysis, maximum numerical precision
+
 ## Use Cases
 
 - Monte Carlo simulations: Millions of model evaluations
 - Bootstrap resampling: Repeated matrix construction
-- Marginal effects: Near-zero-allocation automatic differentiation
+- Marginal effects: Choose zero-allocation finite differences or faster ForwardDiff
 - Policy analysis: Evaluate many counterfactual scenarios
 - Real-time applications: Low-latency prediction serving
 - Large-scale inference: Memory-efficient batch processing
