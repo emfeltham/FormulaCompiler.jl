@@ -1,6 +1,7 @@
 # FormulaCompiler.jl
 
 [![Documentation](https://github.com/emfeltham/FormulaCompiler.jl/actions/workflows/docs.yml/badge.svg)](https://github.com/emfeltham/FormulaCompiler.jl/actions/workflows/docs.yml)
+[![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/stable/)
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/dev/)
 
 High-performance model matrix evaluation for Julia statistical models. Achieves zero-allocation performance across all formula types through compile-time specialization and targeted metaprogramming.
