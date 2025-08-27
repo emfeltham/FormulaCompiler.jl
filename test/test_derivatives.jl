@@ -6,7 +6,6 @@ using Test
 using FormulaCompiler
 using DataFrames, Tables, GLM, MixedModels, CategoricalArrays
 
-
 @testset "Derivatives: ForwardDiff and FD fallback" begin
     # Data and model
     n = 300
