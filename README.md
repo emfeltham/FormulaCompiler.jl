@@ -212,6 +212,39 @@ model = lm(@formula(y ~ x + z + group), df, contrasts=contrasts)
 compiled = compile_formula(model)  # Standardization built-in
 ```
 
+### Derivatives and Marginal Effects
+
+FormulaCompiler provides zero-allocation computation of derivatives and marginal effects with standard errors:
+
+```julia
+# Build derivative evaluator
+vars = [:x, :z]
+de = build_derivative_evaluator(compiled, data; vars=vars)
+β = coef(model)
+
+# Single-row marginal effect gradient (η case)
+gβ = Vector{Float64}(undef, length(compiled))
+me_eta_grad_beta!(gβ, de, β, 1, :x)  # Zero allocations
+
+# Standard error via delta method
+Σ = vcov(model)
+se = delta_method_se(gβ, Σ)  # Zero allocations
+
+# Average marginal effects with backend selection
+rows = 1:100
+gβ_ame = Vector{Float64}(undef, length(compiled))
+accumulate_ame_gradient!(gβ_ame, de, β, rows, :x; backend=:fd)  # Zero allocations
+se_ame = delta_method_se(gβ_ame, Σ)
+
+println("AME standard error for x: ", se_ame)
+```
+
+**Key capabilities:**
+- **Dual backends**: `:fd` (zero allocations) and `:ad` (higher accuracy)  
+- **η and μ cases**: Linear predictors and transformed via link functions
+- **Delta method**: Standard errors for marginal effects
+- **Production ready**: Validated against reference implementations
+
 ## Advanced Features
 
 ### Memory Efficiency
