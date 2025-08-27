@@ -5,6 +5,60 @@
 using Test
 using FormulaCompiler
 using DataFrames, Tables, GLM, MixedModels, CategoricalArrays
+using Random
+
+# Fix random seed for reproducibility
+Random.seed!(12345)
+
+# ====== PHASE 1: Manual Baseline Infrastructure ======
+
+"""
+    compute_manual_jacobian(compiled, data, row, vars; h=1e-8)
+
+Compute Jacobian using basic finite differences without any 
+FormulaCompiler derivative infrastructure. This is our ground truth.
+"""
+function compute_manual_jacobian(compiled, data, row, vars; h=1e-8)
+    n_terms = length(compiled)
+    n_vars = length(vars)
+    J = Matrix{Float64}(undef, n_terms, n_vars)
+    
+    # Base evaluation
+    y_base = Vector{Float64}(undef, n_terms)
+    compiled(y_base, data, row)
+    
+    for (j, var) in enumerate(vars)
+        # Get current value
+        val = data[var][row]
+        
+        # Only perturb if numeric (continuous variables)
+        if val isa Number
+            # Create new arrays to avoid mutation
+            vals_plus = copy(data[var])
+            vals_minus = copy(data[var])
+            vals_plus[row] = val + h
+            vals_minus[row] = val - h
+            
+            # Create new named tuples with modified arrays
+            data_plus = merge(data, NamedTuple{(var,)}((vals_plus,)))
+            data_minus = merge(data, NamedTuple{(var,)}((vals_minus,)))
+            
+            # Evaluate at perturbed points
+            y_plus = Vector{Float64}(undef, n_terms)
+            y_minus = Vector{Float64}(undef, n_terms)
+            compiled(y_plus, data_plus, row)
+            compiled(y_minus, data_minus, row)
+            
+            # Central difference
+            J[:, j] = (y_plus .- y_minus) ./ (2h)
+        else
+            # Non-numeric variables have zero derivative
+            J[:, j] .= 0.0
+        end
+    end
+    
+    return J
+end
 
 @testset "Derivatives: ForwardDiff and FD fallback" begin
     # Data and model
@@ -35,6 +89,20 @@ using DataFrames, Tables, GLM, MixedModels, CategoricalArrays
     derivative_modelrow!(J, de, 3)
     J_fd = similar(J)
     derivative_modelrow_fd!(J_fd, compiled, data, 3; vars=vars)
+    
+    # PHASE 2: Manual baseline comparison
+    J_manual = compute_manual_jacobian(compiled, data, 3, vars)
+    
+    # Compare all methods against manual baseline
+    println("\n=== Manual Baseline Comparison (Row 3) ===")
+    println("Max |AD - Manual|: ", maximum(abs.(J .- J_manual)))
+    println("Max |FD - Manual|: ", maximum(abs.(J_fd .- J_manual)))
+    
+    # Test against manual baseline (ground truth)
+    @test isapprox(J, J_manual; rtol=1e-5, atol=1e-8) 
+    @test isapprox(J_fd, J_manual; rtol=1e-5, atol=1e-8)
+    
+    # Original test (AD vs FD) - now less critical since we test against ground truth
     @test isapprox(J, J_fd; rtol=1e-5, atol=1e-10)
 
     # Discrete contrast: swap group level at row
@@ -64,6 +132,14 @@ using DataFrames, Tables, GLM, MixedModels, CategoricalArrays
     
     # Test FD backend (allow reasonable tolerance for numerical differences)
     marginal_effects_eta!(gη_fd, de, β, row; backend=:fd)
+    
+    # DIAGNOSTIC: Check what's happening with marginal effects
+    println("\n=== Marginal Effects Diagnostic (Row $row) ===")
+    println("gη_ad (AD):  ", gη_ad)
+    println("gη_fd (FD):  ", gη_fd)
+    println("gη_ref:      ", gη_ref)
+    println("Difference (FD-AD): ", gη_fd .- gη_ad)
+    
     @test isapprox(gη_fd, gη_ref; rtol=1e-3, atol=1e-5)
     
     # Test μ marginal effects with both backends (allow reasonable tolerance)

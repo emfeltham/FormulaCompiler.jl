@@ -83,6 +83,26 @@ using CSV
     push!(results, ("mu_marginal_effects_logit_fd", minimum(b_mu_fd.memory), minimum(b_mu_fd.times)))
     @test results[end, :min_memory_bytes] == 0
 
+    # NEW: Single-column FD Jacobian (zero allocations expected)
+    Jk_buffer = Vector{Float64}(undef, length(compiled))
+    fd_jacobian_column!(Jk_buffer, de, 2, :x)  # Warmup
+    b_fd_col = @benchmark fd_jacobian_column!($Jk_buffer, $de, 3, :x) samples=400
+    push!(results, ("fd_jacobian_column", minimum(b_fd_col.memory), minimum(b_fd_col.times)))
+    @test results[end, :min_memory_bytes] == 0
+
+    # NEW: η parameter gradients (zero allocations expected)
+    gβ_buffer = Vector{Float64}(undef, length(compiled))
+    me_eta_grad_beta!(gβ_buffer, de, β, 2, :x)  # Warmup
+    b_eta_grad = @benchmark me_eta_grad_beta!($gβ_buffer, $de, $β, 3, :x) samples=400
+    push!(results, ("me_eta_grad_beta", minimum(b_eta_grad.memory), minimum(b_eta_grad.times)))
+    @test results[end, :min_memory_bytes] == 0
+
+    # NEW: μ parameter gradients with chain rule (zero allocations expected)
+    me_mu_grad_beta!(gβ_buffer, de, β, 2, :x; link=LogitLink())  # Warmup
+    b_mu_grad = @benchmark me_mu_grad_beta!($gβ_buffer, $de, $β, 3, :x; link=LogitLink()) samples=400
+    push!(results, ("me_mu_grad_beta", minimum(b_mu_grad.memory), minimum(b_mu_grad.times)))
+    @test results[end, :min_memory_bytes] == 0
+
     # Save results to CSV for inspection
     CSV.write("test/derivative_allocations.csv", results)
 
@@ -98,4 +118,38 @@ using CSV
         end
     end samples=20
     @test minimum(b_loop.memory) == 0
+
+    # Tight-loop tests for the three new functions
+    # Single-column FD Jacobian
+    for _ in 1:10
+        fd_jacobian_column!(Jk_buffer, de, 3, :x)
+    end
+    b_loop_fd_col = @benchmark begin
+        for _ in 1:100_000
+            fd_jacobian_column!($Jk_buffer, $de, 3, :x)
+        end
+    end samples=20
+    @test minimum(b_loop_fd_col.memory) == 0
+
+    # η parameter gradients
+    for _ in 1:10
+        me_eta_grad_beta!(gβ_buffer, de, β, 3, :x)
+    end
+    b_loop_eta_grad = @benchmark begin
+        for _ in 1:100_000
+            me_eta_grad_beta!($gβ_buffer, $de, $β, 3, :x)
+        end
+    end samples=20
+    @test minimum(b_loop_eta_grad.memory) == 0
+
+    # μ parameter gradients
+    for _ in 1:10
+        me_mu_grad_beta!(gβ_buffer, de, β, 3, :x; link=LogitLink())
+    end
+    b_loop_mu_grad = @benchmark begin
+        for _ in 1:100_000
+            me_mu_grad_beta!($gβ_buffer, $de, $β, 3, :x; link=LogitLink())
+        end
+    end samples=20
+    @test minimum(b_loop_mu_grad.memory) == 0
 end
