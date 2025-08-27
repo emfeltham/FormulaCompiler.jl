@@ -80,3 +80,125 @@ All steps are in‑place and reuse preallocated buffers; no per‑call allocatio
 
 - For production (large n_rows): use the FD evaluator single‑column mode to compute J_k and build gβ in place; then apply the delta method. This achieves strict zero‑allocation per call after the evaluator is built.
 - For small problems or validation: AD Jacobian can be used as a cross‑check (accept small, environment‑dependent allocations).
+
+## Complete Workflow Examples (Zero-Allocation Implementation)
+
+### Single-Row Marginal Effect with Standard Error
+
+```julia
+using FormulaCompiler, GLM, DataFrames, Tables
+
+# Setup model and data
+df = DataFrame(y = randn(1000), x = randn(1000), z = randn(1000))
+model = lm(@formula(y ~ x + z), df)
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+
+# Build derivative evaluator
+vars = [:x, :z]
+de = build_derivative_evaluator(compiled, data; vars=vars)
+β = coef(model)
+Σ = vcov(model)
+
+# Compute marginal effect gradient for variable :x at row 1
+gβ = Vector{Float64}(undef, length(compiled))
+me_eta_grad_beta!(gβ, de, β, 1, :x)  # Zero allocations
+
+# Standard error via delta method  
+se = delta_method_se(gβ, Σ)  # Zero allocations
+println("Marginal effect SE for x at row 1: ", se)
+```
+
+### Average Marginal Effects with Standard Errors
+
+```julia
+# AME across all observations (or subset)
+rows = 1:size(df, 1)  # All rows
+var = :x
+
+# Compute AME gradient (zero-allocation with :fd backend)
+gβ_ame = Vector{Float64}(undef, length(compiled))
+accumulate_ame_gradient!(gβ_ame, de, β, rows, var; backend=:fd)
+
+# Standard error for AME
+se_ame = delta_method_se(gβ_ame, Σ)
+println("AME standard error for x: ", se_ame)
+```
+
+### GLM with μ Marginal Effects (Logit Link)
+
+```julia
+# Logistic regression setup
+df_logit = DataFrame(
+    y = rand([0, 1], 1000),
+    x = randn(1000), 
+    z = randn(1000)
+)
+model_logit = glm(@formula(y ~ x + z), df_logit, Binomial(), LogitLink())
+data_logit = Tables.columntable(df_logit)
+compiled_logit = compile_formula(model_logit, data_logit)
+
+de_logit = build_derivative_evaluator(compiled_logit, data_logit; vars=[:x, :z])
+β_logit = coef(model_logit)
+Σ_logit = vcov(model_logit)
+
+# μ marginal effect gradient (uses chain rule)
+gβ_mu = Vector{Float64}(undef, length(compiled_logit))
+me_mu_grad_beta!(gβ_mu, de_logit, β_logit, 1, :x; link=LogitLink())
+
+# Standard error for μ marginal effect
+se_mu = delta_method_se(gβ_mu, Σ_logit)
+println("μ marginal effect SE for x: ", se_mu)
+```
+
+### Batch Processing: Multiple Variables and Rows
+
+```julia
+# Process multiple variables efficiently
+results = Dict{Symbol, Dict{String, Float64}}()
+test_rows = [1, 50, 100, 500]
+
+for var in [:x, :z]
+    results[var] = Dict{String, Float64}()
+    
+    for (i, row) in enumerate(test_rows)
+        # Single-row marginal effect gradient
+        gβ = Vector{Float64}(undef, length(compiled))
+        me_eta_grad_beta!(gβ, de, β, row, var)
+        
+        # Standard error
+        se = delta_method_se(gβ, Σ)
+        results[var]["row_$row"] = se
+    end
+    
+    # AME for this variable
+    gβ_ame = Vector{Float64}(undef, length(compiled))
+    accumulate_ame_gradient!(gβ_ame, de, β, test_rows, var; backend=:fd)
+    se_ame = delta_method_se(gβ_ame, Σ)
+    results[var]["AME"] = se_ame
+end
+
+println("Standard errors: ", results)
+```
+
+### Backend Comparison
+
+```julia
+# Compare :fd vs :ad backends for η case
+var = :x
+test_rows = 1:20
+
+# FD backend (zero allocations)
+gβ_fd = Vector{Float64}(undef, length(compiled))
+@time accumulate_ame_gradient!(gβ_fd, de, β, test_rows, var; backend=:fd)
+se_fd = delta_method_se(gβ_fd, Σ)
+
+# AD backend (small allocations, higher accuracy)  
+gβ_ad = Vector{Float64}(undef, length(compiled))
+@time accumulate_ame_gradient!(gβ_ad, de, β, test_rows, var; backend=:ad)
+se_ad = delta_method_se(gβ_ad, Σ)
+
+println("FD backend SE: ", se_fd)
+println("AD backend SE: ", se_ad)
+println("Difference: ", abs(se_fd - se_ad))
+```
