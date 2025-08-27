@@ -142,6 +142,7 @@ export marginal_effects_eta_grad!, marginal_effects_eta_grad
 export marginal_effects_eta_fd!, marginal_effects_eta_fd
 export marginal_effects_mu!, marginal_effects_mu
 export fd_jacobian_column!, me_eta_grad_beta!, me_mu_grad_beta!
+export delta_method_se, accumulate_ame_gradient!
 
 ############################## Development Tools ##############################
 
