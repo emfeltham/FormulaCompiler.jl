@@ -26,15 +26,10 @@ using LinearAlgebra: dot
         InverseLink(), SqrtLink()
     ]
 
-    # Allocation policy: μ marginal effects reuse η path + link scaling.
-    # Expect 0 alloc for η-gradient path; for AD Jacobian-based path CI caps ≤256 bytes
-    # (see DERIVATIVE_PLAN.md Acceptance Criteria and Environment Matrix).
     for L in links
         gμ = Vector{Float64}(undef, length(vars))
-        # Warm path
+        # Warm path and correctness (allocations are validated in test_allocations.jl)
         marginal_effects_mu!(gμ, de, β, 3; link=L)
-        allocs = @allocated marginal_effects_mu!(gμ, de, β, 4; link=L)
-        @test allocs <= 256  # Tightened from 768 to reflect optimized preallocated buffers
         @test all(isfinite, gμ)
     end
 

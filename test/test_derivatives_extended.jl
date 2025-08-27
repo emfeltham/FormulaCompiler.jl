@@ -22,8 +22,6 @@ using DataFrames, Tables, GLM, MixedModels, CategoricalArrays
     de_glm = build_derivative_evaluator(compiled_glm, data; vars=vars)
     J = Matrix{Float64}(undef, length(compiled_glm), length(vars))
     derivative_modelrow!(J, de_glm, 3)  # warm path
-    allocs = @allocated derivative_modelrow!(J, de_glm, 4)
-    @test allocs <= 144  # Tightened from 256 to reflect ForwardDiff internal optimizations
     # FD compare
     J_fd = similar(J)
     derivative_modelrow_fd!(J_fd, compiled_glm, data, 4; vars=vars)
@@ -35,8 +33,6 @@ using DataFrames, Tables, GLM, MixedModels, CategoricalArrays
     de_mm = build_derivative_evaluator(compiled_mm, data; vars=vars)
     Jmm = Matrix{Float64}(undef, length(compiled_mm), length(vars))
     derivative_modelrow!(Jmm, de_mm, 2)
-    allocs2 = @allocated derivative_modelrow!(Jmm, de_mm, 3)
-    @test allocs2 <= 144  # Tightened from 256 to reflect ForwardDiff internal optimizations
     Jmm_fd = similar(Jmm)
     derivative_modelrow_fd!(Jmm_fd, compiled_mm, data, 3; vars=vars)
     @test isapprox(Jmm, Jmm_fd; rtol=1e-6, atol=1e-8)

@@ -3,5 +3,5 @@ The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.d
   juliaup update
 
 in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
-Test Summary:                      | Pass  Total  Time
-Link functions: marginal effects μ |   11     11  3.8s
+Test Summary:                                 | Pass  Total   Time
+Derivative Allocation Checks (BenchmarkTools) |    7      7  15.2s

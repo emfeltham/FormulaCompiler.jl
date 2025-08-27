@@ -4,15 +4,8 @@
 using Test
 using FormulaCompiler
 using DataFrames, Tables, GLM, CategoricalArrays
-using BenchmarkTools
-
-##
-## Allocation policy note
-## - ForwardDiff Jacobian: on many Julia/ForwardDiff setups this can be 0 alloc after warmup
-##   with fully concrete evaluator; CI thresholds cap small FD-internal allocations (≤112 bytes).
-## - FD Jacobian: designed to be 0 alloc with concrete types and preallocated buffers.
-## See DERIVATIVE_PLAN.md → Acceptance Criteria, Environment Matrix.
-##
+## Correctness-only tests for derivatives (allocations are validated in
+## test/test_derivative_allocations.jl).
 @testset "Derivatives: ForwardDiff and FD fallback" begin
     # Data and model
     n = 300
@@ -37,11 +30,7 @@ using BenchmarkTools
     derivative_modelrow!(J, de, 1)
     derivative_modelrow!(J, de, 2)
 
-    # Strict allocation check after warmup - only ForwardDiff internals should allocate
-    allocs = @allocated derivative_modelrow!(J, de, 3)
-    @test allocs <= 112  # Tightened from 256 to reflect ForwardDiff internal minimum
-
-    # FD fallback comparison
+    # FD fallback comparison (standalone FD for correctness baseline)
     J_fd = similar(J)
     derivative_modelrow_fd!(J_fd, compiled, data, 3; vars=vars)
     @test isapprox(J, J_fd; rtol=1e-6, atol=1e-8)

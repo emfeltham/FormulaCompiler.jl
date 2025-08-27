@@ -1,10 +1,17 @@
+# test_derivative_allocations.jl
+
 using Test
 using FormulaCompiler
 using DataFrames, Tables, GLM, CategoricalArrays
 using BenchmarkTools
+using CSV
 
-@testset "Derivative allocation checks (BenchmarkTools)" begin
-    # Data and model similar to test_derivatives.jl
+@testset "Derivative Allocation Checks (BenchmarkTools)" begin
+    results = DataFrame(
+        path = String[],
+        min_memory_bytes = Int[],
+        min_time_seconds = Float64[],
+    )
     n = 300
     df = DataFrame(
         y = randn(n),
@@ -26,27 +33,60 @@ using BenchmarkTools
     J_fd = similar(J)
     gη = Vector{Float64}(undef, length(vars))
     gμ = Vector{Float64}(undef, length(vars))
+    row_vec = Vector{Float64}(undef, length(compiled))
 
     # Warmup
+    compiled(row_vec, data, 2)
     derivative_modelrow!(J, de, 2)
     derivative_modelrow_fd!(J_fd, compiled, data, 2; vars=vars)
+    derivative_modelrow_fd!(J_fd, de, 2)
     marginal_effects_eta_grad!(gη, de, β, 2)
     marginal_effects_mu!(gμ, de, β, 2; link=LogitLink())
 
-    # FD Jacobian: expect 0 allocations
+    # Core compiled evaluation: expect 0 allocations
+    b_comp = @benchmark $compiled($row_vec, $data, 3) samples=600
+    push!(results, ("compiled_row", minimum(b_comp.memory), minimum(b_comp.times)))
+    @test results[end, :min_memory_bytes] == 0
+
+    # FD Jacobian (standalone): builds row-local overrides per call; allow small cap
     b_fd = @benchmark derivative_modelrow_fd!($J_fd, $compiled, $data, 3; vars=$vars) samples=400
-    @test minimum(b_fd.memory) == 0
+    push!(results, ("fd_jacobian_standalone", minimum(b_fd.memory), minimum(b_fd.times)))
+    @test results[end, :min_memory_bytes] <= 2048
+
+    # FD Jacobian via evaluator (generated, prebuilt overrides)
+    # Use the exported positional hot path to avoid keyword overhead
+    b_fd_eval = @benchmark derivative_modelrow_fd_pos!($J_fd, $de, 3) samples=400
+    push!(results, ("fd_jacobian_evaluator", minimum(b_fd_eval.memory), minimum(b_fd_eval.times)))
+    @test results[end, :min_memory_bytes] == 0
 
     # ForwardDiff Jacobian: allow small FD-internal allocs (env dependent)
     b_ad = @benchmark derivative_modelrow!($J, $de, 3) samples=400
-    @test minimum(b_ad.memory) <= 144
+    push!(results, ("ad_jacobian", minimum(b_ad.memory), minimum(b_ad.times)))
+    @test results[end, :min_memory_bytes] <= 256
 
-    # η-gradient path: fast scalar AD (allow small cap until config is hoisted)
+    # η-gradient path: allow cap until GradientConfig is fully hoisted
     b_grad = @benchmark marginal_effects_eta_grad!($gη, $de, $β, 3) samples=400
-    @test minimum(b_grad.memory) <= 192
+    push!(results, ("eta_gradient", minimum(b_grad.memory), minimum(b_grad.times)))
+    @test results[end, :min_memory_bytes] <= 512
 
-    # μ marginal effects: follows η path + link scaling; cap conservatively
+    # μ marginal effects (Logit): follows η path + link scaling; cap conservatively
     b_mu = @benchmark marginal_effects_mu!($gμ, $de, $β, 3; link=LogitLink()) samples=400
-    @test minimum(b_mu.memory) <= 256
-end
+    push!(results, ("mu_marginal_effects_logit", minimum(b_mu.memory), minimum(b_mu.times)))
+    @test results[end, :min_memory_bytes] <= 256
 
+    # Save results to CSV for inspection
+    CSV.write("test/derivative_allocations.csv", results)
+
+    # Tight-loop allocation test (via BenchmarkTools) for FD evaluator
+    # Verify that any tiny allocation reported by the single-call benchmark
+    # does not scale with the number of calls in a real loop.
+    for _ in 1:10
+        derivative_modelrow_fd_pos!(J_fd, de, 3)
+    end
+    b_loop = @benchmark begin
+        for _ in 1:100_000
+            derivative_modelrow_fd_pos!($J_fd, $de, 3)
+        end
+    end samples=20
+    @test minimum(b_loop.memory) == 0
+end

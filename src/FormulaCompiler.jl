@@ -134,11 +134,12 @@ export ModelRowEvaluator, modelrow!, modelrow
 include("evaluation/derivatives.jl")
 export build_derivative_evaluator, derivative_modelrow!, derivative_modelrow
 export derivative_modelrow_fd!, derivative_modelrow_fd
+export derivative_modelrow_fd_pos!
 export contrast_modelrow!, contrast_modelrow
 export continuous_variables
 export marginal_effects_eta!, marginal_effects_eta
 export marginal_effects_eta_grad!, marginal_effects_eta_grad
-export marginal_effects_eta_fd!, marginal_effects_eta_fd, marginal_effects_eta_fd_true_zero!
+export marginal_effects_eta_fd!, marginal_effects_eta_fd
 export marginal_effects_mu!, marginal_effects_mu
 
 ############################## Development Tools ##############################
