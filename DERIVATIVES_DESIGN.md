@@ -170,4 +170,4 @@ The derivatives system integrates seamlessly with:
 - **Tables.jl**: Universal table format support
 - **StatsModels.jl**: Complete formula system compatibility
 
-This design provides a production-ready, high-performance derivative computation system suitable for both research and production statistical computing applications.
+This design provides a high-performance derivative computation system suitable for both research and production statistical computing applications.
