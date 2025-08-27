@@ -1,11 +1,12 @@
 # test_derivatives.jl
 # julia --project="." test/test_derivatives.jl > test/test_derivatives.txt 2>&1
+# Correctness tests for derivatives
 
 using Test
 using FormulaCompiler
-using DataFrames, Tables, GLM, CategoricalArrays
-## Correctness-only tests for derivatives (allocations are validated in
-## test/test_derivative_allocations.jl).
+using DataFrames, Tables, GLM, MixedModels, CategoricalArrays
+
+
 @testset "Derivatives: ForwardDiff and FD fallback" begin
     # Data and model
     n = 300
@@ -56,4 +57,40 @@ using DataFrames, Tables, GLM, CategoricalArrays
     derivative_modelrow!(Jrow, de, row)
     gη2 = transpose(Jrow) * β
     @test isapprox(gη, gη2; rtol=0, atol=0)
+end
+
+@testset "Derivatives Extended: GLM(Logit) and MixedModels" begin
+    # Data
+    n = 300
+    df = DataFrame(
+        y = rand([0, 1], n),
+        x = randn(n),
+        z = abs.(randn(n)) .+ 0.1,
+        group3 = categorical(rand(["A", "B", "C"], n)),
+        g = categorical(rand(1:20, n)),
+    )
+    data = Tables.columntable(df)
+
+    # GLM (Logit)
+    glm_model = glm(@formula(y ~ 1 + x + z + x & group3), df, Binomial(), LogitLink())
+    compiled_glm = compile_formula(glm_model, data)
+    vars = [:x, :z]
+    # Note: AD Jacobian allocation caps are environment-dependent (see DERIVATIVE_PLAN.md).
+    de_glm = build_derivative_evaluator(compiled_glm, data; vars=vars)
+    J = Matrix{Float64}(undef, length(compiled_glm), length(vars))
+    derivative_modelrow!(J, de_glm, 3)  # warm path
+    # FD compare
+    J_fd = similar(J)
+    derivative_modelrow_fd!(J_fd, compiled_glm, data, 4; vars=vars)
+    @test isapprox(J, J_fd; rtol=1e-6, atol=1e-8)
+
+    # MixedModels (fixed effects only)
+    mm = fit(MixedModel, @formula(y ~ 1 + x + z + (1|g)), df; progress=false)
+    compiled_mm = compile_formula(mm, data)
+    de_mm = build_derivative_evaluator(compiled_mm, data; vars=vars)
+    Jmm = Matrix{Float64}(undef, length(compiled_mm), length(vars))
+    derivative_modelrow!(Jmm, de_mm, 2)
+    Jmm_fd = similar(Jmm)
+    derivative_modelrow_fd!(Jmm_fd, compiled_mm, data, 3; vars=vars)
+    @test isapprox(Jmm, Jmm_fd; rtol=1e-6, atol=1e-8)
 end
