@@ -71,8 +71,17 @@ using CSV
 
     # μ marginal effects (Logit): follows η path + link scaling; cap conservatively
     b_mu = @benchmark marginal_effects_mu!($gμ, $de, $β, 3; link=LogitLink()) samples=400
-    push!(results, ("mu_marginal_effects_logit", minimum(b_mu.memory), minimum(b_mu.times)))
+    push!(results, ("mu_marginal_effects_logit_ad", minimum(b_mu.memory), minimum(b_mu.times)))
     @test results[end, :min_memory_bytes] <= 256
+
+    # Test zero-allocation FD backends for marginal effects
+    b_eta_fd = @benchmark marginal_effects_eta!($gη, $de, $β, 3; backend=:fd) samples=400
+    push!(results, ("eta_marginal_effects_fd", minimum(b_eta_fd.memory), minimum(b_eta_fd.times)))
+    @test results[end, :min_memory_bytes] == 0
+
+    b_mu_fd = @benchmark marginal_effects_mu!($gμ, $de, $β, 3; link=LogitLink(), backend=:fd) samples=400
+    push!(results, ("mu_marginal_effects_logit_fd", minimum(b_mu_fd.memory), minimum(b_mu_fd.times)))
+    @test results[end, :min_memory_bytes] == 0
 
     # Save results to CSV for inspection
     CSV.write("test/derivative_allocations.csv", results)

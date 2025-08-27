@@ -677,31 +677,47 @@ end
 # -- Marginal effects implementations (placed after types are defined) --
 
 """
-    marginal_effects_eta!(g, de, beta, row)
+    marginal_effects_eta!(g, de, beta, row; backend=:ad)
 
 Fill `g` with marginal effects of η = Xβ w.r.t. `de.vars` at `row`.
 Implements: `g = J' * β`, where `J = ∂X/∂vars`.
 
+Arguments:
+- `backend::Symbol`: `:ad` (ForwardDiff) or `:fd` (finite differences)
+
 Backends and allocations:
-- In-place (`!`) does not allocate the result container. Any small residual allocation
-  observed today comes from AD internals when using an AD-backed path. Zero allocations
-  per call are achievable via a finite-difference (FD) evaluator path that avoids AD.
+- `:ad`: Uses ForwardDiff automatic differentiation. Small allocations (≤288 bytes) 
+  due to AD internals, but faster and more accurate.
+- `:fd`: Uses zero-allocation finite differences. Strict 0 bytes after warmup,
+  but slightly slower due to multiple function evaluations.
 - Allocating convenience (`marginal_effects_eta`) allocates the result vector by design.
 
 Recommendations:
-- For strict 0-alloc per call after warmup, prefer an FD-based implementation (single-column
-  FD with chain rule). See `VARIANCE.md` for details and the upcoming single-column API.
+- Use `:fd` backend for strict zero-allocation requirements
+- Use `:ad` backend for speed and numerical accuracy (default)
 """
 function marginal_effects_eta!(
     g::AbstractVector{Float64},
     de::DerivativeEvaluator,
     beta::AbstractVector{<:Real},
-    row::Int,
+    row::Int;
+    backend::Symbol = :ad,
 )
     @assert length(g) == length(de.vars)
     @assert length(beta) == length(de)
-    # Use preallocated Jacobian buffer to avoid allocation
-    derivative_modelrow!(de.jacobian_buffer, de, row)
+    
+    # Select backend for Jacobian computation
+    if backend === :fd
+        # Zero-allocation finite difference path
+        derivative_modelrow_fd_pos!(de.jacobian_buffer, de, row)
+    elseif backend === :ad
+        # ForwardDiff automatic differentiation path
+        derivative_modelrow!(de.jacobian_buffer, de, row)
+    else
+        throw(ArgumentError("Invalid backend: $backend. Use :ad or :fd"))
+    end
+    
+    # Matrix multiplication: g = J' * β (always zero-allocation)
     mul!(g, transpose(de.jacobian_buffer), beta)
     return g
 end
@@ -709,10 +725,11 @@ end
 function marginal_effects_eta(
     de::DerivativeEvaluator,
     beta::AbstractVector{<:Real},
-    row::Int,
+    row::Int;
+    backend::Symbol = :ad,
 )
     g = Vector{Float64}(undef, length(de.vars))
-    marginal_effects_eta!(g, de, beta, row)
+    marginal_effects_eta!(g, de, beta, row; backend=backend)
     return g
 end
 
@@ -912,20 +929,24 @@ if isdefined(GLM, :InverseSquareLink)
 end
 
 """
-    marginal_effects_mu!(g, de, beta, row; link)
+    marginal_effects_mu!(g, de, beta, row; link, backend=:ad)
 
 Compute marginal effects of μ = g⁻¹(η) at `row` via chain rule: `dμ/dx = (dμ/dη) * (dη/dx)`.
-Provide `link` (e.g., `IdentityLink()`, `LogLink()`, `LogitLink()`).
+
+Arguments:
+- `link`: Link function (e.g., `IdentityLink()`, `LogLink()`, `LogitLink()`)
+- `backend::Symbol`: `:ad` (ForwardDiff) or `:fd` (finite differences)
 
 Backends and allocations:
-- In-place (`!`) writes into `g`; any small per-call allocations observed come from AD internals
-  when using an AD-backed path. A zero-allocation path is available via FD single-column J and
-  chain-rule scaling (see `VARIANCE.md`).
+- `:ad`: Uses ForwardDiff via η path. Small allocations (≤256 bytes) due to AD internals,
+  but faster and more accurate.
+- `:fd`: Uses zero-allocation finite differences. Strict 0 bytes after warmup,
+  but slightly slower due to multiple function evaluations.
 - Allocating convenience (`marginal_effects_mu`) allocates the result vector by design.
 
 Recommendations:
-- Prefer an FD evaluator–based implementation for strict 0 allocations after warmup; use AD
-  primarily for cross-checks or small problems.
+- Use `:fd` backend for strict zero-allocation requirements
+- Use `:ad` backend for speed and numerical accuracy (default)
 """
 function marginal_effects_mu!(
     g::AbstractVector{Float64},
@@ -933,9 +954,10 @@ function marginal_effects_mu!(
     beta::AbstractVector{<:Real},
     row::Int;
     link=GLM.IdentityLink(),
+    backend::Symbol = :ad,
 )
-    # Compute dη/dx using preallocated buffer
-    marginal_effects_eta!(de.eta_gradient_buffer, de, beta, row)
+    # Compute dη/dx using selected backend and preallocated buffer
+    marginal_effects_eta!(de.eta_gradient_buffer, de, beta, row; backend=backend)
     # Compute η at row using preallocated buffer
     de.compiled_base(de.xrow_buffer, de.base_data, row)
     η = dot(beta, de.xrow_buffer)
@@ -951,9 +973,10 @@ function marginal_effects_mu(
     beta::AbstractVector{<:Real},
     row::Int;
     link=GLM.IdentityLink(),
+    backend::Symbol = :ad,
 )
     g = Vector{Float64}(undef, length(de.vars))
-    marginal_effects_mu!(g, de, beta, row; link=link)
+    marginal_effects_mu!(g, de, beta, row; link=link, backend=backend)
     return g
 end
 

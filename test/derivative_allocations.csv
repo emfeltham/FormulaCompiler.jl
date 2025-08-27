@@ -1,7 +1,9 @@
 path,min_memory_bytes,min_time_seconds
-compiled_row,0,7.049049049049049
-fd_jacobian_standalone,1728,1008.3
-fd_jacobian_evaluator,0,43.76713709677419
-ad_jacobian,256,457.06598984771574
-eta_gradient,288,526.0947368421052
-mu_marginal_effects_logit,256,516.4947916666666
+compiled_row,0,7.041
+fd_jacobian_standalone,1728,1033.3
+fd_jacobian_evaluator,0,45.11402623612513
+ad_jacobian,256,423.5778894472362
+eta_gradient,288,496.5618556701031
+mu_marginal_effects_logit_ad,256,482.05128205128204
+eta_marginal_effects_fd,0,57.58841463414634
+mu_marginal_effects_logit_fd,0,79.71797520661157

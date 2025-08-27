@@ -48,15 +48,29 @@ using DataFrames, Tables, GLM, MixedModels, CategoricalArrays
     y_to = modelrow(compiled, data_to, row)
     @test isapprox(Δ, y_to .- y_from; rtol=0, atol=0)
 
-    # Marginal effects: η = Xβ
+    # Marginal effects: η = Xβ (test both AD and FD backends)
     β = coef(model)
-    gη = Vector{Float64}(undef, length(vars))
-    marginal_effects_eta!(gη, de, β, row)
+    gη_ad = Vector{Float64}(undef, length(vars))
+    gη_fd = Vector{Float64}(undef, length(vars))
+    
+    # Test AD backend
+    marginal_effects_eta!(gη_ad, de, β, row; backend=:ad)
     # Check consistency with J' * β
     Jrow = Matrix{Float64}(undef, length(compiled), length(vars))
     derivative_modelrow!(Jrow, de, row)
-    gη2 = transpose(Jrow) * β
-    @test isapprox(gη, gη2; rtol=0, atol=0)
+    gη_ref = transpose(Jrow) * β
+    @test isapprox(gη_ad, gη_ref; rtol=0, atol=0)
+    
+    # Test FD backend
+    marginal_effects_eta!(gη_fd, de, β, row; backend=:fd)
+    @test isapprox(gη_fd, gη_ref; rtol=1e-6, atol=1e-8)
+    
+    # Test μ marginal effects with both backends
+    gμ_ad = Vector{Float64}(undef, length(vars))
+    gμ_fd = Vector{Float64}(undef, length(vars))
+    marginal_effects_mu!(gμ_ad, de, β, row; link=LogitLink(), backend=:ad)
+    marginal_effects_mu!(gμ_fd, de, β, row; link=LogitLink(), backend=:fd)
+    @test isapprox(gμ_ad, gμ_fd; rtol=1e-6, atol=1e-8)
 end
 
 @testset "Derivatives Extended: GLM(Logit) and MixedModels" begin
