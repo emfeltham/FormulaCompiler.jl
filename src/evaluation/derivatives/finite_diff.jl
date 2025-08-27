@@ -1,4 +1,5 @@
-# finite_diff.jl - Finite difference implementations
+# finite_diff.jl
+# Finite difference implementations
 
 """
     derivative_modelrow_fd!(J, compiled, data, row; vars, step=:auto)
