@@ -55,6 +55,12 @@ where FormulaCompiler extracts only the fixed effects component $\mathbf{x}_i^T 
 
 ## Formula Compilation Mathematics
 
+FormulaCompiler.jl transforms statistical formulas through a systematic compilation process:
+
+![Compilation Pipeline](../diagrams/generated/src_architecture_diagram_7.svg)
+
+*Figure 1: The compilation pipeline transforms statistical formulas into position-mapped, type-specialized evaluators through systematic decomposition and analysis.*
+
 ### Term Decomposition
 
 A statistical formula like `y ~ x + z + x*group` is decomposed into atomic operations:
