@@ -43,4 +43,8 @@ export build_derivative_evaluator,
        marginal_effects_mu!, marginal_effects_mu,
        marginal_effects_eta_grad!, marginal_effects_eta_grad,
        contrast_modelrow!, contrast_modelrow,
-       continuous_variables
+       continuous_variables,
+       # New single-column FD and parameter gradient functions
+       fd_jacobian_column!, fd_jacobian_column_pos!,
+       me_eta_grad_beta!,
+       me_mu_grad_beta!

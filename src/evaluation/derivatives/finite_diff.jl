@@ -270,3 +270,146 @@ function marginal_effects_eta_fd(
     marginal_effects_eta_fd!(g, de, beta, row; step=step)
     return g
 end
+
+"""
+    fd_jacobian_column!(Jk, de, row, var; step=:auto)
+
+Fill `Jk` with the k-th Jacobian column ∂X/∂var at the given row using finite differences.
+
+Arguments:
+- `Jk::Vector{Float64}`: Preallocated buffer of length `n_terms`
+- `de::DerivativeEvaluator`: Built by `build_derivative_evaluator`
+- `row::Int`: Row index (1-based)
+- `var::Symbol`: Variable to differentiate with respect to (must be in `de.vars`)
+- `step`: Numeric step size or `:auto` (`eps()^(1/3) * max(1, |x|)`)
+
+Returns:
+- The same `Jk` buffer, with `Jk[i] = ∂X[i]/∂var` for the given row
+
+Notes:
+- Zero allocations per call after warmup
+- Uses typed overrides and cached column access for performance
+- Variable must exist in `de.vars` from evaluator construction
+"""
+function fd_jacobian_column!(
+    Jk::Vector{Float64},
+    de::DerivativeEvaluator,
+    row::Int,
+    var::Symbol;
+    step=:auto,
+)
+    # Find variable index
+    var_idx = findfirst(==(var), de.vars)
+    var_idx === nothing && throw(ArgumentError("Variable $var not found in de.vars"))
+    
+    @assert length(Jk) == length(de)
+    
+    if step === :auto
+        return _fd_column_auto!(Jk, de, row, var_idx)
+    else
+        return _fd_column_step!(Jk, de, row, var_idx, Float64(step))
+    end
+end
+
+# Internal FD single column (no keyword) with auto step
+@generated function _fd_column_auto!(
+    Jk::Vector{Float64},
+    de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC},
+    row::Int,
+    var_idx::Int,
+) where {T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC}
+    N = NV
+    stmts = Expr[]
+    push!(stmts, :(yplus = de.fd_yplus))
+    push!(stmts, :(yminus = de.fd_yminus))
+    push!(stmts, :(xbase = de.fd_xbase))
+    push!(stmts, :(nterms = length(de)))
+    
+    # Fill xbase with unrolled tuple access
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
+    end
+    
+    # Set row for overrides (unrolled)
+    for i in 1:N
+        push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    
+    # Single variable finite difference computation
+    push!(stmts, :(x = xbase[var_idx]))
+    
+    # Set all overrides to base values
+    for k in 1:N
+        push!(stmts, :(@inbounds de.overrides[$k].replacement = xbase[$k]))
+    end
+    
+    # Step selection and evaluations for the single variable
+    push!(stmts, :(h = (2.220446049250313e-6 * max(1.0, abs(x)))))
+    push!(stmts, :(@inbounds de.overrides[var_idx].replacement = x + h))
+    push!(stmts, :(de.compiled_base(yplus, de.data_over, row)))
+    push!(stmts, :(@inbounds de.overrides[var_idx].replacement = x - h))
+    push!(stmts, :(de.compiled_base(yminus, de.data_over, row)))
+    
+    # Central difference for single column
+    push!(stmts, :(inv_2h = 1.0 / (2.0 * h)))
+    push!(stmts, quote
+        @fastmath for i in 1:nterms
+            @inbounds Jk[i] = (yplus[i] - yminus[i]) * inv_2h
+        end
+    end)
+    
+    return Expr(:block, stmts...)
+end
+
+# Internal FD single column (no keyword) with explicit step  
+@generated function _fd_column_step!(
+    Jk::Vector{Float64},
+    de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC},
+    row::Int,
+    var_idx::Int,
+    step::Float64,
+) where {T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC}
+    N = NV
+    stmts = Expr[]
+    push!(stmts, :(yplus = de.fd_yplus))
+    push!(stmts, :(yminus = de.fd_yminus))
+    push!(stmts, :(xbase = de.fd_xbase))
+    push!(stmts, :(nterms = length(de)))
+    
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
+    end
+    
+    for i in 1:N
+        push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    
+    push!(stmts, :(x = xbase[var_idx]))
+    
+    for k in 1:N
+        push!(stmts, :(@inbounds de.overrides[$k].replacement = xbase[$k]))
+    end
+    
+    push!(stmts, :(h = step))
+    push!(stmts, :(@inbounds de.overrides[var_idx].replacement = x + h))
+    push!(stmts, :(de.compiled_base(yplus, de.data_over, row)))
+    push!(stmts, :(@inbounds de.overrides[var_idx].replacement = x - h))
+    push!(stmts, :(de.compiled_base(yminus, de.data_over, row)))
+    
+    push!(stmts, :(inv_2h = 1.0 / (2.0 * h)))
+    push!(stmts, quote
+        @fastmath for i in 1:nterms
+            @inbounds Jk[i] = (yplus[i] - yminus[i]) * inv_2h
+        end
+    end)
+    
+    return Expr(:block, stmts...)
+end
+
+"""
+    fd_jacobian_column_pos!(Jk, de, row, var_idx)
+
+Positional hot path for single-column finite-difference Jacobian.
+Uses variable index directly to avoid symbol lookup.
+"""
+@inline fd_jacobian_column_pos!(Jk::Vector{Float64}, de::DerivativeEvaluator, row::Int, var_idx::Int) = _fd_column_auto!(Jk, de, row, var_idx)

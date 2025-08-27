@@ -32,8 +32,8 @@ function marginal_effects_eta!(
     
     # Select backend for Jacobian computation
     if backend === :fd
-        # Zero-allocation finite difference path
-        derivative_modelrow_fd_pos!(de.jacobian_buffer, de, row)
+        # Zero-allocation finite difference path using evaluator
+        derivative_modelrow_fd!(de.jacobian_buffer, de, row)
     elseif backend === :ad
         # ForwardDiff automatic differentiation path
         derivative_modelrow!(de.jacobian_buffer, de, row)
@@ -107,4 +107,97 @@ function marginal_effects_mu(
     g = Vector{Float64}(undef, length(de.vars))
     marginal_effects_mu!(g, de, beta, row; link=link, backend=backend)
     return g
+end
+
+"""
+    me_eta_grad_beta!(gβ, de, β, row, var)
+
+Compute ∂m/∂β for m = marginal effect on η w.r.t. `var`: gβ .= J_k.
+
+Arguments:
+- `gβ::Vector{Float64}`: Preallocated buffer of length `n_terms`
+- `de::DerivativeEvaluator`: Built by `build_derivative_evaluator`
+- `β::Vector{Float64}`: Model coefficients
+- `row::Int`: Row index (1-based)
+- `var::Symbol`: Variable for marginal effect (must be in `de.vars`)
+
+Returns:
+- The same `gβ` buffer, with gradient of η marginal effect w.r.t. parameters
+
+Notes:
+- Zero allocations per call after warmup
+- For η marginal effects: ∂m/∂β = ∂X/∂var (single Jacobian column)
+- Uses zero-allocation single-column FD implementation
+"""
+function me_eta_grad_beta!(
+    gβ::Vector{Float64},
+    de::DerivativeEvaluator,
+    β::Vector{Float64},
+    row::Int,
+    var::Symbol,
+)
+    @assert length(gβ) == length(de)
+    
+    # For η marginal effects, ∂m/∂β = J_k (single Jacobian column)
+    # Use zero-allocation single-column FD
+    fd_jacobian_column!(gβ, de, row, var)
+    return gβ
+end
+
+"""
+    me_mu_grad_beta!(gβ, de, β, row, var; link=GLM.IdentityLink())
+
+Compute ∂m/∂β for m = marginal effect on μ w.r.t. `var` using chain rule.
+
+Arguments:
+- `gβ::Vector{Float64}`: Preallocated buffer of length `n_terms`
+- `de::DerivativeEvaluator`: Built by `build_derivative_evaluator`
+- `β::Vector{Float64}`: Model coefficients
+- `row::Int`: Row index (1-based)
+- `var::Symbol`: Variable for marginal effect (must be in `de.vars`)
+- `link`: GLM link function
+
+Returns:
+- The same `gβ` buffer, with gradient of μ marginal effect w.r.t. parameters
+
+Formula:
+- gβ = g'(η) * J_k + (J_k' * β) * g''(η) * X_row
+- where g'(η) = dμ/dη, g''(η) = d²μ/dη², J_k = ∂X/∂var
+
+Notes:
+- Zero allocations per call after warmup
+- Uses preallocated evaluator buffers
+- Implements full chain rule for μ marginal effects
+"""
+function me_mu_grad_beta!(
+    gβ::Vector{Float64},
+    de::DerivativeEvaluator,
+    β::Vector{Float64},
+    row::Int,
+    var::Symbol;
+    link=GLM.IdentityLink(),
+)
+    @assert length(gβ) == length(de)
+    
+    # Step 1: Compute X_row and η, store X_row in xrow_buffer
+    de.compiled_base(de.xrow_buffer, de.base_data, row)
+    η = dot(β, de.xrow_buffer)
+    
+    # Step 2: Get link function derivatives
+    g_prime = _dmu_deta(link, η)      # dμ/dη
+    g_double_prime = _d2mu_deta2(link, η)  # d²μ/dη²
+    
+    # Step 3: Get single Jacobian column J_k and store in fd_yplus buffer (reuse as temporary)
+    fd_jacobian_column!(de.fd_yplus, de, row, var)  # Now fd_yplus contains J_k
+    
+    # Step 4: Compute J_k' * β (scalar)
+    Jk_dot_beta = dot(de.fd_yplus, β)
+    
+    # Step 5: Apply chain rule formula: gβ = g'(η) * J_k + (J_k' * β) * g''(η) * X_row
+    # xrow_buffer contains X_row, fd_yplus contains J_k
+    @inbounds @fastmath for i in eachindex(gβ)
+        gβ[i] = g_prime * de.fd_yplus[i] + Jk_dot_beta * g_double_prime * de.xrow_buffer[i]
+    end
+    
+    return gβ
 end
