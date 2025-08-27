@@ -369,24 +369,19 @@ end
 """
     derivative_modelrow_fd!(J, compiled, data, row; vars, step=:auto)
 
-Finite-difference Jacobian for a single row using central differences.
+Finite-difference Jacobian for a single row using central differences (standalone).
 
 Arguments:
 - `J::AbstractMatrix{Float64}`: Preallocated `(n_terms, n_vars)` buffer.
 - `compiled::UnifiedCompiled`: Result of `compile_formula`.
 - `data::NamedTuple`: Column-table data.
 - `row::Int`: Row index.
-
-Example:
-```julia
-g = Vector{Float64}(undef, length(deval.vars))
-marginal_effects_eta!(g, deval, beta, 1)
-```
 - `vars::Vector{Symbol}`: Variables to differentiate with respect to.
 - `step`: Numeric step size or `:auto` (`eps()^(1/3) * max(1, |x|)`).
 
 Notes:
 - Two evaluations per variable; useful as a robust fallback and for cross-checks.
+- This standalone path allocates per call (builds per-call overrides and small temporaries). For zero allocations after warmup, prefer the evaluator FD path (`derivative_modelrow_fd_pos!`).
 """
 function derivative_modelrow_fd!(
     J::AbstractMatrix{Float64},
@@ -472,7 +467,13 @@ end
 """
     derivative_modelrow_fd!(J, evaluator, row; step=:auto)
 
-ULTIMATE zero-allocation finite differences with compile-time optimization.
+Finite-difference Jacobian via an evaluator with preallocated state. This path is optimized
+for zero allocations after warmup using typed overrides and unrolled column access.
+
+Notes:
+- For guaranteed zero allocations, use the positional hot path `derivative_modelrow_fd_pos!(J, de, row)`.
+- The keyword-based wrapper forwards to allocation-free internals but may register tiny
+  environment-dependent overhead in some benchmarks; the positional variant avoids this.
 """
 # Internal FD evaluator (no keyword) with auto step
 @generated function _derivative_modelrow_fd_auto!(
@@ -570,7 +571,17 @@ end
     end
 end
 
-# Positional convenience (no keyword) for zero-allocation hot path, with distinct name
+"""
+    derivative_modelrow_fd_pos!(J, evaluator, row)
+
+Positional hot path for finite-difference Jacobian via an evaluator.
+Writes into `J` and performs zero allocations per call after warmup.
+
+Notes:
+- Uses preallocated evaluator state (typed overrides, unrolled column access).
+- Prefer this for production/bulk evaluation. For a standalone baseline, see
+  `derivative_modelrow_fd!(J, compiled, data, row; vars)` (allocates by design).
+"""
 @inline derivative_modelrow_fd_pos!(J::AbstractMatrix{Float64}, de::DerivativeEvaluator, row::Int) = _derivative_modelrow_fd_auto!(J, de, row)
 
 function derivative_modelrow_fd(
@@ -666,10 +677,20 @@ end
 # -- Marginal effects implementations (placed after types are defined) --
 
 """
-    marginal_effects_eta!(g, deval, beta, row)
+    marginal_effects_eta!(g, de, beta, row)
 
-Fill `g` with marginal effects of η = Xβ w.r.t. `deval.vars` at `row`.
-Implements: g = J' * β, where J = ∂X/∂vars.
+Fill `g` with marginal effects of η = Xβ w.r.t. `de.vars` at `row`.
+Implements: `g = J' * β`, where `J = ∂X/∂vars`.
+
+Backends and allocations:
+- In-place (`!`) does not allocate the result container. Any small residual allocation
+  observed today comes from AD internals when using an AD-backed path. Zero allocations
+  per call are achievable via a finite-difference (FD) evaluator path that avoids AD.
+- Allocating convenience (`marginal_effects_eta`) allocates the result vector by design.
+
+Recommendations:
+- For strict 0-alloc per call after warmup, prefer an FD-based implementation (single-column
+  FD with chain rule). See `VARIANCE.md` for details and the upcoming single-column API.
 """
 function marginal_effects_eta!(
     g::AbstractVector{Float64},
@@ -891,10 +912,20 @@ if isdefined(GLM, :InverseSquareLink)
 end
 
 """
-    marginal_effects_mu!(g, deval, beta, row; link)
+    marginal_effects_mu!(g, de, beta, row; link)
 
-Compute marginal effects of μ = g⁻¹(η) at `row` via chain rule: dμ/dx = (dμ/dη) * (dη/dx).
+Compute marginal effects of μ = g⁻¹(η) at `row` via chain rule: `dμ/dx = (dμ/dη) * (dη/dx)`.
 Provide `link` (e.g., `IdentityLink()`, `LogLink()`, `LogitLink()`).
+
+Backends and allocations:
+- In-place (`!`) writes into `g`; any small per-call allocations observed come from AD internals
+  when using an AD-backed path. A zero-allocation path is available via FD single-column J and
+  chain-rule scaling (see `VARIANCE.md`).
+- Allocating convenience (`marginal_effects_mu`) allocates the result vector by design.
+
+Recommendations:
+- Prefer an FD evaluator–based implementation for strict 0 allocations after warmup; use AD
+  primarily for cross-checks or small problems.
 """
 function marginal_effects_mu!(
     g::AbstractVector{Float64},

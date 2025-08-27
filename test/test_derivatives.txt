@@ -3,5 +3,8 @@ The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.d
   juliaup update
 
 in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
+Precompiling FormulaCompiler...
+   4211.8 ms  ✓ FormulaCompiler
+  1 dependency successfully precompiled in 5 seconds. 179 already precompiled.
 Test Summary:                            | Pass  Total  Time
-Derivatives: ForwardDiff and FD fallback |    3      3  4.1s
+Derivatives: ForwardDiff and FD fallback |    3      3  4.2s
