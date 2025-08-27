@@ -10,7 +10,7 @@ Arguments:
 - `backend::Symbol`: `:ad` (ForwardDiff) or `:fd` (finite differences)
 
 Backends and allocations:
-- `:ad`: Uses ForwardDiff automatic differentiation. Small allocations (≤288 bytes) 
+- `:ad`: Uses ForwardDiff automatic differentiation. Small allocations (~368 bytes) 
   due to AD internals, but faster and more accurate.
 - `:fd`: Uses zero-allocation finite differences. Strict 0 bytes after warmup,
   but slightly slower due to multiple function evaluations.
@@ -67,7 +67,7 @@ Arguments:
 - `backend::Symbol`: `:ad` (ForwardDiff) or `:fd` (finite differences)
 
 Backends and allocations:
-- `:ad`: Uses ForwardDiff via η path. Small allocations (≤256 bytes) due to AD internals,
+- `:ad`: Uses ForwardDiff via η path. Small allocations (~368 bytes) due to AD internals,
   but faster and more accurate.
 - `:fd`: Uses zero-allocation finite differences. Strict 0 bytes after warmup,
   but slightly slower due to multiple function evaluations.

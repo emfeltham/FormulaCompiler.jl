@@ -16,7 +16,8 @@ Returns:
 
 Notes:
 - Orientation is `(n_terms, n_vars)`; `n_terms == length(compiled)`.
-- Zero allocations in steady state after warmup.
+- Small allocations (~368 bytes) due to ForwardDiff internals. For strict zero-allocation
+  requirements, use `derivative_modelrow_fd!` instead.
 """
 function derivative_modelrow!(J::AbstractMatrix{Float64}, de::DerivativeEvaluator, row::Int)
     @assert size(J, 1) == length(de) "Jacobian row mismatch: expected $(length(de)) terms"
