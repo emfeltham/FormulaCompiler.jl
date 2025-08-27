@@ -3,5 +3,33 @@ The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.d
   juliaup update
 
 in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
-Test Summary:                                 | Pass  Total   Time
-Derivative Allocation Checks (BenchmarkTools) |    9      9  16.6s
+ERROR: LoadError: Some tests did not pass: 13 passed, 2 failed, 0 errored, 0 broken.
+in expression starting at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:9
+Derivative Allocation Checks (BenchmarkTools): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:65
+  Expression: results[end, :min_memory_bytes] <= 256
+   Evaluated: 368 <= 256
+
+Stacktrace:
+ [1] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+ [2] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:65 [inlined]
+ [3] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [4] top-level scope
+   @ ~/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:10
+Derivative Allocation Checks (BenchmarkTools): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:75
+  Expression: results[end, :min_memory_bytes] <= 256
+   Evaluated: 368 <= 256
+
+Stacktrace:
+ [1] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+ [2] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:75 [inlined]
+ [3] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [4] top-level scope
+   @ ~/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:10
+Test Summary:                                 | Pass  Fail  Total   Time
+Derivative Allocation Checks (BenchmarkTools) |   13     2     15  37.2s

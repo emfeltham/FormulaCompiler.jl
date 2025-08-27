@@ -42,37 +42,12 @@ function build_derivative_evaluator(
     # Pre-cache column references to avoid getproperty allocations (as NTuple)
     fd_columns = ntuple(i -> getproperty(data, vars[i]), nvars)
     
-    # First pass evaluator (shell) to create typed closures/configs
+    # Create a mutable ref that will eventually point to the final evaluator
     beta_ref = Base.RefValue(Vector{Float64}())
-    shell = DerivativeEvaluator{T, Ops, S, O, typeof(data), typeof(data_over), nvars, typeof(fd_columns), Nothing, Nothing, Nothing, Nothing}(
-        compiled,
-        data,
-        vars,
-        xbuf,
-        overrides,
-        data_over,
-        nothing,  # overrides_dual
-        nothing,  # data_over_dual
-        rowvec_float,
-        nothing,   # rowvec_dual
-        nothing,   # compiled_dual
-        nothing,   # g
-        nothing,   # cfg
-        nothing,   # gscalar
-        nothing,   # gradcfg
-        beta_ref,
-        1,
-        Matrix{Float64}(undef, length(compiled), nvars),  # jacobian_buffer
-        Vector{Float64}(undef, nvars),                    # eta_gradient_buffer
-        Vector{Float64}(undef, length(compiled)),         # xrow_buffer
-        Vector{Float64}(undef, length(compiled)),         # fd_yplus
-        Vector{Float64}(undef, length(compiled)),         # fd_yminus
-        Vector{Float64}(undef, nvars),                    # fd_xbase
-        fd_columns,                                       # fd_columns
-    )
-
-    # Build typed closures and configs against the shell
-    g = DerivClosure(shell)
+    de_ref = Base.RefValue{DerivativeEvaluator}()
+    
+    # Build typed closures and configs using the ref (which is still uninitialized)
+    g = DerivClosure(de_ref)
     ch = chunk === :auto ? ForwardDiff.Chunk{nvars}() : chunk
     cfg = ForwardDiff.JacobianConfig(g, xbuf, ch)
 
@@ -106,5 +81,9 @@ function build_derivative_evaluator(
         Vector{Float64}(undef, nvars),
         fd_columns,
     )
+    
+    # Now initialize the ref to point to the final evaluator
+    de_ref[] = de
+    
     return de
 end

@@ -52,20 +52,22 @@ function (g::DerivClosure)(x::AbstractVector)
         ov_vec = de.overrides
         data_over = de.data_over
     else
-        # Ensure overrides/data_over exist for this specific Dual tag
+        # For Dual types, we need to rebuild data_over for each new row
+        # because categorical variables aren't wrapped and their row access is fixed
         need_build = de.overrides_dual === nothing
         if !need_build
-            # Compare stored override eltype to current Tx; rebuild on mismatch
+            # Check if we have the right type AND the right row
             ovs = de.overrides_dual
             if !(isempty(ovs))
                 stored_T = typeof(first(ovs)).parameters[1]
-                need_build = (stored_T !== Tx)
+                stored_row = first(ovs).row
+                need_build = (stored_T !== Tx) || (stored_row !== de.row)
             else
                 need_build = true
             end
         end
         if need_build
-            data_over_dual, overrides_dual = build_row_override_data_typed(de.base_data, de.vars, 1, Tx)
+            data_over_dual, overrides_dual = build_row_override_data_typed(de.base_data, de.vars, de.row, Tx)
             de.overrides_dual = overrides_dual
             de.data_over_dual = data_over_dual
         end

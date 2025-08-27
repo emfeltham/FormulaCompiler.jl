@@ -1,4 +1,5 @@
-# automatic_diff.jl - ForwardDiff automatic differentiation implementations
+# automatic_diff.jl
+# ForwardDiff automatic differentiation implementations
 
 """
     derivative_modelrow!(J, deval, row) -> AbstractMatrix{Float64}

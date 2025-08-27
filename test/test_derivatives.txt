@@ -3,20 +3,5 @@ The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.d
   juliaup update
 
 in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
-ERROR: LoadError: Some tests did not pass: 4 passed, 1 failed, 0 errored, 0 broken.
-in expression starting at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives.jl:9
-Derivatives: ForwardDiff and FD fallback: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives.jl:36
-  Expression: isapprox(J, J_fd; rtol = 1.0e-6, atol = 1.0e-8)
-   Evaluated: isapprox([0.0 0.0; 1.0 0.0; … ; 0.0 0.0; 0.0 0.0], [0.0 0.0; 0.9999999999994895 0.0; … ; 0.9999999999994895 0.0; 0.0 0.0]; rtol = 1.0e-6, atol = 1.0e-8)
-
-Stacktrace:
- [1] macro expansion
-   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
- [2] macro expansion
-   @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:36 [inlined]
- [3] macro expansion
-   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
- [4] top-level scope
-   @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:11
-Test Summary:                            | Pass  Fail  Total  Time
-Derivatives: ForwardDiff and FD fallback |    4     1      5  5.0s
+Test Summary:          | Pass  Total  Time
+Derivative correctness |   17     17  6.9s
