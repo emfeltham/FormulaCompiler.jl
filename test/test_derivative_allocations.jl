@@ -152,4 +152,64 @@ using CSV
         end
     end samples=20
     @test minimum(b_loop_mu_grad.memory) == 0
+
+    # NEW: Variance computation primitives allocation tests
+    
+    # delta_method_se (always 0 bytes - pure math)
+    Σ_test = [1.0 0.1; 0.1 1.0]
+    gβ_test = [0.5, -0.3]
+    delta_method_se(gβ_test, Σ_test)  # Warmup
+    b_delta = @benchmark delta_method_se($gβ_test, $Σ_test) samples=400
+    push!(results, ("delta_method_se", minimum(b_delta.memory), minimum(b_delta.times)))
+    @test results[end, :min_memory_bytes] == 0
+
+    # accumulate_ame_gradient! with :fd backend (zero allocations expected)
+    rows_test = 1:5
+    gβ_ame_buffer = Vector{Float64}(undef, length(compiled))
+    accumulate_ame_gradient!(gβ_ame_buffer, de, β, rows_test, :x; backend=:fd)  # Warmup
+    b_ame_fd = @benchmark accumulate_ame_gradient!($gβ_ame_buffer, $de, $β, $rows_test, :x; backend=:fd) samples=400
+    push!(results, ("accumulate_ame_gradient_fd", minimum(b_ame_fd.memory), minimum(b_ame_fd.times)))
+    @test results[end, :min_memory_bytes] == 0
+
+    # accumulate_ame_gradient! with :ad backend (small allocations expected)
+    accumulate_ame_gradient!(gβ_ame_buffer, de, β, rows_test, :x; backend=:ad)  # Warmup
+    b_ame_ad = @benchmark accumulate_ame_gradient!($gβ_ame_buffer, $de, $β, $rows_test, :x; backend=:ad) samples=400
+    push!(results, ("accumulate_ame_gradient_ad", minimum(b_ame_ad.memory), minimum(b_ame_ad.times)))
+    @test results[end, :min_memory_bytes] <= 2048  # Allow small allocations for AD backend
+
+    # Tight-loop tests for variance primitives
+    
+    # delta_method_se tight loop
+    for _ in 1:10
+        delta_method_se(gβ_test, Σ_test)
+    end
+    b_loop_delta = @benchmark begin
+        for _ in 1:100_000
+            delta_method_se($gβ_test, $Σ_test)
+        end
+    end samples=20
+    @test minimum(b_loop_delta.memory) == 0
+
+    # accumulate_ame_gradient! :fd backend tight loop
+    for _ in 1:10
+        accumulate_ame_gradient!(gβ_ame_buffer, de, β, rows_test, :x; backend=:fd)
+    end
+    b_loop_ame_fd = @benchmark begin
+        for _ in 1:1000  # Fewer iterations since this is more expensive
+            accumulate_ame_gradient!($gβ_ame_buffer, $de, $β, $rows_test, :x; backend=:fd)
+        end
+    end samples=20
+    @test minimum(b_loop_ame_fd.memory) == 0
+
+    # accumulate_ame_gradient! :ad backend tight loop (allow allocations)
+    for _ in 1:10
+        accumulate_ame_gradient!(gβ_ame_buffer, de, β, rows_test, :x; backend=:ad)
+    end
+    b_loop_ame_ad = @benchmark begin
+        for _ in 1:1000  # Fewer iterations since this is more expensive
+            accumulate_ame_gradient!($gβ_ame_buffer, $de, $β, $rows_test, :x; backend=:ad)
+        end
+    end samples=20
+    # AD backend can have scaling allocations, so we just check it's reasonable
+    @test minimum(b_loop_ame_ad.memory) <= 200_000  # Reasonable cap for 1000 iterations
 end

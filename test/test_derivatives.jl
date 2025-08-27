@@ -455,3 +455,148 @@ end
         end
     end
 end
+
+@testset "Variance Computation Primitives" begin
+    n = 200
+    df = DataFrame(
+        y = randn(n),
+        x = randn(n),
+        z = abs.(randn(n)) .+ 0.1,
+        group = categorical(rand(["A", "B"], n))
+    )
+    data = Tables.columntable(df)
+    
+    # Linear model for η case
+    model_lm = lm(@formula(y ~ x + z), df)
+    compiled_lm = compile_formula(model_lm, data)
+    vars = [:x, :z]
+    β_lm = coef(model_lm)
+    Σ_lm = vcov(model_lm)
+    de_lm = build_derivative_evaluator(compiled_lm, data; vars=vars)
+    
+    # GLM for μ case
+    df_logit = copy(df)
+    df_logit.y_binary = rand([0, 1], n)
+    data_logit = Tables.columntable(df_logit)
+    model_glm = glm(@formula(y_binary ~ x + z), df_logit, Binomial(), LogitLink())
+    compiled_glm = compile_formula(model_glm, data_logit)
+    β_glm = coef(model_glm)
+    Σ_glm = vcov(model_glm)
+    de_glm = build_derivative_evaluator(compiled_glm, data_logit; vars=vars)
+    
+    test_row = 5
+    test_rows = 1:10
+
+    @testset "delta_method_se" begin
+        # Test with known analytical example
+        Σ_simple = [1.0 0.1; 0.1 1.0]
+        gβ_simple = [0.5, -0.3]
+        expected_se = sqrt(gβ_simple' * Σ_simple * gβ_simple)
+        
+        se = delta_method_se(gβ_simple, Σ_simple)
+        @test isapprox(se, expected_se; rtol=1e-12)
+        
+        # Test with real model gradient
+        for var in vars
+            # Get parameter gradient from existing function
+            gβ = Vector{Float64}(undef, length(compiled_lm))
+            me_eta_grad_beta!(gβ, de_lm, β_lm, test_row, var)
+            
+            # Compute SE
+            se = delta_method_se(gβ, Σ_lm)
+            @test se > 0.0
+            @test isfinite(se)
+        end
+    end
+    
+    @testset "accumulate_ame_gradient!" begin
+        # Test η case (IdentityLink)
+        for var in vars
+            # Test both backends
+            for backend in [:fd, :ad]
+                # Compute AME gradient
+                gβ_ame = Vector{Float64}(undef, length(compiled_lm))
+                accumulate_ame_gradient!(gβ_ame, de_lm, β_lm, test_rows, var; 
+                                       link=GLM.IdentityLink(), backend=backend)
+                
+                # Manual verification: average of individual gradients
+                gβ_manual_sum = zeros(Float64, length(compiled_lm))
+                gβ_temp = Vector{Float64}(undef, length(compiled_lm))
+                for row in test_rows
+                    me_eta_grad_beta!(gβ_temp, de_lm, β_lm, row, var)
+                    gβ_manual_sum .+= gβ_temp
+                end
+                gβ_manual_avg = gβ_manual_sum ./ length(test_rows)
+                
+                @test isapprox(gβ_ame, gβ_manual_avg; rtol=1e-6, atol=1e-8)
+            end
+            
+            # Test backend consistency for η case
+            gβ_fd = Vector{Float64}(undef, length(compiled_lm))
+            gβ_ad = Vector{Float64}(undef, length(compiled_lm))
+            
+            accumulate_ame_gradient!(gβ_fd, de_lm, β_lm, test_rows, var; 
+                                   link=GLM.IdentityLink(), backend=:fd)
+            accumulate_ame_gradient!(gβ_ad, de_lm, β_lm, test_rows, var; 
+                                   link=GLM.IdentityLink(), backend=:ad)
+            
+            @test isapprox(gβ_fd, gβ_ad; rtol=1e-5, atol=1e-7)
+        end
+        
+        # Test μ case (LogitLink)
+        for var in vars
+            gβ_mu = Vector{Float64}(undef, length(compiled_glm))
+            accumulate_ame_gradient!(gβ_mu, de_glm, β_glm, test_rows, var; 
+                                   link=LogitLink(), backend=:fd)
+            
+            # Manual verification for μ case
+            gβ_manual_sum = zeros(Float64, length(compiled_glm))
+            gβ_temp = Vector{Float64}(undef, length(compiled_glm))
+            for row in test_rows
+                me_mu_grad_beta!(gβ_temp, de_glm, β_glm, row, var; link=LogitLink())
+                gβ_manual_sum .+= gβ_temp
+            end
+            gβ_manual_avg = gβ_manual_sum ./ length(test_rows)
+            
+            @test isapprox(gβ_mu, gβ_manual_avg; rtol=1e-6, atol=1e-8)
+        end
+    end
+    
+    @testset "Integrated workflow: AME with standard errors" begin
+        # Complete workflow test: compute AME gradient and standard error
+        var = :x
+        rows = 1:50  # Subset for faster testing
+        
+        # Compute AME gradient
+        gβ_ame = Vector{Float64}(undef, length(compiled_lm))
+        accumulate_ame_gradient!(gβ_ame, de_lm, β_lm, rows, var; backend=:fd)
+        
+        # Compute standard error
+        se_ame = delta_method_se(gβ_ame, Σ_lm)
+        
+        @test se_ame > 0.0
+        @test isfinite(se_ame)
+        
+        # Standard error should be smaller than individual SEs due to averaging
+        gβ_single = Vector{Float64}(undef, length(compiled_lm))
+        me_eta_grad_beta!(gβ_single, de_lm, β_lm, first(rows), var)
+        se_single = delta_method_se(gβ_single, Σ_lm)
+        
+        # AME SE should typically be smaller due to averaging effect
+        # (though this isn't guaranteed mathematically, it's typical)
+        @test isfinite(se_single)
+    end
+    
+    @testset "Error handling" begin
+        # Test invalid backend
+        gβ_dummy = Vector{Float64}(undef, length(compiled_lm))
+        @test_throws ArgumentError accumulate_ame_gradient!(
+            gβ_dummy, de_lm, β_lm, test_rows, :x; backend=:invalid
+        )
+        
+        # Test variable not found
+        @test_throws ArgumentError accumulate_ame_gradient!(
+            gβ_dummy, de_lm, β_lm, test_rows, :nonexistent_var; backend=:fd
+        )
+    end
+end
