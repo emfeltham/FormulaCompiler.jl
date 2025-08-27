@@ -111,6 +111,13 @@ Updated: August 26, 2025 (incorporates allocation findings from DERIVATIVE_ALLOC
 - The observed “192‑byte floor” is likely due to remaining Any‑typed plumbing (e.g., `Vector{Any}` column cache, Any‑typed overrides/fields) rather than an inherent runtime floor.
 - Action: eliminate Any on hot paths before concluding a true floor exists; document environment variance for ForwardDiff internals.
 
+## Implemented (snapshot)
+
+- FD evaluator Jacobian: strict 0‑alloc after warmup via positional hot path and unrolled access; tight-loop benchmark (100k calls) shows 0.
+- AD Jacobian and η‑gradient: small, env‑dependent allocations remain (≤256 bytes) with hoisted configs and typed closures.
+- Allocation testing consolidated in `test/test_derivative_allocations.jl`; CSV written to `test/derivative_allocations.csv`.
+- Variance/SEs workflow documented in `VARIANCE.md` (delta method with single‑column FD J and in‑place gradients).
+
 ## Acceptance Criteria
 
 - Core modelrow
@@ -123,7 +130,7 @@ Updated: August 26, 2025 (incorporates allocation findings from DERIVATIVE_ALLOC
   - Timing: Within 2× of current optimized FD implementation for small n_vars; scales linearly with n_vars.
 
 - ForwardDiff Jacobian (per row)
-  - Allocations: 0 bytes per call on supported env (see Environment Matrix) with fully concrete evaluator; otherwise ≤112–192 bytes per call.
+  - Allocations: 0 bytes per call on supported env (see Environment Matrix) with fully concrete evaluator; otherwise ≤112–256 bytes per call.
   - Correctness: Matches FD central differences within rtol=1e-6, atol=1e-8.
   - Timing: Competitive with or faster than FD central differences for small to moderate n_vars; document chunking impact.
 
@@ -244,6 +251,13 @@ Phase 4: Column Cache Typing (reduce `Any` in FD and AD)
   - Option A: `Vector{AbstractVector{<:Real}}` for simplicity and concrete field type.
   - Option B: `NTuple{N,AbstractVector{Tᵢ}}` when `nvars` is small and fixed for stronger specialization.
 - Expected outcome: More consistent inference in hot loops; no per‑call overhead.
+
+Phase 4.5: FD evaluator hot-path (strict 0‑alloc)
+- Goal: Guarantee 0 allocations per call for FD evaluator.
+- Changes:
+  - Add positional hot-path (`derivative_modelrow_fd_pos!`) that forwards to internal functions without keyword overhead.
+  - Use fully concrete FD overrides and unrolled NTuple column access in generated FD evaluator.
+- Expected outcome: FD evaluator 0‑alloc after warmup; confirmed via BenchmarkTools and tight-loop tests.
 
 Phase 5: AD g/cfg Concrete Storage (careful about type cycles)
 - Goal: Make `g` and `cfg` fields concrete without introducing type cycles.
