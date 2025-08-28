@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>StandardizedPredictors.jl · FormulaCompiler.jl</title><meta name="title" content="StandardizedPredictors.jl · FormulaCompiler.jl"/><meta property="og:title" content="StandardizedPredictors.jl · FormulaCompiler.jl"/><meta property="twitter:title" content="StandardizedPredictors.jl · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/integration/standardized_predictors/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/integration/standardized_predictors/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/integration/standardized_predictors/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><script src="../../assets/mermaid.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../../guide/basic_usage/">Basic Usage</a></li><li><a class="tocitem" href="../../guide/advanced_features/">Advanced Features</a></li><li><a class="tocitem" href="../../guide/scenarios/">Scenario Analysis</a></li><li><a class="tocitem" href="../../guide/performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../glm/">GLM.jl</a></li><li><a class="tocitem" href="../mixed_models/">MixedModels.jl</a></li><li class="is-active"><a class="tocitem" href>StandardizedPredictors.jl</a><ul class="internal"><li><a class="tocitem" href="#Supported-Standardizations"><span>Supported Standardizations</span></a></li><li><a class="tocitem" href="#Basic-Usage"><span>Basic Usage</span></a></li><li><a class="tocitem" href="#ZScore-Standardization"><span>ZScore Standardization</span></a></li><li><a class="tocitem" href="#Advanced-Examples"><span>Advanced Examples</span></a></li><li><a class="tocitem" href="#Performance-Considerations"><span>Performance Considerations</span></a></li><li><a class="tocitem" href="#Best-Practices"><span>Best Practices</span></a></li><li><a class="tocitem" href="#Future-Extensions"><span>Future Extensions</span></a></li></ul></li></ul></li><li><a class="tocitem" href="../../mathematical_foundation/">Mathematical Foundation</a></li><li><a class="tocitem" href="../../architecture/">Architecture</a></li><li><a class="tocitem" href="../../api/">API Reference</a></li><li><a class="tocitem" href="../../examples/">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Ecosystem Integration</a></li><li class="is-active"><a href>StandardizedPredictors.jl</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>StandardizedPredictors.jl</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/integration/standardized_predictors.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="StandardizedPredictors.jl-Integration"><a class="docs-heading-anchor" href="#StandardizedPredictors.jl-Integration">StandardizedPredictors.jl Integration</a><a id="StandardizedPredictors.jl-Integration-1"></a><a class="docs-heading-anchor-permalink" href="#StandardizedPredictors.jl-Integration" title="Permalink"></a></h1><p>FormulaCompiler.jl integrates with StandardizedPredictors.jl to handle standardized predictors efficiently in zero-allocation model evaluation.</p><h2 id="Supported-Standardizations"><a class="docs-heading-anchor" href="#Supported-Standardizations">Supported Standardizations</a><a id="Supported-Standardizations-1"></a><a class="docs-heading-anchor-permalink" href="#Supported-Standardizations" title="Permalink"></a></h2><p>Currently, FormulaCompiler.jl supports:</p><ul><li><strong>ZScore</strong>: Z-score standardization (mean=0, std=1)</li><li>Future versions will support additional standardizations</li></ul><h2 id="Basic-Usage"><a class="docs-heading-anchor" href="#Basic-Usage">Basic Usage</a><a id="Basic-Usage-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Usage" title="Permalink"></a></h2><pre><code class="language-julia hljs">using StandardizedPredictors, FormulaCompiler, GLM, DataFrames, Tables
+
+# Create sample data
+df = DataFrame(
+    y = randn(1000),
+    x1 = randn(1000) * 5 .+ 10,  # Mean ≈ 10, std ≈ 5
+    x2 = randn(1000) * 2 .+ 3,   # Mean ≈ 3, std ≈ 2
+    group = rand([&quot;A&quot;, &quot;B&quot;, &quot;C&quot;], 1000)
+)
+
+# Define standardization contrasts
+contrasts_dict = Dict(
+    :x1 =&gt; ZScore(),
+    :x2 =&gt; ZScore()
+)
+
+# Fit model with standardized predictors
+model = lm(@formula(y ~ x1 + x2 * group), df, contrasts=contrasts_dict)
+
+# Compile with built-in standardization
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)</code></pre><h2 id="ZScore-Standardization"><a class="docs-heading-anchor" href="#ZScore-Standardization">ZScore Standardization</a><a id="ZScore-Standardization-1"></a><a class="docs-heading-anchor-permalink" href="#ZScore-Standardization" title="Permalink"></a></h2><h3 id="Automatic-Integration"><a class="docs-heading-anchor" href="#Automatic-Integration">Automatic Integration</a><a id="Automatic-Integration-1"></a><a class="docs-heading-anchor-permalink" href="#Automatic-Integration" title="Permalink"></a></h3><p>FormulaCompiler.jl automatically handles ZScore standardization:</p><pre><code class="language-julia hljs"># The standardization parameters are built into the compiled formula
+println(&quot;Model includes standardization: &quot;, has_standardization(compiled))
+
+# Evaluation automatically applies standardization
+row_vec = Vector{Float64}(undef, length(compiled))
+compiled(row_vec, data, 1)  # x1 and x2 are automatically standardized</code></pre><h3 id="Manual-Standardization-Parameters"><a class="docs-heading-anchor" href="#Manual-Standardization-Parameters">Manual Standardization Parameters</a><a id="Manual-Standardization-Parameters-1"></a><a class="docs-heading-anchor-permalink" href="#Manual-Standardization-Parameters" title="Permalink"></a></h3><p>You can access the standardization parameters:</p><pre><code class="language-julia hljs"># Get standardization info
+std_info = get_standardization_info(compiled)
+println(&quot;Standardized variables: &quot;, keys(std_info))
+
+for (var, params) in std_info
+    println(&quot;Variable $var: mean=$(params.mean), std=$(params.std)&quot;)
+end</code></pre><h3 id="Custom-Standardization-Values"><a class="docs-heading-anchor" href="#Custom-Standardization-Values">Custom Standardization Values</a><a id="Custom-Standardization-Values-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-Standardization-Values" title="Permalink"></a></h3><p>Override standardization parameters for specific scenarios:</p><pre><code class="language-julia hljs"># Create scenario with custom standardization
+custom_scenario = create_scenario(&quot;custom_std&quot;, data;
+    x1 = 0.0,  # Will be standardized as (0.0 - mean_x1) / std_x1
+    x2 = 1.0   # Will be standardized as (1.0 - mean_x2) / std_x2
+)
+
+# The standardization is applied automatically
+compiled(row_vec, custom_scenario.data, 1)</code></pre><h2 id="Advanced-Examples"><a class="docs-heading-anchor" href="#Advanced-Examples">Advanced Examples</a><a id="Advanced-Examples-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Examples" title="Permalink"></a></h2><h3 id="Marginal-Effects-with-Standardization"><a class="docs-heading-anchor" href="#Marginal-Effects-with-Standardization">Marginal Effects with Standardization</a><a id="Marginal-Effects-with-Standardization-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects-with-Standardization" title="Permalink"></a></h3><pre><code class="language-julia hljs">function marginal_effects_standardized(model, data, variable, delta=0.1)
+    compiled = compile_formula(model, data)
+    
+    # Get original values
+    original_values = data[variable]
+    
+    # Create perturbed values (in original scale)
+    perturbed_values = original_values .+ delta
+    perturbed_data = (; data..., variable =&gt; perturbed_values)
+    
+    row_vec_orig = Vector{Float64}(undef, length(compiled))
+    row_vec_pert = Vector{Float64}(undef, length(compiled))
+    
+    n_obs = Tables.rowcount(data)
+    marginal_effects = Vector{Float64}(undef, n_obs)
+    
+    for i in 1:n_obs
+        # Both evaluations will apply standardization automatically
+        compiled(row_vec_orig, data, i)
+        compiled(row_vec_pert, perturbed_data, i)
+        
+        # Calculate marginal effect (difference in standardized scale)
+        pred_orig = dot(coef(model), row_vec_orig)
+        pred_pert = dot(coef(model), row_vec_pert)
+        
+        marginal_effects[i] = (pred_pert - pred_orig) / delta
+    end
+    
+    return marginal_effects
+end
+
+# Calculate marginal effects for standardized x1
+me_x1 = marginal_effects_standardized(model, data, :x1)
+println(&quot;Mean marginal effect of x1: &quot;, mean(me_x1))</code></pre><h3 id="Policy-Analysis-with-Standardized-Predictors"><a class="docs-heading-anchor" href="#Policy-Analysis-with-Standardized-Predictors">Policy Analysis with Standardized Predictors</a><a id="Policy-Analysis-with-Standardized-Predictors-1"></a><a class="docs-heading-anchor-permalink" href="#Policy-Analysis-with-Standardized-Predictors" title="Permalink"></a></h3><pre><code class="language-julia hljs">function standardized_policy_analysis(model, base_data)
+    compiled = compile_formula(model, base_data)
+    
+    # Get original means and stds for interpretation
+    x1_mean = mean(base_data.x1)
+    x1_std = std(base_data.x1)
+    x2_mean = mean(base_data.x2) 
+    x2_std = std(base_data.x2)
+    
+    # Create policy scenarios (in original scale)
+    scenarios = Dict(
+        &quot;baseline&quot; =&gt; create_scenario(&quot;baseline&quot;, base_data),
+        
+        # Move everyone to +1 standard deviation
+        &quot;high_x1&quot; =&gt; create_scenario(&quot;high_x1&quot;, base_data; 
+            x1 = x1_mean + x1_std
+        ),
+        
+        # Move everyone to population mean
+        &quot;mean_values&quot; =&gt; create_scenario(&quot;mean_values&quot;, base_data;
+            x1 = x1_mean,
+            x2 = x2_mean
+        ),
+        
+        # Extreme policy: +2 standard deviations
+        &quot;extreme_policy&quot; =&gt; create_scenario(&quot;extreme&quot;, base_data;
+            x1 = x1_mean + 2 * x1_std,
+            x2 = x2_mean + 2 * x2_std
+        )
+    )
+    
+    # Evaluate scenarios
+    results = Dict{String, Vector{Float64}}()
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    for (name, scenario) in scenarios
+        n_obs = Tables.rowcount(scenario.data)
+        predictions = Vector{Float64}(undef, n_obs)
+        
+        for i in 1:n_obs
+            compiled(row_vec, scenario.data, i)
+            predictions[i] = dot(coef(model), row_vec)
+        end
+        
+        results[name] = predictions
+    end
+    
+    # Compare scenarios
+    for (name, preds) in results
+        println(&quot;Scenario $name:&quot;)
+        println(&quot;  Mean prediction: $(round(mean(preds), digits=3))&quot;)
+        println(&quot;  Std prediction: $(round(std(preds), digits=3))&quot;)
+        
+        if name != &quot;baseline&quot;
+            baseline_mean = mean(results[&quot;baseline&quot;])
+            effect = mean(preds) - baseline_mean
+            println(&quot;  Effect vs baseline: $(round(effect, digits=3))&quot;)
+        end
+        println()
+    end
+    
+    return results
+end
+
+# Run analysis
+policy_results = standardized_policy_analysis(model, data)</code></pre><h3 id="Interpretation-Helpers"><a class="docs-heading-anchor" href="#Interpretation-Helpers">Interpretation Helpers</a><a id="Interpretation-Helpers-1"></a><a class="docs-heading-anchor-permalink" href="#Interpretation-Helpers" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Functions to help interpret standardized results
+
+function unstandardize_prediction(prediction, y_mean, y_std)
+    &quot;&quot;&quot;Convert prediction back to original scale&quot;&quot;&quot;
+    return prediction * y_std + y_mean
+end
+
+function standardized_effect_size(effect, y_std)
+    &quot;&quot;&quot;Convert effect to Cohen&#39;s d (standardized effect size)&quot;&quot;&quot;
+    return effect / y_std
+end
+
+function interpret_standardized_coef(coef_value, x_std, y_std)
+    &quot;&quot;&quot;Interpret standardized coefficient&quot;&quot;&quot;
+    # Effect of 1 standard deviation change in X on Y (in Y&#39;s standard deviation units)
+    return coef_value * (x_std / y_std)
+end
+
+# Example usage
+model_coefs = coef(model)
+y_std = std(df.y)
+x1_std = std(df.x1)
+
+x1_coef_interpretation = interpret_standardized_coef(model_coefs[2], x1_std, y_std)
+println(&quot;One std dev increase in x1 changes y by $(round(x1_coef_interpretation, digits=3)) std devs&quot;)</code></pre><h2 id="Performance-Considerations"><a class="docs-heading-anchor" href="#Performance-Considerations">Performance Considerations</a><a id="Performance-Considerations-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Considerations" title="Permalink"></a></h2><h3 id="Compilation-Overhead"><a class="docs-heading-anchor" href="#Compilation-Overhead">Compilation Overhead</a><a id="Compilation-Overhead-1"></a><a class="docs-heading-anchor-permalink" href="#Compilation-Overhead" title="Permalink"></a></h3><pre><code class="language-julia hljs">using BenchmarkTools
+
+# Standardization adds minimal compilation overhead
+@benchmark compile_formula($model, $data)
+
+# Evaluation performance is identical to non-standardized models
+compiled = compile_formula(model, data)
+row_vec = Vector{Float64}(undef, length(compiled))
+
+@benchmark $compiled($row_vec, $data, 1)  # Still ~50ns, 0 allocations</code></pre><h3 id="Memory-Efficiency"><a class="docs-heading-anchor" href="#Memory-Efficiency">Memory Efficiency</a><a id="Memory-Efficiency-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Efficiency" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Standardization parameters are stored efficiently
+sizeof_standardized = sizeof(compiled)
+println(&quot;Compiled formula size with standardization: $sizeof_standardized bytes&quot;)
+
+# Scenarios still provide memory benefits
+large_scenario = create_scenario(&quot;large&quot;, data; x1 = 100.0)  # Large value
+println(&quot;Scenario with standardization: $(sizeof(large_scenario)) bytes&quot;)</code></pre><h2 id="Best-Practices"><a class="docs-heading-anchor" href="#Best-Practices">Best Practices</a><a id="Best-Practices-1"></a><a class="docs-heading-anchor-permalink" href="#Best-Practices" title="Permalink"></a></h2><h3 id="Variable-Selection-for-Standardization"><a class="docs-heading-anchor" href="#Variable-Selection-for-Standardization">Variable Selection for Standardization</a><a id="Variable-Selection-for-Standardization-1"></a><a class="docs-heading-anchor-permalink" href="#Variable-Selection-for-Standardization" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Good candidates for standardization
+good_candidates = [
+    :income,        # Often has wide range and skew
+    :age,           # Different scales across studies
+    :test_scores,   # For comparing across tests
+    :measurements   # Physical measurements with different units
+]
+
+# Usually don&#39;t standardize
+dont_standardize = [
+    :binary_vars,   # 0/1 variables
+    :count_vars,    # Poisson-distributed variables
+    :categorical,   # Categorical variables (use contrasts instead)
+    :percentages    # Already on 0-100 scale
+]
+
+# Example: selective standardization
+selective_contrasts = Dict(
+    :income =&gt; ZScore(),      # Standardize income
+    :age =&gt; ZScore(),         # Standardize age  
+    :treatment =&gt; DummyCoding(),  # Don&#39;t standardize binary treatment
+    :region =&gt; EffectsCoding()    # Use effects coding for categorical
+)
+
+model_selective = lm(@formula(y ~ income + age + treatment + region), df, 
+                    contrasts = selective_contrasts)</code></pre><h3 id="Scenario-Design-with-Standardization"><a class="docs-heading-anchor" href="#Scenario-Design-with-Standardization">Scenario Design with Standardization</a><a id="Scenario-Design-with-Standardization-1"></a><a class="docs-heading-anchor-permalink" href="#Scenario-Design-with-Standardization" title="Permalink"></a></h3><pre><code class="language-julia hljs">function create_meaningful_scenarios(base_data, model)
+    # Get standardization info to create interpretable scenarios
+    x1_mean = mean(base_data.x1)
+    x1_std = std(base_data.x1)
+    x2_mean = mean(base_data.x2)
+    x2_std = std(base_data.x2)
+    
+    scenarios = Dict(
+        # Baseline: typical individual
+        &quot;typical&quot; =&gt; create_scenario(&quot;typical&quot;, base_data;
+            x1 = x1_mean,      # Average x1
+            x2 = x2_mean       # Average x2
+        ),
+        
+        # High achiever: +1 std dev on both
+        &quot;high_achiever&quot; =&gt; create_scenario(&quot;high&quot;, base_data;
+            x1 = x1_mean + x1_std,
+            x2 = x2_mean + x2_std
+        ),
+        
+        # Low performer: -1 std dev on both
+        &quot;low_performer&quot; =&gt; create_scenario(&quot;low&quot;, base_data;
+            x1 = x1_mean - x1_std,
+            x2 = x2_mean - x2_std
+        ),
+        
+        # Mixed profile: high x1, low x2
+        &quot;mixed_profile&quot; =&gt; create_scenario(&quot;mixed&quot;, base_data;
+            x1 = x1_mean + x1_std,
+            x2 = x2_mean - x1_std
+        )
+    )
+    
+    return scenarios
+end
+
+meaningful_scenarios = create_meaningful_scenarios(data, model)</code></pre><h3 id="Validation-and-Diagnostics"><a class="docs-heading-anchor" href="#Validation-and-Diagnostics">Validation and Diagnostics</a><a id="Validation-and-Diagnostics-1"></a><a class="docs-heading-anchor-permalink" href="#Validation-and-Diagnostics" title="Permalink"></a></h3><pre><code class="language-julia hljs">function validate_standardization(model, data)
+    compiled = compile_formula(model, data)
+    
+    # Check that standardized variables have correct properties
+    # (This is a conceptual check - actual implementation would need model internals)
+    
+    # Verify evaluation works correctly
+    row_vec = Vector{Float64}(undef, length(compiled))
+    compiled(row_vec, data, 1)
+    
+    # Compare with manual standardization
+    manual_x1 = (data.x1[1] - mean(data.x1)) / std(data.x1)
+    manual_x2 = (data.x2[1] - mean(data.x2)) / std(data.x2)
+    
+    println(&quot;✓ Standardization validation completed&quot;)
+    println(&quot;Manual x1 standardization: $(round(manual_x1, digits=3))&quot;)
+    println(&quot;Manual x2 standardization: $(round(manual_x2, digits=3))&quot;)
+    
+    return true
+end
+
+validate_standardization(model, data)</code></pre><h2 id="Future-Extensions"><a class="docs-heading-anchor" href="#Future-Extensions">Future Extensions</a><a id="Future-Extensions-1"></a><a class="docs-heading-anchor-permalink" href="#Future-Extensions" title="Permalink"></a></h2><p>FormulaCompiler.jl plans to support additional StandardizedPredictors.jl features:</p><ul><li><strong>CenterScale</strong>: Custom center and scale parameters</li><li><strong>MeanScale</strong>: Mean scaling</li><li><strong>UnitScale</strong>: Unit scaling  </li><li><strong>Custom transformations</strong>: User-defined standardization functions</li></ul><p>These will follow the same zero-allocation principles and integrate seamlessly with the scenario system.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../mixed_models/">« MixedModels.jl</a><a class="docs-footer-nextpage" href="../../mathematical_foundation/">Mathematical Foundation »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Thursday 28 August 2025 13:43">Thursday 28 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

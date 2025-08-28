@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>MixedModels.jl · FormulaCompiler.jl</title><meta name="title" content="MixedModels.jl · FormulaCompiler.jl"/><meta property="og:title" content="MixedModels.jl · FormulaCompiler.jl"/><meta property="twitter:title" content="MixedModels.jl · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/integration/mixed_models/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/integration/mixed_models/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/integration/mixed_models/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><script src="../../assets/mermaid.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../../guide/basic_usage/">Basic Usage</a></li><li><a class="tocitem" href="../../guide/advanced_features/">Advanced Features</a></li><li><a class="tocitem" href="../../guide/scenarios/">Scenario Analysis</a></li><li><a class="tocitem" href="../../guide/performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../glm/">GLM.jl</a></li><li class="is-active"><a class="tocitem" href>MixedModels.jl</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Basic-Integration"><span>Basic Integration</span></a></li><li><a class="tocitem" href="#Fixed-Effects-Extraction"><span>Fixed Effects Extraction</span></a></li><li><a class="tocitem" href="#Use-Cases"><span>Use Cases</span></a></li><li><a class="tocitem" href="#Performance-Benefits"><span>Performance Benefits</span></a></li><li><a class="tocitem" href="#Advanced-Examples"><span>Advanced Examples</span></a></li><li><a class="tocitem" href="#Integration-Notes"><span>Integration Notes</span></a></li><li><a class="tocitem" href="#Best-Practices"><span>Best Practices</span></a></li></ul></li><li><a class="tocitem" href="../standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../../mathematical_foundation/">Mathematical Foundation</a></li><li><a class="tocitem" href="../../architecture/">Architecture</a></li><li><a class="tocitem" href="../../api/">API Reference</a></li><li><a class="tocitem" href="../../examples/">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Ecosystem Integration</a></li><li class="is-active"><a href>MixedModels.jl</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>MixedModels.jl</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/integration/mixed_models.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="MixedModels.jl-Integration"><a class="docs-heading-anchor" href="#MixedModels.jl-Integration">MixedModels.jl Integration</a><a id="MixedModels.jl-Integration-1"></a><a class="docs-heading-anchor-permalink" href="#MixedModels.jl-Integration" title="Permalink"></a></h1><p>FormulaCompiler.jl integrates with MixedModels.jl by automatically extracting fixed effects from mixed-effects models, enabling zero-allocation evaluation of the fixed-effects portion.</p><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>Mixed models contain both fixed and random effects. FormulaCompiler.jl focuses on the fixed effects portion, which is often needed for:</p><ul><li>Marginal effects calculation</li><li>Prediction with population-level effects</li><li>Bootstrap inference on fixed effects</li><li>Policy analysis scenarios</li></ul><h2 id="Basic-Integration"><a class="docs-heading-anchor" href="#Basic-Integration">Basic Integration</a><a id="Basic-Integration-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Integration" title="Permalink"></a></h2><pre><code class="language-julia hljs">using MixedModels, FormulaCompiler, DataFrames, Tables
+
+# Example dataset
+df = DataFrame(
+    y = randn(1000),
+    x = randn(1000),
+    treatment = rand(Bool, 1000),
+    group = rand(1:10, 1000),
+    cluster = rand(1:50, 1000)
+)
+
+# Fit mixed model
+mixed_model = fit(MixedModel, @formula(y ~ x + treatment + (1|group) + (1+x|cluster)), df)
+
+# FormulaCompiler automatically extracts fixed effects: y ~ x + treatment
+compiled = compile_formula(mixed_model, Tables.columntable(df))</code></pre><h2 id="Fixed-Effects-Extraction"><a class="docs-heading-anchor" href="#Fixed-Effects-Extraction">Fixed Effects Extraction</a><a id="Fixed-Effects-Extraction-1"></a><a class="docs-heading-anchor-permalink" href="#Fixed-Effects-Extraction" title="Permalink"></a></h2><h3 id="Automatic-Extraction"><a class="docs-heading-anchor" href="#Automatic-Extraction">Automatic Extraction</a><a id="Automatic-Extraction-1"></a><a class="docs-heading-anchor-permalink" href="#Automatic-Extraction" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Mixed model with various random effects structures
+mixed_model = fit(MixedModel, @formula(y ~ x * treatment + age + (1|group) + (x|cluster)), df)
+
+# Fixed effects formula: y ~ x * treatment + age
+fixed_formula = fixed_effects_form(mixed_model)
+println(&quot;Fixed effects: &quot;, fixed_formula)
+
+# Compile fixed effects only
+compiled = compile_formula(mixed_model, data)</code></pre><h3 id="Manual-Fixed-Effects"><a class="docs-heading-anchor" href="#Manual-Fixed-Effects">Manual Fixed Effects</a><a id="Manual-Fixed-Effects-1"></a><a class="docs-heading-anchor-permalink" href="#Manual-Fixed-Effects" title="Permalink"></a></h3><pre><code class="language-julia hljs"># If you need more control, extract manually
+fixed_form = mixed_model.formula.rhs.terms[1]  # Gets fixed effects terms
+manual_model = lm(FormulaTerm(mixed_model.formula.lhs, fixed_form), df)
+compiled_manual = compile_formula(manual_model, data)</code></pre><h2 id="Use-Cases"><a class="docs-heading-anchor" href="#Use-Cases">Use Cases</a><a id="Use-Cases-1"></a><a class="docs-heading-anchor-permalink" href="#Use-Cases" title="Permalink"></a></h2><h3 id="Population-Level-Predictions"><a class="docs-heading-anchor" href="#Population-Level-Predictions">Population-Level Predictions</a><a id="Population-Level-Predictions-1"></a><a class="docs-heading-anchor-permalink" href="#Population-Level-Predictions" title="Permalink"></a></h3><pre><code class="language-julia hljs">function population_predictions(mixed_model, data, scenarios)
+    # Compile fixed effects
+    compiled = compile_formula(mixed_model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    results = Dict{String, Vector{Float64}}()
+    
+    for (scenario_name, scenario) in scenarios
+        n_obs = Tables.rowcount(scenario.data)
+        predictions = Vector{Float64}(undef, n_obs)
+        
+        for i in 1:n_obs
+            compiled(row_vec, scenario.data, i)
+            # This gives the fixed effects linear predictor
+            predictions[i] = dot(fixef(mixed_model), row_vec)
+        end
+        
+        results[scenario_name] = predictions
+    end
+    
+    return results
+end
+
+# Example usage
+scenarios = Dict(
+    &quot;baseline&quot; =&gt; create_scenario(&quot;baseline&quot;, data),
+    &quot;treatment&quot; =&gt; create_scenario(&quot;treatment&quot;, data; treatment = true)
+)
+
+pop_predictions = population_predictions(mixed_model, data, scenarios)</code></pre><h3 id="Marginal-Effects-for-Fixed-Effects"><a class="docs-heading-anchor" href="#Marginal-Effects-for-Fixed-Effects">Marginal Effects for Fixed Effects</a><a id="Marginal-Effects-for-Fixed-Effects-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects-for-Fixed-Effects" title="Permalink"></a></h3><pre><code class="language-julia hljs">function marginal_effects_mixed(mixed_model, data, variable)
+    compiled = compile_formula(mixed_model, data)
+    fixed_coefs = fixef(mixed_model)
+    
+    # Create perturbed data
+    delta = 0.01
+    original_values = data[variable]
+    perturbed_values = original_values .+ delta
+    perturbed_data = (; data..., variable =&gt; perturbed_values)
+    
+    row_vec_orig = Vector{Float64}(undef, length(compiled))
+    row_vec_pert = Vector{Float64}(undef, length(compiled))
+    
+    n_obs = Tables.rowcount(data)
+    marginal_effects = Vector{Float64}(undef, n_obs)
+    
+    for i in 1:n_obs
+        compiled(row_vec_orig, data, i)
+        compiled(row_vec_pert, perturbed_data, i)
+        
+        pred_orig = dot(fixed_coefs, row_vec_orig)
+        pred_pert = dot(fixed_coefs, row_vec_pert)
+        
+        marginal_effects[i] = (pred_pert - pred_orig) / delta
+    end
+    
+    return marginal_effects
+end</code></pre><h2 id="Performance-Benefits"><a class="docs-heading-anchor" href="#Performance-Benefits">Performance Benefits</a><a id="Performance-Benefits-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Benefits" title="Permalink"></a></h2><h3 id="Comparison-with-modelmatrix"><a class="docs-heading-anchor" href="#Comparison-with-modelmatrix">Comparison with modelmatrix</a><a id="Comparison-with-modelmatrix-1"></a><a class="docs-heading-anchor-permalink" href="#Comparison-with-modelmatrix" title="Permalink"></a></h3><pre><code class="language-julia hljs">using BenchmarkTools
+
+# Setup mixed model
+mixed_model = fit(MixedModel, @formula(y ~ x + treatment + (1|group)), df)
+data = Tables.columntable(df)
+
+# Traditional approach: extract full model matrix
+function traditional_mixed_row(model, row_idx)
+    # Get fixed effects design matrix
+    X = modelmatrix(model.optsum.lm)  # Linear model component
+    return X[row_idx, :]
+end
+
+# FormulaCompiler approach
+compiled = compile_formula(mixed_model, data)
+row_vec = Vector{Float64}(undef, length(compiled))
+
+function fc_mixed_row(compiled, data, row_vec, row_idx)
+    compiled(row_vec, data, row_idx)
+    return row_vec
+end
+
+# Benchmark
+println(&quot;Traditional mixed model row extraction:&quot;)
+@benchmark traditional_mixed_row($mixed_model, 1)
+
+println(&quot;FormulaCompiler mixed model row extraction:&quot;)
+@benchmark fc_mixed_row($compiled, $data, $row_vec, 1)</code></pre><h2 id="Advanced-Examples"><a class="docs-heading-anchor" href="#Advanced-Examples">Advanced Examples</a><a id="Advanced-Examples-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Examples" title="Permalink"></a></h2><h3 id="Bootstrap-Fixed-Effects"><a class="docs-heading-anchor" href="#Bootstrap-Fixed-Effects">Bootstrap Fixed Effects</a><a id="Bootstrap-Fixed-Effects-1"></a><a class="docs-heading-anchor-permalink" href="#Bootstrap-Fixed-Effects" title="Permalink"></a></h3><pre><code class="language-julia hljs">function bootstrap_fixed_effects(mixed_model, data, n_bootstrap=1000)
+    compiled = compile_formula(mixed_model, data)
+    n_obs = Tables.rowcount(data)
+    n_coefs = length(compiled)
+    
+    # Get response variable
+    y_var = Symbol(mixed_model.formula.lhs)
+    y = data[y_var]
+    
+    bootstrap_coefs = Matrix{Float64}(undef, n_bootstrap, n_coefs)
+    row_vec = Vector{Float64}(undef, n_coefs)
+    
+    for boot in 1:n_bootstrap
+        # Bootstrap sample
+        sample_idx = rand(1:n_obs, n_obs)
+        
+        # Build design matrix for bootstrap sample
+        X_boot = Matrix{Float64}(undef, n_obs, n_coefs)
+        y_boot = Vector{Float64}(undef, n_obs)
+        
+        for (i, idx) in enumerate(sample_idx)
+            compiled(row_vec, data, idx)
+            X_boot[i, :] .= row_vec
+            y_boot[i] = y[idx]
+        end
+        
+        # Estimate fixed effects (OLS approximation)
+        bootstrap_coefs[boot, :] = X_boot \ y_boot
+    end
+    
+    return bootstrap_coefs
+end
+
+# Usage
+boot_coefs = bootstrap_fixed_effects(mixed_model, data, 1000)
+
+# Confidence intervals
+using Statistics
+conf_intervals = [
+    (quantile(boot_coefs[:, j], 0.025), quantile(boot_coefs[:, j], 0.975))
+    for j in 1:size(boot_coefs, 2)
+]</code></pre><h3 id="Policy-Scenario-Analysis"><a class="docs-heading-anchor" href="#Policy-Scenario-Analysis">Policy Scenario Analysis</a><a id="Policy-Scenario-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Policy-Scenario-Analysis" title="Permalink"></a></h3><pre><code class="language-julia hljs">function analyze_policy_scenarios(mixed_model, base_data)
+    compiled = compile_formula(mixed_model, base_data)
+    fixed_coefs = fixef(mixed_model)
+    
+    # Define policy scenarios
+    scenarios = [
+        (&quot;baseline&quot;, create_scenario(&quot;baseline&quot;, base_data)),
+        (&quot;universal_treatment&quot;, create_scenario(&quot;treatment_all&quot;, base_data; treatment = true)),
+        (&quot;targeted_treatment&quot;, create_scenario(&quot;treatment_targeted&quot;, base_data; 
+            treatment = true, 
+            x = quantile(base_data.x, 0.75)  # Top 25% of x values
+        )),
+        (&quot;enhanced_policy&quot;, create_scenario(&quot;enhanced&quot;, base_data;
+            treatment = true,
+            x = mean(base_data.x),
+            additional_support = 1.0  # New policy variable
+        ))
+    ]
+    
+    results = Dict{String, NamedTuple}()
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    for (name, scenario) in scenarios
+        n_obs = Tables.rowcount(scenario.data)
+        predictions = Vector{Float64}(undef, n_obs)
+        
+        for i in 1:n_obs
+            compiled(row_vec, scenario.data, i)
+            predictions[i] = dot(fixed_coefs, row_vec)
+        end
+        
+        results[name] = (
+            mean_outcome = mean(predictions),
+            std_outcome = std(predictions),
+            quantiles = [quantile(predictions, q) for q in [0.25, 0.5, 0.75]]
+        )
+    end
+    
+    return results
+end
+
+# Run analysis
+policy_results = analyze_policy_scenarios(mixed_model, data)
+
+# Display results
+for (policy, stats) in policy_results
+    println(&quot;Policy: $policy&quot;)
+    println(&quot;  Mean outcome: $(round(stats.mean_outcome, digits=3))&quot;)
+    println(&quot;  Std outcome: $(round(stats.std_outcome, digits=3))&quot;)
+    println(&quot;  Quartiles: $(round.(stats.quantiles, digits=3))&quot;)
+    println()
+end</code></pre><h2 id="Integration-Notes"><a class="docs-heading-anchor" href="#Integration-Notes">Integration Notes</a><a id="Integration-Notes-1"></a><a class="docs-heading-anchor-permalink" href="#Integration-Notes" title="Permalink"></a></h2><h3 id="What&#39;s-Included"><a class="docs-heading-anchor" href="#What&#39;s-Included">What&#39;s Included</a><a id="What&#39;s-Included-1"></a><a class="docs-heading-anchor-permalink" href="#What&#39;s-Included" title="Permalink"></a></h3><ul><li>Fixed effects terms only</li><li>Interaction terms involving fixed effects</li><li>Functions applied to fixed effects predictors</li></ul><h3 id="What&#39;s-Excluded"><a class="docs-heading-anchor" href="#What&#39;s-Excluded">What&#39;s Excluded</a><a id="What&#39;s-Excluded-1"></a><a class="docs-heading-anchor-permalink" href="#What&#39;s-Excluded" title="Permalink"></a></h3><ul><li>Random effects terms <code>(1|group)</code>, <code>(x|group)</code></li><li>Random intercepts and slopes</li><li>Cross-level interactions involving random effects</li></ul><h3 id="Validation"><a class="docs-heading-anchor" href="#Validation">Validation</a><a id="Validation-1"></a><a class="docs-heading-anchor-permalink" href="#Validation" title="Permalink"></a></h3><pre><code class="language-julia hljs">function validate_mixed_model_integration(mixed_model, data)
+    compiled = compile_formula(mixed_model, data)
+    
+    # Extract fixed effects design matrix from MixedModels.jl
+    mm_fixed = modelmatrix(mixed_model.optsum.lm)
+    
+    # Compare with FormulaCompiler
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    for i in 1:min(10, size(mm_fixed, 1))
+        compiled(row_vec, data, i)
+        original_row = mm_fixed[i, :]
+        
+        if !isapprox(row_vec, original_row, rtol=1e-12)
+            @warn &quot;Mismatch in row $i&quot;
+            return false
+        end
+    end
+    
+    println(&quot;✓ FormulaCompiler matches MixedModels.jl fixed effects matrix&quot;)
+    return true
+end</code></pre><h2 id="Best-Practices"><a class="docs-heading-anchor" href="#Best-Practices">Best Practices</a><a id="Best-Practices-1"></a><a class="docs-heading-anchor-permalink" href="#Best-Practices" title="Permalink"></a></h2><h3 id="When-to-Use-FormulaCompiler-with-Mixed-Models"><a class="docs-heading-anchor" href="#When-to-Use-FormulaCompiler-with-Mixed-Models">When to Use FormulaCompiler with Mixed Models</a><a id="When-to-Use-FormulaCompiler-with-Mixed-Models-1"></a><a class="docs-heading-anchor-permalink" href="#When-to-Use-FormulaCompiler-with-Mixed-Models" title="Permalink"></a></h3><p><strong>Good use cases:</strong></p><ul><li>Population-level predictions</li><li>Fixed effects marginal effects</li><li>Policy scenario analysis</li><li>Bootstrap inference on fixed effects</li></ul><p><strong>Not suitable for:</strong></p><ul><li>Predictions requiring random effects (BLUPs)</li><li>Individual-level predictions in clustered data</li><li>Random effects inference</li><li>Cross-level interaction effects</li></ul><h3 id="Performance-Considerations"><a class="docs-heading-anchor" href="#Performance-Considerations">Performance Considerations</a><a id="Performance-Considerations-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Considerations" title="Permalink"></a></h3><pre><code class="language-julia hljs"># For repeated evaluations, compile once
+mixed_model = fit(MixedModel, @formula(y ~ x + (1|group)), df)
+compiled = compile_formula(mixed_model, data)  # Do this once
+
+# Then evaluate many times
+row_vec = Vector{Float64}(undef, length(compiled))
+for scenario in many_scenarios
+    for individual in many_individuals
+        compiled(row_vec, scenario.data, individual)
+        # Process fixed effects prediction...
+    end
+end</code></pre><h3 id="Memory-Efficiency"><a class="docs-heading-anchor" href="#Memory-Efficiency">Memory Efficiency</a><a id="Memory-Efficiency-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Efficiency" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Mixed models can be large - use scenarios for memory efficiency
+large_mixed_model = fit(MixedModel, complex_formula, large_df)
+base_data = Tables.columntable(large_df)
+
+# Instead of creating many copies of large_df
+# Use scenarios to override just the variables of interest
+policy_scenario = create_scenario(&quot;policy&quot;, base_data; 
+    key_variable = new_value
+)
+
+# Evaluate with minimal memory overhead
+compiled = compile_formula(large_mixed_model, base_data)
+# ... use compiled with policy_scenario.data</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../glm/">« GLM.jl</a><a class="docs-footer-nextpage" href="../standardized_predictors/">StandardizedPredictors.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Thursday 28 August 2025 13:43">Thursday 28 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

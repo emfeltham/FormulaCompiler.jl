@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Performance Tips · FormulaCompiler.jl</title><meta name="title" content="Performance Tips · FormulaCompiler.jl"/><meta property="og:title" content="Performance Tips · FormulaCompiler.jl"/><meta property="twitter:title" content="Performance Tips · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/performance/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/performance/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/guide/performance/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><script src="../../assets/mermaid.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../basic_usage/">Basic Usage</a></li><li><a class="tocitem" href="../advanced_features/">Advanced Features</a></li><li><a class="tocitem" href="../scenarios/">Scenario Analysis</a></li><li class="is-active"><a class="tocitem" href>Performance Tips</a><ul class="internal"><li><a class="tocitem" href="#Core-Performance-Principles"><span>Core Performance Principles</span></a></li><li><a class="tocitem" href="#Runtime-Execution-Flow"><span>Runtime Execution Flow</span></a></li><li><a class="tocitem" href="#Pre-compilation-Best-Practices"><span>Pre-compilation Best Practices</span></a></li><li><a class="tocitem" href="#Memory-Management"><span>Memory Management</span></a></li><li><a class="tocitem" href="#Benchmarking-and-Profiling"><span>Benchmarking and Profiling</span></a></li><li><a class="tocitem" href="#Formula-Specific-Optimizations"><span>Formula-Specific Optimizations</span></a></li><li><a class="tocitem" href="#Large-Dataset-Strategies"><span>Large Dataset Strategies</span></a></li><li><a class="tocitem" href="#Optimization-Anti-patterns"><span>Optimization Anti-patterns</span></a></li><li><a class="tocitem" href="#Performance-Monitoring"><span>Performance Monitoring</span></a></li><li><a class="tocitem" href="#Real-world-Performance-Examples"><span>Real-world Performance Examples</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../../integration/glm/">GLM.jl</a></li><li><a class="tocitem" href="../../integration/mixed_models/">MixedModels.jl</a></li><li><a class="tocitem" href="../../integration/standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../../mathematical_foundation/">Mathematical Foundation</a></li><li><a class="tocitem" href="../../architecture/">Architecture</a></li><li><a class="tocitem" href="../../api/">API Reference</a></li><li><a class="tocitem" href="../../examples/">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">User Guide</a></li><li class="is-active"><a href>Performance Tips</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Performance Tips</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/guide/performance.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Performance-Tips"><a class="docs-heading-anchor" href="#Performance-Tips">Performance Tips</a><a id="Performance-Tips-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Tips" title="Permalink"></a></h1><p>This guide covers best practices for achieving maximum performance with FormulaCompiler.jl.</p><h2 id="Core-Performance-Principles"><a class="docs-heading-anchor" href="#Core-Performance-Principles">Core Performance Principles</a><a id="Core-Performance-Principles-1"></a><a class="docs-heading-anchor-permalink" href="#Core-Performance-Principles" title="Permalink"></a></h2><p>FormulaCompiler.jl achieves zero-allocation performance through:</p><ol><li><strong>Compile-time specialization</strong>: Move expensive computations to compile time</li><li><strong>Type stability</strong>: Ensure all operations are type-predictable</li><li><strong>Memory reuse</strong>: Pre-allocate and reuse output vectors</li><li><strong>Efficient data structures</strong>: Use column tables for optimal access patterns</li></ol><h2 id="Runtime-Execution-Flow"><a class="docs-heading-anchor" href="#Runtime-Execution-Flow">Runtime Execution Flow</a><a id="Runtime-Execution-Flow-1"></a><a class="docs-heading-anchor-permalink" href="#Runtime-Execution-Flow" title="Permalink"></a></h2><p>Here&#39;s what happens during each ~50ns evaluation:</p><p><img src="../../assets/src_guide_performance_diagram_4.svg" alt="Diagram"/></p><h2 id="Pre-compilation-Best-Practices"><a class="docs-heading-anchor" href="#Pre-compilation-Best-Practices">Pre-compilation Best Practices</a><a id="Pre-compilation-Best-Practices-1"></a><a class="docs-heading-anchor-permalink" href="#Pre-compilation-Best-Practices" title="Permalink"></a></h2><h3 id="Compile-Once,-Use-Many-Times"><a class="docs-heading-anchor" href="#Compile-Once,-Use-Many-Times">Compile Once, Use Many Times</a><a id="Compile-Once,-Use-Many-Times-1"></a><a class="docs-heading-anchor-permalink" href="#Compile-Once,-Use-Many-Times" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Good: Compile once
+compiled = compile_formula(model, data)
+row_vec = Vector{Float64}(undef, length(compiled))
+
+# Use many times (zero allocations)
+for i in 1:1_000_000
+    compiled(row_vec, data, i % nrow(data) + 1)
+    # Process result...
+end
+
+# Bad: Compile every time
+for i in 1:1_000_000
+    result = modelrow(model, data, i % nrow(data) + 1)  # Compiles AND allocates!
+end</code></pre><h3 id="Data-Format-Optimization"><a class="docs-heading-anchor" href="#Data-Format-Optimization">Data Format Optimization</a><a id="Data-Format-Optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Data-Format-Optimization" title="Permalink"></a></h3><pre><code class="language-julia hljs">using Tables, DataFrames
+
+df = DataFrame(x = randn(10000), y = randn(10000))
+
+# Best: Column table format
+data = Tables.columntable(df)  # Convert once
+compiled = compile_formula(model, data)
+
+# Good: Direct DataFrame (but slower)
+compiled = compile_formula(model, df)
+
+# Benchmark the difference
+using BenchmarkTools
+
+@benchmark $compiled($row_vec, $data, 1)        # Fastest
+@benchmark $compiled($row_vec, $df, 1)          # Slower due to column access</code></pre><h2 id="Memory-Management"><a class="docs-heading-anchor" href="#Memory-Management">Memory Management</a><a id="Memory-Management-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Management" title="Permalink"></a></h2><h3 id="Pre-allocation-Strategies"><a class="docs-heading-anchor" href="#Pre-allocation-Strategies">Pre-allocation Strategies</a><a id="Pre-allocation-Strategies-1"></a><a class="docs-heading-anchor-permalink" href="#Pre-allocation-Strategies" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Pre-allocate output vectors
+compiled = compile_formula(model, data)
+row_vec = Vector{Float64}(undef, length(compiled))
+
+# For batch processing
+n_rows = 1000
+batch_matrix = Matrix{Float64}(undef, n_rows, length(compiled))
+
+# Reuse across operations
+for batch_start in 1:n_rows:total_rows
+    batch_end = min(batch_start + n_rows - 1, total_rows)
+    batch_size = batch_end - batch_start + 1
+    
+    # Use view for variable batch sizes
+    batch_view = view(batch_matrix, 1:batch_size, :)
+    modelrow!(batch_view, compiled, data, batch_start:batch_end)
+end</code></pre><h3 id="Memory-Layout-Optimization"><a class="docs-heading-anchor" href="#Memory-Layout-Optimization">Memory Layout Optimization</a><a id="Memory-Layout-Optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Layout-Optimization" title="Permalink"></a></h3><pre><code class="language-julia hljs"># For repeated operations on the same rows
+function optimized_repeated_evaluation(compiled, data, row_indices, n_repetitions)
+    n_rows = length(row_indices)
+    n_cols = length(compiled)
+    
+    # Pre-allocate everything
+    results = Array{Float64, 3}(undef, n_repetitions, n_rows, n_cols)
+    row_vec = Vector{Float64}(undef, n_cols)
+    
+    for rep in 1:n_repetitions
+        for (i, row_idx) in enumerate(row_indices)
+            compiled(row_vec, data, row_idx)
+            results[rep, i, :] .= row_vec
+        end
+    end
+    
+    return results
+end</code></pre><h2 id="Benchmarking-and-Profiling"><a class="docs-heading-anchor" href="#Benchmarking-and-Profiling">Benchmarking and Profiling</a><a id="Benchmarking-and-Profiling-1"></a><a class="docs-heading-anchor-permalink" href="#Benchmarking-and-Profiling" title="Permalink"></a></h2><h3 id="Basic-Performance-Testing"><a class="docs-heading-anchor" href="#Basic-Performance-Testing">Basic Performance Testing</a><a id="Basic-Performance-Testing-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Performance-Testing" title="Permalink"></a></h3><pre><code class="language-julia hljs">using BenchmarkTools
+
+function benchmark_formula_compilation(model, data)
+    # Benchmark compilation
+    compilation_time = @benchmark compile_formula($model, $data)
+    
+    # Benchmark evaluation
+    compiled = compile_formula(model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    evaluation_time = @benchmark $compiled($row_vec, $data, 1)
+    
+    return (compilation = compilation_time, evaluation = evaluation_time)
+end
+
+# Run benchmark
+results = benchmark_formula_compilation(model, data)
+println(&quot;Compilation: &quot;, results.compilation)
+println(&quot;Evaluation: &quot;, results.evaluation)</code></pre><h3 id="Allocation-Detection"><a class="docs-heading-anchor" href="#Allocation-Detection">Allocation Detection</a><a id="Allocation-Detection-1"></a><a class="docs-heading-anchor-permalink" href="#Allocation-Detection" title="Permalink"></a></h3><pre><code class="language-julia hljs">function check_zero_allocations(compiled, data, n_tests=1000)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    # Warm up
+    compiled(row_vec, data, 1)
+    
+    # Test for allocations
+    allocs_before = Base.gc_alloc_count()
+    
+    for i in 1:n_tests
+        compiled(row_vec, data, i % nrow(data) + 1)
+    end
+    
+    allocs_after = Base.gc_alloc_count()
+    
+    if allocs_after &gt; allocs_before
+        @warn &quot;Detected $(allocs_after - allocs_before) allocations in $n_tests evaluations&quot;
+    else
+        println(&quot;✓ Zero allocations confirmed for $n_tests evaluations&quot;)
+    end
+end
+
+check_zero_allocations(compiled, data)</code></pre><h3 id="Performance-Profiling"><a class="docs-heading-anchor" href="#Performance-Profiling">Performance Profiling</a><a id="Performance-Profiling-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Profiling" title="Permalink"></a></h3><pre><code class="language-julia hljs">using Profile, ProfileView
+
+function profile_performance(compiled, data, n_evaluations=100_000)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    # Profile execution
+    Profile.clear()
+    @profile begin
+        for i in 1:n_evaluations
+            compiled(row_vec, data, i % nrow(data) + 1)
+        end
+    end
+    
+    # Analyze results
+    ProfileView.view()  # Opens interactive profile viewer
+end</code></pre><h2 id="Formula-Specific-Optimizations"><a class="docs-heading-anchor" href="#Formula-Specific-Optimizations">Formula-Specific Optimizations</a><a id="Formula-Specific-Optimizations-1"></a><a class="docs-heading-anchor-permalink" href="#Formula-Specific-Optimizations" title="Permalink"></a></h2><h3 id="Simple-vs-Complex-Formulas"><a class="docs-heading-anchor" href="#Simple-vs-Complex-Formulas">Simple vs Complex Formulas</a><a id="Simple-vs-Complex-Formulas-1"></a><a class="docs-heading-anchor-permalink" href="#Simple-vs-Complex-Formulas" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Simple formulas are fastest
+simple_model = lm(@formula(y ~ x + z), df)
+simple_compiled = compile_formula(simple_model, data)
+
+# Complex formulas still achieve zero allocation but are slower
+complex_model = lm(@formula(y ~ x * group * treatment + log(z) + sqrt(abs(w))), df)
+complex_compiled = compile_formula(complex_model, data)
+
+# Benchmark both
+@benchmark $simple_compiled($row_vec, $data, 1)
+@benchmark $complex_compiled($row_vec, $data, 1)</code></pre><h3 id="Categorical-Variable-Optimization"><a class="docs-heading-anchor" href="#Categorical-Variable-Optimization">Categorical Variable Optimization</a><a id="Categorical-Variable-Optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Categorical-Variable-Optimization" title="Permalink"></a></h3><pre><code class="language-julia hljs">using CategoricalArrays
+
+# Ordered categoricals can be more efficient
+df.ordered_group = categorical(df.group, ordered=true)
+
+# Use efficient contrast coding
+contrasts_dict = Dict(:group =&gt; DummyCoding())
+model_with_contrasts = lm(@formula(y ~ x + group), df, contrasts=contrasts_dict)</code></pre><h3 id="Function-Optimization-Tips"><a class="docs-heading-anchor" href="#Function-Optimization-Tips">Function Optimization Tips</a><a id="Function-Optimization-Tips-1"></a><a class="docs-heading-anchor-permalink" href="#Function-Optimization-Tips" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Some functions are more efficient than others
+fast_functions = [
+    @formula(y ~ log(x)),      # Fast
+    @formula(y ~ exp(x)),      # Fast
+    @formula(y ~ sqrt(x)),     # Fast
+    @formula(y ~ x^2),         # Fast
+    @formula(y ~ abs(x))       # Fast
+]
+
+slower_functions = [
+    @formula(y ~ sin(x)),      # Slower
+    @formula(y ~ cos(x)),      # Slower
+    @formula(y ~ x^3.5)        # Slower (non-integer powers)
+]</code></pre><h2 id="Large-Dataset-Strategies"><a class="docs-heading-anchor" href="#Large-Dataset-Strategies">Large Dataset Strategies</a><a id="Large-Dataset-Strategies-1"></a><a class="docs-heading-anchor-permalink" href="#Large-Dataset-Strategies" title="Permalink"></a></h2><h3 id="Chunked-Processing"><a class="docs-heading-anchor" href="#Chunked-Processing">Chunked Processing</a><a id="Chunked-Processing-1"></a><a class="docs-heading-anchor-permalink" href="#Chunked-Processing" title="Permalink"></a></h3><pre><code class="language-julia hljs">function process_large_dataset_efficiently(model, data, chunk_size=10_000)
+    compiled = compile_formula(model, data)
+    n_rows = Tables.rowcount(data)
+    n_cols = length(compiled)
+    
+    # Pre-allocate chunk matrix
+    chunk_matrix = Matrix{Float64}(undef, chunk_size, n_cols)
+    
+    results = Vector{Matrix{Float64}}()
+    
+    for start_idx in 1:chunk_size:n_rows
+        end_idx = min(start_idx + chunk_size - 1, n_rows)
+        actual_chunk_size = end_idx - start_idx + 1
+        
+        # Use view for variable chunk sizes
+        chunk_view = view(chunk_matrix, 1:actual_chunk_size, :)
+        
+        # Zero-allocation batch evaluation
+        modelrow!(chunk_view, compiled, data, start_idx:end_idx)
+        
+        # Store results (this allocates, but unavoidable for storage)
+        push!(results, copy(chunk_view))
+    end
+    
+    return results
+end</code></pre><h3 id="Parallel-Processing"><a class="docs-heading-anchor" href="#Parallel-Processing">Parallel Processing</a><a id="Parallel-Processing-1"></a><a class="docs-heading-anchor-permalink" href="#Parallel-Processing" title="Permalink"></a></h3><pre><code class="language-julia hljs">using Distributed
+
+@everywhere using FormulaCompiler
+
+function parallel_formula_evaluation(model, data, row_indices)
+    # Compile on each worker
+    compiled = compile_formula(model, data)
+    
+    # Distributed evaluation
+    results = @distributed (vcat) for row_idx in row_indices
+        row_vec = Vector{Float64}(undef, length(compiled))
+        compiled(row_vec, data, row_idx)
+        row_vec&#39;  # Return as row matrix
+    end
+    
+    return results
+end</code></pre><h2 id="Optimization-Anti-patterns"><a class="docs-heading-anchor" href="#Optimization-Anti-patterns">Optimization Anti-patterns</a><a id="Optimization-Anti-patterns-1"></a><a class="docs-heading-anchor-permalink" href="#Optimization-Anti-patterns" title="Permalink"></a></h2><h3 id="What-NOT-to-Do"><a class="docs-heading-anchor" href="#What-NOT-to-Do">What NOT to Do</a><a id="What-NOT-to-Do-1"></a><a class="docs-heading-anchor-permalink" href="#What-NOT-to-Do" title="Permalink"></a></h3><pre><code class="language-julia hljs"># DON&#39;T: Recompile in loops
+for i in 1:1000
+    result = modelrow(model, data, i)  # Recompiles every time!
+end
+
+# DON&#39;T: Use DataFrames for row access in tight loops
+for i in 1:1000
+    compiled(row_vec, df, i)  # Slower than column table
+end
+
+# DON&#39;T: Forget to pre-allocate
+results = []
+for i in 1:1000
+    compiled(row_vec, data, i)
+    push!(results, copy(row_vec))  # Allocates and copies!
+end
+
+# DON&#39;T: Create unnecessary temporary arrays
+for i in 1:1000
+    compiled(row_vec, data, i)
+    result = row_vec .+ 1.0  # Allocates new array!
+end</code></pre><h3 id="Better-Alternatives"><a class="docs-heading-anchor" href="#Better-Alternatives">Better Alternatives</a><a id="Better-Alternatives-1"></a><a class="docs-heading-anchor-permalink" href="#Better-Alternatives" title="Permalink"></a></h3><pre><code class="language-julia hljs"># DO: Compile once, pre-allocate, reuse
+compiled = compile_formula(model, data)
+data_table = Tables.columntable(df)
+row_vec = Vector{Float64}(undef, length(compiled))
+results = Matrix{Float64}(undef, 1000, length(compiled))
+
+for i in 1:1000
+    compiled(row_vec, data_table, i)
+    results[i, :] .= row_vec  # In-place assignment
+end
+
+# DO: Use broadcasting for transformations
+results .+= 1.0  # In-place broadcasting</code></pre><h2 id="Performance-Monitoring"><a class="docs-heading-anchor" href="#Performance-Monitoring">Performance Monitoring</a><a id="Performance-Monitoring-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Monitoring" title="Permalink"></a></h2><h3 id="Continuous-Performance-Testing"><a class="docs-heading-anchor" href="#Continuous-Performance-Testing">Continuous Performance Testing</a><a id="Continuous-Performance-Testing-1"></a><a class="docs-heading-anchor-permalink" href="#Continuous-Performance-Testing" title="Permalink"></a></h3><pre><code class="language-julia hljs">function performance_regression_test(model, data, target_time_ns=100)
+    compiled = compile_formula(model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    # Warm up
+    compiled(row_vec, data, 1)
+    
+    # Time single evaluation
+    time_ns = @elapsed begin
+        for _ in 1:1000
+            compiled(row_vec, data, 1)
+        end
+    end * 1e9 / 1000  # Convert to ns per evaluation
+    
+    if time_ns &gt; target_time_ns
+        @warn &quot;Performance regression detected: $(round(time_ns))ns &gt; $(target_time_ns)ns&quot;
+    else
+        println(&quot;✓ Performance target met: $(round(time_ns))ns ≤ $(target_time_ns)ns&quot;)
+    end
+    
+    return time_ns
+end</code></pre><h3 id="Memory-Usage-Monitoring"><a class="docs-heading-anchor" href="#Memory-Usage-Monitoring">Memory Usage Monitoring</a><a id="Memory-Usage-Monitoring-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Usage-Monitoring" title="Permalink"></a></h3><pre><code class="language-julia hljs">function memory_usage_test(model, data)
+    # Measure compilation memory
+    compilation_memory = @allocated compile_formula(model, data)
+    
+    # Measure evaluation memory
+    compiled = compile_formula(model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    evaluation_memory = @allocated compiled(row_vec, data, 1)
+    
+    println(&quot;Compilation memory: $(compilation_memory) bytes&quot;)
+    println(&quot;Evaluation memory: $(evaluation_memory) bytes&quot;)
+    
+    if evaluation_memory &gt; 0
+        @warn &quot;Non-zero allocation in evaluation: $(evaluation_memory) bytes&quot;
+    end
+    
+    return (compilation = compilation_memory, evaluation = evaluation_memory)
+end</code></pre><h2 id="Real-world-Performance-Examples"><a class="docs-heading-anchor" href="#Real-world-Performance-Examples">Real-world Performance Examples</a><a id="Real-world-Performance-Examples-1"></a><a class="docs-heading-anchor-permalink" href="#Real-world-Performance-Examples" title="Permalink"></a></h2><h3 id="Monte-Carlo-Simulation"><a class="docs-heading-anchor" href="#Monte-Carlo-Simulation">Monte Carlo Simulation</a><a id="Monte-Carlo-Simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Monte-Carlo-Simulation" title="Permalink"></a></h3><pre><code class="language-julia hljs">function efficient_monte_carlo(model, data, n_simulations=1_000_000)
+    compiled = compile_formula(model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    results = Vector{Float64}(undef, n_simulations)
+    
+    # Pre-compute random indices
+    row_indices = rand(1:nrow(data), n_simulations)
+    
+    @time begin
+        for i in 1:n_simulations
+            compiled(row_vec, data, row_indices[i])
+            results[i] = some_statistic(row_vec)  # Your analysis function
+        end
+    end
+    
+    return results
+end</code></pre><h3 id="Bootstrap-Resampling"><a class="docs-heading-anchor" href="#Bootstrap-Resampling">Bootstrap Resampling</a><a id="Bootstrap-Resampling-1"></a><a class="docs-heading-anchor-permalink" href="#Bootstrap-Resampling" title="Permalink"></a></h3><pre><code class="language-julia hljs">function efficient_bootstrap(model, data, n_bootstrap=1000)
+    compiled = compile_formula(model, data)
+    n_rows = nrow(data)
+    n_cols = length(compiled)
+    
+    bootstrap_results = Matrix{Float64}(undef, n_bootstrap, n_cols)
+    row_vec = Vector{Float64}(undef, n_cols)
+    
+    for boot in 1:n_bootstrap
+        # Generate bootstrap sample indices
+        sample_indices = rand(1:n_rows, n_rows)
+        
+        # Compute bootstrap statistic
+        for (i, row_idx) in enumerate(sample_indices)
+            compiled(row_vec, data, row_idx)
+            if i == 1
+                bootstrap_results[boot, :] .= row_vec
+            else
+                bootstrap_results[boot, :] .+= row_vec
+            end
+        end
+        
+        bootstrap_results[boot, :] ./= n_rows  # Average
+    end
+    
+    return bootstrap_results
+end</code></pre><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><p>Key performance guidelines:</p><ol><li><strong>Compile once</strong>: Never recompile formulas in loops</li><li><strong>Pre-allocate</strong>: Create output vectors once and reuse</li><li><strong>Use column tables</strong>: Convert DataFrames to <code>Tables.columntable</code> format</li><li><strong>Profile regularly</strong>: Monitor for performance regressions</li><li><strong>Batch when possible</strong>: Use <code>modelrow!</code> for multiple rows</li></ol></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../scenarios/">« Scenario Analysis</a><a class="docs-footer-nextpage" href="../../integration/glm/">GLM.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Thursday 28 August 2025 13:43">Thursday 28 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

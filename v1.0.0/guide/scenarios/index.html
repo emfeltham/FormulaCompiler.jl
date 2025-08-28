@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Scenario Analysis · FormulaCompiler.jl</title><meta name="title" content="Scenario Analysis · FormulaCompiler.jl"/><meta property="og:title" content="Scenario Analysis · FormulaCompiler.jl"/><meta property="twitter:title" content="Scenario Analysis · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/scenarios/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/scenarios/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/guide/scenarios/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><script src="../../assets/mermaid.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../basic_usage/">Basic Usage</a></li><li><a class="tocitem" href="../advanced_features/">Advanced Features</a></li><li class="is-active"><a class="tocitem" href>Scenario Analysis</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Scenario-Workflow"><span>Scenario Workflow</span></a></li><li><a class="tocitem" href="#Basic-Scenario-Creation"><span>Basic Scenario Creation</span></a></li><li><a class="tocitem" href="#Scenario-Collections"><span>Scenario Collections</span></a></li><li><a class="tocitem" href="#Advanced-Scenario-Patterns"><span>Advanced Scenario Patterns</span></a></li><li><a class="tocitem" href="#Policy-Analysis-Applications"><span>Policy Analysis Applications</span></a></li><li><a class="tocitem" href="#Memory-Efficiency"><span>Memory Efficiency</span></a></li><li><a class="tocitem" href="#Best-Practices"><span>Best Practices</span></a></li></ul></li><li><a class="tocitem" href="../performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../../integration/glm/">GLM.jl</a></li><li><a class="tocitem" href="../../integration/mixed_models/">MixedModels.jl</a></li><li><a class="tocitem" href="../../integration/standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../../mathematical_foundation/">Mathematical Foundation</a></li><li><a class="tocitem" href="../../architecture/">Architecture</a></li><li><a class="tocitem" href="../../api/">API Reference</a></li><li><a class="tocitem" href="../../examples/">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">User Guide</a></li><li class="is-active"><a href>Scenario Analysis</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Scenario Analysis</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/guide/scenarios.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Scenario-Analysis"><a class="docs-heading-anchor" href="#Scenario-Analysis">Scenario Analysis</a><a id="Scenario-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Scenario-Analysis" title="Permalink"></a></h1><p>FormulaCompiler.jl&#39;s scenario system enables efficient &quot;what-if&quot; analysis and counterfactual modeling with minimal memory overhead.</p><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>The scenario system allows you to:</p><ul><li>Override specific variables while keeping others unchanged</li><li>Create policy scenarios for analysis</li><li>Generate scenario grids for comprehensive analysis</li><li>Perform efficient counterfactual analysis</li><li>Handle missing data patterns</li></ul><p>All with minimal memory allocation using the <code>OverrideVector</code> system.</p><h2 id="Scenario-Workflow"><a class="docs-heading-anchor" href="#Scenario-Workflow">Scenario Workflow</a><a id="Scenario-Workflow-1"></a><a class="docs-heading-anchor-permalink" href="#Scenario-Workflow" title="Permalink"></a></h2><p><img src="../../assets/src_guide_scenarios_diagram_5.svg" alt="Diagram"/></p><h2 id="Basic-Scenario-Creation"><a class="docs-heading-anchor" href="#Basic-Scenario-Creation">Basic Scenario Creation</a><a id="Basic-Scenario-Creation-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Scenario-Creation" title="Permalink"></a></h2><h3 id="Simple-Overrides"><a class="docs-heading-anchor" href="#Simple-Overrides">Simple Overrides</a><a id="Simple-Overrides-1"></a><a class="docs-heading-anchor-permalink" href="#Simple-Overrides" title="Permalink"></a></h3><pre><code class="language-julia hljs">using FormulaCompiler, DataFrames, Tables, GLM
+
+# Setup data
+df = DataFrame(
+    y = randn(1000),
+    x = randn(1000),
+    treatment = rand(Bool, 1000),
+    age = rand(18:80, 1000),
+    income = rand(20000:100000, 1000)
+)
+
+data = Tables.columntable(df)
+model = lm(@formula(y ~ x * treatment + age + log(income)), df)
+compiled = compile_formula(model, data)
+
+# Create scenarios
+baseline = create_scenario(&quot;baseline&quot;, data)
+
+# Treatment effect scenario
+treatment_scenario = create_scenario(&quot;treatment_on&quot;, data;
+    treatment = true
+)
+
+# Policy scenario: everyone gets average income
+policy_scenario = create_scenario(&quot;income_equality&quot;, data;
+    income = mean(df.income)
+)
+
+# Complex scenario with multiple overrides
+intervention = create_scenario(&quot;intervention&quot;, data;
+    treatment = true,
+    age = 30,           # Set everyone to age 30
+    income = 50000      # Set everyone to $50k income
+)</code></pre><h3 id="Evaluating-Scenarios"><a class="docs-heading-anchor" href="#Evaluating-Scenarios">Evaluating Scenarios</a><a id="Evaluating-Scenarios-1"></a><a class="docs-heading-anchor-permalink" href="#Evaluating-Scenarios" title="Permalink"></a></h3><pre><code class="language-julia hljs">row_vec = Vector{Float64}(undef, length(compiled))
+
+# Compare scenarios for individual 100
+individual = 100
+
+compiled(row_vec, baseline.data, individual)
+baseline_prediction = copy(row_vec)
+
+compiled(row_vec, treatment_scenario.data, individual)  
+treatment_prediction = copy(row_vec)
+
+compiled(row_vec, intervention.data, individual)
+intervention_prediction = copy(row_vec)
+
+# Calculate treatment effects
+treatment_effect = treatment_prediction .- baseline_prediction
+intervention_effect = intervention_prediction .- baseline_prediction</code></pre><h2 id="Scenario-Collections"><a class="docs-heading-anchor" href="#Scenario-Collections">Scenario Collections</a><a id="Scenario-Collections-1"></a><a class="docs-heading-anchor-permalink" href="#Scenario-Collections" title="Permalink"></a></h2><h3 id="Creating-Scenario-Grids"><a class="docs-heading-anchor" href="#Creating-Scenario-Grids">Creating Scenario Grids</a><a id="Creating-Scenario-Grids-1"></a><a class="docs-heading-anchor-permalink" href="#Creating-Scenario-Grids" title="Permalink"></a></h3><p>Generate all combinations of scenario parameters:</p><pre><code class="language-julia hljs"># Create a 2×3×2 grid of scenarios
+policy_grid = create_scenario_grid(&quot;policy_analysis&quot;, data, Dict(
+    :treatment =&gt; [false, true],
+    :income =&gt; [30000, 50000, 80000],
+    :region =&gt; [&quot;urban&quot;, &quot;rural&quot;]
+))
+
+println(&quot;Created $(length(policy_grid)) scenarios&quot;)  # 12 scenarios
+
+# Evaluate all scenarios for a specific individual
+individual = 1
+results = Matrix{Float64}(undef, length(policy_grid), length(compiled))
+
+for (i, scenario) in enumerate(policy_grid)
+    compiled(view(results, i, :), scenario.data, individual)
+end
+
+# Results matrix: each row is one scenario combination</code></pre><h3 id="Named-Scenario-Collections"><a class="docs-heading-anchor" href="#Named-Scenario-Collections">Named Scenario Collections</a><a id="Named-Scenario-Collections-1"></a><a class="docs-heading-anchor-permalink" href="#Named-Scenario-Collections" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Create multiple related scenarios
+scenarios = ScenarioCollection(&quot;treatment_analysis&quot;)
+
+add_scenario!(scenarios, &quot;control&quot;, data; treatment = false)
+add_scenario!(scenarios, &quot;low_dose&quot;, data; treatment = true, dose = 50)  
+add_scenario!(scenarios, &quot;high_dose&quot;, data; treatment = true, dose = 100)
+add_scenario!(scenarios, &quot;placebo&quot;, data; treatment = false, placebo = true)
+
+# Evaluate all scenarios
+results = evaluate_scenarios(compiled, scenarios, individual)
+
+# Access by name
+control_result = results[&quot;control&quot;]
+treatment_result = results[&quot;high_dose&quot;]</code></pre><h2 id="Advanced-Scenario-Patterns"><a class="docs-heading-anchor" href="#Advanced-Scenario-Patterns">Advanced Scenario Patterns</a><a id="Advanced-Scenario-Patterns-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Scenario-Patterns" title="Permalink"></a></h2><h3 id="Dynamic-Scenario-Modification"><a class="docs-heading-anchor" href="#Dynamic-Scenario-Modification">Dynamic Scenario Modification</a><a id="Dynamic-Scenario-Modification-1"></a><a class="docs-heading-anchor-permalink" href="#Dynamic-Scenario-Modification" title="Permalink"></a></h3><pre><code class="language-julia hljs">scenario = create_scenario(&quot;dynamic&quot;, data; x = 1.0)
+
+# Modify scenarios iteratively
+for new_treatment_value in [false, true]
+    set_override!(scenario, :treatment, new_treatment_value)
+    
+    for new_age in [25, 35, 45, 55, 65]
+        set_override!(scenario, :age, new_age)
+        
+        # Evaluate current scenario
+        compiled(row_vec, scenario.data, individual)
+        println(&quot;Treatment: $new_treatment_value, Age: $new_age, Prediction: $(row_vec[1])&quot;)
+    end
+end
+
+# Bulk updates
+update_scenario!(scenario; 
+    treatment = true,
+    age = 40,
+    income = 60000,
+    new_policy = true
+)
+
+# Remove specific overrides
+remove_override!(scenario, :new_policy)</code></pre><h3 id="Conditional-Scenarios"><a class="docs-heading-anchor" href="#Conditional-Scenarios">Conditional Scenarios</a><a id="Conditional-Scenarios-1"></a><a class="docs-heading-anchor-permalink" href="#Conditional-Scenarios" title="Permalink"></a></h3><p>Create scenarios with conditional logic:</p><pre><code class="language-julia hljs">function create_conditional_scenario(name, data, condition_func)
+    scenario = create_scenario(name, data)
+    
+    # Apply conditions based on original data
+    if condition_func === :high_earners
+        # Override high earners (top 25%) to maximum income
+        high_income_threshold = quantile(df.income, 0.75)
+        max_income = maximum(df.income)
+        
+        # This would need custom implementation to be truly conditional
+        # For now, we can approximate with population statistics
+        set_override!(scenario, :income, max_income)
+    end
+    
+    return scenario
+end</code></pre><h3 id="Stochastic-Scenarios"><a class="docs-heading-anchor" href="#Stochastic-Scenarios">Stochastic Scenarios</a><a id="Stochastic-Scenarios-1"></a><a class="docs-heading-anchor-permalink" href="#Stochastic-Scenarios" title="Permalink"></a></h3><p>Generate random scenario variations:</p><pre><code class="language-julia hljs">using Random
+
+function create_random_scenarios(base_data, n_scenarios, seed=123)
+    Random.seed!(seed)
+    scenarios = ScenarioCollection(&quot;random_scenarios&quot;)
+    
+    for i in 1:n_scenarios
+        scenario_name = &quot;random_$i&quot;
+        
+        # Random treatment assignment
+        treatment = rand(Bool)
+        
+        # Random age from realistic distribution
+        age = rand(25:65)
+        
+        # Random income with some correlation to age
+        base_income = 30000 + age * 800 + rand(Normal(0, 10000))
+        income = max(20000, base_income)
+        
+        add_scenario!(scenarios, scenario_name, base_data;
+            treatment = treatment,
+            age = age, 
+            income = income
+        )
+    end
+    
+    return scenarios
+end
+
+# Generate 100 random scenarios
+random_scenarios = create_random_scenarios(data, 100)
+
+# Evaluate all random scenarios
+random_results = evaluate_scenarios(compiled, random_scenarios, individual)</code></pre><h2 id="Policy-Analysis-Applications"><a class="docs-heading-anchor" href="#Policy-Analysis-Applications">Policy Analysis Applications</a><a id="Policy-Analysis-Applications-1"></a><a class="docs-heading-anchor-permalink" href="#Policy-Analysis-Applications" title="Permalink"></a></h2><h3 id="Treatment-Effect-Analysis"><a class="docs-heading-anchor" href="#Treatment-Effect-Analysis">Treatment Effect Analysis</a><a id="Treatment-Effect-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Treatment-Effect-Analysis" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Create treatment vs. control scenarios
+control = create_scenario(&quot;control&quot;, data; treatment = false)
+treated = create_scenario(&quot;treated&quot;, data; treatment = true)
+
+# Calculate individual treatment effects
+n_individuals = 100
+treatment_effects = Vector{Float64}(n_individuals)
+
+for i in 1:n_individuals
+    compiled(row_vec, control.data, i)
+    control_pred = row_vec[1]  # Assuming outcome is first term
+    
+    compiled(row_vec, treated.data, i)
+    treated_pred = row_vec[1]
+    
+    treatment_effects[i] = treated_pred - control_pred
+end
+
+# Analyze distribution of treatment effects
+using Statistics
+println(&quot;Mean treatment effect: $(mean(treatment_effects))&quot;)
+println(&quot;Std treatment effect: $(std(treatment_effects))&quot;)</code></pre><h3 id="Income-Redistribution-Analysis"><a class="docs-heading-anchor" href="#Income-Redistribution-Analysis">Income Redistribution Analysis</a><a id="Income-Redistribution-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Income-Redistribution-Analysis" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Create scenarios with different income distributions
+income_scenarios = Dict(
+    &quot;current&quot; =&gt; create_scenario(&quot;current&quot;, data),
+    &quot;universal_basic&quot; =&gt; create_scenario(&quot;ubi&quot;, data; income = 40000),
+    &quot;progressive&quot; =&gt; create_scenario(&quot;progressive&quot;, data; 
+        income = quantile(df.income, 0.5)  # Everyone gets median income
+    ),
+    &quot;equality&quot; =&gt; create_scenario(&quot;equality&quot;, data; 
+        income = mean(df.income)  # Everyone gets mean income
+    )
+)
+
+# Evaluate welfare outcomes under different policies
+welfare_results = Dict{String, Vector{Float64}}()
+
+for (policy_name, scenario) in income_scenarios
+    policy_outcomes = Vector{Float64}(nrow(df))
+    
+    for i in 1:nrow(df)
+        compiled(row_vec, scenario.data, i)
+        policy_outcomes[i] = row_vec[1]  # Or some welfare function
+    end
+    
+    welfare_results[policy_name] = policy_outcomes
+end
+
+# Compare distributions
+for (policy, outcomes) in welfare_results
+    println(&quot;Policy: $policy&quot;)
+    println(&quot;  Mean outcome: $(mean(outcomes))&quot;)
+    println(&quot;  Std outcome: $(std(outcomes))&quot;)  
+    println(&quot;  Gini coefficient: $(gini_coefficient(outcomes))&quot;)
+end</code></pre><h3 id="Sensitivity-Analysis"><a class="docs-heading-anchor" href="#Sensitivity-Analysis">Sensitivity Analysis</a><a id="Sensitivity-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Sensitivity-Analysis" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Analyze sensitivity to key parameters
+function sensitivity_analysis(compiled, data, base_individual, param_ranges)
+    base_scenario = create_scenario(&quot;base&quot;, data)
+    results = Dict{Symbol, Vector{Tuple{Float64, Float64}}}()
+    
+    for (param, range) in param_ranges
+        param_results = Vector{Tuple{Float64, Float64}}()
+        
+        for value in range
+            # Create scenario with this parameter value
+            set_override!(base_scenario, param, value)
+            
+            # Evaluate
+            row_vec = Vector{Float64}(undef, length(compiled))
+            compiled(row_vec, base_scenario.data, base_individual)
+            
+            push!(param_results, (value, row_vec[1]))
+        end
+        
+        results[param] = param_results
+        remove_override!(base_scenario, param)  # Reset for next parameter
+    end
+    
+    return results
+end
+
+# Run sensitivity analysis
+sensitivity_ranges = Dict(
+    :age =&gt; 20:5:80,
+    :income =&gt; 20000:10000:100000,
+    :x =&gt; -3:0.5:3
+)
+
+sensitivity_results = sensitivity_analysis(compiled, data, 1, sensitivity_ranges)
+
+# Plot or analyze results
+for (param, results) in sensitivity_results
+    values = [r[1] for r in results]
+    outcomes = [r[2] for r in results]
+    
+    println(&quot;Parameter: $param&quot;)
+    println(&quot;  Range: $(minimum(values)) to $(maximum(values))&quot;)
+    println(&quot;  Outcome range: $(minimum(outcomes)) to $(maximum(outcomes))&quot;)
+end</code></pre><h2 id="Memory-Efficiency"><a class="docs-heading-anchor" href="#Memory-Efficiency">Memory Efficiency</a><a id="Memory-Efficiency-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Efficiency" title="Permalink"></a></h2><h3 id="Understanding-OverrideVector"><a class="docs-heading-anchor" href="#Understanding-OverrideVector">Understanding OverrideVector</a><a id="Understanding-OverrideVector-1"></a><a class="docs-heading-anchor-permalink" href="#Understanding-OverrideVector" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Compare memory usage
+n_obs = 1_000_000
+
+# Traditional approach: full vector
+full_vector = fill(42.0, n_obs)
+println(&quot;Full vector size: $(sizeof(full_vector)) bytes&quot;)
+
+# OverrideVector approach  
+override_vector = OverrideVector(42.0, n_obs)
+println(&quot;Override vector size: $(sizeof(override_vector)) bytes&quot;)
+
+# Memory savings
+savings_ratio = sizeof(full_vector) / sizeof(override_vector)
+println(&quot;Memory savings: $(round(savings_ratio))x&quot;)
+
+# Both provide same interface
+@assert full_vector[500_000] == override_vector[500_000]
+@assert length(full_vector) == length(override_vector)</code></pre><h3 id="Efficient-Scenario-Storage"><a class="docs-heading-anchor" href="#Efficient-Scenario-Storage">Efficient Scenario Storage</a><a id="Efficient-Scenario-Storage-1"></a><a class="docs-heading-anchor-permalink" href="#Efficient-Scenario-Storage" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Multiple scenarios with shared base data
+shared_data = Tables.columntable(df)
+
+# Each scenario only stores its overrides
+scenario1 = create_scenario(&quot;s1&quot;, shared_data; treatment = true)
+scenario2 = create_scenario(&quot;s2&quot;, shared_data; income = 50000)  
+scenario3 = create_scenario(&quot;s3&quot;, shared_data; age = 30, treatment = false)
+
+# Total memory is much less than 3 full copies of data
+total_scenario_memory = sizeof(scenario1) + sizeof(scenario2) + sizeof(scenario3)
+full_data_memory = 3 * sum(sizeof(col) for col in shared_data)
+
+println(&quot;Scenario memory: $total_scenario_memory bytes&quot;)
+println(&quot;Full copy memory: $full_data_memory bytes&quot;)
+println(&quot;Savings: $(round(full_data_memory / total_scenario_memory))x&quot;)</code></pre><h2 id="Best-Practices"><a class="docs-heading-anchor" href="#Best-Practices">Best Practices</a><a id="Best-Practices-1"></a><a class="docs-heading-anchor-permalink" href="#Best-Practices" title="Permalink"></a></h2><h3 id="Scenario-Design"><a class="docs-heading-anchor" href="#Scenario-Design">Scenario Design</a><a id="Scenario-Design-1"></a><a class="docs-heading-anchor-permalink" href="#Scenario-Design" title="Permalink"></a></h3><ul><li>Use descriptive names for scenarios</li><li>Group related scenarios in collections</li><li>Cache compiled formulas when evaluating many scenarios</li><li>Pre-allocate output vectors for repeated evaluations</li></ul><h3 id="Performance-Tips"><a class="docs-heading-anchor" href="#Performance-Tips">Performance Tips</a><a id="Performance-Tips-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Tips" title="Permalink"></a></h3><ul><li>Create scenarios once and reuse them</li><li>Use batch evaluation for multiple individuals</li><li>Consider using views for large result matrices</li><li>Profile memory usage in complex scenario analyses</li></ul><h3 id="Statistical-Considerations"><a class="docs-heading-anchor" href="#Statistical-Considerations">Statistical Considerations</a><a id="Statistical-Considerations-1"></a><a class="docs-heading-anchor-permalink" href="#Statistical-Considerations" title="Permalink"></a></h3><ul><li>Always compare to appropriate baselines</li><li>Account for uncertainty in treatment effect estimates</li><li>Consider interaction effects in scenario design</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../advanced_features/">« Advanced Features</a><a class="docs-footer-nextpage" href="../performance/">Performance Tips »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Thursday 28 August 2025 13:43">Thursday 28 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
