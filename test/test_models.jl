@@ -6,7 +6,7 @@ using Test
 using FormulaCompiler
 using DataFrames, GLM, Tables, CategoricalArrays, MixedModels
 using StatsModels, BenchmarkTools
-using FormulaCompiler: make_test_data, test_formulas, test_model_correctness
+# Test helpers are included from test/support/testing_utilities.jl via runtests.jl
 using Random
 
 @testset "Model Correctness Tests" begin

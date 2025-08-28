@@ -7,7 +7,7 @@ using FormulaCompiler
 using Statistics
 using DataFrames, GLM, Tables, CategoricalArrays, Random
 using StatsModels
-using FormulaCompiler: test_data, test_formula_correctness, test_allocation_performance
+# Test helpers are included from test/support/testing_utilities.jl via runtests.jl
 
 @testset "Position Mapping Tests" begin
     Random.seed!(06515)

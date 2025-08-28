@@ -1,13 +1,13 @@
 # test_allocations.jl
 # Formal test suite for zero-allocation verification
 # "allocation_survey.jl" prints allocations to a table.
-# julia --project="." test/test_allocations.jl > test/test_allocations.txt 2>&1
+# julia --project="test" test/test_allocations.jl > test/test_allocations.txt 2>&1
 
 using Test
 using FormulaCompiler
 using DataFrames, GLM, Tables, CategoricalArrays, MixedModels
 using StatsModels, BenchmarkTools
-using FormulaCompiler: make_test_data, test_formulas, test_zero_allocation
+# Test helpers are included from test/support/testing_utilities.jl via runtests.jl
 using Random
 
 @testset "Zero Allocation Survey" begin

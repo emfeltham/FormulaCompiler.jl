@@ -8,9 +8,12 @@ This repository separates correctness tests from allocation/performance tests to
   - `julia --project=. -e 'using Pkg; Pkg.test()'`
   - or `julia --project=. test/runtests.jl`
 - Individual suites (examples)
-  - `julia --project=. -e 'include("test/test_derivatives.jl")'`
-  - `julia --project=. -e 'include("test/test_links.jl")'`
-  - `julia --project=. -e 'include("test/test_allocations.jl")'`
+  - Root project + bootstrap
+    - `julia --project=. -e 'include("test/bootstrap.jl"); _fc_load_testdeps(); include("test/test_derivatives.jl")'`
+    - `julia --project=. -e 'include("test/bootstrap.jl"); _fc_load_testdeps(); include("test/test_links.jl")'`
+    - `julia --project=. -e 'include("test/bootstrap.jl"); _fc_load_testdeps(csv=true); include("test/test_derivative_allocations.jl")'`
+  - Test project
+    - `julia --project=test -e 'include("test/bootstrap.jl"); _fc_load_testdeps(); include("test/test_derivatives.jl")'`
 
 ## Suite Organization
 
@@ -46,10 +49,10 @@ This repository separates correctness tests from allocation/performance tests to
   - Standalone Jacobian: small, bounded allocations (per‑call row override build). Current cap ≤ 2048 bytes.
   - Evaluator Jacobian (generated FD): trending to 0; current cap ≤ 256 bytes (tighten as typing completes).
 - ForwardDiff
-  - Jacobian (vector AD): environment‑dependent small allocations; current cap ≤ 256 bytes.
+  - Jacobian (vector AD): environment‑dependent small allocations; current cap ≤ 512 bytes.
   - η‑gradient (scalar AD): trending to 0 with hoisted configs; current cap ≤ 512 bytes (tighten as we confirm 0 on CI).
 - μ marginal effects
-  - Follows the η path + link scaling; current cap ≤ 256 bytes.
+  - Follows the η path + link scaling; current cap ≤ 512 bytes.
 
 Notes:
 - ForwardDiff internal behavior can vary across Julia/ForwardDiff versions; caps are set to be strict but realistic.

@@ -6,7 +6,7 @@
 using FormulaCompiler
 using DataFrames, GLM, Tables, CategoricalArrays, MixedModels
 using StatsModels, BenchmarkTools, CSV
-using FormulaCompiler: make_test_data, test_formulas
+# Test helpers are included from test/support/testing_utilities.jl when run via runtests.
 using Random
 
 Random.seed!(08540)

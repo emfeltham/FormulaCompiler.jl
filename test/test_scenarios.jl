@@ -12,7 +12,7 @@
     )
     data = Tables.columntable(df)
     model = lm(@formula(y ~ x * group + flag), df)
-    compiled = compile_formula(model)
+    compiled = compile_formula(model, data)
     
     @testset "OverrideVector" begin
         # Test basic functionality

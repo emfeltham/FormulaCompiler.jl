@@ -3,8 +3,24 @@ The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.d
   juliaup update
 
 in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
-Precompiling FormulaCompiler...
-   3987.2 ms  ✓ FormulaCompiler
-  1 dependency successfully precompiled in 4 seconds. 239 already precompiled.
-Test Summary:          | Pass  Total   Time
-Zero Allocation Survey |  105    105  38.6s
+ERROR: LoadError: Some tests did not pass: 0 passed, 0 failed, 1 errored, 0 broken.
+in expression starting at /Users/emf/.julia/dev/FormulaCompiler/test/test_allocations.jl:13
+Zero Allocation Survey: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_allocations.jl:13
+  Got exception outside of a @test
+  UndefVarError: `make_test_data` not defined in `Main`
+  Suggestion: check for spelling errors or missing imports.
+  Stacktrace:
+   [1] macro expansion
+     @ ~/.julia/dev/FormulaCompiler/test/test_allocations.jl:18 [inlined]
+   [2] macro expansion
+     @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+   [3] top-level scope
+     @ ~/.julia/dev/FormulaCompiler/test/test_allocations.jl:14
+   [4] include(mod::Module, _path::String)
+     @ Base ./Base.jl:557
+   [5] exec_options(opts::Base.JLOptions)
+     @ Base ./client.jl:323
+   [6] _start()
+     @ Base ./client.jl:531
+Test Summary:          | Error  Total  Time
+Zero Allocation Survey |     1      1  0.8s

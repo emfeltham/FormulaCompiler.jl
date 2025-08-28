@@ -106,3 +106,16 @@ end
 
 # Export main functions
 export UnifiedCompiled, compile_formula
+
+"""
+    compile_formula(formula::StatsModels.FormulaTerm, data_example::NamedTuple) -> UnifiedCompiled
+
+Convenience overload to compile directly from a `StatsModels.FormulaTerm` and
+column-table data. This mirrors the model-based entry point but skips
+`get_fixed_effects_formula`.
+"""
+function compile_formula(formula::StatsModels.FormulaTerm, data_example::NamedTuple)
+    ops_vec, scratch_size, output_size = decompose_formula(formula, data_example)
+    ops_tuple = Tuple(ops_vec)
+    return UnifiedCompiled{Float64, typeof(ops_tuple), scratch_size, output_size}(ops_tuple)
+end

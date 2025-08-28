@@ -82,8 +82,7 @@ module FormulaCompiler
 
 ################################ Dependencies ################################
 
-# Development dependencies (remove from production builds)
-using Random, Test, BenchmarkTools
+# Development dependencies (kept out of production builds)
 
 # Core dependencies
 using Dates: now
@@ -145,10 +144,7 @@ export fd_jacobian_column!, me_eta_grad_beta!, me_mu_grad_beta!
 export delta_method_se, accumulate_ame_gradient!
 
 ############################## Development Tools ##############################
-
-# Development utilities (only include in dev builds)
-include("dev/testing_utilities.jl")
-# (Don't export functions here, import as needed)
+# (No dev utilities included in production module.)
 
 ############################## Future Features ##############################
 

@@ -469,8 +469,6 @@ function create_scenario_grid(collection_name::String,
     scenarios = DataScenario[]
     total_combinations = prod(length.(value_grids))
     
-    println("Creating scenario grid: $(total_combinations) combinations")
-    
     for (i, combination) in enumerate(Iterators.product(value_grids...))
         override_dict = Dict{Symbol, Any}()
         for (j, var) in enumerate(variables)
@@ -481,11 +479,13 @@ function create_scenario_grid(collection_name::String,
         scenario = create_scenario(scenario_name, data, override_dict)
         push!(scenarios, scenario)
         
-        if i % max(1, total_combinations ÷ 10) == 0
-            println("  Progress: $(i)/$(total_combinations) scenarios created")
-        end
+        # if i % max(1, total_combinations ÷ 10) == 0
+        #     println("  Progress: $(i)/$(total_combinations) scenarios created")
+        # end
     end
     
+    println("Created $(total_combinations) scenario grid combinations")
+
     metadata = Dict{String, Any}(
         "variables" => variables,
         "grid_sizes" => [length(grid) for grid in value_grids],
