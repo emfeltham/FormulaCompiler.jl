@@ -150,10 +150,18 @@ using BenchmarkTools
 ### Performance Characteristics
 
 - **Core evaluation**: Exactly 0 allocations (modelrow!, compiled functions)
-- **ForwardDiff derivatives**: ≤112 bytes per call (ForwardDiff internals, unavoidable)
-- **Marginal effects**: ≤256 bytes per call (optimized with preallocated buffers)  
+- **Finite differences (FD)**: Exactly 0 allocations (optimized implementation)
+- **ForwardDiff derivatives**: ≤512 bytes per call (ForwardDiff internals, unavoidable)
+- **Marginal effects**: ≤512 bytes per call for AD backend (optimized with preallocated buffers)  
 - **Allocation efficiency**: >99.75% compared to naive AD approaches
 - **Validation**: Cross-validated against finite differences for robustness
+
+!!! note "Future Improvements"
+    We are actively working on a more efficient automatic differentiation implementation 
+    that will reduce or eliminate allocations in the AD backend. The current ForwardDiff-based 
+    implementation provides excellent accuracy with minimal allocations (≤512 bytes), while 
+    the finite differences backend already achieves zero allocations for users who prioritize 
+    memory efficiency over speed.
 
 ### ForwardDiff-Based Derivatives
 
@@ -166,14 +174,14 @@ de = build_derivative_evaluator(compiled, data; vars=vars)
 
 # Pre-allocate Jacobian matrix (reused across calls)
 J = Matrix{Float64}(undef, length(compiled), length(vars))
-derivative_modelrow!(J, de, 1)  # ~112 bytes, near-optimal
+derivative_modelrow!(J, de, 1)  # ≤512 bytes (AD backend)
 
 # Marginal effects η = Xβ (uses preallocated buffers)
 β = coef(model)
-g_eta = marginal_effects_eta(de, β, 1)  # ~112 bytes
+g_eta = marginal_effects_eta(de, β, 1)  # ≤512 bytes (AD backend)
 
 # GLM mean μ = g⁻¹(η) with link functions
-g_mu = marginal_effects_mu(de, β, 1; link=LogitLink())  # ~112-256 bytes
+g_mu = marginal_effects_mu(de, β, 1; link=LogitLink())  # ≤512 bytes (AD backend)
 ```
 
 Finite-difference fallback (simple and robust):
@@ -231,10 +239,10 @@ using BenchmarkTools
 de = build_derivative_evaluator(compiled, data; vars=[:x, :z])
 J = Matrix{Float64}(undef, length(compiled), length(de.vars))
 
-# Benchmark derivatives (~112 bytes, near-theoretical minimum)
+# Benchmark derivatives (≤512 bytes, AD backend)
 @benchmark derivative_modelrow!($J, $de, 25)
 
-# Benchmark marginal effects (~112-256 bytes with preallocated buffers)  
+# Benchmark marginal effects (≤512 bytes with preallocated buffers, AD backend)  
 β = coef(model)
 g = Vector{Float64}(undef, length(de.vars))
 @benchmark marginal_effects_eta!($g, $de, $β, 25)

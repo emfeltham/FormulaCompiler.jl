@@ -30,8 +30,9 @@ FormulaCompiler.jl provides a sophisticated automatic differentiation system tha
 
 ### Performance Characteristics
 - **Core evaluation**: Exactly 0 allocations  
-- **ForwardDiff derivatives**: ≤112 bytes per call (ForwardDiff internal minimum)
-- **Marginal effects**: ≤256 bytes per call (optimized with preallocated buffers)
+- **Finite differences (FD)**: Exactly 0 allocations (optimized implementation)
+- **ForwardDiff derivatives**: ≤512 bytes per call (ForwardDiff internals)
+- **Marginal effects**: ≤512 bytes per call for AD backend (optimized with preallocated buffers)
 - **Allocation efficiency**: >99.75% compared to naive AD approaches
 - **Validation**: Cross-validated against finite differences (rtol=1e-6, atol=1e-8)
 
@@ -150,7 +151,7 @@ scenario = create_scenario("treatment", data;
 )
 ```
 
-### `create_scenario_grid(name, data, parameter_dict)`
+### `create_scenario_grid(name, data, parameter_dict; verbose=false)`
 
 Create all combinations of scenario parameters.
 
@@ -158,6 +159,7 @@ Create all combinations of scenario parameters.
 - `name`: Base name for scenarios
 - `data`: Base data
 - `parameter_dict`: Dict mapping variables to vectors of values
+- `verbose`: Whether to print creation progress (default: `false`)
 
 **Returns:**
 - `Vector{DataScenario}`: Vector of all parameter combinations
@@ -167,7 +169,7 @@ Create all combinations of scenario parameters.
 grid = create_scenario_grid("policy", data, Dict(
     :treatment => [false, true],
     :dose => [50, 100, 150]
-))  # Creates 6 scenarios
+); verbose=true)  # Creates 6 scenarios, prints progress
 ```
 
 ### `OverrideVector(value, length)`
@@ -279,7 +281,7 @@ Build a reusable ForwardDiff-based derivative evaluator for computing Jacobians 
 - `DerivativeEvaluator`: Reusable evaluator with preallocated buffers
 
 **Performance:**
-- One-time construction cost, then ~112 bytes per derivative call
+- One-time construction cost, then ≤512 bytes per derivative call (AD backend)
 - Contains preallocated Jacobian matrices and gradient vectors
 
 **Example:**
@@ -299,7 +301,7 @@ Fill Jacobian matrix with derivatives of model row with respect to selected vari
 - `row`: Row index to evaluate
 
 **Performance:**
-- ~112 bytes allocated per call (ForwardDiff internals)
+- ≤512 bytes allocated per call (ForwardDiff internals)
 - Uses preallocated buffers for near-optimal efficiency
 
 **Example:**
@@ -323,7 +325,7 @@ Compute marginal effects on linear predictor η = Xβ using chain rule.
 - Uses preallocated internal Jacobian buffer
 
 **Performance:**
-- ~112 bytes per call with preallocated buffers
+- ≤512 bytes per call with preallocated buffers (AD backend)
 
 **Example:**
 ```julia
@@ -349,7 +351,7 @@ Compute marginal effects on mean μ via chain rule: dμ/dx = (dμ/dη) × (dη/d
 - `InverseSquareLink()` (when available)
 
 **Performance:**
-- ~112-256 bytes per call with preallocated internal buffers
+- ≤512 bytes per call with preallocated internal buffers (AD backend)
 
 **Example:**
 ```julia
@@ -377,8 +379,8 @@ de = build_derivative_evaluator(compiled, data; vars=vars)
 ## Performance Notes
 
 - **Core functions** (`modelrow!`, `compiled(row_vec, data, row)`) achieve exactly 0 bytes allocated
-- **Derivative functions** achieve ~112 bytes per call (near-theoretical minimum for ForwardDiff)
-- **Marginal effects** use preallocated buffers to minimize allocations (~112-256 bytes)
+- **Derivative functions** achieve ≤512 bytes per call (ForwardDiff internals)
+- **Marginal effects** use preallocated buffers to minimize allocations (≤512 bytes)
 - `compile_formula` has one-time compilation cost but enables many fast evaluations
 - Use `Tables.columntable` format for best performance
 - Pre-allocate output vectors/matrices and reuse them across evaluations

@@ -1,5 +1,6 @@
 # FormulaCompiler.jl
 
+[![CI](https://github.com/emfeltham/FormulaCompiler.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/emfeltham/FormulaCompiler.jl/actions/workflows/ci.yml)
 [![Documentation](https://github.com/emfeltham/FormulaCompiler.jl/actions/workflows/docs.yml/badge.svg)](https://github.com/emfeltham/FormulaCompiler.jl/actions/workflows/docs.yml)
 [![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/stable/)
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/dev/)
@@ -126,7 +127,7 @@ policy_change = create_scenario("policy", data;
 )
 
 # Evaluate scenarios
-compiled = compile_formula(model)
+compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 compiled(row_vec, baseline.data, 1)      # Original data

@@ -452,11 +452,12 @@ baseline = get_scenario_by_name(policy_grid, "policy_analysis_treatment_false_do
 !!! note
     Creates Cartesian product of all variable values.
     Scenario names are auto-generated based on variable values.
-    Progress is printed for large grids (>10 combinations).
+    Use `verbose=true` to print creation progress.
 """
 function create_scenario_grid(collection_name::String,
                              data::NamedTuple,
-                             variable_grids::Dict{Symbol, <:AbstractVector})
+                             variable_grids::Dict{Symbol, <:AbstractVector};
+                             verbose::Bool = false)
     
     if isempty(variable_grids)
         scenario = create_scenario("$(collection_name)_original", data)
@@ -484,7 +485,7 @@ function create_scenario_grid(collection_name::String,
         # end
     end
     
-    println("Created $(total_combinations) scenario grid combinations")
+    verbose && println("Created $(total_combinations) scenario grid combinations")
 
     metadata = Dict{String, Any}(
         "variables" => variables,
