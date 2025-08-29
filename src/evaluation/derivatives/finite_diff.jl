@@ -1,6 +1,10 @@
 # finite_diff.jl
 # Finite difference implementations
 
+# Mathematically appropriate auto step scale for central differences
+# h ≈ cbrt(eps(Float64)) * max(1, |x|)
+const FD_AUTO_EPS_SCALE = cbrt(eps(Float64))  # ≈ 6.055454452393339e-6
+
 """
     derivative_modelrow_fd!(J, compiled, data, row; vars, step=:auto)
 
@@ -102,7 +106,7 @@ Notes:
             push!(stmts, :(@inbounds de.overrides[$k].replacement = xbase[$k]))
         end
         # step selection and evaluations
-        push!(stmts, :(h = (2.220446049250313e-6 * max(1.0, abs(x)))))
+        push!(stmts, :(h = (FD_AUTO_EPS_SCALE * max(1.0, abs(x)))))
         push!(stmts, :(@inbounds de.overrides[$j].replacement = x + h))
         push!(stmts, :(de.compiled_base(yplus, de.data_over, row)))
         push!(stmts, :(@inbounds de.overrides[$j].replacement = x - h))
@@ -233,8 +237,8 @@ Zero-allocation marginal effects using finite differences (with override system)
             for k in 1:nvars
                 de.overrides[k].replacement = xbase[k]
             end
-            # Step selection (hardcode eps()^(1/3) to avoid function calls)
-            h = step === :auto ? (2.220446049250313e-6 * max(1.0, abs(x))) : step
+            # Step selection (auto uses cbrt(eps(Float64)))
+            h = step === :auto ? (FD_AUTO_EPS_SCALE * max(1.0, abs(x))) : step
             # Plus
             de.overrides[j].replacement = x + h
             de.compiled_base(yplus, de.data_over, row)
@@ -345,7 +349,7 @@ end
     end
     
     # Step selection and evaluations for the single variable
-    push!(stmts, :(h = (2.220446049250313e-6 * max(1.0, abs(x)))))
+    push!(stmts, :(h = (FD_AUTO_EPS_SCALE * max(1.0, abs(x)))))
     push!(stmts, :(@inbounds de.overrides[var_idx].replacement = x + h))
     push!(stmts, :(de.compiled_base(yplus, de.data_over, row)))
     push!(stmts, :(@inbounds de.overrides[var_idx].replacement = x - h))
