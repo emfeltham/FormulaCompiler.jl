@@ -55,7 +55,18 @@ Notes:
 - Works with gradients computed by any backend (AD, FD, analytical)
 """
 function delta_method_se(gβ::AbstractVector{Float64}, Σ::AbstractMatrix{Float64})
-    return sqrt(gβ' * Σ * gβ)
+    # Zero-allocation computation of sqrt(gβ' * Σ * gβ)
+    # Use BLAS dot product to avoid temporary arrays
+    n = length(gβ)
+    result = 0.0
+    @inbounds for i in 1:n
+        temp = 0.0
+        for j in 1:n
+            temp += Σ[i, j] * gβ[j]
+        end
+        result += gβ[i] * temp
+    end
+    return sqrt(result)
 end
 
 """

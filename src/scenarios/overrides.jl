@@ -287,10 +287,37 @@ function create_override_vector(value, original_column::AbstractVector)
         # Non-categorical boolean: convert to Float64 (0.0 or 1.0)
         converted_value = Float64(value)
         return OverrideVector(converted_value, length(original_column))
+    elseif original_column isa Vector{<:Integer} && value isa AbstractFloat
+        # Integer columns with float overrides
+        if isinteger(value)
+            # Integer-valued float: preserve original integer type
+            try
+                converted_value = convert(eltype(original_column), value)
+                return OverrideVector(converted_value, length(original_column))
+            catch InexactError
+                # Value too large for integer type, use Float64
+                converted_value = Float64(value)
+                return OverrideVector(converted_value, length(original_column))
+            end
+        else
+            # Fractional float: convert to Float64 to preserve fractional part
+            converted_value = Float64(value)
+            return OverrideVector(converted_value, length(original_column))
+        end
     else
-        # Other numeric or general types
-        converted_value = convert(eltype(original_column), value)
-        return OverrideVector(converted_value, length(original_column))
+        # Other numeric or general types - try exact type conversion first
+        try
+            converted_value = convert(eltype(original_column), value)
+            return OverrideVector(converted_value, length(original_column))
+        catch MethodError
+            # If conversion fails, use Float64 as fallback for numeric types
+            if eltype(original_column) <: Number
+                converted_value = Float64(value)
+                return OverrideVector(converted_value, length(original_column))
+            else
+                rethrow()
+            end
+        end
     end
 end
 
