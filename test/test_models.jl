@@ -94,6 +94,76 @@ using Random
         end
     end
     
+    @testset "Integer Continuous Variables" begin
+        # Test with integer continuous variables to catch type issues
+        n_int = 200
+        df_int = DataFrame(
+            y = randn(n_int),
+            int_x = rand(1:100, n_int),  # Integer continuous variable
+            int_age = rand(18:80, n_int),  # Age as integer
+            int_score = rand(0:1000, n_int),  # Test score as integer
+            group = categorical(rand(["A", "B", "C"], n_int)),
+            float_z = randn(n_int)  # Mix with float for comparison
+        )
+        data_int = Tables.columntable(df_int)
+        
+        @testset "Simple integer variable" begin
+            model = lm(@formula(y ~ int_x), df_int)
+            @test test_model_correctness(model, data_int, n_int)
+            
+            # Test compilation works
+            compiled = compile_formula(model, data_int)
+            @test length(compiled) == 2  # Intercept + int_x
+            
+            # Test evaluation
+            output = Vector{Float64}(undef, length(compiled))
+            compiled(output, data_int, 1)
+            @test length(output) == 2
+            @test all(isfinite.(output))
+        end
+        
+        @testset "Integer with interactions" begin
+            model = lm(@formula(y ~ int_x * group), df_int)
+            @test test_model_correctness(model, data_int, n_int)
+            
+            compiled = compile_formula(model, data_int)
+            @test length(compiled) > 2  # Should have interaction terms
+        end
+        
+        @testset "Multiple integer variables" begin
+            model = lm(@formula(y ~ int_x + int_age + int_score), df_int)
+            @test test_model_correctness(model, data_int, n_int)
+            
+            compiled = compile_formula(model, data_int)
+            @test length(compiled) == 4  # Intercept + 3 integer variables
+        end
+        
+        @testset "Integer with function transformation" begin
+            model = lm(@formula(y ~ log(int_score + 1)), df_int)  # +1 to avoid log(0)
+            @test test_model_correctness(model, data_int, n_int)
+            
+            compiled = compile_formula(model, data_int)
+            @test length(compiled) == 2  # Intercept + log(int_score + 1)
+        end
+        
+        @testset "Mixed integer and float" begin
+            model = lm(@formula(y ~ int_x * float_z + int_age), df_int)
+            @test test_model_correctness(model, data_int, n_int)
+            
+            compiled = compile_formula(model, data_int)
+            @test length(compiled) == 4  # Intercept + int_x + float_z + int_x:float_z + int_age
+        end
+        
+        @testset "GLM with integer variables" begin
+            # Create binary response for logistic regression
+            df_int.binary_y = rand([0, 1], n_int)
+            data_int = Tables.columntable(df_int)
+            
+            model = glm(@formula(binary_y ~ int_x + int_age), df_int, Binomial(), LogitLink())
+            @test test_model_correctness(model, data_int, n_int)
+        end
+    end
+    
     @testset "ModelRow Interface Tests" begin
         # Test ModelRowEvaluator interface
         model = lm(@formula(continuous_response ~ x * group3 + log(z)), df)

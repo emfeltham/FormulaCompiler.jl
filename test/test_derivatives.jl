@@ -599,4 +599,138 @@ end
             gβ_dummy, de_lm, β_lm, test_rows, :nonexistent_var; backend=:fd
         )
     end
+
+    @testset "Integer Continuous Variables Derivatives" begin
+        # Test derivatives work correctly with integer variables
+        n = 100
+        df_int = DataFrame(
+            y = randn(n),
+            int_x = rand(1:100, n),        # Integer continuous
+            int_age = rand(18:80, n),      # Age as integer
+            int_count = rand(0:50, n),     # Count variable
+            float_z = randn(n),            # Float for comparison
+            group = categorical(rand(["A", "B", "C"], n))
+        )
+        data_int = Tables.columntable(df_int)
+        
+        @testset "Integer variable derivatives - basic" begin
+            model = lm(@formula(y ~ int_x), df_int)
+            compiled = compile_formula(model, data_int)
+            vars = [:int_x]
+            de = build_derivative_evaluator(compiled, data_int; vars=vars)
+            
+            test_row = 5
+            
+            # Test AD derivatives
+            J_ad = Matrix{Float64}(undef, length(compiled), length(vars))
+            derivative_modelrow!(J_ad, de, test_row)
+            
+            # Test FD derivatives  
+            J_fd = Matrix{Float64}(undef, length(compiled), length(vars))
+            derivative_modelrow_fd!(J_fd, de, test_row)
+            
+            # Should match
+            @test isapprox(J_ad, J_fd; rtol=1e-6, atol=1e-8)
+            
+            # Manual verification - derivative of int_x should be 1 (simple linear)
+            @test isapprox(J_ad[2, 1], 1.0; atol=1e-12)  # Second term is int_x coefficient
+        end
+        
+        @testset "Integer with interactions" begin
+            model = lm(@formula(y ~ int_x * group), df_int)
+            compiled = compile_formula(model, data_int)
+            vars = [:int_x]
+            de = build_derivative_evaluator(compiled, data_int; vars=vars)
+            
+            test_row = 10
+            J_ad = Matrix{Float64}(undef, length(compiled), length(vars))
+            J_fd = Matrix{Float64}(undef, length(compiled), length(vars))
+            
+            derivative_modelrow!(J_ad, de, test_row)
+            derivative_modelrow_fd!(J_fd, de, test_row)
+            
+            @test isapprox(J_ad, J_fd; rtol=1e-6, atol=1e-8)
+        end
+        
+        @testset "Multiple integer variables" begin
+            model = lm(@formula(y ~ int_x + int_age + int_count), df_int)
+            compiled = compile_formula(model, data_int)
+            vars = [:int_x, :int_age, :int_count]
+            de = build_derivative_evaluator(compiled, data_int; vars=vars)
+            
+            test_row = 15
+            J_ad = Matrix{Float64}(undef, length(compiled), length(vars))
+            J_fd = Matrix{Float64}(undef, length(compiled), length(vars))
+            
+            derivative_modelrow!(J_ad, de, test_row)
+            derivative_modelrow_fd!(J_fd, de, test_row)
+            
+            @test isapprox(J_ad, J_fd; rtol=1e-6, atol=1e-8)
+            
+            # Manual verification - derivatives should be [1, 1, 1] for linear terms
+            @test isapprox(J_ad[2, 1], 1.0; atol=1e-12)  # int_x
+            @test isapprox(J_ad[3, 2], 1.0; atol=1e-12)  # int_age  
+            @test isapprox(J_ad[4, 3], 1.0; atol=1e-12)  # int_count
+        end
+        
+        @testset "Mixed integer and float derivatives" begin
+            model = lm(@formula(y ~ int_x * float_z + int_age), df_int)
+            compiled = compile_formula(model, data_int)
+            vars = [:int_x, :float_z, :int_age]
+            de = build_derivative_evaluator(compiled, data_int; vars=vars)
+            
+            test_row = 20
+            J_ad = Matrix{Float64}(undef, length(compiled), length(vars))
+            J_fd = Matrix{Float64}(undef, length(compiled), length(vars))
+            
+            derivative_modelrow!(J_ad, de, test_row)
+            derivative_modelrow_fd!(J_fd, de, test_row)
+            
+            @test isapprox(J_ad, J_fd; rtol=1e-6, atol=1e-8)
+        end
+        
+        @testset "Integer marginal effects" begin
+            model = lm(@formula(y ~ int_x + int_age), df_int) 
+            compiled = compile_formula(model, data_int)
+            vars = [:int_x, :int_age]
+            de = build_derivative_evaluator(compiled, data_int; vars=vars)
+            β = coef(model)
+            
+            test_row = 25
+            
+            # Test marginal effects on η (linear predictor)
+            gη_ad = Vector{Float64}(undef, length(vars))
+            gη_fd = Vector{Float64}(undef, length(vars))
+            
+            marginal_effects_eta!(gη_ad, de, β, test_row; backend=:ad)
+            marginal_effects_eta!(gη_fd, de, β, test_row; backend=:fd)
+            
+            @test isapprox(gη_ad, gη_fd; rtol=1e-6, atol=1e-8)
+            
+            # For linear model, marginal effects should equal coefficients
+            @test isapprox(gη_ad[1], β[2]; atol=1e-12)  # int_x coefficient
+            @test isapprox(gη_ad[2], β[3]; atol=1e-12)  # int_age coefficient
+        end
+        
+        @testset "Integer transformations" begin
+            # Test derivatives with transformed integer variables
+            model = lm(@formula(y ~ log(int_count + 1)), df_int)  # +1 to avoid log(0)
+            compiled = compile_formula(model, data_int)
+            vars = [:int_count]
+            de = build_derivative_evaluator(compiled, data_int; vars=vars)
+            
+            test_row = 30
+            J_ad = Matrix{Float64}(undef, length(compiled), length(vars))
+            J_fd = Matrix{Float64}(undef, length(compiled), length(vars))
+            
+            derivative_modelrow!(J_ad, de, test_row)
+            derivative_modelrow_fd!(J_fd, de, test_row)
+            
+            @test isapprox(J_ad, J_fd; rtol=1e-6, atol=1e-8)
+            
+            # Manual verification - derivative of log(int_count + 1) w.r.t int_count is 1/(int_count + 1)
+            expected_deriv = 1.0 / (data_int.int_count[test_row] + 1.0)
+            @test isapprox(J_ad[2, 1], expected_deriv; rtol=1e-10)
+        end
+    end
 end

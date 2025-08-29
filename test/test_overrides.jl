@@ -270,4 +270,108 @@ Random.seed!(06515)
         @test string(scenario_string.data.group[1]) == "B"
         @test string(scenario_symbol.data.group[1]) == "B"
     end
+
+    @testset "Integer Continuous Variable Overrides" begin
+        # Test override system with integer continuous variables
+        n = 100
+        df = DataFrame(
+            y = randn(n),
+            int_age = rand(18:80, n),        # Integer continuous
+            int_score = rand(0:1000, n),     # Integer test score
+            float_x = randn(n),              # Float for comparison
+            group = categorical(rand(["A", "B", "C"], n))
+        )
+        data = Tables.columntable(df)
+        model = lm(@formula(y ~ int_age + int_score + float_x + group), df)
+        compiled = compile_formula(model, data)
+
+        @testset "Basic integer overrides" begin
+            # Test integer-to-integer override
+            scenario1 = create_scenario("int_to_int", data;
+                int_age = 25,
+                int_score = 500
+            )
+            
+            output_orig = Vector{Float64}(undef, length(compiled))
+            output_override = Vector{Float64}(undef, length(compiled))
+            
+            compiled(output_orig, data, 1)
+            compiled(output_override, scenario1.data, 1)
+            
+            @test scenario1.data.int_age[1] == 25
+            @test scenario1.data.int_score[1] == 500
+            @test output_orig != output_override  # Should be different
+        end
+
+        @testset "Type-flexible overrides" begin
+            # Test integer column with float override (non-integer)
+            scenario_float = create_scenario("int_with_float", data;
+                int_age = 25.5  # Non-integer float for integer column
+            )
+            
+            @test scenario_float.data.int_age[1] == 25.5
+            @test typeof(scenario_float.data.int_age[1]) == Float64
+            
+            # Test integer column with integer float override
+            scenario_int_float = create_scenario("int_with_int_float", data;
+                int_age = 30.0  # Integer float for integer column
+            )
+            
+            @test scenario_int_float.data.int_age[1] == 30
+            @test typeof(scenario_int_float.data.int_age[1]) == Int64
+            
+            # Test float column with integer override
+            scenario_float_int = create_scenario("float_with_int", data;
+                float_x = 42  # Integer for float column
+            )
+            
+            @test scenario_float_int.data.float_x[1] == 42.0
+            @test typeof(scenario_float_int.data.float_x[1]) == Float64
+        end
+
+        @testset "Integer scenario grids" begin
+            # Test scenario grid creation with integer variables
+            grid = create_scenario_grid("int_grid", data, Dict(
+                :int_age => [25, 45, 65],           # Integer values
+                :int_score => [200, 500, 800],      # Integer values
+                :group => ["A", "B"]                # Categorical
+            ))
+            
+            @test length(grid) == 18  # 3 × 3 × 2 = 18 scenarios
+            
+            # Test all scenarios evaluate correctly
+            test_row = 5
+            results = Matrix{Float64}(undef, length(grid), length(compiled))
+            
+            for (i, scenario) in enumerate(grid)
+                compiled(view(results, i, :), scenario.data, test_row)
+                # Verify override values are set correctly in each scenario
+                @test scenario.data.int_age[test_row] in [25, 45, 65]
+                @test scenario.data.int_score[test_row] in [200, 500, 800]
+                @test string(scenario.data.group[test_row]) in ["A", "B"]
+            end
+            
+            # Results should vary across scenarios
+            @test maximum(results) > minimum(results)
+        end
+
+        @testset "Integer overrides with derivatives" begin
+            # Test that derivative evaluator works with data that has integer overrides
+            vars = [:int_age, :float_x]
+            de = build_derivative_evaluator(compiled, data; vars=vars)
+            
+            # Create scenario with integer overrides
+            scenario = create_scenario("deriv_int", data;
+                int_age = 35,
+                int_score = 750
+            )
+            
+            # This should not error - testing basic compatibility
+            J = Matrix{Float64}(undef, length(compiled), length(vars))
+            derivative_modelrow_fd!(J, de, 1)
+            
+            @test size(J) == (length(compiled), length(vars))
+            @test all(isfinite.(J))
+        end
+    end
 end
