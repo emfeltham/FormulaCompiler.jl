@@ -350,16 +350,42 @@ end
     # Get categorical column data
     column_data = getproperty(data, Col)
     
-    # Extract level code dynamically with zero allocations
-    level = extract_level_code_zero_alloc(column_data, row_idx)
-    
-    # Clamp to valid range (safety check)
-    n_levels = size(op.contrast_matrix, 1)
-    level = clamp(level, 1, n_levels)
-    
-    # Apply contrast matrix (stored as field)
-    for (i, pos) in enumerate(Positions)
-        scratch[pos] = convert(eltype(scratch), op.contrast_matrix[level, i])
+    # Check if this is a categorical mixture override
+    if column_data isa CategoricalMixtureOverride
+        # Handle categorical mixture: weighted combination of contrast rows
+        mixture_obj = column_data.mixture_obj
+        
+        # Initialize positions to zero
+        for (i, pos) in enumerate(Positions)
+            scratch[pos] = 0.0
+        end
+        
+        # Map mixture level names to contrast matrix row indices
+        original_levels = mixture_obj.original_levels
+        
+        # Compute weighted combination
+        for (level_name, weight) in zip(mixture_obj.levels, mixture_obj.weights)
+            level_name_str = string(level_name)
+            level_idx = findfirst(==(level_name_str), original_levels)
+            if level_idx !== nothing
+                for (i, pos) in enumerate(Positions)
+                    scratch[pos] += weight * op.contrast_matrix[level_idx, i]
+                end
+            end
+        end
+    else
+        # Standard categorical handling (unchanged)
+        # Extract level code dynamically with zero allocations
+        level = extract_level_code_zero_alloc(column_data, row_idx)
+        
+        # Clamp to valid range (safety check)
+        n_levels = size(op.contrast_matrix, 1)
+        level = clamp(level, 1, n_levels)
+        
+        # Apply contrast matrix (stored as field)
+        for (i, pos) in enumerate(Positions)
+            scratch[pos] = convert(eltype(scratch), op.contrast_matrix[level, i])
+        end
     end
 end
 

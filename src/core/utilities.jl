@@ -50,3 +50,26 @@ struct OverrideVector{T} <: AbstractVector{T}
         new{T}(value, length)
     end
 end
+
+"""
+    CategoricalMixtureOverride{T} <: AbstractVector{T}
+
+A special override vector for categorical mixtures that stores the mixture specification
+along with the original categorical levels. This enables weighted contrast computation
+in the execution engine.
+
+# Example
+```julia
+# Categorical mixture: 30% A, 70% B
+mixture_obj = MixtureWithLevels(mix("A" => 0.3, "B" => 0.7), ["A", "B"])
+override = CategoricalMixtureOverride(mixture_obj, 1000)
+```
+"""
+struct CategoricalMixtureOverride{T} <: AbstractVector{T}
+    mixture_obj::T  # MixtureWithLevels object from Margins.jl
+    length::Int
+    
+    function CategoricalMixtureOverride(mixture_obj::T, length::Int) where T
+        new{T}(mixture_obj, length)
+    end
+end
