@@ -31,16 +31,24 @@ function build_derivative_evaluator(
     override_vecs = Vector{FDOverrideVector}(undef, nvars)
     pairs = Pair{Symbol,FDOverrideVector}[]
     for (i, s) in enumerate(vars)
-        col = getproperty(data, s)::Vector{Float64}
-        ov = FDOverrideVector(col, 1, 0.0)
+        col = getproperty(data, s)
+        # Convert integer columns to Float64 for derivative computation
+        float_col = if col isa Vector{Int64} || col isa Vector{Int32} || col isa Vector{Int}
+            convert(Vector{Float64}, col)
+        else
+            col::Vector{Float64}
+        end
+        ov = FDOverrideVector(float_col, 1, 0.0)
         override_vecs[i] = ov
         push!(pairs, s => ov)
     end
-    data_over = (; data..., pairs...)
+    # Merge with converted columns - use Float64 versions for derivative computation
+    data_over = merge(data, NamedTuple(pairs))
     overrides = override_vecs
     rowvec_float = Vector{Float64}(undef, length(compiled))
     # Pre-cache column references to avoid getproperty allocations (as NTuple)
-    fd_columns = ntuple(i -> getproperty(data, vars[i]), nvars)
+    # Use the converted Float64 columns for FD computation
+    fd_columns = ntuple(i -> getproperty(data_over, vars[i]), nvars)
     
     # Create a mutable ref that will eventually point to the final evaluator
     beta_ref = Base.RefValue(Vector{Float64}())

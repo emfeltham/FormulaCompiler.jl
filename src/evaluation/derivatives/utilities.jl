@@ -4,7 +4,8 @@
     continuous_variables(compiled, data) -> Vector{Symbol}
 
 Return a list of continuous variable symbols present in the compiled ops, excluding
-categoricals detected via ContrastOps. Filters by `eltype(data[sym]) <: Real`.
+categoricals detected via ContrastOps. Filters by `eltype(data[sym]) <: Real` but
+excludes Bool columns (which should be treated as categorical).
 """
 function continuous_variables(compiled::UnifiedCompiled, data::NamedTuple)
     cont = Set{Symbol}()
@@ -22,12 +23,12 @@ function continuous_variables(compiled::UnifiedCompiled, data::NamedTuple)
     for c in cats
         delete!(cont, c)
     end
-    # Keep only columns that exist in data and are Real-typed
+    # Keep only columns that exist in data and are Real-typed (but not Bool)
     vars = Symbol[]
     for s in cont
         if hasproperty(data, s)
             col = getproperty(data, s)
-            if eltype(col) <: Real
+            if eltype(col) <: Real && !(eltype(col) <: Bool)
                 push!(vars, s)
             end
         end
