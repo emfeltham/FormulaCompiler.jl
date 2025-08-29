@@ -8,7 +8,10 @@ Build a ForwardDiff-based derivative evaluator for a fixed set of variables.
 Arguments:
 - `compiled::UnifiedCompiled`: Result of `compile_formula(model, data)`.
 - `data::NamedTuple`: Column-table data (e.g., `Tables.columntable(df)`).
-- `vars::Vector{Symbol}`: Variables to differentiate with respect to (typically continuous predictors).
+- `vars::Vector{Symbol}`: Variables to differentiate with respect to.
+  - IMPORTANT: `vars` must be continuous predictors. Categorical variables are not
+    differentiable; for categorical profile workflows, use the scenario system
+    (e.g., `create_scenario()`) combined with derivative evaluators.
 - `chunk`: `ForwardDiff.Chunk{N}()` or `:auto` (uses `Chunk{length(vars)}`).
 
 Returns:
@@ -25,6 +28,17 @@ function build_derivative_evaluator(
     vars::Vector{Symbol},
     chunk=:auto,
 ) where {T, Ops, S, O}
+    # Validate that all requested vars are continuous (no categorical derivatives)
+    allowed = continuous_variables(compiled, data)
+    bad = [v for v in vars if !(v in allowed)]
+    if !isempty(bad)
+        msg = "build_derivative_evaluator only supports continuous variables. " *
+              "Non-continuous/categorical vars requested: $(bad). " *
+              "For categorical profile workflows, use the scenario system " *
+              "(e.g., create_scenario()) combined with derivative evaluators."
+        throw(ArgumentError(msg))
+    end
+
     nvars = length(vars)
     xbuf = Vector{Float64}(undef, nvars)
     # Prebuild fully concrete overrides + merged data (Float64 path)
