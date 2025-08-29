@@ -5,8 +5,8 @@ This repository separates correctness tests from allocation/performance tests to
 ## How To Run
 
 - All tests
-  - `julia --project=. -e 'using Pkg; Pkg.test()'`
-  - or `julia --project=. test/runtests.jl`
+  - `julia --project=. -e 'using Pkg; Pkg.test()' > test/test.txt 2>&1`
+  - or `julia --project=. test/runtests.jl` > test/runtests.txt 2>&1`
 - Individual suites (examples)
   - Root project + bootstrap
     - `julia --project=. -e 'include("test/bootstrap.jl"); _fc_load_testdeps(); include("test/test_derivatives.jl")'`

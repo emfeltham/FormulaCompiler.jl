@@ -6,7 +6,7 @@ using DataFrames, Tables, GLM, CategoricalArrays
 using BenchmarkTools
 using CSV
 
-@testset "Derivative Allocation Checks (BenchmarkTools)" begin
+@testset "Derivative Allocation Checks" begin
     results = DataFrame(
         path = String[],
         min_memory_bytes = Int[],

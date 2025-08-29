@@ -6,6 +6,7 @@ using DataFrames
 using GLM
 using StatsModels
 using Tables
+using BenchmarkTools
 
 @testset "UnifiedCompiler Basic Tests" begin
     
@@ -94,9 +95,9 @@ using Tables
         # Warm up
         compiled(output, data, 1)
         
-        # Test allocation
-        alloc = @allocated compiled(output, data, 1)
-        @test alloc == 0  # ZERO allocations!
+        # Test allocation with BenchmarkTools
+        b = @benchmark $compiled($output, $data, 1) samples=100
+        @test minimum(b.memory) == 0  # ZERO allocations!
         
         # Test more complex case
         formula = @formula(response ~ exp(x) * log(z))
@@ -106,9 +107,9 @@ using Tables
         # Warm up
         compiled(output, data, 1)
         
-        # Test allocation
-        alloc = @allocated compiled(output, data, 1)
-        @test alloc == 0  # ZERO allocations!
+        # Test allocation with BenchmarkTools
+        b = @benchmark $compiled($output, $data, 1) samples=100
+        @test minimum(b.memory) == 0  # ZERO allocations!
     end
 end
 

@@ -151,7 +151,7 @@ using Random
             @test test_model_correctness(model, data_int, n_int)
             
             compiled = compile_formula(model, data_int)
-            @test length(compiled) == 4  # Intercept + int_x + float_z + int_x:float_z + int_age
+            @test length(compiled) == 5  # Intercept + int_x + float_z + int_x:float_z + int_age
         end
         
         @testset "GLM with integer variables" begin

@@ -71,16 +71,20 @@ function test_formula_correctness(formula, df, data)
 end
 
 function test_allocation_performance(compiled, output_compiled, data)
+    # Warmup
     for _ in 1:10
         compiled(output_compiled, data, 1)
     end
-    compiled_allocs = @allocated begin
+    
+    # Use BenchmarkTools to measure allocations accurately
+    b = @benchmark begin
         for i in 1:100
             row_idx = ((i-1) % 200) + 1
-            compiled(output_compiled, data, row_idx)
+            $compiled($output_compiled, $data, row_idx)
         end
-    end
-    allocs_per_call = compiled_allocs / 100
+    end samples=50
+    
+    allocs_per_call = minimum(b.memory) / 100
     @test allocs_per_call == 0
     return allocs_per_call
 end
