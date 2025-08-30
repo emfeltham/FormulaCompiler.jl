@@ -235,7 +235,7 @@ using BenchmarkTools
 compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
-@benchmark $compiled($row_vec, $data, 1)  # Still ~50ns, 0 allocations
+@benchmark $compiled($row_vec, $data, 1)  # Still fast, 0 allocations
 ```
 
 ### Memory Efficiency
