@@ -1,16 +1,16 @@
 # FormulaCompiler.jl
 
-High-performance, zero-allocation model matrix evaluation for Julia statistical models. Works across all formula types through advanced compile-time specialization.
+Computationally efficient model matrix evaluation for Julia statistical models. Implements position-mapping compilation to achieve substantial performance improvements across formula types through compile-time specialization.
 
 ## Key Features
 
-- **Zero allocations**: ~50ns per row, 0 bytes allocated across all 2032 test cases
-- **Significant speedup and efficiency** over `modelmatrix()` for single-row evaluations  
-- **Universal compatibility**: Handles any valid StatsModels.jl formula, including complex interactions and functions
-- **Advanced scenarios**: Memory-efficient variable overrides for policy analysis
-- **Unified architecture**: Single compilation pipeline handles all formula complexities
-- **Full ecosystem support**: Works with GLM.jl, MixedModels.jl, StandardizedPredictors.jl
-- **Dual-backend derivatives**: Zero-allocation finite differences OR ForwardDiff (~368 bytes per call)
+- **Memory efficiency**: ~50ns per row evaluation with minimal memory allocation (validated across 2032+ test cases)
+- **Computational performance**: Substantial improvements over traditional `modelmatrix()` approaches for single-row evaluations  
+- **Comprehensive compatibility**: Supports all valid StatsModels.jl formulas, including complex interactions and mathematical functions
+- **Scenario analysis**: Memory-efficient variable override system for counterfactual analysis
+- **Unified architecture**: Single compilation pipeline accommodates diverse formula structures
+- **Ecosystem integration**: Compatible with GLM.jl, MixedModels.jl, and StandardizedPredictors.jl
+- **Dual-backend derivatives**: Memory-efficient finite differences and ForwardDiff automatic differentiation options
 
 ## Installation
 
@@ -38,13 +38,13 @@ df = DataFrame(
 
 model = lm(@formula(y ~ x * group + log(z)), df)
 
-# Compile once for fast evaluation  
+# Compile once for efficient repeated evaluation  
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
-# Zero-allocation evaluation (call millions of times)
-compiled(row_vec, data, 1)  # ~50ns, 0 allocations
+# Memory-efficient evaluation suitable for repeated calls
+compiled(row_vec, data, 1)  # ~50ns, minimal allocations
 ```
 
 ## Performance Comparison

@@ -1,20 +1,20 @@
-# Motivation for FormulaCompiler.jl
+# Development Motivation for FormulaCompiler.jl
 
-Multiple public discussions and issues in the StatsModels.jl community directly motivated the development of FormulaCompiler.jl by highlighting frequent performance pain points and advanced usage limitations with StatsModels.jl's `modelmatrix` and formula evaluation approach.[^1][^2][^3]
+The development of FormulaCompiler.jl was motivated by documented performance limitations and computational requirements in the StatsModels.jl ecosystem, as evidenced by community discussions and development priorities.[^1][^2][^3]
 
-## Performance Pain Points
+## Identified Performance Limitations
 
-- High Compilation Overhead: Repeated complaints appear about slow compilation and evaluation times with StatsModels, especially when formulas or data change frequently, such as in workflows requiring rapid matrix construction (e.g., simulations or policy analysis). For example, one user noted a 606-column design matrix with just 6 rows took nearly 3 minutes to build due to repeated compilation, even though the logic was straightforward and suited for more optimized handling.[^2]
+- **Compilation Overhead**: Community discussions document substantial compilation and evaluation time costs in StatsModels.jl, particularly affecting workflows requiring frequent matrix construction such as simulations and policy analysis. Documented cases include design matrix construction requiring several minutes for moderately complex formulas, indicating opportunities for computational optimization.[^2]
 
-- Meta-Issue for Performance Tracking: The StatsModels.jl maintainers identified major performance issues as blockers for a stable 1.0 release and opened a dedicated "meta-issue" on GitHub to track these limitations, indicating ongoing concern and demand for fast, low-allocation solutions.[^1]
+- **Performance Development Priority**: The StatsModels.jl maintainers have identified performance issues as development priorities, establishing dedicated tracking mechanisms to address computational limitations. This indicates recognized demand for optimized evaluation approaches.[^1]
 
-- Advanced Scenario Needs: Discussions highlight the need for more efficient, flexible methods for model matrix evaluation to support workflows like scenario analysis, bootstrapping, Monte Carlo simulations, and large-scale inference, which motivate packages like FormulaCompiler.jl that offer zero-allocation, high-speed, and more granular evaluation.[^3]
+- **Advanced Computational Requirements**: Community discussions identify requirements for more efficient model matrix evaluation methods to support computationally intensive workflows including scenario analysis, bootstrap resampling, Monte Carlo simulations, and large-scale statistical inference.[^3]
 
-## Advanced Model Matrix Evaluation
+## Computational Architecture Requirements
 
-- Desire for Row-Wise and In-Place Operations: StatsModels.jl plans to improve row-wise table support and enable more efficient in-place operations, as reflected by ongoing development priorities. However, practical solutions are lacking, leaving room for new packages to address these deficiencies.[^3]
+- **Row-wise and In-place Operations**: Development discussions indicate plans for improved row-wise table support and in-place operation capabilities within StatsModels.jl. The gap between planned and available functionality provides motivation for alternative computational approaches.[^3]
 
-- Limitations With Large Data and Out-of-Core Scenarios: Users struggle with StatsModels.jl when processing model matrices for datasets too large for memory, where low-latency, streaming, or single-row evaluation methods are crucial but not well-supported yet.[^4][^3]
+- **Large-scale Data Processing**: Community discussions document challenges with model matrix processing for datasets exceeding memory constraints, identifying requirements for low-latency, streaming, and single-row evaluation methods that are not comprehensively addressed by existing implementations.[^3]
 
 ## Community Documentation
 

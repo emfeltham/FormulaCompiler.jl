@@ -5,16 +5,16 @@
 [![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/stable/)
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/dev/)
 
-High-performance model matrix evaluation for Julia statistical models. Achieves zero-allocation performance across all formula types through compile-time specialization and targeted metaprogramming.
+Computationally efficient model matrix evaluation for Julia statistical models. Implements position-mapping compilation to achieve substantial performance improvements over traditional model matrix construction through compile-time specialization.
 
 ## Key Features
 
-- Zero allocations: ~50ns per row, 0 bytes allocated across all 105 test cases
-- Significant speedup and efficiency gain over previous ways to construct `modelmatrix()`
-- Universal compatibility: Handles any valid StatsModels.jl formula, including complex interactions and functions
-- Advanced scenarios: Memory-efficient variable overrides for policy analysis
-- Unified architecture: Single compilation pipeline handles all formula complexities
-- JuliaStats ecosystem support: Works with GLM.jl, MixedModels.jl, StandardizedPredictors.jl
+- **Memory efficiency**: Optimized evaluation approach minimizes memory allocation during computation
+- **Performance improvement**: Substantial computational advantages over traditional model matrix construction methods
+- **Comprehensive compatibility**: Supports all valid StatsModels.jl formulas, including complex interactions and functions
+- **Scenario analysis**: Memory-efficient variable override system for counterfactual analysis
+- **Unified architecture**: Single compilation pipeline accommodates diverse formula structures
+- **Ecosystem integration**: Compatible with GLM.jl, MixedModels.jl, and StandardizedPredictors.jl
 
 ## How It Works
 
@@ -24,7 +24,7 @@ flowchart TD
     B --> C["Compile Formula<br>compile_formula"] 
     C --> D["Create Output Vector<br>Vector{Float64}"]
     D --> E["Evaluate Rows<br>compiled(output, data, idx)"]
-    E --> F["Process Results<br>~50ns per row, 0 allocations"]
+    E --> F["Process Results<br>Efficient evaluation, minimal allocations"]
     
     style A fill:#e1f5fe
     style C fill:#f3e5f5
@@ -54,30 +54,30 @@ df = DataFrame(
 
 model = lm(@formula(y ~ x * group + log(z)), df)
 
-# Compile once for fast evaluation  
+# Compile once for efficient repeated evaluation  
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
-# Zero-allocation evaluation (call millions of times)
-compiled(row_vec, data, 1)  # ~50ns, 0 allocations
+# Memory-efficient evaluation suitable for repeated calls
+compiled(row_vec, data, 1)  # Efficient evaluation with minimal allocations
 ```
 
 ## Core Interfaces
 
-### Zero-Allocation Interface (Fastest)
+### Optimized Interface (Recommended for Performance-Critical Applications)
 
 ```julia
-# Pre-compile for maximum performance
+# Pre-compile for optimal performance
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
-# Evaluate single rows
+# Evaluate individual rows
 compiled(row_vec, data, 1)    # Row 1
 compiled(row_vec, data, 100)  # Row 100
 
-# Evaluate multiple rows
+# Evaluate multiple rows efficiently
 matrix = Matrix{Float64}(undef, 10, length(compiled))
 modelrow!(matrix, compiled, data, 1:10)
 ```
@@ -102,7 +102,7 @@ modelrow!(row_vec, model, data, 1)  # Uses cache
 # Create evaluator object
 evaluator = ModelRowEvaluator(model, df)
 
-# Zero-allocation evaluation
+# Memory-efficient evaluation
 result = evaluator(1)           # Row 1
 evaluator(row_vec, 1)          # In-place evaluation
 ```
@@ -216,7 +216,7 @@ compiled = compile_formula(model)  # Standardization built-in
 
 ### Derivatives and Marginal Effects
 
-FormulaCompiler provides zero-allocation computation of derivatives and marginal effects with standard errors:
+FormulaCompiler provides memory-efficient computation of derivatives and marginal effects with standard errors:
 
 ```julia
 # Build derivative evaluator
@@ -226,41 +226,41 @@ de = build_derivative_evaluator(compiled, data; vars=vars)
 
 # Single-row marginal effect gradient (η case)
 gβ = Vector{Float64}(undef, length(compiled))
-me_eta_grad_beta!(gβ, de, β, 1, :x)  # Zero allocations
+me_eta_grad_beta!(gβ, de, β, 1, :x)  # Minimal memory allocation
 
 # Standard error via delta method
 Σ = vcov(model)
-se = delta_method_se(gβ, Σ)  # Zero allocations
+se = delta_method_se(gβ, Σ)  # Efficient computation
 
 # Average marginal effects with backend selection
 rows = 1:100
 gβ_ame = Vector{Float64}(undef, length(compiled))
-accumulate_ame_gradient!(gβ_ame, de, β, rows, :x; backend=:fd)  # Zero allocations
+accumulate_ame_gradient!(gβ_ame, de, β, rows, :x; backend=:fd)  # Memory-efficient computation
 se_ame = delta_method_se(gβ_ame, Σ)
 
 println("AME standard error for x: ", se_ame)
 ```
 
 **Key capabilities:**
-- **Dual backends**: `:fd` (zero allocations) and `:ad` (higher accuracy)  
-- **η and μ cases**: Linear predictors and transformed via link functions
-- **Delta method**: Standard errors for marginal effects
-- **Production ready**: Validated against reference implementations
+- **Dual backends**: `:fd` (memory-efficient) and `:ad` (higher numerical accuracy)  
+- **η and μ cases**: Linear predictors and link function transformations
+- **Delta method**: Standard error computation for marginal effects
+- **Validated implementation**: Cross-validated against reference implementations
 
 ## Advanced Features
 
 ### Memory Efficiency
 
-The scenario system uses `OverrideVector` for memory efficiency:
+The scenario system employs `OverrideVector` for memory-efficient data representation:
 
 ```julia
-# Traditional approach: allocates 8MB for 1M rows
-traditional = fill(42.0, 1_000_000)
+# Traditional approach: substantial memory allocation for large datasets
+traditional = fill(42.0, 1_000_000)  # ~8MB allocation
 
-# FormulaCompiler: allocates ~32 bytes
-efficient = OverrideVector(42.0, 1_000_000)
+# FormulaCompiler approach: constant memory overhead
+efficient = OverrideVector(42.0, 1_000_000)  # ~32 bytes allocation
 
-# Both provide identical interface
+# Identical computational interface
 traditional[500_000] == efficient[500_000]  # true
 ```
 
@@ -303,37 +303,40 @@ traditional[500_000] == efficient[500_000]  # true
    results = [modelrow(model, data, i) for i in 1:1000]
    ```
 
-## Benchmarks
+## Performance Characteristics
 
-Performance results across all tested formula types:
+Comparative performance evaluation across formula types:
 
 ```julia
 using BenchmarkTools
 
-# Traditional approach (creates full model matrix)
+# Traditional approach (full model matrix construction)
 @benchmark modelmatrix(model)[1, :]
-# ~10.2 μs (1 allocation: 896 bytes)
+# Note: Constructs entire model matrix, computationally intensive for large datasets
 
-# FormulaCompiler (zero-allocation single row)
+# FormulaCompiler optimized approach
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 @benchmark compiled(row_vec, data, 1)
-# ~50 ns (0 allocations: 0 bytes)
-
-# Zero allocation across 105 test cases
+# Substantial performance improvement with minimal memory allocation
 ```
 
-Note on derivatives: ForwardDiff-based `derivative_modelrow!` achieves ≤112 bytes per call (ForwardDiff internal minimum). Marginal effects operations use preallocated buffers achieving ≤256 bytes per call. The test suite validates these tight performance bounds across 27 derivative-specific tests with cross-validation against finite differences.
+**Derivative computation performance**: 
+- ForwardDiff-based operations achieve minimal per-call allocations due to automatic differentiation requirements
+- Finite difference backend provides memory-efficient alternative with validation against automatic differentiation results
+- Marginal effects computations utilize preallocated buffers to minimize overhead
+
+**Current implementation notes**: The automatic differentiation backend for batch gradient operations (`accumulate_ame_gradient!`) currently exceeds minimal allocation targets. Users requiring strict memory constraints should utilize the `:fd` backend, which provides mathematically equivalent results with reduced memory overhead.
 
 ## Architecture
 
-FormulaCompiler achieves zero-allocation performance through a unified compilation pipeline that transforms statistical formulas into specialized, type-stable execution paths:
+FormulaCompiler achieves computational efficiency through a unified compilation pipeline that transforms statistical formulas into specialized, type-stable execution paths:
 
-- Position mapping: All operations use compile-time position specialization
-- Hybrid dispatch: Empirically tuned threshold (≤25 ops: recursive, >25 ops: @generated) to handle Julia's heuristic compilation behavior
-- Universal: Single system handles all formula complexities without special cases
+- **Position mapping**: Operations utilize compile-time position specialization for optimal performance
+- **Adaptive dispatch**: Empirically determined threshold (≤25 operations: recursive dispatch, >25 operations: generated functions) to optimize compilation behavior
+- **Unified design**: Single compilation system accommodates diverse formula structures without special-case handling
 
 ## Use Cases
 
