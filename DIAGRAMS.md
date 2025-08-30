@@ -13,7 +13,7 @@ flowchart TD
     B --> C["Compile Formula<br>compile_formula"] 
     C --> D["Create Output Vector<br>Vector{Float64}"]
     D --> E["Evaluate Rows<br>compiled(output, data, idx)"]
-    E --> F["Process Results<br>~50ns per row, 0 allocations"]
+    E --> F["Process Results<br>Fast evaluation, 0 allocations"]
     
     style A fill:#e1f5fe
     style C fill:#f3e5f5  
