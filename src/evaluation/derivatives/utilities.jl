@@ -66,6 +66,15 @@ function delta_method_se(gβ::AbstractVector{Float64}, Σ::AbstractMatrix{Float6
         end
         result += gβ[i] * temp
     end
+    
+    # Debug check for negative variance (should not happen with valid covariance matrix)
+    if result < 0.0
+        @warn "Negative variance detected in delta method: gβ'Σgβ = $result. " *
+              "This suggests numerical issues or invalid covariance matrix. " *
+              "Check gradient computation and covariance matrix conditioning."
+        return NaN
+    end
+    
     return sqrt(result)
 end
 
