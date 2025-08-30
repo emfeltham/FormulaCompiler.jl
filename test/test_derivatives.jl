@@ -255,7 +255,7 @@ end
                 
                 # Get X_row and η
                 X_row = Vector{Float64}(undef, length(compiled_glm))
-                compiled_glm(X_row, data, test_row)
+                compiled_glm(X_row, data_logit, test_row)
                 η = dot(β_glm, X_row)
                 
                 # Manual chain rule: gβ = g'(η) * J_k + (J_k' * β) * g''(η) * X_row
