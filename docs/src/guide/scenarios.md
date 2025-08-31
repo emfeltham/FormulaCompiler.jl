@@ -13,6 +13,8 @@ The scenario system allows you to:
 
 All with minimal memory allocation using the `OverrideVector` system.
 
+For derivative computation with scenarios and advanced applications, see [Advanced Features](advanced_features.md).
+
 ## Scenario Workflow
 
 ![Diagram](../assets/src_guide_scenarios_diagram_5.svg)
@@ -401,3 +403,9 @@ println("Savings: $(round(full_data_memory / total_scenario_memory))x")
 - Always compare to appropriate baselines
 - Account for uncertainty in treatment effect estimates
 - Consider interaction effects in scenario design
+
+## Further Reading
+
+- [Advanced Features](advanced_features.md) - Derivative computation and high-performance patterns
+- [Mathematical Foundation](../mathematical_foundation.md) - Theoretical background for scenario analysis
+- [API Reference](../api.md) - Complete documentation for scenario functions

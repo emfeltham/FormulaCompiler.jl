@@ -2,6 +2,8 @@
 
 Real-world examples demonstrating FormulaCompiler.jl in action.
 
+For fundamental usage patterns, see [Basic Usage](guide/basic_usage.md). For advanced computational techniques, see [Advanced Features](guide/advanced_features.md).
+
 ## Monte Carlo Simulation
 
 High-performance Monte Carlo simulation using zero-allocation evaluation:

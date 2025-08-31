@@ -83,7 +83,7 @@ compiled(row_vec, data, 100)  # Evaluate row 100
 compiled(row_vec, data, 500)  # Evaluate row 500
 ```
 
-Each call takes ~50ns and allocates 0 bytes!
+Each call achieves zero allocations with excellent performance!
 
 ## Alternative Interfaces
 
@@ -146,12 +146,9 @@ using BenchmarkTools
 @benchmark $compiled($row_vec, $data, 1)
 ```
 
-You should see output like:
+You should see zero allocations and fast evaluation times:
 ```
-BenchmarkTools.Trial: 10000 samples with 1000 evaluations.
- Range (min … max):  45.123 ns … 67.891 ns  ┊ GC (min … max): 0.00% … 0.00%
- Time  (median):     48.456 ns               ┊ GC (median):    0.00%
- Time  (mean ± σ):   49.234 ns ±  2.345 ns  ┊ GC (mean ± σ):  0.00% ± 0.00%
+BenchmarkTools.Trial: Many samples with many evaluations.
  Memory estimate: 0 bytes, allocs estimate: 0.
 ```
 
@@ -161,11 +158,149 @@ Compare this to the traditional approach:
 @benchmark modelmatrix($model)[1, :]
 ```
 
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### Compilation Errors
+
+**Problem**: `MethodError` during `compile_formula`
+```julia
+# Error: MethodError: no method matching compile_formula(::SomeUnsupportedModel, ::NamedTuple)
+```
+
+**Solution**: Ensure you're using a supported model type (GLM, MixedModels) or check package compatibility.
+
+**Problem**: `BoundsError` or dimension mismatches
+```julia
+# Error: BoundsError: attempt to access 500-element Vector at index [1001]
+```
+
+**Solution**: Verify that your data contains the expected number of rows and that `row_idx` is within bounds.
+
+#### Performance Issues
+
+**Problem**: Non-zero allocations detected
+```julia
+# @benchmark shows non-zero memory allocations
+```
+
+**Solutions**:
+1. Use `Tables.columntable(df)` instead of DataFrame directly
+2. Ensure output vector is pre-allocated with correct size
+3. Check for type instabilities in your data (mixed types in columns)
+4. Verify all categorical variables use `CategoricalArrays.jl`
+
+**Problem**: Slower than expected performance
+```julia
+# Evaluation takes longer than anticipated
+```
+
+**Solutions**:
+1. Let compilation warm up with a few calls before benchmarking
+2. Use the caching interface (`modelrow!` with cache=true) for repeated evaluations
+3. Check for very complex formulas that may benefit from simplification
+4. Ensure data is in optimal format (`Tables.columntable`)
+
+#### Data Format Issues
+
+**Problem**: Categorical variables not working correctly
+```julia
+# Error with categorical contrasts or unexpected contrast behavior
+```
+
+**Solutions**:
+1. Convert to `CategoricalArrays.jl` format: `categorical(column, levels=...)`
+2. Ensure factor levels are consistent between training and evaluation data
+3. Check contrast specifications in model fitting
+
+**Problem**: Missing values causing errors
+```julia
+# Error: missing values not supported
+```
+
+**Solution**: Remove or impute missing values before model fitting and compilation.
+
+#### Memory Issues
+
+**Problem**: Large memory usage despite zero-allocation claims
+```julia
+# High memory usage in application
+```
+
+**Solutions**:
+1. Use scenario system instead of creating multiple data copies
+2. Reuse compiled formulas rather than recompiling
+3. Clear model cache if accumulating many different compilations: `clear_model_cache!()`
+
+### Performance Validation
+
+Verify your setup achieves expected performance:
+
+```julia
+using BenchmarkTools
+
+# Check zero allocations
+result = @benchmark $compiled($row_vec, $data, 1)
+@assert result.memory == 0 "Expected zero allocations, got $(result.memory) bytes"
+
+# Check cache effectiveness  
+@time modelrow!(row_vec, model, data, 1; cache=true)  # First call
+@time modelrow!(row_vec, model, data, 2; cache=true)  # Should be much faster
+```
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. Check the [API Reference](api.md) for detailed function documentation
+2. Review [Examples](examples.md) for similar use cases
+3. Examine [Advanced Features](guide/advanced_features.md) for complex scenarios
+4. Consult [Performance Tips](guide/performance.md) for optimization guidance
+
+## Interface Selection Guide
+
+Choose the right interface for your needs:
+
+### Use `compiled(output, data, row_idx)` when:
+- Maximum performance is critical
+- You're in tight computational loops
+- You can manage pre-allocation
+- Zero allocations are required
+
+### Use `modelrow!(output, compiled, data, row_idx)` when:
+- You want explicit control over compilation
+- You need the same compiled formula across different data
+- Memory management is important
+- You prefer functional over object-oriented style
+
+### Use `modelrow(model, data, row_idx)` when:
+- Convenience outweighs performance
+- You're prototyping or exploring
+- Allocation overhead is acceptable
+- You prefer simple, direct interfaces
+
+### Use `ModelRowEvaluator(model, data)` when:
+- You prefer object-oriented interfaces
+- The same model and data are used repeatedly
+- You need both allocating and non-allocating evaluation
+- You want encapsulated state management
+
 ## What's Next?
 
-Now that you understand the basics, you can explore:
+Now that you understand the basics, explore advanced topics:
 
-- [Advanced Features](guide/advanced_features.md) - Scenario analysis and memory optimization
-- [Performance Tips](guide/performance.md) - Getting the most out of FormulaCompiler.jl
-- [Examples](examples.md) - Real-world use cases and patterns
-- [API Reference](api.md) - Complete function documentation
+### Immediate Next Steps
+- [Basic Usage Guide](guide/basic_usage.md) - Detailed interface documentation
+- [Scenario Analysis](guide/scenarios.md) - Counterfactual analysis and variable overrides
+- [Performance Tips](guide/performance.md) - Optimization strategies
+
+### Advanced Applications  
+- [Examples](examples.md) - Real-world statistical computing patterns
+- [GLM Integration](integration/glm.md) - Linear and generalized linear model workflows
+- [MixedModels Integration](integration/mixed_models.md) - Mixed-effects model support
+
+### Reference Documentation
+- [API Reference](../api.md) - Complete function documentation with examples
+- [Architecture](../architecture.md) - Implementation details and design principles  
+- [Mathematical Foundation](../mathematical_foundation.md) - Theoretical background and computational theory

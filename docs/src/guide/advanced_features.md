@@ -1,10 +1,10 @@
 # Advanced Features
 
-FormulaCompiler.jl provides sophisticated features for advanced statistical computing scenarios.
+FormulaCompiler.jl provides sophisticated capabilities for advanced statistical computing, high-performance applications, and complex analytical workflows. This guide covers memory-efficient scenario analysis, derivative computation, and integration patterns for demanding computational environments.
 
 ## Memory-Efficient Override System
 
-The override system allows you to create "what-if" scenarios without duplicating data in memory.
+The override system allows you to create "what-if" scenarios without duplicating data in memory. For comprehensive coverage of this system, see the [Scenario Analysis](scenarios.md) guide.
 
 ### OverrideVector
 
@@ -23,8 +23,8 @@ efficient = OverrideVector(42.0, 1_000_000)
 traditional[500_000] == efficient[500_000]  # true
 length(efficient) == 1_000_000              # true
 
-# But massive memory savings
-sizeof(traditional) ÷ sizeof(efficient)  # ~250,000x smaller!
+# Massive memory savings
+# OverrideVector uses constant memory regardless of length
 ```
 
 ### Data Scenarios
@@ -143,63 +143,134 @@ using BenchmarkTools
 @benchmark compile_formula($model, $data)
 ```
 
-## Derivatives and Contrasts
+## Derivative Computation System
 
-**Near-Zero-Allocation Automatic Differentiation**: Compute per-row derivatives of the model row with respect to selected variables using optimized ForwardDiff-based system.
+FormulaCompiler provides comprehensive automatic differentiation capabilities for computing Jacobians, marginal effects, and gradients with dual backend support optimized for different performance requirements.
 
 ### Performance Characteristics
 
-- **Core evaluation**: Exactly 0 allocations (modelrow!, compiled functions)
-- **Finite differences (FD)**: Exactly 0 allocations (optimized implementation)
-- **ForwardDiff derivatives**: ≤512 bytes per call (ForwardDiff internals, unavoidable)
-- **Marginal effects**: ≤512 bytes per call for AD backend (optimized with preallocated buffers)  
-- **Allocation efficiency**: >99.75% compared to naive AD approaches
+- **Core evaluation**: Zero allocations (modelrow!, compiled functions)
+- **Finite differences (FD)**: Zero allocations (optimized implementation)
+- **ForwardDiff derivatives**: Small allocations per call (ForwardDiff internals)
+- **Marginal effects**: Backend-dependent allocation behavior
 - **Validation**: Cross-validated against finite differences for robustness
 
-!!! note "Future Improvements"
-    We are actively working on a more efficient automatic differentiation implementation 
-    that will reduce or eliminate allocations in the AD backend. The current ForwardDiff-based 
-    implementation provides excellent accuracy with minimal allocations (≤512 bytes), while 
-    the finite differences backend already achieves zero allocations for users who prioritize 
-    memory efficiency over speed.
+!!! note "Backend Selection"
+    FormulaCompiler provides dual backends for derivative computation: ForwardDiff (accurate with small allocations) and finite differences (zero allocations). Choose based on your performance requirements.
 
-### ForwardDiff-Based Derivatives
+### Derivative Evaluator Construction
+
+Build reusable derivative evaluators for efficient computation:
 
 ```julia
-using ForwardDiff, GLM
+using FormulaCompiler, GLM
 
+# Setup model with mixed variable types
+df = DataFrame(
+    y = randn(1000),
+    price = randn(1000),          # Float64 continuous
+    quantity = rand(1:100, 1000), # Int64 continuous (auto-converted)
+    available = rand(Bool, 1000), # Bool categorical
+    region = categorical(rand(["North", "South"], 1000))  # Categorical
+)
+
+model = lm(@formula(y ~ price * region + log(quantity + 1) + available), df)
+data = Tables.columntable(df)
 compiled = compile_formula(model, data)
-vars = [:x, :z]  # choose continuous vars
-de = build_derivative_evaluator(compiled, data; vars=vars)
 
-# Pre-allocate Jacobian matrix (reused across calls)
-J = Matrix{Float64}(undef, length(compiled), length(vars))
-derivative_modelrow!(J, de, 1)  # ≤512 bytes (AD backend)
+# Identify continuous variables automatically
+continuous_vars = continuous_variables(compiled, data)  # [:price, :quantity]
 
-# Marginal effects η = Xβ (uses preallocated buffers)
+# Build derivative evaluator
+de = build_derivative_evaluator(compiled, data; vars=continuous_vars)
+```
+
+### Jacobian Computation
+
+Compute partial derivatives of model matrix rows:
+
+```julia
+# Method 1: Automatic differentiation (accurate, small allocations)
+J_ad = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
+derivative_modelrow!(J_ad, de, 1; backend=:ad)
+
+# Method 2: Finite differences (zero allocations)  
+J_fd = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
+derivative_modelrow_fd_pos!(J_fd, de, 1)
+
+# Method 3: Standalone finite differences (for validation)
+J_standalone = derivative_modelrow_fd(compiled, data, 1; vars=continuous_vars)
+
+# All methods produce equivalent results
+@assert isapprox(J_ad, J_fd; rtol=1e-6) "AD and FD should match"
+```
+
+### Marginal Effects Computation
+
+Compute effects on linear predictor and response scales:
+
+```julia
 β = coef(model)
-g_eta = marginal_effects_eta(de, β, 1)  # ≤512 bytes (AD backend)
 
-# GLM mean μ = g⁻¹(η) with link functions
-g_mu = marginal_effects_mu(de, β, 1; link=LogitLink())  # ≤512 bytes (AD backend)
+# Effects on linear predictor η = Xβ
+g_eta = Vector{Float64}(undef, length(continuous_vars))
+marginal_effects_eta!(g_eta, de, β, 1; backend=:ad)  # Small allocations, accurate
+marginal_effects_eta!(g_eta, de, β, 1; backend=:fd)  # Zero allocations
+
+# Effects on response scale μ (for GLM models)
+if model isa GLM.GeneralizedLinearModel
+    link_function = GLM.Link(model)
+    g_mu = Vector{Float64}(undef, length(continuous_vars))
+    marginal_effects_mu!(g_mu, de, β, 1; link=link_function, backend=:ad)
+    
+    println("Marginal effects on linear predictor: $g_eta")
+    println("Marginal effects on response scale: $g_mu")
+end
 ```
 
-Finite-difference fallback (simple and robust):
+### Categorical Contrasts
+
+Analyze discrete differences for categorical variables:
 
 ```julia
-J_fd = derivative_modelrow_fd(compiled, data, 1; vars=vars)
+# Compare categorical levels for specific row
+contrast_north_south = contrast_modelrow(compiled, data, 1; 
+                                       var=:region, from="North", to="South")
+
+# Batch contrasts across multiple rows
+rows_to_analyze = [1, 50, 100, 500]
+contrasts = Matrix{Float64}(undef, length(rows_to_analyze), length(compiled))
+
+for (i, row) in enumerate(rows_to_analyze)
+    contrast = contrast_modelrow(compiled, data, row; var=:region, from="North", to="South")
+    contrasts[i, :] .= contrast
+end
 ```
 
-Discrete contrasts for categorical variables:
+### Advanced Configuration
+
+Optimize derivative computation for specific use cases:
 
 ```julia
-Δ = contrast_modelrow(compiled, data, 1; var=:group3, from="A", to="B")
-```
+# Variable selection strategies
+all_continuous = continuous_variables(compiled, data)
+economic_vars = [:price, :quantity]  # Domain-specific subset
+interaction_vars = [:price]          # Focus on key interactions
 
-Tips:
-- Variable selection: `continuous_variables(compiled, data)` returns a convenient list of continuous symbols present in the compiled ops. Pass a subset to `build_derivative_evaluator` via `vars=...`.
-- Chunking: `build_derivative_evaluator(...; chunk=:auto)` uses `ForwardDiff.Chunk{N}` where `N = length(vars)`. You can pass an explicit `ForwardDiff.Chunk{K}()` if you want to tune performance for larger `N`.
-- Links: `marginal_effects_mu` supports common GLM links including `IdentityLink()`, `LogLink()`, `LogitLink()`, `ProbitLink()`, `CloglogLink()`, `CauchitLink()`, `InverseLink()`, and `SqrtLink()` (and `InverseSquareLink()` when available). Extendable as needed.
+# Chunking for large variable sets  
+large_var_set = [:var1, :var2, :var3, :var4, :var5, :var6, :var7, :var8]
+de_chunked = build_derivative_evaluator(compiled, data; 
+                                       vars=large_var_set, 
+                                       chunk=ForwardDiff.Chunk{4}())  # Process in chunks of 4
+
+# Backend selection based on requirements
+function compute_derivatives_with_backend_choice(de, β, row, require_zero_alloc=false)
+    backend = require_zero_alloc ? :fd : :ad
+    g = Vector{Float64}(undef, length(de.vars))
+    marginal_effects_eta!(g, de, β, row; backend=backend)
+    return g
+end
+```
 
 ### Mixed Models (Fixed Effects)
 
@@ -239,13 +310,14 @@ using BenchmarkTools
 de = build_derivative_evaluator(compiled, data; vars=[:x, :z])
 J = Matrix{Float64}(undef, length(compiled), length(de.vars))
 
-# Benchmark derivatives (≤512 bytes, AD backend)
+# Benchmark derivatives
 @benchmark derivative_modelrow!($J, $de, 25)
 
-# Benchmark marginal effects (≤512 bytes with preallocated buffers, AD backend)  
+# Benchmark marginal effects
 β = coef(model)
 g = Vector{Float64}(undef, length(de.vars))
-@benchmark marginal_effects_eta!($g, $de, $β, 25)
+@benchmark marginal_effects_eta!($g, $de, $β, 25; backend=:ad)  # Small allocations
+@benchmark marginal_effects_eta!($g, $de, $β, 25; backend=:fd)  # Zero allocations
 ```
 
 ## Complex Formula Support
@@ -278,26 +350,78 @@ custom_transform(x) = x > 0 ? log(1 + x) : -log(1 - x)
 @formula(y ~ custom_transform(x) + group)
 ```
 
-## High-Performance Patterns
+## High-Performance Computing Patterns
 
-### Avoiding Allocation in Loops
+### Zero-Allocation Computational Loops
+
+Design computational patterns that maintain zero-allocation performance:
 
 ```julia
-# Pre-compile and pre-allocate
-compiled = compile_formula(model, data)
-row_vec = Vector{Float64}(undef, length(compiled))
-results = Matrix{Float64}(undef, n_simulations, length(compiled))
-
-# Monte Carlo simulation with zero allocations
-for sim in 1:n_simulations
-    for row in 1:nrow(df)
-        compiled(row_vec, data, row)
+function monte_carlo_predictions(model, data, n_simulations=10000)
+    # Pre-compile and pre-allocate all necessary buffers
+    compiled = compile_formula(model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    β = coef(model)
+    
+    # Pre-allocate result storage
+    predictions = Vector{Float64}(undef, n_simulations)
+    data_size = length(first(data))
+    
+    # Zero-allocation simulation loop
+    for sim in 1:n_simulations
+        # Random row selection
+        row_idx = rand(1:data_size)
         
-        # Apply some transformation to row_vec
-        results[sim, :] .= some_transformation(row_vec)
+        # Zero-allocation model matrix evaluation
+        compiled(row_vec, data, row_idx)
         
-        # Continue processing...
+        # Zero-allocation prediction computation
+        predictions[sim] = dot(β, row_vec)
     end
+    
+    return predictions
+end
+
+# Usage with performance validation
+predictions = monte_carlo_predictions(model, data, 100000)
+```
+
+### Advanced Memory Management
+
+Optimize memory usage for large-scale applications:
+
+```julia
+function memory_efficient_batch_processing(model, large_dataset, batch_size=1000)
+    compiled = compile_formula(model, large_dataset)
+    n_total = length(first(large_dataset))
+    n_batches = cld(n_total, batch_size)
+    
+    # Pre-allocate reusable buffers
+    row_vec = Vector{Float64}(undef, length(compiled))
+    batch_results = Matrix{Float64}(undef, batch_size, length(compiled))
+    
+    all_results = Vector{Matrix{Float64}}()
+    
+    for batch in 1:n_batches
+        start_idx = (batch - 1) * batch_size + 1
+        end_idx = min(batch * batch_size, n_total)
+        actual_batch_size = end_idx - start_idx + 1
+        
+        # Resize for last batch if needed
+        if actual_batch_size != batch_size
+            batch_results = Matrix{Float64}(undef, actual_batch_size, length(compiled))
+        end
+        
+        # Zero-allocation batch evaluation
+        for (local_idx, global_idx) in enumerate(start_idx:end_idx)
+            compiled(view(batch_results, local_idx, :), large_dataset, global_idx)
+        end
+        
+        # Store results (could write to disk here for very large datasets)
+        push!(all_results, copy(batch_results))
+    end
+    
+    return all_results
 end
 ```
 
@@ -448,10 +572,234 @@ function profile_memory_usage(model, data, n_evaluations=10000)
     Profile.clear_malloc_data()
     
     for i in 1:n_evaluations
-        compiled(row_vec, data, i % nrow(data) + 1)
+        compiled(row_vec, data, i % length(first(data)) + 1)
     end
     
     # Analyze results
     # (Use ProfileView.jl or similar for visualization)
 end
 ```
+
+## Real-World Application Patterns
+
+### Economic Policy Analysis
+
+Combine scenario analysis with derivative computation for comprehensive policy evaluation:
+
+```julia
+function policy_impact_analysis(baseline_model, policy_data, policy_parameters)
+    # Compile baseline model
+    compiled = compile_formula(baseline_model, policy_data)
+    β = coef(baseline_model)
+    
+    # Identify continuous policy levers
+    policy_vars = intersect(keys(policy_parameters), continuous_variables(compiled, policy_data))
+    de = build_derivative_evaluator(compiled, policy_data; vars=collect(policy_vars))
+    
+    # Create policy scenarios
+    scenarios = [
+        create_scenario("status_quo", policy_data),
+        create_scenario("moderate_policy", policy_data; policy_parameters...),
+        create_scenario("aggressive_policy", policy_data; 
+                       [k => v * 1.5 for (k, v) in policy_parameters]...)
+    ]
+    
+    # Evaluate policy impacts
+    n_individuals = min(1000, length(first(policy_data)))  # Sample for analysis
+    
+    results = Dict()
+    for scenario in scenarios
+        scenario_predictions = Vector{Float64}(undef, n_individuals)
+        scenario_marginals = Matrix{Float64}(undef, n_individuals, length(policy_vars))
+        
+        # Evaluate predictions and marginal effects for each individual
+        row_vec = Vector{Float64}(undef, length(compiled))
+        marginal_vec = Vector{Float64}(undef, length(policy_vars))
+        
+        for i in 1:n_individuals
+            # Prediction
+            compiled(row_vec, scenario.data, i)
+            scenario_predictions[i] = dot(β, row_vec)
+            
+            # Marginal effects
+            marginal_effects_eta!(marginal_vec, de, β, i; backend=:fd)  # Zero allocations
+            scenario_marginals[i, :] .= marginal_vec
+        end
+        
+        results[scenario.name] = (
+            predictions = scenario_predictions,
+            marginal_effects = scenario_marginals,
+            mean_prediction = mean(scenario_predictions),
+            policy_sensitivity = mean(scenario_marginals, dims=1)
+        )
+    end
+    
+    return results
+end
+
+# Example usage
+policy_params = Dict(:minimum_wage => 15.0, :tax_rate => 0.25)
+analysis_results = policy_impact_analysis(economic_model, economic_data, policy_params)
+
+# Compare scenarios
+status_quo_mean = analysis_results["status_quo"].mean_prediction
+moderate_mean = analysis_results["moderate_policy"].mean_prediction
+policy_effect = moderate_mean - status_quo_mean
+
+println("Policy effect: $(round(policy_effect, digits=3))")
+```
+
+### Biostatistical Applications
+
+High-throughput analysis for medical and biological research:
+
+```julia
+function biomarker_analysis(survival_model, patient_data, biomarker_ranges)
+    compiled = compile_formula(survival_model, patient_data)
+    β = coef(survival_model)
+    
+    # Identify biomarker variables for sensitivity analysis
+    biomarker_vars = Symbol.(keys(biomarker_ranges))
+    continuous_biomarkers = intersect(biomarker_vars, continuous_variables(compiled, patient_data))
+    
+    if !isempty(continuous_biomarkers)
+        de = build_derivative_evaluator(compiled, patient_data; vars=continuous_biomarkers)
+    end
+    
+    # Create biomarker scenarios
+    biomarker_scenarios = create_scenario_grid("biomarker_analysis", patient_data, biomarker_ranges)
+    
+    # Patient risk stratification
+    n_patients = length(first(patient_data))
+    risk_matrix = Matrix{Float64}(undef, length(biomarker_scenarios), n_patients)
+    
+    # Pre-allocate evaluation buffers
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    # Evaluate all scenario-patient combinations
+    for (scenario_idx, scenario) in enumerate(biomarker_scenarios)
+        for patient_idx in 1:n_patients
+            compiled(row_vec, scenario.data, patient_idx)
+            
+            # Compute risk score (example: linear predictor)
+            risk_score = dot(β, row_vec)
+            risk_matrix[scenario_idx, patient_idx] = risk_score
+        end
+    end
+    
+    # Compute marginal effects for sensitivity analysis
+    if !isempty(continuous_biomarkers)
+        marginal_matrix = Matrix{Float64}(undef, n_patients, length(continuous_biomarkers))
+        marginal_vec = Vector{Float64}(undef, length(continuous_biomarkers))
+        
+        for patient_idx in 1:n_patients
+            marginal_effects_eta!(marginal_vec, de, β, patient_idx; backend=:fd)
+            marginal_matrix[patient_idx, :] .= marginal_vec
+        end
+        
+        return (
+            risk_scores = risk_matrix,
+            marginal_effects = marginal_matrix,
+            scenarios = biomarker_scenarios,
+            biomarker_vars = continuous_biomarkers
+        )
+    else
+        return (
+            risk_scores = risk_matrix,
+            scenarios = biomarker_scenarios
+        )
+    end
+end
+
+# Example usage
+biomarker_ranges = Dict(
+    :tumor_size => [1.0, 2.0, 3.0, 4.0],     # cm
+    :psa_level => [4.0, 10.0, 20.0],         # ng/mL
+    :age => [50, 65, 80]                     # years
+)
+
+bio_results = biomarker_analysis(oncology_model, patient_data, biomarker_ranges)
+```
+
+### Financial Risk Modeling
+
+Scenario analysis for financial applications:
+
+```julia
+function portfolio_risk_analysis(risk_model, market_data, stress_scenarios)
+    compiled = compile_formula(risk_model, market_data)
+    β = coef(risk_model)
+    
+    # Risk factor sensitivity
+    risk_factors = continuous_variables(compiled, market_data)
+    if !isempty(risk_factors)
+        de = build_derivative_evaluator(compiled, market_data; vars=risk_factors)
+    end
+    
+    # Create market stress scenarios
+    stress_scenario_objects = [
+        create_scenario(name, market_data; parameters...)
+        for (name, parameters) in stress_scenarios
+    ]
+    
+    # Portfolio evaluation across scenarios
+    n_assets = length(first(market_data))
+    scenario_valuations = Dict{String, Vector{Float64}}()
+    
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    for scenario in stress_scenario_objects
+        asset_valuations = Vector{Float64}(undef, n_assets)
+        
+        for asset_idx in 1:n_assets
+            compiled(row_vec, scenario.data, asset_idx)
+            # Risk-adjusted valuation
+            asset_valuations[asset_idx] = dot(β, row_vec)
+        end
+        
+        scenario_valuations[scenario.name] = asset_valuations
+    end
+    
+    # Risk sensitivity analysis
+    if !isempty(risk_factors)
+        sensitivity_matrix = Matrix{Float64}(undef, n_assets, length(risk_factors))
+        sensitivity_vec = Vector{Float64}(undef, length(risk_factors))
+        
+        for asset_idx in 1:n_assets
+            marginal_effects_eta!(sensitivity_vec, de, β, asset_idx; backend=:fd)
+            sensitivity_matrix[asset_idx, :] .= sensitivity_vec
+        end
+        
+        return (
+            scenario_valuations = scenario_valuations,
+            risk_sensitivities = sensitivity_matrix,
+            risk_factors = risk_factors
+        )
+    else
+        return (scenario_valuations = scenario_valuations,)
+    end
+end
+
+# Example usage
+stress_scenarios = [
+    ("market_crash", Dict(:market_volatility => 0.4, :interest_rate => 0.02)),
+    ("inflation_shock", Dict(:inflation_rate => 0.08, :commodity_index => 1.5)),
+    ("recession", Dict(:gdp_growth => -0.03, :unemployment => 0.12))
+]
+
+risk_analysis = portfolio_risk_analysis(financial_model, market_data, stress_scenarios)
+
+# Analyze results
+baseline_value = sum(risk_analysis.scenario_valuations["baseline"])
+crash_value = sum(risk_analysis.scenario_valuations["market_crash"])
+portfolio_risk = (crash_value - baseline_value) / baseline_value
+
+println("Portfolio stress loss: $(round(portfolio_risk * 100, digits=2))%")
+```
+
+## Further Reading
+
+- [Scenario Analysis Guide](scenarios.md) - Comprehensive coverage of the override system
+- [Performance Guide](performance.md) - Detailed optimization strategies and benchmarking
+- [Examples](../examples.md) - Additional domain-specific applications
+- [API Reference](../api.md) - Complete function documentation

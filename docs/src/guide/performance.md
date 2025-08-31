@@ -2,6 +2,8 @@
 
 This guide covers best practices for achieving maximum performance with FormulaCompiler.jl.
 
+For basic performance patterns, see [Basic Usage](basic_usage.md). For advanced optimization techniques, see [Advanced Features](advanced_features.md).
+
 ## Core Performance Principles
 
 FormulaCompiler.jl achieves zero-allocation performance through:

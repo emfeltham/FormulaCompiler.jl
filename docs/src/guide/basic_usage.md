@@ -23,8 +23,8 @@ compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 # Use many times (zero allocations)
-compiled(row_vec, data, 1)    # ~50ns, 0 allocations
-compiled(row_vec, data, 100)  # ~50ns, 0 allocations
+compiled(row_vec, data, 1)    # Zero allocations
+compiled(row_vec, data, 100)  # Zero allocations
 ```
 
 ### 2. Convenient Interface (Allocating)
@@ -230,23 +230,354 @@ for chunk in 1:n_chunks
 end
 ```
 
-## Integration with Other Packages
+## Validation and Debugging
 
-FormulaCompiler.jl works seamlessly with the Julia statistical ecosystem:
+### Compilation Validation
+
+Verify that compilation produces expected results:
 
 ```julia
-using GLM, MixedModels, StandardizedPredictors
+using FormulaCompiler, GLM, Tables
 
-# GLM models
-glm_model = glm(@formula(y ~ x), df, Normal(), IdentityLink())
-compiled_glm = compile_formula(glm_model, data)
+# Setup test case
+df = DataFrame(
+    y = randn(100),
+    x = randn(100), 
+    group = rand(["A", "B", "C"], 100)
+)
+model = lm(@formula(y ~ x * group), df)
+data = Tables.columntable(df)
 
-# Mixed models (extracts fixed effects only)
-mixed_model = fit(MixedModel, @formula(y ~ x + (1|group)), df)
-compiled_mixed = compile_formula(mixed_model, data)
+# Compile and validate
+compiled = compile_formula(model, data)
 
-# Standardized predictors
-contrasts = Dict(:x => ZScore())
-std_model = lm(@formula(y ~ x), df, contrasts=contrasts)
-compiled_std = compile_formula(std_model, data)
+# Check dimensions
+@assert length(compiled) == size(modelmatrix(model), 2) "Column count mismatch"
+
+# Validate against GLM's modelmatrix for first few rows
+mm = modelmatrix(model)
+row_vec = Vector{Float64}(undef, length(compiled))
+
+for i in 1:min(5, nrow(df))
+    compiled(row_vec, data, i)
+    expected = mm[i, :]
+    
+    if !isapprox(row_vec, expected; rtol=1e-12)
+        @warn "Mismatch in row $i" row_vec expected
+    else
+        println("✓ Row $i matches GLM modelmatrix")
+    end
+end
 ```
+
+### Performance Validation
+
+Verify zero-allocation performance:
+
+```julia
+using BenchmarkTools
+
+# Test zero allocations
+compiled = compile_formula(model, data)
+row_vec = Vector{Float64}(undef, length(compiled))
+
+# Benchmark evaluation
+result = @benchmark $compiled($row_vec, $data, 1)
+
+# Validate performance characteristics
+@assert result.memory == 0 "Expected zero allocations, got $(result.memory) bytes"
+@assert result.allocs == 0 "Expected zero allocations, got $(result.allocs) allocations"
+
+println("✓ Zero-allocation validation passed")
+println("Memory: $(result.memory) bytes")
+println("Allocations: $(result.allocs)")
+```
+
+### Data Integrity Validation
+
+Ensure data format compatibility:
+
+```julia
+function validate_data_compatibility(model, data)
+    try
+        compiled = compile_formula(model, data)
+        row_vec = Vector{Float64}(undef, length(compiled))
+        compiled(row_vec, data, 1)
+        println("✓ Data format compatible")
+        return true
+    catch e
+        @error "Data format incompatible" exception=e
+        return false
+    end
+end
+
+# Test your data
+is_compatible = validate_data_compatibility(model, data)
+```
+
+## Common Workflow Patterns
+
+### Pattern 1: Monte Carlo Simulation
+
+```julia
+function monte_carlo_analysis(model, base_data, n_simulations=10000)
+    compiled = compile_formula(model, base_data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    results = Vector{Float64}(undef, n_simulations)
+    
+    for i in 1:n_simulations
+        # Random row selection
+        random_row = rand(1:length(first(base_data)))
+        compiled(row_vec, base_data, random_row)
+        
+        # Compute prediction (example: linear predictor)
+        prediction = dot(coef(model), row_vec)
+        results[i] = prediction
+    end
+    
+    return results
+end
+
+# Usage
+mc_results = monte_carlo_analysis(model, data, 10000)
+println("Mean prediction: $(mean(mc_results))")
+println("Std prediction: $(std(mc_results))")
+```
+
+### Pattern 2: Cross-Validation Support
+
+```julia
+function evaluate_fold(model, train_data, test_data, test_indices)
+    # Compile using training data structure
+    compiled = compile_formula(model, train_data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    # Evaluate on test data
+    predictions = Vector{Float64}(undef, length(test_indices))
+    
+    for (i, test_row) in enumerate(test_indices)
+        compiled(row_vec, test_data, test_row)
+        predictions[i] = dot(coef(model), row_vec)
+    end
+    
+    return predictions
+end
+
+# Example usage in cross-validation
+train_data = Tables.columntable(df_train)
+test_data = Tables.columntable(df_test)
+fold_predictions = evaluate_fold(model, train_data, test_data, 1:nrow(df_test))
+```
+
+### Pattern 3: Streaming Data Processing
+
+```julia
+function process_streaming_data(model, data_stream)
+    # Compile once with example data
+    example_data = first(data_stream)
+    compiled = compile_formula(model, example_data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    processed_results = Float64[]
+    
+    for data_batch in data_stream
+        n_rows = length(first(data_batch))
+        for row in 1:n_rows
+            compiled(row_vec, data_batch, row)
+            # Process each row with zero allocations
+            result = dot(coef(model), row_vec)
+            push!(processed_results, result)
+        end
+    end
+    
+    return processed_results
+end
+```
+
+### Pattern 4: Performance-Critical Loops
+
+```julia
+function high_frequency_evaluation(model, data, row_indices)
+    # Pre-compile and pre-allocate everything
+    compiled = compile_formula(model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    results = Vector{Float64}(undef, length(row_indices))
+    
+    # Inner loop with zero allocations
+    @inbounds for (i, row_idx) in enumerate(row_indices)
+        compiled(row_vec, data, row_idx)
+        # Custom computation with pre-allocated vectors
+        results[i] = sum(row_vec)  # Example: sum of predictors
+    end
+    
+    return results
+end
+```
+
+## Integration with Statistical Ecosystem
+
+### GLM.jl Integration
+
+```julia
+using GLM, Distributions
+
+# Linear regression
+linear_model = lm(@formula(y ~ x + group), df)
+compiled_linear = compile_formula(linear_model, data)
+
+# Logistic regression
+df_binary = DataFrame(
+    success = rand(Bool, 1000),
+    x = randn(1000),
+    group = rand(["A", "B"], 1000)
+)
+logit_model = glm(@formula(success ~ x + group), df_binary, Binomial(), LogitLink())
+compiled_logit = compile_formula(logit_model, Tables.columntable(df_binary))
+
+# Poisson regression
+df_count = DataFrame(
+    count = rand(Poisson(2), 1000),
+    x = randn(1000),
+    exposure = rand(0.5:0.1:2.0, 1000)
+)
+poisson_model = glm(@formula(count ~ x + log(exposure)), df_count, Poisson(), LogLink())
+compiled_poisson = compile_formula(poisson_model, Tables.columntable(df_count))
+```
+
+### MixedModels.jl Integration
+
+```julia
+using MixedModels
+
+# Mixed effects model (extracts fixed effects only)
+df_mixed = DataFrame(
+    y = randn(1000),
+    x = randn(1000),
+    treatment = rand(Bool, 1000),
+    subject = rand(1:100, 1000),
+    cluster = rand(1:50, 1000)
+)
+
+mixed_model = fit(MixedModel, @formula(y ~ x + treatment + (1|subject) + (1|cluster)), df_mixed)
+compiled_mixed = compile_formula(mixed_model, Tables.columntable(df_mixed))
+
+# Note: Only fixed effects (x + treatment) are compiled
+# Random effects are not included in the compiled evaluator
+```
+
+### Custom Contrasts
+
+```julia
+using StatsModels
+
+# Define custom contrast coding
+contrasts_dict = Dict(
+    :group => EffectsCoding(),           # Effects coding for group
+    :treatment => DummyCoding(base=false) # Dummy coding with true as reference
+)
+
+model_contrasts = lm(@formula(y ~ x + group + treatment), df, contrasts=contrasts_dict)
+compiled_contrasts = compile_formula(model_contrasts, data)
+```
+
+## Debugging and Troubleshooting
+
+### Common Validation Checks
+
+```julia
+function comprehensive_validation(model, data)
+    println("=== FormulaCompiler Validation ===")
+    
+    # 1. Compilation check
+    try
+        compiled = compile_formula(model, data)
+        println("✓ Compilation successful")
+        println("  Formula length: $(length(compiled))")
+    catch e
+        println("✗ Compilation failed: $e")
+        return false
+    end
+    
+    # 2. Zero allocation check
+    compiled = compile_formula(model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    alloc_result = @allocated compiled(row_vec, data, 1)
+    if alloc_result == 0
+        println("✓ Zero allocations achieved")
+    else
+        println("⚠ Non-zero allocations: $alloc_result bytes")
+    end
+    
+    # 3. Correctness check (first 3 rows)
+    if applicable(modelmatrix, model)
+        mm = modelmatrix(model)
+        max_check = min(3, size(mm, 1))
+        
+        for i in 1:max_check
+            compiled(row_vec, data, i)
+            expected = mm[i, :]
+            
+            if isapprox(row_vec, expected; rtol=1e-12)
+                println("✓ Row $i matches reference implementation")
+            else
+                println("✗ Row $i mismatch detected")
+                println("  Expected: $(expected[1:min(3, length(expected))])...")
+                println("  Got:      $(row_vec[1:min(3, length(row_vec))])...")
+                return false
+            end
+        end
+    end
+    
+    println("✓ All validation checks passed")
+    return true
+end
+
+# Run comprehensive validation
+validation_result = comprehensive_validation(model, data)
+```
+
+### Performance Diagnostics
+
+```julia
+function diagnose_performance(model, data)
+    println("=== Performance Diagnostics ===")
+    
+    # Compilation timing
+    compilation_time = @elapsed compile_formula(model, data)
+    println("Compilation time: $(round(compilation_time * 1000, digits=1))ms")
+    
+    # Setup for evaluation timing
+    compiled = compile_formula(model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    # Warmup (important for accurate timing)
+    for _ in 1:100
+        compiled(row_vec, data, 1)
+    end
+    
+    # Memory allocation check
+    alloc_check = @allocated compiled(row_vec, data, 1)
+    println("Memory allocations: $alloc_check bytes")
+    
+    # Performance benchmark
+    bench_result = @benchmark $compiled($row_vec, $data, 1)
+    println("Evaluation performance:")
+    println("  Memory: $(bench_result.memory) bytes")  
+    println("  Allocations: $(bench_result.allocs)")
+    
+    # Cache effectiveness test
+    println("\nCache effectiveness:")
+    cache_time_1 = @elapsed modelrow!(row_vec, model, data, 1; cache=true)
+    cache_time_2 = @elapsed modelrow!(row_vec, model, data, 2; cache=true)  
+    println("  First call (with compilation): $(round(cache_time_1 * 1000, digits=2))ms")
+    println("  Second call (cached): $(round(cache_time_2 * 1000000, digits=1))μs")
+    
+    return bench_result
+end
+
+# Run diagnostics
+performance_result = diagnose_performance(model, data)
+```
+
+For advanced performance optimization techniques, see the [Performance Guide](performance.md).
