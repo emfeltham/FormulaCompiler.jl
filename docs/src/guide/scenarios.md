@@ -160,6 +160,107 @@ update_scenario!(scenario;
 remove_override!(scenario, :new_policy)
 ```
 
+### Categorical Variable Overrides
+
+Working with categorical variables requires attention to level compatibility:
+
+```julia
+using CategoricalArrays
+
+# Setup data with categorical variables
+df = DataFrame(
+    outcome = randn(1000),
+    age = rand(25:65, 1000),
+    education = categorical(rand(["High School", "College", "Graduate"], 1000)),
+    region = categorical(rand(["Urban", "Suburban", "Rural"], 1000)),
+    treatment = rand(Bool, 1000)
+)
+
+data = Tables.columntable(df)
+model = lm(@formula(outcome ~ age + education * region + treatment), df)
+compiled = compile_formula(model, data)
+
+# Method 1: Use existing categorical values from data (recommended)
+college_val = df.education[findfirst(x -> x == "College", df.education)]
+urban_val = df.region[findfirst(x -> x == "Urban", df.region)]
+
+education_scenario = create_scenario("college_urban", data;
+    education = college_val,
+    region = urban_val
+)
+
+# Method 2: Create new categorical values with matching levels
+education_pool = df.education.pool
+region_pool = df.region.pool
+
+# Find level indices and create values
+grad_idx = findfirst(==("Graduate"), levels(df.education))
+rural_idx = findfirst(==("Rural"), levels(df.region))
+
+new_education = CategoricalValue(education_pool, grad_idx)
+new_region = CategoricalValue(region_pool, rural_idx)
+
+policy_scenario = create_scenario("graduate_rural", data;
+    education = new_education,
+    region = new_region,
+    age = 35,
+    treatment = true
+)
+
+# Method 3: String overrides (automatic conversion)
+# FormulaCompiler automatically converts strings to categorical values
+# when the target column is categorical with matching levels
+simple_scenario = create_scenario("simple", data;
+    education = "College",  # Must be valid level
+    region = "Urban"        # Must be valid level
+)
+```
+
+#### Categorical Override Best Practices
+
+```julia
+# ✅ Recommended: Use existing values
+existing_val = df.category[findfirst(x -> x == "Target", df.category)]
+scenario = create_scenario("test", data; category = existing_val)
+
+# ✅ Good: Create with matching levels  
+target_idx = findfirst(==("Target"), levels(df.category))
+target_val = CategoricalValue(df.category.pool, target_idx)
+scenario = create_scenario("test", data; category = target_val)
+
+# ✅ Convenient: String with valid level
+scenario = create_scenario("test", data; category = "Target")  # If "Target" ∈ levels
+
+# ❌ Error: Mismatched levels
+wrong_val = categorical(["Target"])[1]  # Different level pool
+scenario = create_scenario("test", data; category = wrong_val)  # CategoricalValue error!
+
+# ❌ Error: Invalid level
+scenario = create_scenario("test", data; category = "Invalid")  # Level not found!
+```
+
+#### Troubleshooting Categorical Overrides
+
+**Error**: "CategoricalValue has different levels than target column"
+```julia
+# Check levels compatibility
+println("Original levels: ", levels(df.category))
+println("Override levels: ", levels(override_value))
+
+# Fix: Use existing value or create with matching levels
+target_idx = findfirst(==("Target"), levels(df.category))
+correct_val = CategoricalValue(df.category.pool, target_idx)
+```
+
+**Error**: "Cannot extract level code from InlineStrings.StringX"
+```julia
+# This occurs with certain string types in RDatasets
+# Solution: Convert to standard categorical values
+original_val = df.string_column[1]  # Get existing value
+level_idx = findfirst(==(string(original_val)), levels(df.string_column))
+override_val = CategoricalValue(df.string_column.pool, level_idx)
+```
+
 ### Conditional Scenarios
 
 Create scenarios with conditional logic:
