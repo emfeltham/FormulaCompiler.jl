@@ -267,6 +267,14 @@ println("95% CI: [$(round(ci_lower, digits=3)), $(round(ci_upper, digits=3))]")
 - **Sensitivity analysis**: Test robustness across different model specifications
 - **External validity**: Consider generalizability of counterfactual estimates
 
+## Advanced Examples
+
+For comprehensive examples of counterfactual analysis integrated with statistical packages like Margins.jl, see:
+
+- **[Margins.jl Integration Examples](../examples/margins_integration.md)**: Detailed examples showing FormulaCompiler's scenario system combined with statistical analysis workflows, including population-level policy analysis, profile-based demographic controls, and systematic parameter exploration.
+
+- **[Scenario-Based Derivatives](scenario_derivatives.md)**: Patterns for computing marginal effects in counterfactual contexts while maintaining statistical correctness.
+
 ## Conclusion
 
 FormulaCompiler's override system provides an efficient foundation for counterfactual analysis in statistical computing. The constant-memory approach enables scalable analysis of large datasets while maintaining compatibility with standard statistical modeling workflows.
