@@ -332,6 +332,22 @@ end
         return Int(levelcode(cat_value))
     elseif isa(cat_value, Integer)
         return Int(cat_value)
+    elseif isa(cat_value, String)
+        # Handle String values that may come from ForwardDiff conversion
+        # This can happen when categorical values get processed through dual number contexts
+        # We need to look up the level index in the original categorical structure
+        if isa(column_data, OverrideVector) && isa(column_data.override_value, CategoricalValue)
+            # For override vectors, find the level code from the override value's pool
+            override_val = column_data.override_value
+            pool = override_val.pool
+            level_idx = findfirst(==(cat_value), pool.levels)
+            if level_idx === nothing
+                error("String value '$cat_value' not found in categorical levels $(pool.levels)")
+            end
+            return level_idx
+        else
+            error("Cannot extract level code from String '$cat_value' without categorical context")
+        end
     elseif hasproperty(cat_value, :level)
         return Int(cat_value.level)
     else
