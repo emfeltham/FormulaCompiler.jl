@@ -405,4 +405,103 @@ policy_variations = [
 analysis_results = analyze_policy_scenarios(model, data, policy_variations)
 ```
 
+## Understanding the Integration Architecture
+
+### The 2×2 Framework
+
+Margins.jl implements a clean 2×2 framework that maps perfectly to FormulaCompiler.jl's capabilities:
+
+| | **Effects** (derivatives/contrasts) | **Predictions** (fitted values) |
+|---|---|---|
+| **Profile** | Marginal effects at specific points | Predictions at representative values |
+| **Population** | Average marginal effects | Average predictions across sample |
+
+**Profile-based analysis** uses specific evaluation points like sample means or custom reference grids, providing targeted insights at representative combinations of covariates.
+
+**Population-based analysis** averages across the observed data distribution, preserving natural correlations and providing true population parameters for your sample.
+
+### Reference Grids vs Scenario Overrides
+
+**Reference grids** are ideal for most marginal effects analysis. They create minimal synthetic data with just the variables needed:
+
+```julia
+# Efficient approach for systematic analysis
+reference_data = DataFrame(
+    age = [35],                      # Representative continuous value
+    education = ["High School", "College", "Graduate"],  # All levels
+    region = ["Urban", "Rural"]      # Policy-relevant categories
+)
+result = profile_margins(model, reference_data; type = :effects, vars = [:income])
+```
+
+**Scenario overrides** excel at counterfactual analysis on existing data:
+
+```julia
+# "What if everyone had college education?"
+policy_scenario = create_scenario("education_expansion", data; education = "College")
+result = population_margins(model, policy_scenario.data; type = :predictions)
+```
+
+The choice depends on your research question: reference grids for clean synthetic evaluation points, scenario overrides for counterfactual analysis preserving population structure.
+
+### Performance Considerations
+
+The integration achieves substantial computational advantages over traditional approaches. Data copying scales as O(n × scenarios), quickly becoming prohibitive for large datasets. FormulaCompiler's override system maintains O(1) memory complexity regardless of data size.
+
+For a 100,000-row dataset with 10 scenarios:
+- Data copying approach: ~480 MB × 10 = 4.8 GB
+- Override system: ~48 bytes × 10 = 480 bytes
+
+This efficiency enables large-scale counterfactual analysis that would be impractical with traditional methods.
+
+### Backend Selection
+
+FormulaCompiler provides two computational backends, each optimized for different use cases:
+
+**Finite differences (backend=:fd)**: Zero allocation after warmup, ideal for production and batch processing where memory usage matters.
+
+**Automatic differentiation (backend=:ad)**: Higher accuracy with small memory cost (~400 bytes), preferred for interactive analysis and development.
+
+Most users should start with automatic backend selection (backend=:auto) and override only when specific constraints require it.
+
+### Common Integration Patterns
+
+**Systematic policy analysis** combines scenario grids with comprehensive evaluation:
+
+```julia
+policy_grid = create_scenario_grid("comprehensive", data, Dict(
+    :tax_rate => [0.20, 0.25, 0.30],
+    :minimum_wage => [12.0, 15.0, 18.0]
+))
+
+results = map(policy_grid) do scenario
+    effects = population_margins(model, scenario.data; type = :effects)
+    predictions = population_margins(model, scenario.data; type = :predictions)
+    (policy = scenario.overrides, effects = effects, predictions = predictions)
+end
+```
+
+**Demographic standardization** uses scenarios to control for confounding:
+
+```julia
+standardized = create_scenario("demographic_control", data; 
+                              age = 40, region = "Urban", education = "College")
+controlled_effects = profile_margins(model, standardized.data; 
+                                   at = :means, type = :effects)
+```
+
+### Design Principles
+
+The integration follows several key principles that maximize both statistical validity and computational efficiency:
+
+**Leverage FormulaCompiler's strengths**: The zero-allocation evaluation system, type specialization, and derivative computation provide the computational foundation.
+
+**Respect architectural boundaries**: Use FormulaCompiler for computation, Margins.jl for statistical interface and interpretation.
+
+**Choose appropriate abstractions**: Reference grids for synthetic points, scenario overrides for counterfactuals, population analysis for real-world variation.
+
+**Maintain performance**: Design workflows that enable zero-allocation hot paths while providing user-friendly interfaces.
+
+This architectural approach enables sophisticated statistical analysis while maintaining the computational efficiency that makes large-scale marginal effects analysis practical.
+
 The FormulaCompiler override system provides a powerful foundation for sophisticated counterfactual analysis within the Margins.jl framework, enabling efficient policy evaluation, demographic standardization, and systematic sensitivity analysis while maintaining computational efficiency and memory scalability.
