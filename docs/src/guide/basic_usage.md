@@ -148,11 +148,23 @@ FormulaCompiler.jl handles all standard StatsModels.jl formula syntax:
 ```
 
 ### Categorical Variables
+
+**Required**: FormulaCompiler only supports categorical variables created with `CategoricalArrays.jl`. Raw string variables are not supported.
+
 ```julia
 using CategoricalArrays
 
+# ✅ Required: Convert string columns to categorical
 df.group = categorical(df.group)
 @formula(y ~ x + group)  # Automatic contrast coding
+
+# ❌ Not supported: Raw string variables
+df.category = ["A", "B", "C"]  # String vector
+@formula(y ~ x + category)     # Will cause compilation errors
+
+# ✅ Correct approach
+df.category = categorical(["A", "B", "C"])
+@formula(y ~ x + category)     # Works correctly
 ```
 
 ### Interactions

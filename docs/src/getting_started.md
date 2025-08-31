@@ -51,6 +51,8 @@ df = DataFrame(
 model = lm(@formula(y ~ x * group + log(z) + treatment), df)
 ```
 
+> **Important**: FormulaCompiler requires all categorical variables to use `CategoricalArrays.jl`. String variables in models are not supported. Always convert string columns to categorical format using `categorical(column)` before model fitting.
+
 ### Step 2: Compile the Formula
 
 Convert your data to column-table format for best performance:
@@ -204,15 +206,29 @@ Compare this to the traditional approach:
 
 #### Data Format Issues
 
-**Problem**: Categorical variables not working correctly
+**Problem**: String variables in models
+```julia
+# Error: FormulaCompiler does not support raw string variables
+df.category = ["A", "B", "C", "A", "B"]  # String vector
+model = lm(@formula(y ~ x + category), df)  # Will cause issues
+```
+
+**Solution**: Convert all categorical data to `CategoricalArrays.jl` format before model fitting:
+```julia
+# Required: Convert strings to categorical
+df.category = categorical(df.category)
+model = lm(@formula(y ~ x + category), df)  # Now works correctly
+```
+
+**Problem**: Categorical contrasts or unexpected behavior
 ```julia
 # Error with categorical contrasts or unexpected contrast behavior
 ```
 
 **Solutions**:
-1. Convert to `CategoricalArrays.jl` format: `categorical(column, levels=...)`
-2. Ensure factor levels are consistent between training and evaluation data
-3. Check contrast specifications in model fitting
+1. Ensure all categorical variables use `CategoricalArrays.jl`: `categorical(column)`
+2. Verify factor levels are consistent between training and evaluation data
+3. Check contrast specifications in model fitting: `contrasts = Dict(:var => EffectsCoding())`
 
 **Problem**: Missing values causing errors
 ```julia

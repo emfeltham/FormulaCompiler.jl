@@ -55,18 +55,27 @@ provides constant-time row access regardless of dataset size.
 
 # Formula Features
 - **Basic terms**: `x`, `log(z)`, `x^2`, `(x > 0)`, integer and float variables
-- **Categorical variables**: All contrast types (dummy, effects, helmert, etc.)
+- **Categorical variables**: Must use `CategoricalArrays.jl` format - raw strings not supported
 - **Interactions**: `x * group`, `x * y * z`, `log(x) * group`
 - **Functions**: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^` (integer and fractional powers)
 - **Boolean conditions**: `(x > 0)`, `(z >= mean(z))`, `(group == \"A\")`
 - **Complex formulas**: `x * log(abs(z)) * group + sqrt(y) + (w > threshold)`
 
+# Data Requirements
+- **Categorical variables**: Must use `categorical(column)` before model fitting
+- **Missing values**: Not supported - remove with `dropmissing()` or impute before compilation
+- **Table format**: Use `Tables.columntable(df)` for optimal performance
+
 # Example
 ```julia
-using FormulaCompiler, GLM, DataFrames, Tables
+using FormulaCompiler, GLM, DataFrames, Tables, CategoricalArrays
 
 # Fit model
-df = DataFrame(y = randn(1000), x = randn(1000), group = rand([\"A\", \"B\"], 1000))
+df = DataFrame(
+    y = randn(1000), 
+    x = randn(1000), 
+    group = categorical(rand([\"A\", \"B\"], 1000))  # Required: use categorical()
+)
 model = lm(@formula(y ~ x * group + log(abs(x) + 1)), df)
 
 # Compile once
