@@ -154,3 +154,7 @@ mutable struct DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G,
 end
 
 Base.length(de::DerivativeEvaluator) = de.compiled_base |> length
+
+# Note: For scenario compatibility with derivative evaluators, use the standalone
+# derivative functions (e.g., derivative_modelrow_fd!) which accept arbitrary data
+# rather than the cached evaluator versions that depend on specific base_data

@@ -3,24 +3,88 @@
 """
     build_derivative_evaluator(compiled, data; vars, chunk=:auto) -> DerivativeEvaluator
 
-Build a ForwardDiff-based derivative evaluator for a fixed set of variables.
+Build a reusable automatic differentiation evaluator for computing Jacobians and marginal effects.
 
-Arguments:
-- `compiled::UnifiedCompiled`: Result of `compile_formula(model, data)`.
-- `data::NamedTuple`: Column-table data (e.g., `Tables.columntable(df)`).
-- `vars::Vector{Symbol}`: Variables to differentiate with respect to.
-  - IMPORTANT: `vars` must be continuous predictors. Categorical variables are not
-    differentiable; for categorical profile workflows, use the scenario system
-    (e.g., `create_scenario()`) combined with derivative evaluators.
-- `chunk`: `ForwardDiff.Chunk{N}()` or `:auto` (uses `Chunk{length(vars)}`).
+Constructs a specialized evaluator that computes derivatives of model matrix rows with
+respect to continuous variables using ForwardDiff.jl. Supports both dual-number automatic
+differentiation and finite differences with backend selection for optimal performance.
 
-Returns:
-- `DerivativeEvaluator`: Prebuilt evaluator object reusable across rows.
+# Arguments
+- `compiled::UnifiedCompiled`: Result of `compile_formula(model, data)`
+- `data::NamedTuple`: Column-table data (from `Tables.columntable(df)`)
+- `vars::Vector{Symbol}`: Continuous variables to differentiate with respect to
+  - **Restriction**: Must be continuous predictors (Float64, Int64, Int32, Int)
+  - **Categorical variables**: Not supported; use scenario system for categorical profiles
+  - **Validation**: Function validates variable types and provides clear error messages
+- `chunk`: ForwardDiff chunk size (`ForwardDiff.Chunk{N}()` or `:auto` for `Chunk{length(vars)}`)
 
-Notes:
-- Compile once per model + variable set; reuse across calls.
-- Zero allocations in steady state after warmup (typed closure + config; no per-call merges).
-- Keep `vars` fixed for best specialization.
+# Returns
+- `DerivativeEvaluator{...}`: Specialized evaluator with preallocated buffers
+  - Supports both automatic differentiation and finite differences backends
+  - Contains type-specialized closures and configurations for optimal performance
+  - Reusable across multiple row evaluations and derivative computations
+
+# Performance Characteristics
+- **Construction**: One-time cost proportional to number of variables
+- **AD backend**: Small allocations per call (ForwardDiff internals)
+- **FD backend**: Zero bytes allocated (finite differences)
+- **Specialization**: Type-stable evaluation with concrete closures and configurations
+- **Validation**: Tested across diverse formula types and variable combinations
+
+# Variable Type Handling
+- **Integer variables**: Automatically converted to Float64 for differentiation
+- **Float64 variables**: Used directly without conversion
+- **Type validation**: Rejects non-numeric variables with informative error messages
+- **Memory optimization**: Conversion overhead incurred once during construction
+
+# Example
+```julia
+using FormulaCompiler, GLM
+
+# Setup model with mixed variable types
+df = DataFrame(y = randn(1000), x = randn(1000), age = rand(18:80, 1000), 
+               group = rand([\"A\", \"B\"], 1000))
+model = lm(@formula(y ~ x * group + age + log(abs(x))), df)
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+
+# Build derivative evaluator for continuous variables
+vars = [:x, :age]  # Mix of Float64 and Int64 variables
+de = build_derivative_evaluator(compiled, data; vars=vars)
+
+# Jacobian computation
+J = Matrix{Float64}(undef, length(compiled), length(vars))
+derivative_modelrow!(J, de, 1)  # J[i,j] = ∂X[i]/∂vars[j]
+
+# Marginal effects on linear predictor η = Xβ  
+β = coef(model)
+g_eta = Vector{Float64}(undef, length(vars))
+marginal_effects_eta!(g_eta, de, β, 1; backend=:ad)  # Small allocations
+marginal_effects_eta!(g_eta, de, β, 1; backend=:fd)  # Zero allocations
+```
+
+# Backend Selection
+```julia
+# Choose backend based on requirements
+marginal_effects_eta!(g, de, β, row; backend=:ad)  # Fast, accurate, small allocations
+marginal_effects_eta!(g, de, β, row; backend=:fd)  # Zero allocations, good accuracy
+```
+
+# Use Cases
+- **Marginal effects computation**: Economic and policy analysis
+- **Sensitivity analysis**: Parameter robustness assessment  
+- **Gradient-based optimization**: Custom model fitting and inference
+- **Bootstrap inference**: Repeated derivative computation across samples
+
+# Error Handling
+Provides clear validation with specific guidance:
+```julia
+# This will error with helpful message:
+de = build_derivative_evaluator(compiled, data; vars=[:x, :group])  
+# Error: Non-continuous/categorical vars: [:group]. Use scenario system for categorical profiles.
+```
+
+See also: [`derivative_modelrow!`](@ref), [`marginal_effects_eta!`](@ref), [`continuous_variables`](@ref)
 """
 function build_derivative_evaluator(
     compiled::UnifiedCompiled{T, Ops, S, O},

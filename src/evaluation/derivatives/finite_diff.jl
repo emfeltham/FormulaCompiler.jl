@@ -6,21 +6,74 @@
 const FD_AUTO_EPS_SCALE = cbrt(eps(Float64))  # ≈ 6.055454452393339e-6
 
 """
-    derivative_modelrow_fd!(J, compiled, data, row; vars, step=:auto)
+    derivative_modelrow_fd!(J, compiled, data, row; vars, step=:auto) -> J
 
-Finite-difference Jacobian for a single row using central differences (standalone).
+Compute Jacobian matrix using finite differences with central difference approximation (standalone version).
 
-Arguments:
-- `J::AbstractMatrix{Float64}`: Preallocated `(n_terms, n_vars)` buffer.
-- `compiled::UnifiedCompiled`: Result of `compile_formula`.
-- `data::NamedTuple`: Column-table data.
-- `row::Int`: Row index.
-- `vars::Vector{Symbol}`: Variables to differentiate with respect to.
-- `step`: Numeric step size or `:auto` (`eps()^(1/3) * max(1, |x|)`).
+Standalone finite difference implementation that builds temporary override structures
+for each call. Provides robust numerical differentiation with adaptive step sizing,
+suitable for validation and environments where pre-built evaluators are not available.
 
-Notes:
-- Two evaluations per variable; useful as a robust fallback and for cross-checks.
-- This standalone path allocates per call (builds per-call overrides and small temporaries). For zero allocations after warmup, prefer the evaluator FD path (`derivative_modelrow_fd_pos!`).
+# Arguments
+- `J::AbstractMatrix{Float64}`: Preallocated Jacobian buffer of size `(n_terms, n_vars)`
+  - Will be overwritten with partial derivatives ∂X[i]/∂vars[j]
+- `compiled::UnifiedCompiled`: Compiled formula from `compile_formula(model, data)`
+- `data::NamedTuple`: Data in column-table format (from `Tables.columntable(df)`)
+- `row::Int`: Row index to evaluate (1-based indexing)
+- `vars::Vector{Symbol}`: Continuous variables to differentiate with respect to
+- `step`: Step size for finite differences
+  - `:auto`: Adaptive sizing `h = ε^(1/3) * max(1, |x|)` where ε = machine epsilon
+  - `Float64`: Fixed step size for all variables
+
+# Returns
+- `J`: The same matrix passed in, containing `J[i,j] = ∂X[i]/∂vars[j]` via finite differences
+
+# Performance
+- **Memory**: Allocates temporary override structures per call
+- **Computation**: Two model evaluations per variable (central differences)
+- **Accuracy**: Good numerical accuracy with mathematically appropriate step sizes
+- **Alternative**: For zero allocations, use `derivative_modelrow_fd_pos!` with pre-built evaluator
+
+# Mathematical Method
+Uses central difference approximation:
+```
+∂f/∂x ≈ [f(x + h) - f(x - h)] / (2h)
+```
+with adaptive step sizing for numerical stability.
+
+# Example
+```julia
+using FormulaCompiler, GLM
+
+# Setup model
+model = lm(@formula(y ~ x * group + log(abs(z) + 1)), df)
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+
+# Standalone finite differences
+vars = [:x, :z]
+J = Matrix{Float64}(undef, length(compiled), length(vars))
+derivative_modelrow_fd!(J, compiled, data, 1; vars=vars)
+
+# Adaptive step sizing (recommended)
+derivative_modelrow_fd!(J, compiled, data, 1; vars=vars, step=:auto)
+
+# Fixed step size
+derivative_modelrow_fd!(J, compiled, data, 1; vars=vars, step=1e-6)
+```
+
+# Use Cases
+- **Validation**: Cross-check automatic differentiation results
+- **Fallback computation**: When ForwardDiff is unavailable or problematic
+- **Numerical verification**: Validate derivative implementations
+- **Educational purposes**: Understand finite difference mechanics
+
+# Step Size Selection
+- **`:auto`**: Recommended for most applications, balances truncation and roundoff error
+- **Fixed values**: Use when specific step size control is needed
+- **Variable-specific**: Each variable gets step proportional to its magnitude
+
+See also: [`derivative_modelrow_fd_pos!`](@ref) for zero-allocation version, [`derivative_modelrow!`](@ref) for AD
 """
 function derivative_modelrow_fd!(
     J::AbstractMatrix{Float64},

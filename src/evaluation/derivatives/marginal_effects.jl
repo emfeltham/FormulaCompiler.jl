@@ -1,24 +1,72 @@
 # marginal_effects.jl - Marginal effects implementations with backend selection
 
 """
-    marginal_effects_eta!(g, de, beta, row; backend=:ad)
+    marginal_effects_eta!(g, evaluator, beta, row; backend=:ad) -> g
 
-Fill `g` with marginal effects of η = Xβ w.r.t. `de.vars` at `row`.
-Implements: `g = J' * β`, where `J = ∂X/∂vars`.
+Compute marginal effects on the linear predictor η = Xβ with respect to continuous variables.
 
-Arguments:
-- `backend::Symbol`: `:ad` (ForwardDiff) or `:fd` (finite differences)
+Fills a preallocated gradient vector with marginal effects ∂η/∂x where η is the linear
+predictor and x represents the continuous variables. Uses the mathematical relationship
+g = J'β where J is the Jacobian matrix ∂X/∂x and β are the model coefficients.
 
-Backends and allocations:
-- `:ad`: Uses ForwardDiff automatic differentiation. Small allocations (~368 bytes) 
-  due to AD internals, but faster and more accurate.
-- `:fd`: Uses zero-allocation finite differences. Strict 0 bytes after warmup,
-  but slightly slower due to multiple function evaluations.
-- Allocating convenience (`marginal_effects_eta`) allocates the result vector by design.
+# Arguments
+- `g::AbstractVector{Float64}`: Preallocated gradient buffer of length `length(evaluator.vars)`
+  - Will be overwritten with marginal effects ∂η/∂x
+- `evaluator::DerivativeEvaluator`: Built by `build_derivative_evaluator(compiled, data; vars=...)`
+- `beta::AbstractVector{<:Real}`: Model coefficients (typically from `coef(model)`)
+- `row::Int`: Row index to evaluate (1-based indexing)
+- `backend::Symbol`: Computational backend (`:ad` or `:fd`, default `:ad`)
 
-Recommendations:
-- Use `:fd` backend for strict zero-allocation requirements
-- Use `:ad` backend for speed and numerical accuracy (default)
+# Returns
+- `g`: The same vector passed in, now containing marginal effects for each variable
+
+# Backend Selection
+- **`:ad` (default)**: ForwardDiff automatic differentiation
+  - Small allocations per call (ForwardDiff internals)
+  - High numerical accuracy via dual numbers
+  - Faster computation for complex formulas
+- **`:fd`**: Finite differences
+  - Zero bytes allocated after warmup
+  - Good numerical accuracy with adaptive step sizes
+  - Optimal for allocation-sensitive applications
+
+# Mathematical Foundation
+Computes the gradient of the linear predictor:
+```
+∂η/∂x = ∂(Xβ)/∂x = (∂X/∂x)'β = J'β
+```
+where J[i,j] = ∂X[i]/∂vars[j] is the model matrix Jacobian.
+
+# Example
+```julia
+using FormulaCompiler, GLM
+
+# Setup model with interactions
+model = lm(@formula(y ~ x * group + log(abs(z) + 1)), df)
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+
+# Build evaluator and compute marginal effects
+vars = [:x, :z]
+de = build_derivative_evaluator(compiled, data; vars=vars)
+β = coef(model)
+g = Vector{Float64}(undef, length(vars))
+
+# Automatic differentiation (accurate, small allocations)
+marginal_effects_eta!(g, de, β, 1; backend=:ad)
+println(\"∂η/∂x = \$(g[1]), ∂η/∂z = \$(g[2])\")
+
+# Finite differences (zero allocations)
+marginal_effects_eta!(g, de, β, 1; backend=:fd)
+```
+
+# Use Cases
+- **Economic analysis**: Policy impact assessment via marginal effects
+- **Sensitivity analysis**: Parameter robustness evaluation
+- **Bootstrap inference**: Repeated marginal effects computation across samples
+- **Delta method**: Standard error computation for marginal effects
+
+See also: [`marginal_effects_mu!`](@ref) for effects on response scale, [`derivative_modelrow!`](@ref), [`build_derivative_evaluator`](@ref)
 """
 function marginal_effects_eta!(
     g::AbstractVector{Float64},
@@ -58,24 +106,94 @@ function marginal_effects_eta(
 end
 
 """
-    marginal_effects_mu!(g, de, beta, row; link, backend=:ad)
+    marginal_effects_mu!(g, evaluator, beta, row; link=IdentityLink(), backend=:ad) -> g
 
-Compute marginal effects of μ = g⁻¹(η) at `row` via chain rule: `dμ/dx = (dμ/dη) * (dη/dx)`.
+Compute marginal effects on the response scale μ with respect to continuous variables.
 
-Arguments:
-- `link`: Link function (e.g., `IdentityLink()`, `LogLink()`, `LogitLink()`)
-- `backend::Symbol`: `:ad` (ForwardDiff) or `:fd` (finite differences)
+Computes marginal effects ∂μ/∂x where μ is the expected response after applying the
+inverse link function. Uses the chain rule: ∂μ/∂x = (∂μ/∂η)(∂η/∂x) where η = Xβ is
+the linear predictor and μ = g⁻¹(η) with g being the link function.
 
-Backends and allocations:
-- `:ad`: Uses ForwardDiff via η path. Small allocations (~368 bytes) due to AD internals,
-  but faster and more accurate.
-- `:fd`: Uses zero-allocation finite differences. Strict 0 bytes after warmup,
-  but slightly slower due to multiple function evaluations.
-- Allocating convenience (`marginal_effects_mu`) allocates the result vector by design.
+# Arguments
+- `g::AbstractVector{Float64}`: Preallocated gradient buffer of length `length(evaluator.vars)`
+  - Will be overwritten with marginal effects ∂μ/∂x
+- `evaluator::DerivativeEvaluator`: Built by `build_derivative_evaluator(compiled, data; vars=...)`
+- `beta::AbstractVector{<:Real}`: Model coefficients (typically from `coef(model)`)
+- `row::Int`: Row index to evaluate (1-based indexing)
+- `link`: GLM link function (default `IdentityLink()`)
+  - Supported: `IdentityLink`, `LogLink`, `LogitLink`, `ProbitLink`, `CloglogLink`, etc.
+- `backend::Symbol`: Computational backend (`:ad` or `:fd`, default `:ad`)
 
-Recommendations:
-- Use `:fd` backend for strict zero-allocation requirements
-- Use `:ad` backend for speed and numerical accuracy (default)
+# Returns
+- `g`: The same vector passed in, now containing marginal effects ∂μ/∂x for each variable
+
+# Backend Selection
+- **`:ad` (default)**: ForwardDiff automatic differentiation
+  - Small allocations per call (ForwardDiff internals)
+  - High numerical accuracy via dual numbers
+  - Faster computation for complex formulas
+- **`:fd`**: Finite differences  
+  - Zero bytes allocated after warmup
+  - Good numerical accuracy with chain rule implementation
+  - Optimal for allocation-sensitive applications
+
+# Mathematical Foundation
+Uses the chain rule for link function derivatives:
+```
+∂μ/∂x = (∂μ/∂η) × (∂η/∂x)
+```
+where:
+- `∂η/∂x` is computed via Jacobian methods (AD or FD)
+- `∂μ/∂η` is the derivative of the inverse link function at η = Xβ
+
+# Link Function Support
+```julia
+# Identity: μ = η (linear models)
+marginal_effects_mu!(g, de, β, row; link=IdentityLink())
+
+# Logistic: μ = 1/(1+exp(-η)) (logistic regression)  
+marginal_effects_mu!(g, de, β, row; link=LogitLink())
+
+# Log: μ = exp(η) (Poisson regression)
+marginal_effects_mu!(g, de, β, row; link=LogLink())
+
+# Probit: μ = Φ(η) (probit regression)
+marginal_effects_mu!(g, de, β, row; link=ProbitLink())
+```
+
+# Example
+```julia
+using FormulaCompiler, GLM
+
+# Logistic regression model
+df_binary = DataFrame(success = rand(Bool, 1000), x = randn(1000), z = randn(1000))
+model = glm(@formula(success ~ x + log(abs(z) + 1)), df_binary, Binomial(), LogitLink())
+data = Tables.columntable(df_binary)
+compiled = compile_formula(model, data)
+
+# Build evaluator
+vars = [:x, :z]
+de = build_derivative_evaluator(compiled, data; vars=vars)
+β = coef(model)
+g = Vector{Float64}(undef, length(vars))
+
+# Marginal effects on probability scale
+marginal_effects_mu!(g, de, β, 1; link=LogitLink(), backend=:ad)
+println(\"∂P(success)/∂x = \$(g[1])\")
+println(\"∂P(success)/∂z = \$(g[2])\")
+
+# Compare with effects on logit scale  
+marginal_effects_eta!(g, de, β, 1; backend=:ad)
+println(\"∂logit(P)/∂x = \$(g[1])\")
+```
+
+# Use Cases
+- **Economic interpretation**: Effects on meaningful outcome scales (probabilities, rates, etc.)
+- **Policy analysis**: Impact assessment on interpretable response measures
+- **Medical research**: Treatment effects on probability or survival scales
+- **Comparative analysis**: Standardized effect sizes across different link functions
+
+See also: [`marginal_effects_eta!`](@ref) for effects on linear predictor scale, [`derivative_modelrow!`](@ref)
 """
 function marginal_effects_mu!(
     g::AbstractVector{Float64},
