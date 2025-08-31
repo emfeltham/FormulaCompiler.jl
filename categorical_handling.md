@@ -81,7 +81,7 @@ This ensures we use the **exact** contrast matrix that StatsModels used during m
 Level codes are extracted dynamically at runtime with zero allocations:
 
 ```julia
-@inline function extract_level_code_zero_alloc(column_data::CategoricalVector, row_idx::Int)
+@inline function extract_level_code(column_data::CategoricalVector, row_idx::Int)
     return Int(levelcode(column_data[row_idx]))
 end
 ```
@@ -149,8 +149,8 @@ For an interaction like `group1 * group2`:
 3. **Runtime Evaluation**:
    ```julia
    # Evaluate interaction at runtime
-   level1 = extract_level_code_zero_alloc(data.group1, row_idx)
-   level2 = extract_level_code_zero_alloc(data.group2, row_idx)
+   level1 = extract_level_code(data.group1, row_idx)
+   level2 = extract_level_code(data.group2, row_idx)
    
    # Apply contrast matrices
    contrast1_values = contrast_matrix1[level1, :]

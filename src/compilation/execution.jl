@@ -311,21 +311,21 @@ end
 ###############################################################################
 
 """
-    extract_level_code_zero_alloc(column_data, row_idx::Int) -> Int
+    extract_level_code(column_data, row_idx::Int) -> Int
 
 Extract level code with zero allocations using type-stable dispatch.
 Handles both regular CategoricalVector and OverrideVector for scenarios.
 """
-@inline function extract_level_code_zero_alloc(column_data::CategoricalVector, row_idx::Int)
+@inline function extract_level_code(column_data::CategoricalVector, row_idx::Int)
     return Int(levelcode(column_data[row_idx]))
 end
 
-@inline function extract_level_code_zero_alloc(column_data::OverrideVector{<:CategoricalValue}, row_idx::Int)
+@inline function extract_level_code(column_data::OverrideVector{<:CategoricalValue}, row_idx::Int)
     # For OverrideVector, all rows have the same value - extract once, no allocation
     return Int(levelcode(column_data.override_value))
 end
 
-@inline function extract_level_code_zero_alloc(column_data::AbstractVector, row_idx::Int)
+@inline function extract_level_code(column_data::AbstractVector, row_idx::Int)
     # Fallback for other vector types that contain categorical values
     cat_value = column_data[row_idx]
     if isa(cat_value, CategoricalValue)
@@ -392,7 +392,7 @@ end
     else
         # Standard categorical handling (unchanged)
         # Extract level code dynamically with zero allocations
-        level = extract_level_code_zero_alloc(column_data, row_idx)
+        level = extract_level_code(column_data, row_idx)
         
         # Clamp to valid range (safety check)
         n_levels = size(op.contrast_matrix, 1)
