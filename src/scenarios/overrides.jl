@@ -30,45 +30,64 @@ Base.iterate(v::CategoricalMixtureOverride, state=1) = state > v.length ? nothin
 """
     create_categorical_override(value, original_column::CategoricalArray)
 
-Create an OverrideVector for categorical variables with proper type preservation.
+Construct constant-value column for categorical variable substitution.
+
+Creates memory-efficient override for categorical variables in counterfactual scenarios,
+maintaining categorical properties (levels, ordering) while providing constant value 
+across all observations.
+
+# Applications
+- Treatment assignment: Fix all subjects to specific treatment condition
+- Regional standardization: Evaluate effects holding location constant
+- Demographic control: Standardize categorical covariates for comparison
 
 # Arguments
-- `value`: The override value (can be String, Symbol, Int index, Bool, or CategoricalValue)
-- `original_column::CategoricalArray`: The original categorical column
+- `value`: Categorical level specification (String, Symbol, Int index, Bool, or CategoricalValue)
+- `original_column::CategoricalArray`: Original categorical variable from dataset
 
 # Returns
-- `OverrideVector{CategoricalValue}`: Memory-efficient constant vector with proper categorical type
+- `OverrideVector{CategoricalValue}`: Constant-memory categorical override maintaining type properties
 
-# Supported Value Types
-- `String`/`Symbol`: Must match a valid level name
-- `Int`: Level index (1-based) 
-- `Bool`: For CategoricalArray{Bool}
-- `CategoricalValue`: Preserves all categorical properties
+# Value Specification Methods
+- `String`/`Symbol`: Level name (must exist in original levels)
+- `Int`: Level index (1-based indexing into levels array)
+- `Bool`: For binary categorical variables
+- `CategoricalValue`: Direct categorical value (preserves all properties)
 
 # Example
 ```julia
-# Original categorical column
-group = categorical(["A", "B", "A", "C"], levels=["A", "B", "C"])
+# Original categorical variable
+treatment = categorical(["Control", "Drug_A", "Control", "Drug_B"], 
+                       levels=["Control", "Drug_A", "Drug_B"])
 
-# Override using string
-override1 = create_categorical_override("B", group)
+# Treatment counterfactuals
+control_override = create_categorical_override("Control", treatment)
+drug_a_override = create_categorical_override("Drug_A", treatment)
 
-# Override using level index
-override2 = create_categorical_override(2, group)  # "B" is level 2
+# Using level indices
+control_override = create_categorical_override(1, treatment)  # "Control" is level 1
 
-# Override using symbol
-override3 = create_categorical_override(:C, group)
+# Using symbols for convenience
+drug_b_override = create_categorical_override(:Drug_B, treatment)
 ```
 
-!!! warning
-    Value must exist in the categorical levels or an error is thrown.
-    Preserves ordering and all categorical properties from original column.
+# Type Safety
+- Validates override value exists in original categorical levels
+- Preserves ordering properties (ordered vs unordered categoricals)
+- Maintains level structure for statistical compatibility
 """
 function create_categorical_override(value::T, original_column::CategoricalArray{T}) where T
     levels_list = levels(original_column)
     
     if value ∉ levels_list
-        error("Override value '$value' (type: $(typeof(value))) not in categorical levels: $levels_list")
+        error("""
+        Invalid categorical override: '$value' not found in levels $levels_list
+        
+        Valid approaches:
+        - Use existing level: create_categorical_override("$(levels_list[1])", column)
+        - Check for typographical errors in level specification
+        - Verify categorical levels with levels(column)
+        """)
     end
    
     # Create proper CategoricalValue that preserves ordering and levels
@@ -86,7 +105,14 @@ function create_categorical_override(value::AbstractString, original_column::Cat
     levels_list = levels(original_column)
     
     if value ∉ levels_list
-        error("Override value '$value' not in categorical levels: $levels_list")
+        error("""
+        Invalid categorical override: '$value' not found in levels $levels_list
+        
+        Valid approaches:
+        - Use existing level: create_categorical_override("$(levels_list[1])", column)
+        - Check for typographical errors in level specification  
+        - Verify categorical levels with levels(column)
+        """)
     end
     
     # Create proper CategoricalValue using CategoricalArrays.jl API
@@ -130,7 +156,14 @@ function create_categorical_override(value::Bool, original_column::CategoricalAr
     levels_list = levels(original_column)
     
     if value ∉ levels_list
-        error("Override value '$value' not in categorical levels: $levels_list")
+        error("""
+        Invalid categorical override: '$value' not found in levels $levels_list
+        
+        Valid approaches:
+        - Use existing level: create_categorical_override("$(levels_list[1])", column)
+        - Check for typographical errors in level specification  
+        - Verify categorical levels with levels(column)
+        """)
     end
     
     # Create proper CategoricalValue for Bool
@@ -161,14 +194,25 @@ end
 """
     DataScenario
 
-Represents a data scenario with specific variable overrides.
-Contains the modified data that can be used directly with compiled formulas.
+Counterfactual scenario container with variable substitutions for efficient analysis.
+
+A DataScenario represents a hypothetical version of the data where specified variables
+are held constant at chosen values, enabling systematic counterfactual analysis without
+data duplication.
 
 # Fields
-- `name::String`: Descriptive name for the scenario
-- `overrides::Dict{Symbol,Any}`: Variable overrides (mutable for iterative development)  
-- `data::NamedTuple`: Modified column-table data with OverrideVectors applied
-- `original_data::NamedTuple`: Original unmodified data for reference
+- `name::String`: Descriptive identifier for the counterfactual scenario
+- `overrides::Dict{Symbol,Any}`: Variable substitutions applied in this scenario  
+- `data::NamedTuple`: Modified data structure with constant-value columns for overridden variables
+- `original_data::NamedTuple`: Reference to original unmodified data
+
+# Usage
+DataScenario objects are typically created via `create_scenario()` and used directly 
+with `compile_formula()` for zero-allocation counterfactual evaluation.
+
+# Memory Efficiency
+Uses OverrideVector for substituted variables, providing O(1) memory overhead
+regardless of dataset size compared to O(n) for naive data copying approaches.
 """
 mutable struct DataScenario
     name::String
@@ -178,42 +222,55 @@ mutable struct DataScenario
 end
 
 """
-    create_scenario(name, original_data; overrides...)
-    create_scenario(name, original_data, overrides::Dict)
+    create_scenario(name, data; variable_values...)
+    create_scenario(name, data, overrides::Dict)
 
-Create a data scenario with specified variable overrides for counterfactual analysis.
+Construct counterfactual scenario with specified variable substitutions.
+
+# Applications
+- Policy analysis: `create_scenario("minimum_wage_15", data; wage = 15.0)`
+- Treatment evaluation: `create_scenario("universal_treatment", data; treatment = true)`
+- Sensitivity analysis: `create_scenario("standardized_age", data; age = 40)`
+- Standardization: `create_scenario("urban_baseline", data; region = "Urban", education = "College")`
 
 # Arguments
-- `name::String`: Descriptive name for this scenario
-- `original_data::NamedTuple`: Original data in column-table format (from Tables.columntable)
-- `overrides...`: Keyword arguments for variable overrides (or Dict in second method)
+- `name::String`: Descriptive identifier for this counterfactual scenario
+- `data::NamedTuple`: Original data in column-table format (from Tables.columntable)
+- `variable_values...`: Keyword arguments specifying variable substitutions (or Dict in second method)
 
 # Returns
-- `DataScenario`: Object containing original data, overrides, and modified data with OverrideVectors
+- `DataScenario`: Counterfactual scenario with variable overrides applied
+
+# Computational Properties
+- Memory complexity: O(1) regardless of data size
+- Evaluation: Zero-allocation with FormulaCompiler
+- Scalability: Constant overhead for arbitrary dataset sizes
 
 # Example
 ```julia
 data = Tables.columntable(df)
 
-# Override single variable to mean
-scenario1 = create_scenario("x_at_mean", data; x = mean(data.x))
+# Policy counterfactual: minimum wage at \$15/hour
+policy_scenario = create_scenario("min_wage_policy", data; wage = 15.0)
 
-# Override multiple variables for policy analysis
-scenario2 = create_scenario("policy", data; x = 2.5, group = "A", treatment = true)
+# Treatment counterfactual: universal intervention
+treatment_scenario = create_scenario("all_treated", data; 
+                                   treatment = true, dose = 100.0)
 
-# Use dictionary for dynamic overrides
-overrides = Dict(:dose => 100.0, :region => "North")
-scenario3 = create_scenario("high_dose_north", data, overrides)
+# Standardization: representative demographics
+standard_scenario = create_scenario("representative", data;
+                                  age = 35, education = "College", region = "Urban")
 
-# Evaluate with compiled formula (zero-allocation)
-compiled = compile_formula(model)
-row_vec = Vector{Float64}(undef, length(compiled))
-compiled(row_vec, scenario1.data, row_idx)
+# Compile and evaluate (zero-allocation)
+compiled = compile_formula(model, policy_scenario.data)
+output = Vector{Float64}(undef, length(compiled))
+compiled(output, policy_scenario.data, row_idx)
 ```
 
-!!! note
-    Uses memory-efficient OverrideVector to avoid data duplication.
-    Each override creates a lazy vector returning the same value for all rows.
+Related Functions:
+- `compile_formula()`: Compile scenarios for evaluation
+- `modelrow!()`: Efficient scenario evaluation
+- `create_scenario_grid()`: Multiple scenario construction
 """
 function create_scenario(name::String, original_data::NamedTuple; overrides...)
     override_dict = Dict{Symbol,Any}(overrides)
@@ -241,24 +298,43 @@ end
 """
     create_override_data(original_data, overrides)
 
-Create modified data NamedTuple with variable overrides using OverrideVector.
+Construct modified data structure with variable substitutions for counterfactual analysis.
+
+# Applications  
+- Internal function supporting `create_scenario()` workflow
+- Advanced users requiring direct data modification without scenario wrapper
+- Custom counterfactual analysis implementations
+
+# Implementation
+Creates new NamedTuple where overridden variables are replaced with OverrideVector 
+instances, while non-overridden variables maintain original references.
 
 # Arguments
 - `original_data::NamedTuple`: Base data in column-table format
-- `overrides::Dict{Symbol,Any}`: Variable overrides to apply
+- `overrides::Dict{Symbol,Any}`: Variable-to-value mapping for substitutions
 
 # Returns
-- `NamedTuple`: Modified data with OverrideVectors for overridden variables
+- `NamedTuple`: Modified data structure with constant-value columns for overridden variables
+
+# Computational Properties
+- Memory: O(1) overhead per override, original data preserved by reference
+- Type stability: Maintains NamedTuple structure for FormulaCompiler compatibility
+- Variable handling: Automatic type conversion and categorical level validation
 
 # Example
 ```julia
 data = Tables.columntable(df)
-overrides = Dict(:treatment => true, :dose => 100.0)
-modified = create_override_data(data, overrides)
+overrides = Dict(:treatment => true, :dose => 100.0, :region => "Urban")
+modified_data = create_override_data(data, overrides)
+
+# Use directly with FormulaCompiler
+compiled = compile_formula(model, modified_data)
 ```
 
-!!! note
-    Uses memory-efficient OverrideVector to avoid duplicating data.
+Related Functions:
+- `create_scenario()`: Higher-level interface creating DataScenario objects
+- `create_override_vector()`: Creates individual variable overrides
+- `compile_formula()`: Compiles modified data for evaluation
 """
 function create_override_data(original_data::NamedTuple, overrides::Dict{Symbol,Any})
     # Start with original data
@@ -283,24 +359,49 @@ end
 """
     create_override_vector(value, original_column)
 
-Create appropriate OverrideVector based on original column type.
+Construct constant-value vector with automatic type handling for variable substitution.
+
+# Applications
+- Internal function supporting `create_override_data()` workflow
+- Low-level interface for custom counterfactual implementations
+- Type-safe variable substitution with automatic conversion
+
+# Implementation
+Creates OverrideVector with appropriate element type based on original column,
+handling categorical levels, boolean conversion, and numeric type preservation.
 
 # Arguments
-- `value`: The override value to apply
-- `original_column::AbstractVector`: The original data column
+- `value`: Substitution value (any type compatible with original column)
+- `original_column::AbstractVector`: Original data column defining target type
 
 # Returns
-- `OverrideVector`: Memory-efficient constant vector with appropriate type
+- `OverrideVector`: Constant-memory vector returning specified value for all indices
+
+# Type Handling
+- **Categorical variables**: Validates levels and preserves ordering properties
+- **Boolean variables**: Converts to Float64 (0.0/1.0) for statistical compatibility
+- **Integer variables**: Handles fractional overrides with automatic Float64 promotion
+- **Numeric types**: Attempts exact type conversion with Float64 fallback
 
 # Example
 ```julia
-original = df.treatment  # CategoricalVector
-override = create_override_vector("control", original)
-# Returns OverrideVector{CategoricalValue} for all rows
+# Categorical override
+treatment_col = categorical(["Control", "Drug_A", "Control"])
+override = create_override_vector("Drug_A", treatment_col)
+
+# Numeric override with type conversion
+age_col = [25, 30, 35, 40]  # Vector{Int}
+override = create_override_vector(35.5, age_col)  # Promotes to Float64
+
+# Boolean override 
+enrolled_col = [true, false, true, false]
+override = create_override_vector(true, enrolled_col)  # Returns Float64(1.0)
 ```
 
-!!! note
-    Automatically handles categorical, boolean, and numeric types appropriately.
+Related Functions:
+- `create_override_data()`: Uses this function for each overridden variable
+- `create_categorical_override()`: Specialized function for categorical variables
+- `OverrideVector`: The constant-memory vector type created by this function
 """
 function create_override_vector(value, original_column::AbstractVector)
     # Handle categorical mixtures first
@@ -463,7 +564,38 @@ end
 """
     ScenarioCollection
 
-Container for multiple related scenarios with advanced operations.
+Systematic collection of counterfactual scenarios for comprehensive analysis.
+
+A ScenarioCollection organizes multiple related DataScenario objects with shared 
+metadata, enabling batch operations, systematic evaluation, and organized analysis 
+workflows for complex counterfactual studies.
+
+# Applications
+- Policy sensitivity analysis: Evaluate effects across parameter ranges
+- Treatment dose-response studies: Systematic intervention level testing
+- Regional comparison studies: Geographic heterogeneity analysis
+- Robustness testing: Model stability across variable ranges
+
+# Fields
+- `name::String`: Descriptive identifier for the scenario collection
+- `scenarios::Vector{DataScenario}`: Individual counterfactual scenarios
+- `original_data::NamedTuple`: Reference to base data structure
+- `metadata::Dict{String,Any}`: Collection properties (variables, grid sizes, creation time)
+
+# Collection Interface
+Implements standard collection operations:
+- `length(collection)`: Number of scenarios in collection
+- `collection[i]`: Access individual scenario by index
+- `for scenario in collection`: Iterator support for batch processing
+
+# Memory Efficiency
+Each scenario maintains O(1) memory overhead regardless of original data size,
+making collections viable for systematic analysis with many scenarios.
+
+Related Functions:
+- `create_scenario_grid()`: Primary constructor for systematic scenario collections
+- `modelrow_scenarios!()`: Batch evaluation across collection scenarios
+- `evaluate_scenarios_batch()`: Multi-scenario, multi-row evaluation
 """
 struct ScenarioCollection
     name::String
@@ -484,15 +616,26 @@ Base.iterate(collection::ScenarioCollection, state=1) = state > length(collectio
 """
     create_scenario_grid(collection_name, data, variable_grids::Dict{Symbol, <:AbstractVector})
 
-Create a collection of scenarios for all combinations of variable values.
+Construct systematic grid of counterfactual scenarios for comprehensive analysis.
+
+# Applications
+- Policy sensitivity analysis: Test outcomes across parameter ranges
+- Treatment dose-response: Evaluate effects at multiple intervention levels  
+- Regional comparisons: Assess heterogeneity across geographic areas
+- Robustness testing: Examine model stability across variable ranges
 
 # Arguments
-- `collection_name::String`: Base name for the scenario collection
+- `collection_name::String`: Descriptive identifier for the scenario collection
 - `data::NamedTuple`: Original data in column-table format
-- `variable_grids::Dict{Symbol, <:AbstractVector}`: Dictionary mapping variables to value grids
+- `variable_grids::Dict{Symbol, <:AbstractVector}`: Variable-to-values mapping for grid construction
 
 # Returns
-- `ScenarioCollection`: Collection containing scenarios for all value combinations
+- `ScenarioCollection`: Systematic collection of counterfactual scenarios
+
+# Computational Properties
+- Creates Cartesian product of all variable values
+- Memory: O(scenarios) overhead, not O(scenarios × data_size)  
+- Evaluation: Each scenario maintains zero-allocation properties
 
 # Example
 ```julia
@@ -738,7 +881,44 @@ end
 """
     modelrow_scenarios!(matrix, compiled, scenarios, row_idx)
 
-Evaluate model row across multiple scenarios.
+Evaluate model row across multiple counterfactual scenarios with zero-allocation.
+
+# Applications
+- Batch counterfactual evaluation: Compare predictions across scenario set
+- Policy comparison: Evaluate single observation under different policy scenarios  
+- Sensitivity analysis: Assess prediction stability across parameter variations
+
+# Arguments
+- `matrix::AbstractMatrix{Float64}`: Pre-allocated output matrix (scenarios × formula_terms)
+- `compiled`: Compiled formula from `compile_formula()`
+- `scenarios::Vector{DataScenario}`: Collection of counterfactual scenarios
+- `row_idx::Int`: Row index for evaluation across all scenarios
+
+# Implementation
+Evaluates the specified row under each scenario, storing results in corresponding 
+matrix rows. Maintains zero-allocation properties by reusing pre-allocated matrix.
+
+# Example  
+```julia
+scenarios = [
+    create_scenario("low_dose", data; dose = 50.0),
+    create_scenario("high_dose", data; dose = 150.0)
+]
+
+compiled = compile_formula(model, data)
+results = Matrix{Float64}(undef, length(scenarios), length(compiled))
+modelrow_scenarios!(results, compiled, scenarios, 1)  # Evaluate row 1
+
+# Compare predictions
+low_dose_pred = dot(coef(model), results[1, :])
+high_dose_pred = dot(coef(model), results[2, :])
+```
+
+Related Functions:
+- `create_scenario()`: Create individual scenarios for evaluation
+- `create_scenario_grid()`: Systematic scenario generation
+- `modelrow_collection()`: Convenience wrapper for ScenarioCollection
+- `evaluate_scenarios_batch()`: Multi-row, multi-scenario evaluation
 """
 function modelrow_scenarios!(
     matrix::AbstractMatrix{Float64},
