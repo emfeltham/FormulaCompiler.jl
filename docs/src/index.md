@@ -7,6 +7,7 @@ Computationally efficient model matrix evaluation for Julia statistical models. 
 - **Memory efficiency**: Quick per row evaluation with minimal memory allocation (validated across 2032+ test cases)
 - **Computational performance**: Substantial improvements over traditional `modelmatrix()` approaches for single-row evaluations  
 - **Comprehensive compatibility**: Supports all valid StatsModels.jl formulas, including complex interactions and mathematical functions
+- **Categorical mixtures**: Compile-time support for weighted categorical specifications for marginal effects
 - **Scenario analysis**: Memory-efficient variable override system for counterfactual analysis
 - **Unified architecture**: Single compilation pipeline accommodates diverse formula structures
 - **Ecosystem integration**: Compatible with GLM.jl, MixedModels.jl, and StandardizedPredictors.jl
@@ -109,6 +110,7 @@ marginal_effects_eta!(g, de, beta, row; backend=:ad)  # ~368 bytes, faster
 
 - Read the [Getting Started](getting_started.md) guide for a detailed walkthrough
 - Explore [Advanced Features](guide/advanced_features.md) for scenario analysis and memory optimization
+- Learn about [Categorical Mixtures](guide/categorical_mixtures.md) for marginal effects computation
 - Check out [Examples](examples.md) for real-world use cases
 - Review the [Mathematical Foundation](mathematical_foundation.md) for comprehensive theory and implementation details
 - Review the [API Reference](api.md) for complete function documentation

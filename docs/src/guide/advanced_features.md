@@ -350,6 +350,26 @@ custom_transform(x) = x > 0 ? log(1 + x) : -log(1 - x)
 @formula(y ~ custom_transform(x) + group)
 ```
 
+### Categorical Mixtures
+
+FormulaCompiler.jl supports categorical mixtures for marginal effects computation:
+
+```julia
+# Create data with weighted categorical specifications
+df = DataFrame(
+    x = [1.0, 2.0, 3.0],
+    group = [mix("A" => 0.3, "B" => 0.7),   # 30% A, 70% B
+             mix("A" => 0.3, "B" => 0.7),
+             mix("A" => 0.3, "B" => 0.7)]
+)
+
+# Compile and evaluate with zero allocations
+compiled = compile_formula(model, Tables.columntable(df))
+compiled(output, Tables.columntable(df), 1)  # ~50ns, 0 bytes
+```
+
+For comprehensive coverage of categorical mixtures including validation, helper functions, and marginal effects integration, see the [Categorical Mixtures](categorical_mixtures.md) guide.
+
 ## High-Performance Computing Patterns
 
 ### Zero-Allocation Computational Loops

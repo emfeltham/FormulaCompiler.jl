@@ -16,6 +16,7 @@ makedocs(
         "User Guide" => [
             "Basic Usage" => "guide/basic_usage.md",
             "Advanced Features" => "guide/advanced_features.md",
+            "Categorical Mixtures" => "guide/categorical_mixtures.md",
             "Scenario Analysis" => "guide/scenarios.md",
             "Performance Tips" => "guide/performance.md",
         ],
