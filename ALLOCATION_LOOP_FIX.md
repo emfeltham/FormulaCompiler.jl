@@ -2,123 +2,176 @@
 
 ## Problem Summary
 
-**Issue**: FormulaCompiler claims "zero-allocation" but actually allocates ~200 bytes per call when used in loops, the primary usage pattern for statistical computing.
+**Issue**: FormulaCompiler claims "zero-allocation" but shows erratic allocation behavior in loops, the primary usage pattern for statistical computing.
 
 **Test Results**:
 - Single `compiled(output, data, 1)` after warmup: **0 bytes** ✅
-- Loop `compiled(output, data, i)` for 1000 iterations: **202.688 bytes/call** ❌
+- Loop sizes show variable behavior:
+  - 5 calls: **40,416 bytes/call** ❌
+  - 10-100 calls: **0 bytes/call** ✅  
+  - 1000 calls: **23.44 bytes/call** ❌
 - Loop `modelrow!(output, compiled, data, i)`: **426.816 bytes/call** ❌
 
-**Impact**: Margins.jl's analysis is correct - FormulaCompiler is NOT zero-allocation for practical usage patterns.
+**Impact**: Margins.jl's analysis identifies real allocation issues, though the problem is more nuanced than initially thought - not fundamentally broken architecture, but inconsistent optimization behavior.
 
-## Root Cause Analysis
+## Root Cause Analysis - REVISED
 
-### Primary Cause: `fill!(scratch, zero(T))` in Hot Path
+### ❌ Initial Theory (Disproven): `fill!(scratch, zero(T))`
 
-**Location**: `src/compilation/execution.jl:91`
+**What we tested**: `fill!(scratch, zero(T))` vs `fill!(scratch, 0.0)`
+**Result**: Both approaches allocate heavily (~400 bytes/call), so this was NOT the primary cause
+
+**What we learned**: Even basic `fill!` operations allocate significantly in loop contexts, suggesting the issue is deeper than a simple `zero(T)` call.
+
+### ✅ Actual Root Cause: Julia Compilation/Optimization Thresholds
+
+**Observation**: Allocation behavior varies dramatically by loop size:
+- **Small loops (≤5 calls)**: Heavy allocation (40,000+ bytes/call)  
+- **Medium loops (10-100 calls)**: Zero allocation ✅
+- **Large loops (1000+ calls)**: Minor allocation (~23 bytes/call)
+
+**This pattern indicates Julia's JIT compiler has different optimization strategies**
+
+## Hypotheses for Root Cause
+
+### **Primary Hypothesis: Julia's Compilation/Optimization Thresholds**
+
+The erratic allocation pattern suggests Julia's JIT compiler has **different optimization strategies** based on loop iteration counts:
+
+1. **Small loops (≤5)**: Julia may not fully optimize, treating each iteration as separate compilation units
+2. **Medium loops (10-100)**: Julia recognizes the pattern and aggressively optimizes 
+3. **Large loops (1000+)**: Some optimization degrades or GC pressure kicks in
+
+### **Secondary Hypothesis: Type Inference Context**
+
+The key difference might be **global vs local type inference**:
+- **Single calls**: Julia can infer all types globally at the call site
+- **Loop contexts**: Julia must infer types within the loop scope, potentially causing:
+  - Boxing of loop variables
+  - Re-compilation for each iteration in small loops
+  - Type instability from the `((i-1) % n) + 1` row calculation
+
+### **Tertiary Hypothesis: Scratch Buffer Interaction**
+
+Looking at FormulaCompiler's design, each `compiled` object has a `scratch` buffer that gets reused. The allocation might come from:
+- **Memory layout changes** when the same scratch buffer is accessed rapidly
+- **GC interaction** with the scratch buffer in tight loops
+- **Cache effects** where rapid reuse triggers Julia's memory management
+
+### **Most Likely: The `((i-1) % n) + 1` Calculation**
+
+This specific pattern in the test loop:
 ```julia
-function (f::UnifiedCompiled{T, Ops, S, O})(output::AbstractVector{T}, data::NamedTuple, row_idx::Int) where {T, Ops, S, O}
-    scratch = f.scratch
-    fill!(scratch, zero(T))  # ← ALLOCATION SOURCE: zero(T) creates new object each call
-    execute_ops(f.ops, scratch, data, row_idx)
-    copy_outputs_from_ops!(f.ops, output, scratch)
-    return nothing
+row = ((i-1) % n) + 1
+```
+
+Could be causing:
+- **Integer boxing** in the loop context
+- **Type instability** because Julia can't prove `row` is always `Int`
+- **Bounds checking** allocation for the modular arithmetic
+
+**Test this hypothesis**: Try a loop with `row = i` (no modular arithmetic) vs the current calculation.
+
+## Proposed Fixes - REVISED
+
+### 🔴 **Fix 1: Investigate Loop Index Calculation** (Moderate - 1-2 hours)
+
+**Test**: Replace complex row calculation with simple indexing
+```julia
+# Current (potentially problematic)
+row = ((i-1) % n) + 1
+
+# Test alternative (simpler)  
+row = i  # For small datasets
+```
+
+**Rationale**: The modular arithmetic `((i-1) % n) + 1` may cause type instability or integer boxing in loop contexts.
+
+### 🟡 **Fix 2: Force Aggressive Loop Optimization** (Moderate - 1 hour)
+
+**Approach**: Use Julia optimization hints to ensure consistent behavior across loop sizes
+```julia
+# Add to loop functions
+@inbounds @simd for i in 1:n_calls
+    row = i  # Simple, type-stable indexing
+    compiled(output, data, row)
 end
 ```
 
-**Why This Allocates**:
-1. **`zero(T)`** constructs a new zero value on each call
-2. **Type instability** in loop contexts prevents optimization
-3. **GC pressure** from repeated object creation
+**Rationale**: `@inbounds` and `@simd` may help Julia consistently optimize across different loop sizes.
 
-### Secondary Cause: `modelrow!` Wrapper Overhead
+### 🟢 **Fix 3: Test Alternative Loop Patterns** (Easy - 30 minutes)
 
-**Additional Allocation**: `modelrow!` adds ~224 bytes/call on top of core compilation
-- `@assert` statements with string interpolation
-- Cache dictionary operations (`get_or_compile_formula`)
-- Function call overhead in loops
-
-## Proposed Fixes
-
-### 🟢 **Fix 1: Replace `zero(T)` with Literal** (Easy - 5 minutes)
-
-**Change**:
+**Test different loop structures** to find consistently zero-allocation patterns:
 ```julia
-# Current (allocating)
-fill!(scratch, zero(T))  
-
-# Fixed (zero-allocation)
-fill!(scratch, 0.0)
-```
-
-**Rationale**: Literal `0.0` is a compile-time constant, `zero(T)` constructs runtime objects.
-
-### 🟡 **Fix 2: Optimize Scratch Clearing** (Moderate - 30 minutes)
-
-**Current**: Clears entire scratch buffer every call
-**Better**: 
-```julia
-# Option A: Broadcasting (may be faster)
-scratch .= 0.0
-
-# Option B: Only clear used positions (best)
-@inbounds for i in 1:used_scratch_positions
-    scratch[i] = 0.0
-end
-```
-
-### 🔴 **Fix 3: Lazy Scratch Management** (Complex - 2-4 hours)
-
-**Concept**: Track which scratch positions are "dirty" and only clear as needed
-```julia
-# Track dirty positions in compiled formula
-struct UnifiedCompiled{T, Ops, S, O}
-    ops::Ops
-    scratch::Vector{T}
-    dirty_positions::Vector{Int}  # New field
+# Pattern A: Pre-computed indices
+rows = 1:n_calls
+for row in rows
+    compiled(output, data, row)
 end
 
-# Clear only dirty positions from previous execution
-function clear_dirty_scratch!(scratch, dirty_positions)
-    @inbounds for pos in dirty_positions
-        scratch[pos] = 0.0
-    end
-    empty!(dirty_positions)  # Reset for next round
+# Pattern B: While loop
+i = 1
+while i <= n_calls
+    compiled(output, data, i)
+    i += 1
 end
+
+# Pattern C: Functional approach
+foreach(row -> compiled(output, data, row), 1:n_calls)
 ```
 
-### 🟡 **Fix 4: Remove modelrow! Overhead** (Moderate - 1 hour)
+### 🔴 **Fix 4: Investigate Julia Version/Compiler Settings** (Complex - 2-4 hours)
 
-**Issues**:
+**Hypothesis**: The allocation behavior may be:
+- Julia version dependent (test with different Julia versions)
+- Compiler optimization level dependent
+- Related to specific compilation flags or settings
+
+### 🟡 **Fix 5: Remove modelrow! Overhead** (Moderate - 1 hour)
+
+**Issues identified**:
 1. Remove `@assert` statements or make them compile-time only
 2. Cache optimization: pre-hash cache keys 
 3. Streamline function signatures
 
-## Implementation Priority
+## Implementation Priority - REVISED
 
-### Phase 1: Quick Win (5 minutes)
+### Phase 1: Quick Test (30 minutes)
+Test the most likely hypothesis:
 ```julia
-# src/compilation/execution.jl:91
-- fill!(scratch, zero(T))
-+ fill!(scratch, 0.0)
-```
-**Expected Impact**: Reduce core allocation from ~200 bytes to ~50 bytes per call
+# Test simple vs complex row indexing
+function simple_loop(compiled, output, data, n_calls)
+    for i in 1:n_calls  # Direct indexing, no modular arithmetic
+        compiled(output, data, i)
+    end
+end
 
-### Phase 2: Broadcasting Optimization (30 minutes)
-```julia
-# src/compilation/execution.jl:91
-- fill!(scratch, 0.0)
-+ scratch .= 0.0
+function complex_loop(compiled, output, data, n_calls, n)
+    for i in 1:n_calls
+        row = ((i-1) % n) + 1  # Current pattern
+        compiled(output, data, row)  
+    end
+end
 ```
-**Expected Impact**: Further reduce allocation, potentially to 0 bytes
+**Expected Impact**: If simple indexing shows 0 allocation, we've found the root cause
 
-### Phase 3: Validation
-Run comprehensive tests to ensure zero-allocation is achieved:
+### Phase 2: Test Loop Patterns (30 minutes)
+Try alternative loop structures to find consistently zero-allocation patterns:
 ```julia
-# Test loop allocation
-allocs = @allocated for i in 1:1000; compiled(output, data, i); end
-@assert allocs == 0 "Loop allocation not fixed: $allocs bytes"
+# Test @inbounds @simd hints
+@inbounds @simd for i in 1:n_calls
+    compiled(output, data, i)
+end
+
+# Test functional approaches
+foreach(i -> compiled(output, data, i), 1:n_calls)
 ```
+
+### Phase 3: Julia Optimization Investigation (1-2 hours)
+- Test with different Julia compiler flags
+- Check if specific loop sizes consistently fail
+- Investigate type stability with `@code_warntype`
 
 ## Testing Strategy
 
