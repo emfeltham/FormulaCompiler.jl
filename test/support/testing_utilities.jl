@@ -102,6 +102,74 @@ function test_zero_allocation(model, data)
     return memory_bytes, minimum(benchmark_result.times)
 end
 
+function test_modelrow_zero_allocation(model, data)
+    compiled = compile_formula(model, data)
+    buffer = Vector{Float64}(undef, length(compiled))
+    for _ in 1:100
+        modelrow!(buffer, compiled, data, 1)
+    end
+    
+    benchmark_result = @benchmark modelrow!($buffer, $compiled, $data, 1) samples=1000 seconds=2
+    memory_bytes = minimum(benchmark_result.memory)
+    @test memory_bytes == 0
+    return memory_bytes, minimum(benchmark_result.times)
+end
+
+function test_modelrow_loop_allocation(model, data; n_calls=1000)
+    compiled = compile_formula(model, data)
+    buffer = Vector{Float64}(undef, length(compiled))
+    
+    # Warmup
+    _mr_loop_test(buffer, compiled, data, 10)
+    
+    # Benchmark
+    benchmark_result = @benchmark _mr_loop_test($buffer, $compiled, $data, $n_calls) samples=10 
+    memory_bytes = minimum(benchmark_result.memory)
+    per_call_bytes = memory_bytes / n_calls
+    
+    @test memory_bytes == 0  # Should be zero for loop context
+    return memory_bytes, per_call_bytes, minimum(benchmark_result.times)
+end
+
+# Define test struct at module level
+struct TestEngine
+    compiled::Any
+    row_buf::Vector{Float64}
+end
+
+# Define test functions at module level to avoid BenchmarkTools closure issues
+function _mr_loop_test(buffer, compiled, data, n_calls)
+    n_rows = length(data[1])  # Get number of rows from first column
+    for i in 1:n_calls
+        row_idx = ((i-1) % n_rows) + 1  # Modular arithmetic to stay in bounds
+        modelrow!(buffer, compiled, data, row_idx)
+    end
+end
+
+function _engine_test_pattern(engine, data, n_calls)
+    n_rows = length(data[1])  # Get number of rows from first column
+    for i in 1:n_calls
+        row_idx = ((i-1) % n_rows) + 1  # Modular arithmetic to stay in bounds
+        modelrow!(engine.row_buf, engine.compiled, data, row_idx)
+    end
+end
+
+function test_struct_field_allocation(model, data; n_calls=1000)
+    compiled = compile_formula(model, data)
+    engine = TestEngine(compiled, Vector{Float64}(undef, length(compiled)))
+    
+    # Warmup
+    _engine_test_pattern(engine, data, 10)
+    
+    # Benchmark
+    benchmark_result = @benchmark _engine_test_pattern($engine, $data, $n_calls) samples=10
+    memory_bytes = minimum(benchmark_result.memory)
+    per_call_bytes = memory_bytes / n_calls
+    
+    # This is expected to allocate due to struct field access
+    return memory_bytes, per_call_bytes, minimum(benchmark_result.times)
+end
+
 function test_model_correctness(model, data, n)
     compiled = compile_formula(model, data)
     output = Vector{Float64}(undef, length(compiled))
