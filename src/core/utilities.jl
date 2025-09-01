@@ -73,3 +73,335 @@ struct CategoricalMixtureOverride{T} <: AbstractVector{T}
         new{T}(mixture_obj, length)
     end
 end
+
+# Mixture Detection Utilities
+# Following Phase 1 implementation from CATEGORICAL_MIXTURES_DESIGN.md
+
+"""
+    is_mixture_column(col)
+
+Detect if a column contains categorical mixture specifications.
+Uses duck typing to identify objects with `levels` and `weights` properties.
+
+# Example
+```julia
+# Returns true for mixture specifications
+is_mixture_column([mix("A" => 0.3, "B" => 0.7), mix("A" => 0.3, "B" => 0.7)])
+
+# Returns false for regular categorical data
+is_mixture_column(["A", "B", "A"])
+```
+"""
+function is_mixture_column(col)
+    isempty(col) && return false
+    first_element = col[1]
+    
+    # Check if first element has mixture properties
+    has_mixture_props = hasproperty(first_element, :levels) && hasproperty(first_element, :weights)
+    
+    if !has_mixture_props
+        return false
+    end
+    
+    # For mixture columns, all elements should have the same mixture specification
+    # This is required for compile-time mixture support
+    first_spec = extract_mixture_spec(first_element)
+    for element in col
+        if !hasproperty(element, :levels) || !hasproperty(element, :weights)
+            return false  # Not all elements are mixtures
+        end
+        spec = extract_mixture_spec(element)
+        if spec != first_spec
+            return false  # Inconsistent mixture specifications
+        end
+    end
+    
+    return true
+end
+
+"""
+    extract_mixture_spec(mixture_obj)
+
+Extract the levels and weights from a mixture object.
+Returns a NamedTuple with `levels` and `weights` fields.
+
+# Example
+```julia
+mixture = mix("A" => 0.3, "B" => 0.7)
+spec = extract_mixture_spec(mixture)
+# spec.levels  # ["A", "B"]
+# spec.weights # [0.3, 0.7]
+```
+"""
+function extract_mixture_spec(mixture_obj)
+    return (levels=mixture_obj.levels, weights=mixture_obj.weights)
+end
+
+"""
+    validate_mixture_consistency!(data)
+
+Validate that all mixture columns in the data have consistent specifications.
+This is required for compile-time mixture support where all rows must have
+identical mixture specifications.
+
+# Arguments
+- `data`: NamedTuple containing data columns
+
+# Throws
+- `ArgumentError`: If mixture columns have inconsistent specifications
+- `ArgumentError`: If mixture weights don't sum to 1.0
+
+# Example
+```julia
+# Valid data - all rows have same mixture
+data = (x = [1.0, 2.0], group = [mix("A"=>0.3, "B"=>0.7), mix("A"=>0.3, "B"=>0.7)])
+validate_mixture_consistency!(data)  # Passes
+
+# Invalid data - inconsistent mixtures
+data = (x = [1.0, 2.0], group = [mix("A"=>0.3, "B"=>0.7), mix("A"=>0.5, "B"=>0.5)])
+validate_mixture_consistency!(data)  # Throws ArgumentError
+```
+"""
+function validate_mixture_consistency!(data)
+    for (col_name, col_data) in pairs(data)
+        if is_mixture_column(col_data)
+            validate_mixture_column!(col_name, col_data)
+        end
+    end
+end
+
+"""
+    validate_mixture_column!(col_name, col_data)
+
+Validate a single mixture column for consistency and correctness.
+
+# Arguments
+- `col_name`: Name of the column (for error messages)
+- `col_data`: Vector containing mixture objects
+
+# Throws
+- `ArgumentError`: If mixtures are inconsistent or weights don't sum to 1.0
+"""
+function validate_mixture_column!(col_name, col_data)
+    if isempty(col_data)
+        return  # Empty columns are valid (though unusual)
+    end
+    
+    # Check all rows have same mixture specification
+    first_spec = extract_mixture_spec(col_data[1])
+    for (i, row_mixture) in enumerate(col_data)
+        if i == 1
+            continue  # Skip first element (used as reference)
+        end
+        
+        if !hasproperty(row_mixture, :levels) || !hasproperty(row_mixture, :weights)
+            throw(ArgumentError("Inconsistent mixture specification in column $col_name at row $i: not a mixture object"))
+        end
+        
+        spec = extract_mixture_spec(row_mixture)
+        if spec != first_spec
+            throw(ArgumentError("Inconsistent mixture specification in column $col_name at row $i: expected $(first_spec), got $(spec)"))
+        end
+    end
+    
+    # Validate weights sum to 1.0
+    if !isapprox(sum(first_spec.weights), 1.0, atol=1e-10)
+        throw(ArgumentError("Mixture weights in column $col_name do not sum to 1.0: $(first_spec.weights) (sum = $(sum(first_spec.weights)))"))
+    end
+    
+    # Validate no duplicate levels
+    if length(unique(first_spec.levels)) != length(first_spec.levels)
+        throw(ArgumentError("Mixture in column $col_name contains duplicate levels: $(first_spec.levels)"))
+    end
+    
+    # Validate all weights are non-negative
+    if any(w < 0 for w in first_spec.weights)
+        throw(ArgumentError("Mixture weights in column $col_name must be non-negative: $(first_spec.weights)"))
+    end
+end
+
+# Helper Functions for Mixture Creation (Phase 4)
+
+"""
+    create_mixture_column(mixture_spec, n_rows::Int)
+
+Create a column of identical mixture specifications for use in reference grids.
+
+# Arguments
+- `mixture_spec`: A mixture object with `levels` and `weights` properties
+- `n_rows`: Number of rows to create
+
+# Returns
+Vector of mixture objects, all identical to the input specification
+
+# Example
+```julia
+mixture = mix("A" => 0.3, "B" => 0.7)
+col = create_mixture_column(mixture, 1000)  # 1000 rows of identical mixture
+```
+
+This is more efficient than `fill(mixture, n_rows)` for large datasets as it
+avoids potential copying issues with complex mixture objects.
+"""
+function create_mixture_column(mixture_spec, n_rows::Int)
+    if n_rows < 0
+        throw(ArgumentError("Number of rows must be non-negative, got $n_rows"))
+    end
+    return fill(mixture_spec, n_rows)
+end
+
+"""
+    expand_mixture_grid(base_data, mixture_specs::Dict{Symbol, Any})
+
+Create all combinations of base data with mixture specifications for systematic 
+marginal effects computation.
+
+# Arguments
+- `base_data`: Base data as NamedTuple or DataFrame-compatible structure
+- `mixture_specs`: Dictionary mapping column names to mixture specifications
+
+# Returns
+Vector of NamedTuple data structures, each representing one combination
+
+# Example
+```julia
+base_data = (x = [1.0, 2.0], y = [0.1, 0.2])
+mixtures = Dict(
+    :group => mix("A" => 0.5, "B" => 0.5),
+    :treatment => mix("Control" => 0.3, "Treatment" => 0.7)
+)
+
+expanded = expand_mixture_grid(base_data, mixtures)
+# Returns data with mixture columns added to each row
+```
+
+# Use Cases
+- Reference grid creation for marginal effects
+- Counterfactual analysis with multiple mixture variables
+- Systematic sensitivity analysis across mixture specifications
+"""
+function expand_mixture_grid(base_data, mixture_specs::Dict{Symbol, <:Any})
+    if isempty(mixture_specs)
+        return [base_data]  # No mixtures to expand
+    end
+    
+    # Ensure base_data is a NamedTuple
+    if !(base_data isa NamedTuple)
+        throw(ArgumentError("base_data must be a NamedTuple. Use Tables.columntable() to convert DataFrames."))
+    end
+    
+    n_rows = length(first(values(base_data)))
+    
+    # Create expanded data with mixture columns
+    expanded_data = Dict{Symbol, Any}()
+    
+    # Copy all base columns
+    for (col_name, col_data) in pairs(base_data)
+        expanded_data[col_name] = col_data
+    end
+    
+    # Add mixture columns
+    for (col_name, mixture_spec) in mixture_specs
+        if haskey(expanded_data, col_name)
+            @warn "Overriding existing column $col_name with mixture specification"
+        end
+        expanded_data[col_name] = create_mixture_column(mixture_spec, n_rows)
+    end
+    
+    return [NamedTuple(expanded_data)]
+end
+
+"""
+    validate_mixture_weights(weights::AbstractVector{<:Real}; atol::Real=1e-10)
+
+Validate that mixture weights are properly normalized and non-negative.
+
+# Arguments
+- `weights`: Vector of mixture weights
+- `atol`: Absolute tolerance for sum-to-one check
+
+# Throws
+- `ArgumentError`: If weights are invalid
+
+# Example
+```julia
+validate_mixture_weights([0.3, 0.7])        # ✓ Valid
+validate_mixture_weights([0.3, 0.6])        # ✗ Sum ≠ 1.0
+validate_mixture_weights([0.5, -0.5])       # ✗ Negative weights
+```
+"""
+function validate_mixture_weights(weights::AbstractVector{<:Real}; atol::Real=1e-10)
+    if any(w < 0 for w in weights)
+        throw(ArgumentError("Mixture weights must be non-negative: $weights"))
+    end
+    
+    weight_sum = sum(weights)
+    if !isapprox(weight_sum, 1.0, atol=atol)
+        throw(ArgumentError("Mixture weights must sum to 1.0 (±$atol): got $weights (sum = $weight_sum)"))
+    end
+end
+
+"""
+    validate_mixture_levels(levels::AbstractVector)
+
+Validate that mixture levels are unique and non-empty.
+
+# Arguments
+- `levels`: Vector of level identifiers
+
+# Throws
+- `ArgumentError`: If levels are invalid
+
+# Example
+```julia
+validate_mixture_levels(["A", "B", "C"])    # ✓ Valid
+validate_mixture_levels(["A", "A", "B"])    # ✗ Duplicate levels
+validate_mixture_levels(String[])           # ✗ Empty levels
+```
+"""
+function validate_mixture_levels(levels::AbstractVector)
+    if isempty(levels)
+        throw(ArgumentError("Mixture levels cannot be empty"))
+    end
+    
+    if length(unique(levels)) != length(levels)
+        duplicates = [level for level in unique(levels) if count(==(level), levels) > 1]
+        throw(ArgumentError("Mixture levels must be unique. Duplicates found: $duplicates"))
+    end
+end
+
+"""
+    create_balanced_mixture(levels::AbstractVector)
+
+Create a balanced (equal weight) mixture from a vector of levels.
+
+# Arguments  
+- `levels`: Vector of level identifiers
+
+# Returns
+Dictionary suitable for creating mixture objects: `Dict(level => weight, ...)`
+
+# Example
+```julia
+balanced = create_balanced_mixture(["A", "B", "C"])
+# Returns: Dict("A" => 0.333..., "B" => 0.333..., "C" => 0.333...)
+
+# Use with mixture constructor:
+mixture = mix(balanced...)  # Splat the dictionary
+```
+
+This is useful for creating reference mixtures where all levels should be
+equally weighted for marginal effects computation.
+"""
+function create_balanced_mixture(levels::AbstractVector)
+    if isempty(levels)
+        throw(ArgumentError("Cannot create balanced mixture from empty levels"))
+    end
+    
+    validate_mixture_levels(levels)
+    
+    n_levels = length(levels)
+    weight = 1.0 / n_levels
+    
+    return Dict(string(level) => weight for level in levels)
+end

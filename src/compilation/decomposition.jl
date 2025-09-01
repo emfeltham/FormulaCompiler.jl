@@ -1,6 +1,11 @@
 # UnifiedCompiler Formula Decomposition
 # Convert StatsModels terms to unified operations
 
+# Import mixture detection utilities from utilities.jl
+using ..FormulaCompiler: is_mixture_column, extract_mixture_spec
+
+# Import types from types.jl (MixtureContrastOp will be available through the module structure)
+
 ###############################################################################
 # KRONECKER PRODUCT EXPANSION FOR INTERACTIONS (From restart branch)
 ###############################################################################
@@ -439,13 +444,30 @@ function decompose_term!(ctx::CompilationContext, term::InteractionTerm, data_ex
     return result
 end
 
-# Handle categorical terms
+# Handle categorical terms (extended for mixture support)
 function decompose_term!(ctx::CompilationContext, term::CategoricalTerm, data_example)
     # Check cache
     if haskey(ctx.position_map, term)
         return ctx.position_map[term]
     end
     
+    # Check if this categorical column contains mixtures
+    col_data = get_column_data(term, data_example)
+    
+    if is_mixture_column(col_data)
+        return decompose_mixture_term(ctx, term, col_data)
+    else
+        return decompose_standard_categorical(ctx, term)
+    end
+end
+
+# Helper function to extract column data for a term
+function get_column_data(term::CategoricalTerm, data_example)
+    return getproperty(data_example, term.sym)
+end
+
+# Standard categorical decomposition (existing logic)
+function decompose_standard_categorical(ctx::CompilationContext, term::CategoricalTerm)
     # Get contrast matrix from term
     contrasts = term.contrasts
     contrast_matrix = Matrix{Float64}(contrasts.matrix)  # Ensure it's Float64
@@ -460,6 +482,52 @@ function decompose_term!(ctx::CompilationContext, term::CategoricalTerm, data_ex
     
     ctx.position_map[term] = positions
     return positions
+end
+
+# New mixture decomposition logic (Phase 1 implementation)
+function decompose_mixture_term(ctx::CompilationContext, term::CategoricalTerm, mixture_col)
+    # Extract mixture specification from first row (all rows should have same mixture)
+    mixture_spec = extract_mixture_spec(mixture_col[1])
+    
+    # Get contrast matrix for the categorical levels
+    contrast_matrix = build_contrast_matrix_for_mixture(mixture_spec.levels, term)
+    n_contrasts = size(contrast_matrix, 2)
+    
+    # Allocate positions for contrast columns
+    positions = allocate_positions!(ctx, n_contrasts)
+    
+    # Encode mixture spec in type parameters for specialization
+    level_indices = tuple((findfirst(==(string(l)), mixture_spec.levels) for l in mixture_spec.levels)...)
+    weights = tuple(mixture_spec.weights...)
+    
+    # Create mixture contrast operation with type-embedded mixture specification
+    operation = MixtureContrastOp{
+        term.sym,
+        tuple(positions...),
+        level_indices,
+        weights
+    }(contrast_matrix)
+    
+    push!(ctx.operations, operation)
+    
+    ctx.position_map[term] = positions
+    return positions
+end
+
+# Helper to build contrast matrix for mixture levels
+function build_contrast_matrix_for_mixture(levels, term::CategoricalTerm)
+    # Use the existing contrast matrix from the term
+    contrasts = term.contrasts
+    contrast_matrix = Matrix{Float64}(contrasts.matrix)
+    
+    # Validate that all mixture levels exist in the contrast matrix
+    # (This assumes the contrast matrix was built with all possible levels)
+    n_levels = size(contrast_matrix, 1)
+    if length(levels) > n_levels
+        error("Mixture contains more levels ($(length(levels))) than contrast matrix ($(n_levels))")
+    end
+    
+    return contrast_matrix
 end
 
 # Handle constant terms

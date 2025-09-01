@@ -6,6 +6,9 @@ include("execution.jl")
 include("scratch.jl")
 include("decomposition.jl")
 
+# Import mixture validation functions
+using ..FormulaCompiler: validate_mixture_consistency!
+
 # Helper to extract fixed effects formula
 function get_fixed_effects_formula(model)
     # For MixedModels, extract only fixed effects
@@ -100,6 +103,9 @@ compiled = compile_formula(mixed, data)  # Compiles fixed effects: y ~ x + treat
 See also: [`modelrow!`](@ref), [`ModelRowEvaluator`](@ref), [`create_scenario`](@ref)
 """
 function compile_formula(model, data_example::NamedTuple)
+    # Phase 2: Validate mixture columns are consistent
+    validate_mixture_consistency!(data_example)
+    
     # Extract schema-applied formula using standard API
     # For MixedModels, this extracts only fixed effects
     formula = get_fixed_effects_formula(model)
@@ -161,6 +167,9 @@ compiled(output, data, 1)  # Zero allocations
 See also: [`compile_formula(model, data)`](@ref) for model-based compilation
 """
 function compile_formula(formula::StatsModels.FormulaTerm, data_example::NamedTuple)
+    # Phase 2: Validate mixture columns are consistent
+    validate_mixture_consistency!(data_example)
+    
     ops_vec, scratch_size, output_size = decompose_formula(formula, data_example)
     ops_tuple = Tuple(ops_vec)
     return UnifiedCompiled{Float64, typeof(ops_tuple), scratch_size, output_size}(ops_tuple)

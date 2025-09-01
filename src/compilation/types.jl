@@ -155,6 +155,55 @@ struct ContrastOp{Column, OutPositions} <: AbstractOp
 end
 
 """
+    MixtureContrastOp{Column, OutPositions, LevelIndices, Weights} <: AbstractOp
+
+**Categorical Mixture Contrast Operation**: Applies pre-computed weighted contrast combinations
+for categorical mixture specifications.
+
+## Position Mapping Role
+- **Input**: Mixture specification (levels and weights embedded in type)
+- **Output**: Multiple consecutive scratch positions (one per contrast)  
+- **Matrix Storage**: Contrast matrix for the categorical levels
+- **Specialization**: Level indices and weights embedded as type parameters
+
+## Type Parameter Embedding
+All mixture specifications are embedded at compile time for maximum performance:
+- **LevelIndices**: Tuple of indices into contrast matrix rows
+- **Weights**: Tuple of mixture weights (corresponding to levels)
+- **OutPositions**: Tuple of scratch positions to fill
+
+## Examples
+```julia
+# Binary mixture: 30% "A", 70% "B" with positions [4, 5]
+MixtureContrastOp{
+    :group,           # Column name
+    (4, 5),          # Output positions  
+    (1, 2),          # Level indices (A=1, B=2 in contrast matrix)
+    (0.3, 0.7)       # Mixture weights
+}(contrast_matrix)
+
+# Execution computes weighted combination:
+# scratch[4] = 0.3 * contrast_matrix[1, 1] + 0.7 * contrast_matrix[2, 1]
+# scratch[5] = 0.3 * contrast_matrix[1, 2] + 0.7 * contrast_matrix[2, 2]
+```
+
+## Performance Benefits  
+- **Zero-allocation execution**: All computations unrolled at compile time
+- **Type specialization**: Each mixture specification gets its own compiled method
+- **Memory efficiency**: No runtime storage of mixture specifications
+- **Cache friendly**: Pre-computed weighted contrasts avoid repeated calculations
+
+## Compile-Time Optimization
+The type parameter embedding enables aggressive compiler optimization:
+- Loop unrolling for small mixtures
+- Constant folding for weights
+- Inlined matrix access patterns
+"""
+struct MixtureContrastOp{Column, OutPositions, LevelIndices, Weights} <: AbstractOp
+    contrast_matrix::Matrix{Float64}  # Pre-computed contrast matrix for categorical levels
+end
+
+"""
     CopyOp{InPos, OutIdx} <: AbstractOp
 
 **Output Copy Operation**: Transfers scratch values to final output vector.

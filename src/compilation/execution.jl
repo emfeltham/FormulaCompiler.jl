@@ -405,6 +405,68 @@ end
     end
 end
 
+"""
+    execute_op(::MixtureContrastOp{Col, Positions, LevelIndices, Weights}, scratch, data, row_idx)
+
+**Categorical Mixture Execution with Position Mapping**: Implements zero-allocation 
+execution for categorical mixture specifications using compile-time type embedding.
+
+## Position Mapping for Mixtures
+
+The mixture execution demonstrates advanced position mapping where:
+- **Positions**: Output scratch positions (compile-time tuple)
+- **LevelIndices**: Contrast matrix row indices (compile-time tuple)
+- **Weights**: Mixture weights (compile-time tuple)
+
+## Execution Algorithm
+
+```julia
+# For binary mixture: 30% "A", 70% "B" with positions [4, 5]
+MixtureContrastOp{:group, (4, 5), (1, 2), (0.3, 0.7)}
+
+# Execution computes weighted combination:
+# scratch[4] = 0.3 * contrast_matrix[1, 1] + 0.7 * contrast_matrix[2, 1]
+# scratch[5] = 0.3 * contrast_matrix[1, 2] + 0.7 * contrast_matrix[2, 2]
+```
+
+## Zero-Allocation Implementation
+
+All computations unrolled at compile time:
+- **Loop unrolling**: Each (level_idx, weight) pair becomes separate computation
+- **Type specialization**: Separate method for each mixture specification
+- **Constant folding**: Weights become compile-time constants
+- **Direct indexing**: All positions and indices known at compile time
+
+## Performance Benefits
+
+- **No runtime mixture resolution**: All specifications embedded in type
+- **No dynamic dispatch**: Each mixture gets specialized execution method
+- **Cache friendly**: Sequential scratch position access
+- **Compiler optimization**: Full pipeline optimization possible
+"""
+@inline function execute_op(
+    op::MixtureContrastOp{Col, Positions, LevelIndices, Weights}, 
+    scratch, 
+    data, 
+    row_idx
+) where {Col, Positions, LevelIndices, Weights}
+    # Zero out positions first
+    for pos in Positions
+        scratch[pos] = 0.0
+    end
+    
+    # Compute weighted combination (fully unrolled at compile time)
+    # This loop gets unrolled by the compiler since LevelIndices and Weights are compile-time tuples
+    for (level_idx, weight) in zip(LevelIndices, Weights)
+        for (contrast_col, pos) in enumerate(Positions)
+            scratch[pos] += weight * op.contrast_matrix[level_idx, contrast_col]
+        end
+    end
+end
+
+# Note: The general method above handles all cases efficiently, including binary mixtures.
+# Julia's compiler will optimize the tuple iteration for small, compile-time tuples.
+
 # Copy from scratch to output (CopyOp doesn't need output as separate arg)
 @inline function execute_op(::CopyOp{InPos, OutIdx}, scratch, data, row_idx) where {InPos, OutIdx}
     # CopyOp is handled separately in copy_outputs!
