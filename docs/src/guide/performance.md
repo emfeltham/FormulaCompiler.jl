@@ -12,6 +12,8 @@ FormulaCompiler.jl achieves zero-allocation performance through:
 3. **Memory reuse**: Pre-allocate and reuse output vectors
 4. **Efficient data structures**: Use column tables for optimal access patterns
 
+For a detailed understanding of how compile-time specialization is implemented, including the use of metaprogramming for complex formulas and derivative computation, see [Metaprogramming](../metaprogramming.md).
+
 ## Runtime Execution Flow
 
 Here's what happens during each ~50ns evaluation:

@@ -4,7 +4,7 @@ Computationally efficient model matrix evaluation for Julia statistical models. 
 
 ## Key Features
 
-- **Memory efficiency**: ~50ns per row evaluation with minimal memory allocation (validated across 2032+ test cases)
+- **Memory efficiency**: Quick per row evaluation with minimal memory allocation (validated across 2032+ test cases)
 - **Computational performance**: Substantial improvements over traditional `modelmatrix()` approaches for single-row evaluations  
 - **Comprehensive compatibility**: Supports all valid StatsModels.jl formulas, including complex interactions and mathematical functions
 - **Scenario analysis**: Memory-efficient variable override system for counterfactual analysis
@@ -100,7 +100,7 @@ marginal_effects_eta!(g, de, beta, row; backend=:ad)  # ~368 bytes, faster
 
 - Monte Carlo simulations: Millions of model evaluations
 - Bootstrap resampling: Repeated matrix construction
-- Marginal effects: Choose zero-allocation finite differences or faster ForwardDiff
+- Marginal effects: Choose zero-allocation finite differences or faster ForwardDiff ([Margins.jl](https://github.com/emfeltham/Margins.jl) is built on FormulaCompiler.jl)
 - Policy analysis: Evaluate many counterfactual scenarios
 - Real-time applications: Low-latency prediction serving
 - Large-scale inference: Memory-efficient batch processing

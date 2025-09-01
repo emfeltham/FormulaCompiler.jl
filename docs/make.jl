@@ -26,6 +26,7 @@ makedocs(
         ],
         "Mathematical Foundation" => "mathematical_foundation.md",
         "Architecture" => "architecture.md",
+        "Metaprogramming" => "metaprogramming.md",
         "API Reference" => "api.md",
         "Examples" => "examples.md",
     ],
