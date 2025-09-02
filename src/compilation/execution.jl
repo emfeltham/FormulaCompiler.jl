@@ -350,6 +350,14 @@ end
         end
     elseif hasproperty(cat_value, :level)
         return Int(cat_value.level)
+    elseif hasproperty(cat_value, :levels) && hasproperty(cat_value, :weights)
+        # Handle mixture objects that incorrectly reach this path
+        # This is a defensive fix - mixtures should normally be handled by MixtureContrastOp
+        error("Categorical mixture objects should not reach extract_level_code(). " *
+              "This indicates a compilation routing issue. " *
+              "Mixture objects should be compiled to MixtureContrastOp, not ContrastOp. " *
+              "Check that is_mixture_column() detection is working during compilation. " *
+              "Mixture type: $(typeof(cat_value))")
     else
         error("Cannot extract level code from $(typeof(cat_value))")
     end
