@@ -1,6 +1,13 @@
 # evaluator.jl - DerivativeEvaluator construction and setup
 
 """
+    _is_numeric_vector(col) -> Bool
+
+Check if a column is a numeric vector that can be converted to Float64.
+"""
+_is_numeric_vector(col::AbstractVector) = eltype(col) <: Number
+
+"""
     build_derivative_evaluator(compiled, data; vars, chunk=:auto) -> DerivativeEvaluator
 
 Build a reusable automatic differentiation evaluator for computing Jacobians and marginal effects.
@@ -32,24 +39,28 @@ differentiation and finite differences with backend selection for optimal perfor
 - **Validation**: Tested across diverse formula types and variable combinations
 
 # Variable Type Handling
-- **Integer variables**: Automatically converted to Float64 for differentiation
-- **Float64 variables**: Used directly without conversion
-- **Type validation**: Rejects non-numeric variables with informative error messages
+- **All numeric types**: Automatically converted to Float64 for differentiation (Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, Float32, Float64)
+- **Type validation**: Rejects non-numeric variables with informative error messages  
 - **Memory optimization**: Conversion overhead incurred once during construction
 
 # Example
 ```julia
 using FormulaCompiler, GLM
 
-# Setup model with mixed variable types
-df = DataFrame(y = randn(1000), x = randn(1000), age = rand(18:80, 1000), 
-               group = rand([\"A\", \"B\"], 1000))
-model = lm(@formula(y ~ x * group + age + log(abs(x))), df)
+# Setup model with diverse variable types
+df = DataFrame(
+    y = randn(1000), 
+    x = randn(1000),                    # Float64
+    age = rand(Int16(18):Int16(80), 1000),  # Int16  
+    score = rand(UInt8(0):UInt8(100), 1000), # UInt8
+    group = rand([\"A\", \"B\"], 1000)
+)
+model = lm(@formula(y ~ x * group + age + score), df)
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 
 # Build derivative evaluator for continuous variables
-vars = [:x, :age]  # Mix of Float64 and Int64 variables
+vars = [:x, :age, :score]  # Mix of Float64, Int16, and UInt8
 de = build_derivative_evaluator(compiled, data; vars=vars)
 
 # Jacobian computation
@@ -111,7 +122,7 @@ function build_derivative_evaluator(
     for (i, s) in enumerate(vars)
         col = getproperty(data, s)
         # Convert integer columns to Float64 for derivative computation
-        float_col = if col isa Vector{Int64} || col isa Vector{Int32} || col isa Vector{Int}
+        float_col = if _is_numeric_vector(col)
             convert(Vector{Float64}, col)
         else
             col::Vector{Float64}

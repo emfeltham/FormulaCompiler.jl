@@ -11,12 +11,15 @@ FormulaCompiler.jl achieves zero-allocation performance through:
 2. **Type stability**: Ensure all operations are type-predictable
 3. **Memory reuse**: Pre-allocate and reuse output vectors
 4. **Efficient data structures**: Use column tables for optimal access patterns
+5. **Zero-allocation automatic differentiation**: Pre-conversion strategy eliminates AD memory overhead
+
+**Zero-Allocation Automatic Differentiation**: FormulaCompiler.jl achieves zero-allocation automatic differentiation for statistical formulas through a pre-conversion approach, providing performance improvements while maintaining machine precision accuracy.
 
 For a detailed understanding of how compile-time specialization is implemented, including the use of metaprogramming for complex formulas and derivative computation, see [Metaprogramming](../metaprogramming.md).
 
 ## Runtime Execution Flow
 
-Here's what happens during each ~50ns evaluation:
+Here's what happens during each evaluation:
 
 ![Diagram](../assets/src_guide_performance_diagram_4.svg)
 
@@ -30,14 +33,14 @@ compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 # Use many times (zero allocations)
-for i in 1:1_000_000
+for i in 1:1000
     compiled(row_vec, data, i % nrow(data) + 1)
     # Process result...
 end
 
 # Bad: Compile every time
-for i in 1:1_000_000
-    result = modelrow(model, data, i % nrow(data) + 1)  # Compiles AND allocates!
+for i in 1:1000
+    result = modelrow(model, data, i % nrow(data) + 1)  # Compiles and allocates
 end
 ```
 
@@ -341,7 +344,7 @@ results .+= 1.0  # In-place broadcasting
 ### Continuous Performance Testing
 
 ```julia
-function performance_regression_test(model, data, target_time_ns=100)
+function performance_regression_test(model, data, target_time_ns=200)
     compiled = compile_formula(model, data)
     row_vec = Vector{Float64}(undef, length(compiled))
     
@@ -350,10 +353,10 @@ function performance_regression_test(model, data, target_time_ns=100)
     
     # Time single evaluation
     time_ns = @elapsed begin
-        for _ in 1:1000
+        for _ in 1:100
             compiled(row_vec, data, 1)
         end
-    end * 1e9 / 1000  # Convert to ns per evaluation
+    end * 1e9 / 100  # Convert to ns per evaluation
     
     if time_ns > target_time_ns
         @warn "Performance regression detected: $(round(time_ns))ns > $(target_time_ns)ns"

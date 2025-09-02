@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide will walk you through the basics of using FormulaCompiler.jl to achieve zero-allocation model matrix evaluation.
+This guide will walk you through the basics of using FormulaCompiler.jl for efficient model matrix evaluation.
 
 ## Installation
 
@@ -85,7 +85,7 @@ compiled(row_vec, data, 100)  # Evaluate row 100
 compiled(row_vec, data, 500)  # Evaluate row 500
 ```
 
-Each call achieves zero allocations with excellent performance!
+Each call achieves zero allocations with good performance.
 
 ## Alternative Interfaces
 
@@ -148,7 +148,7 @@ using BenchmarkTools
 @benchmark $compiled($row_vec, $data, 1)
 ```
 
-You should see zero allocations and fast evaluation times:
+You should see zero allocations and good evaluation performance:
 ```
 BenchmarkTools.Trial: Many samples with many evaluations.
  Memory estimate: 0 bytes, allocs estimate: 0.
@@ -201,7 +201,7 @@ Compare this to the traditional approach:
 **Solutions**:
 1. Let compilation warm up with a few calls before benchmarking
 2. Use the caching interface (`modelrow!` with cache=true) for repeated evaluations
-3. Check for very complex formulas that may benefit from simplification
+3. Check for complex formulas that may benefit from simplification
 4. Ensure data is in optimal format (`Tables.columntable`)
 
 #### Data Format Issues
