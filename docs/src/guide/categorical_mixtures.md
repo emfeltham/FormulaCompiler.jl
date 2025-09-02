@@ -49,6 +49,26 @@ mixture = MixtureExample(["Control", "Treatment"], [0.4, 0.6])
 
 ## Creating Mixture Data
 
+### Boolean Variables and Mixtures
+
+**Boolean variables** in statistical models are handled identically to binary categorical variables in FormulaCompiler. If you need Boolean mixtures (e.g., "70% treated, 30% untreated"), convert Boolean variables to categorical first:
+
+```julia
+# Instead of Boolean mixtures, convert to categorical:
+df = DataFrame(
+    x = [1.0, 2.0, 3.0],
+    treated = [mix("false" => 0.3, "true" => 0.7),   # 30% untreated, 70% treated
+               mix("false" => 0.3, "true" => 0.7),
+               mix("false" => 0.3, "true" => 0.7)]
+)
+
+# Or create a helper function:
+bool_mix(prob_true) = mix("false" => 1-prob_true, "true" => prob_true)
+df.treated = fill(bool_mix(0.7), nrow(df))  # 70% probability of treatment
+```
+
+This approach leverages the existing categorical mixture system and provides identical mathematical results to hypothetical Boolean mixtures.
+
 ### Helper Functions
 
 FormulaCompiler provides several utilities for creating mixture data:
@@ -370,6 +390,7 @@ compiled = compile_formula(model, Tables.columntable(mix_data))
 1. **Consistent specifications**: All rows must have identical mixture specifications
 2. **Compile-time binding**: Cannot change mixture weights at runtime
 3. **Duck typing dependency**: Mixture objects must have `levels` and `weights` properties
+4. **Boolean mixtures**: Not directly supported - convert Boolean variables to categorical first (see [Boolean Variables](#boolean-variables-and-mixtures) section)
 
 ### Design Trade-offs
 
