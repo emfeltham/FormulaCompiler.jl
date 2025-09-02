@@ -34,6 +34,10 @@ include(joinpath(@__DIR__, "support", "testing_utilities.jl"))
     include("test_overrides.jl") # Override and scenario functionality
     include("test_categorical_correctness.jl") # Detailed categorical override correctness
     
+    # Categorical mixtures (Phase 5 complete implementation)
+    include("test_categorical_mixtures.jl") # Comprehensive mixture test suite
+    include("test_mixture_modelrows.jl")    # Modelrow correctness with mixtures
+    
     # Derivatives
     include("test_derivatives.jl")
     include("test_links.jl")
