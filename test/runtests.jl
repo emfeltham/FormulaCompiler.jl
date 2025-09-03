@@ -1,6 +1,7 @@
 # test/runtests.jl
 # Main test runner for FormulaCompiler.jl
 # julia --project="test" test/runtests.jl > test/tests.txt 2>&1
+# julia --project="." -e "import Pkg; Pkg.test()" > test/test.txt 2>&1
 
 using Test
 using Random
