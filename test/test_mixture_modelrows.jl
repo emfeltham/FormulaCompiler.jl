@@ -3,18 +3,7 @@ using Test
 using FormulaCompiler, GLM, DataFrames, Tables, CategoricalArrays
 using BenchmarkTools
 
-# Test mixture object (consistent with other test files)
-struct TestMixture
-    levels::Vector{String}
-    weights::Vector{Float64}
-    
-    function TestMixture(levels::Vector{String}, weights::Vector{Float64})
-        @assert length(levels) == length(weights)
-        @assert isapprox(sum(weights), 1.0, atol=1e-10)
-        @assert all(w >= 0 for w in weights)
-        new(levels, weights)
-    end
-end
+# Use native FormulaCompiler mixtures instead of duck-typed test mixtures
 
 @testset "Modelrow Functions with Categorical Mixtures" begin
     
@@ -33,9 +22,9 @@ end
         # Create test data with mixtures
         test_df = DataFrame(
             x = [1.0, 2.0, 3.0],
-            group = [TestMixture(["A", "B"], [0.3, 0.7]),
-                     TestMixture(["A", "B"], [0.3, 0.7]),
-                     TestMixture(["A", "B"], [0.3, 0.7])]
+            group = [mix("A" => 0.3, "B" => 0.7),
+                     mix("A" => 0.3, "B" => 0.7),
+                     mix("A" => 0.3, "B" => 0.7)]
         )
         
         compiled = compile_formula(model, Tables.columntable(test_df))
@@ -92,7 +81,7 @@ end
             # Test with 50-50 mixture
             mixture_df = DataFrame(
                 x = [1.0],
-                group = [TestMixture(["A", "B"], [0.5, 0.5])]
+                group = [mix("A" => 0.5, "B" => 0.5)]
             )
             
             # Create data with full categorical structure (both levels present)
@@ -120,7 +109,7 @@ end
             weights = [0.8, 0.2]
             mixture_df = DataFrame(
                 x = [2.0],
-                group = [TestMixture(["A", "B"], weights)]
+                group = [mix("A" => weights[1], "B" => weights[2])]
             )
             
             # Full structure for correct contrast evaluation
@@ -148,8 +137,8 @@ end
         test_df = DataFrame(
             x = [1.5, 2.5],
             z = [0.5, 1.5],
-            group = [TestMixture(["A", "B"], [0.4, 0.6]),
-                     TestMixture(["A", "B"], [0.4, 0.6])]
+            group = [mix("A" => 0.4, "B" => 0.6),
+                     mix("A" => 0.4, "B" => 0.6)]
         )
         
         compiled = compile_formula(model, Tables.columntable(test_df))
@@ -182,7 +171,7 @@ end
             # Test that backends agree on simpler cases by testing with a simpler model
             simple_model = lm(@formula(y ~ x + z), train_df[1:20, :])  # Simpler model
             simple_test_df = DataFrame(x = [1.0], z = [1.0], 
-                                     group = [TestMixture(["A", "B"], [0.5, 0.5])])
+                                     group = [mix("A" => 0.5, "B" => 0.5)])
             simple_compiled = compile_formula(simple_model, Tables.columntable(simple_test_df))
             simple_vars = continuous_variables(simple_compiled, Tables.columntable(simple_test_df))
             
@@ -217,7 +206,7 @@ end
         
         test_df = DataFrame(
             x = [1.0],
-            group = [TestMixture(["A", "B", "C"], [0.2, 0.3, 0.5])]
+            group = [mix("A" => 0.2, "B" => 0.3, "C" => 0.5)]
         )
         
         compiled = compile_formula(model, Tables.columntable(test_df))

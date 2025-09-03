@@ -2,7 +2,7 @@
 
 ## Overview
 
-FormulaCompiler.jl now supports **categorical mixtures** - weighted combinations of categorical levels that enable efficient profile-based marginal effects computation. This feature allows you to specify fractional categorical values like `mix("A" => 0.3, "B" => 0.7)` directly in your data, which are then compiled into zero-allocation evaluators.
+FormulaCompiler.jl supports **categorical mixtures** - weighted combinations of categorical and boolean levels that enable efficient profile-based marginal effects computation. This feature allows you to specify fractional values like `mix("A" => 0.3, "B" => 0.7)` or boolean mixtures like `mix("false" => 0.3, "true" => 0.7)` directly in your data, which are then compiled into zero-allocation evaluators.
 
 **Key benefits:**
 - **Zero-allocation execution**: ~50ns per row, 0 bytes allocated
@@ -51,10 +51,10 @@ mixture = MixtureExample(["Control", "Treatment"], [0.4, 0.6])
 
 ### Boolean Variables and Mixtures
 
-**Boolean variables** in statistical models are handled identically to binary categorical variables in FormulaCompiler. If you need Boolean mixtures (e.g., "70% treated, 30% untreated"), convert Boolean variables to categorical first:
+**Boolean variables** support mixtures directly in FormulaCompiler! Boolean mixtures are automatically converted to probability representations for efficient computation.
 
 ```julia
-# Instead of Boolean mixtures, convert to categorical:
+# Boolean mixtures work directly:
 df = DataFrame(
     x = [1.0, 2.0, 3.0],
     treated = [mix("false" => 0.3, "true" => 0.7),   # 30% untreated, 70% treated
@@ -65,7 +65,17 @@ df = DataFrame(
 # Or create a helper function:
 bool_mix(prob_true) = mix("false" => 1-prob_true, "true" => prob_true)
 df.treated = fill(bool_mix(0.7), nrow(df))  # 70% probability of treatment
+
+# Boolean mixtures are converted to Float64 probabilities automatically
+compiled = compile_formula(model, Tables.columntable(df))
+# treated column now contains 0.7 (probability of true) for all rows
 ```
+
+**Implementation Details:**
+- Boolean mixtures are detected via duck typing (objects with `levels`, `weights`, and `original_levels` properties)
+- Automatically converted to Float64 probability of `true` (e.g., 70% true → 0.7)
+- Zero-allocation performance maintained: ~50ns per row, 0 bytes allocated
+- Works seamlessly with scenarios and counterfactual analysis
 
 This approach leverages the existing categorical mixture system and provides identical mathematical results to hypothetical Boolean mixtures.
 
@@ -388,9 +398,8 @@ compiled = compile_formula(model, Tables.columntable(mix_data))
 ### Current Limitations
 
 1. **Consistent specifications**: All rows must have identical mixture specifications
-2. **Compile-time binding**: Cannot change mixture weights at runtime
-3. **Duck typing dependency**: Mixture objects must have `levels` and `weights` properties
-4. **Boolean mixtures**: Not directly supported - convert Boolean variables to categorical first (see [Boolean Variables](#boolean-variables-and-mixtures) section)
+2. **Compile-time binding**: Cannot change mixture weights at runtime  
+3. **Duck typing dependency**: Mixture objects must have `levels`, `weights`, and `original_levels` properties
 
 ### Design Trade-offs
 

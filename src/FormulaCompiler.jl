@@ -103,6 +103,14 @@ using StandardizedPredictors: ZScoredTerm
 include("core/utilities.jl")
 export not, OverrideVector
 
+# Mixture system
+include("mixtures/types.jl")
+include("mixtures/constructors.jl") 
+include("mixtures/validation.jl")
+export CategoricalMixture, MixtureWithLevels
+export mix
+export validate_mixture_against_data, create_balanced_mixture, mixture_to_scenario_value
+
 ################################# Integration #################################
 
 # External package integration

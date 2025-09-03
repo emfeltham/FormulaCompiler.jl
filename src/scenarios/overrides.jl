@@ -173,19 +173,6 @@ function create_categorical_override(value::Bool, original_column::CategoricalAr
     return OverrideVector(categorical_value, length(original_column))
 end
 
-# Method for categorical mixtures (from Margins.jl)
-# This imports the MixtureWithLevels type from Margins.jl
-function create_categorical_override(mixture_obj, original_column::CategoricalArray)
-    # Check if this is a MixtureWithLevels object by duck typing
-    if hasproperty(mixture_obj, :levels) && hasproperty(mixture_obj, :weights) && hasproperty(mixture_obj, :original_levels)
-        # This is a categorical mixture - we need special handling
-        # For now, we'll create a special OverrideVector type that knows about mixtures
-        return CategoricalMixtureOverride(mixture_obj, length(original_column))
-    else
-        # Fallback to regular categorical override
-        return create_categorical_override(string(mixture_obj), original_column)
-    end
-end
 
 ###############################################################################
 # DATA SCENARIO INFRASTRUCTURE
@@ -404,22 +391,26 @@ Related Functions:
 - `OverrideVector`: The constant-memory vector type created by this function
 """
 function create_override_vector(value, original_column::AbstractVector)
-    # Handle categorical mixtures first
-    if hasproperty(value, :levels) && hasproperty(value, :weights) && hasproperty(value, :original_levels)
-        # This is a MixtureWithLevels object
+    # Handle FormulaCompiler's native CategoricalMixture type
+    if isdefined(FormulaCompiler, :CategoricalMixture) && value isa FormulaCompiler.CategoricalMixture
+        # Handle directly without creating MixtureWithLevels to avoid recursion
         if original_column isa CategoricalArray
-            return create_categorical_override(value, original_column)
-        elseif original_column isa Vector{Bool}
-            # Handle Bool mixture for non-categorical Bool column
-            # Convert to fractional representation (probability of true)
-            mixture = value.mixture
-            level_weight_dict = Dict(string.(mixture.levels) .=> mixture.weights)
+            # For CategoricalArray, create a mixture override
+            original_levels = string.(levels(original_column))
+            mixture_with_levels = FormulaCompiler.MixtureWithLevels(value, original_levels)
+            return CategoricalMixtureOverride(mixture_with_levels, length(original_column))
+        elseif eltype(original_column) <: Bool
+            # Handle Bool mixture directly using probability conversion
+            level_weight_dict = Dict(string.(value.levels) .=> value.weights)
             false_weight = get(level_weight_dict, "false", 0.0)
             true_weight = get(level_weight_dict, "true", 0.0)
-            prob_true = true_weight  # Probability of true
+            prob_true = true_weight
             return OverrideVector(Float64(prob_true), length(original_column))
         else
-            error("Categorical mixtures not supported for column type $(typeof(original_column))")
+            # Handle general categorical columns (String, Symbol, etc.) with mixture override
+            original_levels = sort(unique(string.(original_column)))
+            mixture_with_levels = FormulaCompiler.MixtureWithLevels(value, original_levels)
+            return CategoricalMixtureOverride(mixture_with_levels, length(original_column))
         end
     elseif original_column isa CategoricalArray
         # Categorical handling (including CategoricalArray{Bool})
