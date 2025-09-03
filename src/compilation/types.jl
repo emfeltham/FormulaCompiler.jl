@@ -84,7 +84,7 @@ struct ConstantOp{Value, OutPos} <: AbstractOp end
 ## Position Mapping Role  
 - **Input**: Single scratch position containing argument
 - **Output**: Single scratch position for result
-- **Functions**: :exp, :log, :sqrt, :abs, :sin, :cos, :- (negation)
+- **Functions**: :exp, :log, :log1p, :sqrt, :abs, :sin, :cos, :- (negation)
 
 ## Examples
 ```julia

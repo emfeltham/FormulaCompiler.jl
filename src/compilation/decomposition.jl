@@ -340,6 +340,8 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
         func_sym = :exp
     elseif isa(func_name, typeof(log))
         func_sym = :log
+    elseif isa(func_name, typeof(log1p))
+        func_sym = :log1p
     elseif isa(func_name, typeof(sqrt))
         func_sym = :sqrt
     elseif isa(func_name, typeof(abs))

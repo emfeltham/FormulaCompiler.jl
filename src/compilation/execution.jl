@@ -238,6 +238,10 @@ end
     scratch[Out] = log(scratch[In])
 end
 
+@inline function execute_op(::UnaryOp{:log1p, In, Out}, scratch, data, row_idx) where {In, Out}
+    scratch[Out] = log1p(scratch[In])
+end
+
 @inline function execute_op(::UnaryOp{:sqrt, In, Out}, scratch, data, row_idx) where {In, Out}
     scratch[Out] = sqrt(scratch[In])
 end
