@@ -111,6 +111,7 @@ marginal_effects_eta!(g, de, beta, row; backend=:ad)  # ~368 bytes, faster
 - Read the [Getting Started](getting_started.md) guide for a detailed walkthrough
 - Explore [Advanced Features](guide/advanced_features.md) for scenario analysis and memory optimization
 - Learn about [Categorical Mixtures](guide/categorical_mixtures.md) for marginal effects computation
+- See [StandardizedPredictors Integration](integration/standardized_predictors.md) for comprehensive z-score standardization workflows
 - Check out [Examples](examples.md) for real-world use cases
 - Review the [Mathematical Foundation](mathematical_foundation.md) for comprehensive theory and implementation details
 - Review the [API Reference](api.md) for complete function documentation
