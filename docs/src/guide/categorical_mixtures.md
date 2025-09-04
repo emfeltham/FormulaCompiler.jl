@@ -2,7 +2,7 @@
 
 ## Overview
 
-FormulaCompiler.jl supports **categorical mixtures** - weighted combinations of categorical and boolean levels that enable efficient profile-based marginal effects computation. This feature allows you to specify fractional values like `mix("A" => 0.3, "B" => 0.7)` or boolean mixtures like `mix("false" => 0.3, "true" => 0.7)` directly in your data, which are then compiled into zero-allocation evaluators.
+FormulaCompiler.jl supports **categorical mixtures** - weighted combinations of categorical levels that enable efficient profile-based marginal effects computation. This feature allows you to specify fractional values like `mix("A" => 0.3, "B" => 0.7)` directly in your data, which are then compiled into zero-allocation evaluators. For boolean variables, use simple numeric probabilities (e.g., `treated = 0.7` for 70% treatment rate).
 
 **Key benefits:**
 - **Zero-allocation execution**: ~50ns per row, 0 bytes allocated
@@ -49,35 +49,34 @@ mixture = MixtureExample(["Control", "Treatment"], [0.4, 0.6])
 
 ## Creating Mixture Data
 
-### Boolean Variables and Mixtures
+### Boolean Variables and Population Analysis
 
-**Boolean variables** support mixtures directly in FormulaCompiler! Boolean mixtures are automatically converted to probability representations for efficient computation.
+**Boolean variables** work seamlessly with FormulaCompiler's continuous interpretation. For population-level analysis and marginal effects, simply use numeric probabilities directly:
 
 ```julia
-# Boolean mixtures work directly:
+# Population analysis with boolean probabilities - much simpler!
 df = DataFrame(
     x = [1.0, 2.0, 3.0],
-    treated = [mix("false" => 0.3, "true" => 0.7),   # 30% untreated, 70% treated
-               mix("false" => 0.3, "true" => 0.7),
-               mix("false" => 0.3, "true" => 0.7)]
+    treated = fill(0.7, 3)  # 70% treatment probability for population analysis
 )
 
-# Or create a helper function:
-bool_mix(prob_true) = mix("false" => 1-prob_true, "true" => prob_true)
-df.treated = fill(bool_mix(0.7), nrow(df))  # 70% probability of treatment
-
-# Boolean mixtures are converted to Float64 probabilities automatically
+# Fits naturally with FormulaCompiler's boolean handling
 compiled = compile_formula(model, Tables.columntable(df))
-# treated column now contains 0.7 (probability of true) for all rows
+output = Vector{Float64}(undef, length(compiled))
+compiled(output, Tables.columntable(df), 1)  # treated effect = 0.7
 ```
 
-**Implementation Details:**
-- Boolean mixtures are detected via duck typing (objects with `levels`, `weights`, and `original_levels` properties)
-- Automatically converted to Float64 probability of `true` (e.g., 70% true → 0.7)
-- Zero-allocation performance maintained: ~50ns per row, 0 bytes allocated
-- Works seamlessly with scenarios and counterfactual analysis
+**Benefits of Numeric Approach:**
+- **Simpler**: No complex mixture objects needed
+- **Direct**: `treated = 0.7` is clearer than `mix("false" => 0.3, "true" => 0.7)`
+- **Efficient**: Zero-allocation performance maintained
+- **Compatible**: Works with all scenario and counterfactual tools
+- **StatsModels consistent**: Matches how boolean variables are actually handled
 
-This approach leverages the existing categorical mixture system and provides identical mathematical results to hypothetical Boolean mixtures.
+**Use Cases:**
+- **Individual scenarios**: `treated = true` or `treated = false`  
+- **Population analysis**: `treated = 0.6` (60% treatment rate)
+- **Marginal effects**: Varying treatment probabilities across reference grids
 
 ### Helper Functions
 

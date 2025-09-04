@@ -352,6 +352,9 @@ end
         else
             error("Cannot extract level code from String '$cat_value' without categorical context")
         end
+    elseif isa(cat_value, Bool)
+        # Handle boolean values: false = level 1, true = level 2
+        return cat_value ? 2 : 1
     elseif hasproperty(cat_value, :level)
         return Int(cat_value.level)
     elseif hasproperty(cat_value, :levels) && hasproperty(cat_value, :weights)
@@ -367,6 +370,13 @@ end
     end
 end
 
+
+# Specialized method for Vector{Bool} for better performance with boolean auto-promotion
+@inline function extract_level_code(column_data::Vector{Bool}, row_idx::Int)
+    # Handle boolean values directly: false = level 1, true = level 2
+    # This matches the boolean contrast matrix: [false, true] → [0.0, 1.0]
+    return column_data[row_idx] ? 2 : 1
+end
 
 # Categorical contrast operation (multi-output) with dynamic level extraction
 @inline function execute_op(

@@ -445,7 +445,7 @@ function _get_baseline_level(model, var::Symbol)
     for term in matrix_term.terms
         if isa(term, StatsModels.CategoricalTerm) && term.sym == var
             contrasts = term.contrasts
-            baseline_levels = setdiff(contrasts.levels, contrasts.termnames)
+            baseline_levels = setdiff(contrasts.levels, StatsModels.coefnames(contrasts))
             if length(baseline_levels) == 1
                 return baseline_levels[1]
             elseif length(baseline_levels) == 0

@@ -147,6 +147,42 @@ FormulaCompiler.jl handles all standard StatsModels.jl formula syntax:
 @formula(y ~ (x > 0) + (z < mean(z)))
 ```
 
+### Boolean Variables
+
+**Boolean variables** (`Vector{Bool}`) are treated as continuous variables, matching StatsModels behavior exactly:
+
+```julia
+# Boolean data - treated as continuous
+df = DataFrame(
+    outcome = randn(100),
+    x = randn(100),
+    treated = rand(Bool, 100)  # true/false values
+)
+
+model = lm(@formula(outcome ~ x + treated), df)
+compiled = compile_formula(model, Tables.columntable(df))
+
+# Numerical encoding: false → 0.0, true → 1.0
+# This matches StatsModels exactly
+```
+
+**For counterfactual analysis**, use boolean or numeric overrides:
+
+```julia
+# Boolean scenarios - individual counterfactuals
+treated_scenario = create_scenario("treated", data; treated = true)
+control_scenario = create_scenario("control", data; treated = false)
+
+# Numeric scenarios - population analysis  
+partial_scenario = create_scenario("partial", data; treated = 0.7)  # 70% treated
+```
+
+**Key Points**:
+- `Vector{Bool}` columns work automatically - no conversion needed
+- Produces identical results to StatsModels
+- Supports both boolean (`true`/`false`) and numeric (`0.7`) overrides
+- Zero-allocation performance maintained
+
 ### Categorical Variables
 
 **Required**: FormulaCompiler only supports categorical variables created with `CategoricalArrays.jl`. Raw string variables are not supported.
@@ -439,7 +475,7 @@ compiled_linear = compile_formula(linear_model, data)
 
 # Logistic regression
 df_binary = DataFrame(
-    success = rand(Bool, 1000),
+    success = rand(Bool, 1000),  # Boolean response: true/false → 1.0/0.0
     x = randn(1000),
     group = rand(["A", "B"], 1000)
 )
@@ -465,7 +501,7 @@ using MixedModels
 df_mixed = DataFrame(
     y = randn(1000),
     x = randn(1000),
-    treatment = rand(Bool, 1000),
+    treatment = rand(Bool, 1000),  # Boolean predictor: treated/untreated
     subject = rand(1:100, 1000),
     cluster = rand(1:50, 1000)
 )

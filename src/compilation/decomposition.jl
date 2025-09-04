@@ -499,7 +499,9 @@ function decompose_mixture_term(ctx::CompilationContext, term::CategoricalTerm, 
     positions = allocate_positions!(ctx, n_contrasts)
     
     # Encode mixture spec in type parameters for specialization
-    level_indices = tuple((findfirst(==(string(l)), mixture_spec.levels) for l in mixture_spec.levels)...)
+    # Map each mixture level to its index in the contrast matrix
+    contrasts = term.contrasts
+    level_indices = tuple((findfirst(==(l), contrasts.levels) for l in mixture_spec.levels)...)
     weights = tuple(mixture_spec.weights...)
     
     # Create mixture contrast operation with type-embedded mixture specification
