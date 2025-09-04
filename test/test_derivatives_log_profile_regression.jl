@@ -52,4 +52,3 @@ using FormulaCompiler
     @test_nowarn marginal_effects_eta!(g, de, β, row; backend=:ad)
     @test g[1] ≈ β[2] / xval rtol=1e-8
 end
-
