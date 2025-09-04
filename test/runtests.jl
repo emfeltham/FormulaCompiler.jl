@@ -43,4 +43,7 @@ include(joinpath(@__DIR__, "support", "testing_utilities.jl"))
     include("test_derivatives.jl")
     include("test_links.jl")
     include("test_derivative_allocations.jl")
+    
+    # External package integration
+    include("test_standardized_predictors.jl") # StandardizedPredictors.jl integration
 end
