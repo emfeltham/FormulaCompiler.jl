@@ -43,6 +43,10 @@ include(joinpath(@__DIR__, "support", "testing_utilities.jl"))
     include("test_derivatives.jl")
     include("test_links.jl")
     include("test_derivative_allocations.jl")
+    # Regression tests
+    include("test_derivatives_log_profile_regression.jl")
+    # Edge-case regression and stability tests
+    include("test_derivatives_domain_edge_cases.jl")
     
     # External package integration
     include("test_standardized_predictors.jl") # StandardizedPredictors.jl integration
