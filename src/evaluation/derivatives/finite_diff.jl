@@ -142,13 +142,13 @@ Notes:
     push!(stmts, :(yminus = de.fd_yminus))
     push!(stmts, :(xbase = de.fd_xbase))
     push!(stmts, :(nterms = length(de)))
-    # Fill xbase with unrolled tuple access
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
-    end
-    # Set row for overrides (unrolled)
+    # Set row for overrides (unrolled) BEFORE reading base values
     for i in 1:N
         push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    # Fill xbase from the underlying base vectors to avoid reading a stale replacement
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
     end
     # Main unrolled finite difference loop across variables
     for j in 1:N
@@ -187,11 +187,13 @@ end
     push!(stmts, :(yminus = de.fd_yminus))
     push!(stmts, :(xbase = de.fd_xbase))
     push!(stmts, :(nterms = length(de)))
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
-    end
+    # Set row for overrides BEFORE reading base values
     for i in 1:N
         push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    # Fill xbase from underlying base vectors
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
     end
     for j in 1:N
         push!(stmts, :(x = xbase[$j]))
@@ -383,14 +385,14 @@ end
     push!(stmts, :(xbase = de.fd_xbase))
     push!(stmts, :(nterms = length(de)))
     
-    # Fill xbase with unrolled tuple access
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
-    end
-    
-    # Set row for overrides (unrolled)
+    # Set row for overrides BEFORE reading base values
     for i in 1:N
         push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    
+    # Fill xbase from underlying base vectors (avoid stale replacement)
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
     end
     
     # Single variable finite difference computation
@@ -434,12 +436,14 @@ end
     push!(stmts, :(xbase = de.fd_xbase))
     push!(stmts, :(nterms = length(de)))
     
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
-    end
-    
+    # Set row for overrides BEFORE reading base values
     for i in 1:N
         push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    
+    # Fill xbase from underlying base vectors
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
     end
     
     push!(stmts, :(x = xbase[var_idx]))
