@@ -254,13 +254,14 @@ traditional[500_000] == efficient[500_000]  # true
 
 ## Supported Formula Features
 
-- Basic terms: `x`, `log(z)`, `x^2`, `(x > 0)`
-- Categorical variables: All contrast types, ordered/unordered
-- Interactions: `x * group`, `x * y * z`, `log(z) * group`
-- Functions: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`, boolean operators
-- Complex formulas: `x * log(z) * group + sqrt(abs(y)) + (x > mean(x))`
-- Standardized predictors: ZScore, custom transformations
-- Mixed models: Automatic fixed-effects extraction
+- **Basic terms**: `x`, `log(z)`, `x^2`, `(x > 0)`  
+- **Boolean variables**: `Vector{Bool}` treated as continuous (false → 0.0, true → 1.0)
+- **Categorical variables**: All contrast types, ordered/unordered
+- **Interactions**: `x * group`, `x * y * z`, `log(z) * group`  
+- **Functions**: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`, boolean operators
+- **Complex formulas**: `x * log(z) * group + sqrt(abs(y)) + (x > mean(x))`
+- **Standardized predictors**: ZScore, custom transformations
+- **Mixed models**: Automatic fixed-effects extraction
 
 ## Performance Tips
 
