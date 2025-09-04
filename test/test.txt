@@ -3,50 +3,26 @@ The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.d
   juliaup update
 
 in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
-┌ Warning: The project dependencies or compat requirements have changed since the manifest was last resolved.
-│ It is recommended to `Pkg.resolve()` or consider `Pkg.update()` if necessary.
-└ @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:1200
      Testing FormulaCompiler
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "Preferences" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "NLopt" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "InlineStrings" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "ProgressMeter" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "MixedModels" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "StringViews" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "DataFrames" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "ForwardDiff" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "StatsModels" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "SortingAlgorithms" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "StatsBase" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-┌ Warning: Could not use exact versions of packages in manifest, re-resolving
-└ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1909
-      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_gF8TYX/Project.toml`
+      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_7kbXCK/Project.toml`
   [6e4b80f9] BenchmarkTools v1.6.0
   [336ed68f] CSV v0.10.15
 ⌅ [324d7699] CategoricalArrays v0.10.8
   [a93c6f00] DataFrames v1.7.1
   [72341345] FormulaCompiler v1.0.0 `~/.julia/dev/FormulaCompiler`
-⌅ [f6369f11] ForwardDiff v0.10.38
+  [f6369f11] ForwardDiff v1.1.0
   [38e38edf] GLM v1.9.0
-⌃ [ff71e718] MixedModels v4.36.0
+⌅ [ff71e718] MixedModels v4.38.1
+  [ce6b1742] RDatasets v0.7.7
+  [5064a6a7] StandardizedPredictors v1.0.1
   [10745b16] Statistics v1.11.1
   [3eaba693] StatsModels v0.7.6
   [bd369af6] Tables v1.12.1
+  [ade2ca70] Dates v1.11.0
   [37e2e46d] LinearAlgebra v1.11.0
   [9a3f8284] Random v1.11.0
   [8dfed614] Test v1.11.0
-      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_gF8TYX/Manifest.toml`
+      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_7kbXCK/Manifest.toml`
   [79e6a3ab] Adapt v4.3.0
   [66dad0bd] AliasTables v1.1.3
   [4c555306] ArrayLayouts v1.11.2
@@ -79,10 +55,11 @@ in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and upda
   [4e289a0a] EnumX v1.0.5
   [e2ba6199] ExprTools v0.1.10
   [442a2c76] FastGaussQuadrature v1.0.2
+  [5789e2e9] FileIO v1.17.0
   [48062228] FilePathsBase v0.9.24
   [1a297f60] FillArrays v1.13.0
   [72341345] FormulaCompiler v1.0.0 `~/.julia/dev/FormulaCompiler`
-⌅ [f6369f11] ForwardDiff v0.10.38
+  [f6369f11] ForwardDiff v1.1.0
   [38e38edf] GLM v1.9.0
   [34004b35] HypergeometricFunctions v0.3.28
   [615f187c] IfElse v0.1.1
@@ -98,7 +75,7 @@ in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and upda
   [2ab3a3ac] LogExpFunctions v0.3.29
   [1914dd2f] MacroTools v0.5.16
   [e1d29d7a] Missings v1.2.0
-⌃ [ff71e718] MixedModels v4.36.0
+⌅ [ff71e718] MixedModels v4.38.1
   [7e9fb7ac] MixedModelsDatasets v0.1.2
   [78c3b35d] Mocking v0.8.1
   [76087f3c] NLopt v1.2.1
@@ -113,6 +90,8 @@ in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and upda
   [92933f4c] ProgressMeter v1.11.0
   [43287f4e] PtrArrays v1.3.0
   [1fd47b50] QuadGK v2.11.2
+⌅ [df47a6cb] RData v0.8.3
+  [ce6b1742] RDatasets v0.7.7
   [189a3867] Reexport v1.2.2
   [ae029012] Requires v1.3.1
   [79098fc4] Rmath v0.8.0
@@ -124,7 +103,7 @@ in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and upda
   [03a91e81] SplitApplyCombine v1.2.3
   [5064a6a7] StandardizedPredictors v1.0.1
   [aedffcd0] Static v1.2.0
-  [90137ffa] StaticArrays v1.9.14
+  [90137ffa] StaticArrays v1.9.15
   [1e83bf80] StaticArraysCore v1.4.3
   [10745b16] Statistics v1.11.1
   [82ae8749] StatsAPI v1.7.1
@@ -194,72 +173,8 @@ in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and upda
   [8e850b90] libblastrampoline_jll v5.11.0+0
   [8e850ede] nghttp2_jll v1.59.0+0
   [3f19e933] p7zip_jll v17.4.0+2
-        Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading.
+        Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading.
      Testing Running tests...
-ERROR: LoadError: Some tests did not pass: 2083 passed, 2 failed, 0 errored, 0 broken.
-in expression starting at /Users/emf/.julia/dev/FormulaCompiler/test/runtests.jl:25
-  Model matrix structure:
-    Intercept: 1.0
-    cat2[B]: 1.0
-    cat3[Med]: 0.0
-    cat3[High]: 0.0
-    cat4 effects: [0.0, 1.0, 0.0]
-    Interaction terms: [0.0, 0.0]
-Derivative Allocation Checks: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:180
-  Expression: results[end, :min_memory_bytes] <= 2048
-   Evaluated: 8720 <= 2048
-
-Stacktrace:
- [1] macro expansion
-   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
- [2] macro expansion
-   @ ~/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:180 [inlined]
- [3] macro expansion
-   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
- [4] top-level scope
-   @ ~/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:10
-Derivative Allocation Checks: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:216
-  Expression: minimum(b_loop_ame_ad.memory) <= 200000
-   Evaluated: 8720000 <= 200000
-
-Stacktrace:
- [1] macro expansion
-   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
- [2] macro expansion
-   @ ~/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:216 [inlined]
- [3] macro expansion
-   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
- [4] top-level scope
-   @ ~/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:10
-Test Summary:                        | Pass  Fail  Total     Time
-FormulaCompiler.jl Tests             | 2083     2   2085  2m49.2s
-  Position Mapping Tests             |  103          103    37.9s
-  Zero Allocation Survey             |  105          105    40.0s
-  Model Correctness Tests            |  545          545     8.4s
-  Override System Tests              | 1151         1151     2.6s
-  Check variable differentiation     |    6            6     0.4s
-  Categorical Override Tests         |   77           77     2.4s
-  Derivative correctness             |   35           35     7.0s
-  Variance Computation Primitives    |   31           31     4.1s
-  Link functions: marginal effects μ |   11           11     0.1s
-  Derivative Allocation Checks       |   19     2     21  1m04.4s
-ERROR: Package FormulaCompiler errored during testing
-Stacktrace:
- [1] pkgerror(msg::String)
-   @ Pkg.Types ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Types.jl:68
- [2] test(ctx::Pkg.Types.Context, pkgs::Vector{Pkg.Types.PackageSpec}; coverage::Bool, julia_args::Cmd, test_args::Cmd, test_fn::Nothing, force_latest_compatible_version::Bool, allow_earlier_backwards_compatible_versions::Bool, allow_reresolve::Bool)
-   @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:2111
- [3] test
-   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1996 [inlined]
- [4] test(ctx::Pkg.Types.Context, pkgs::Vector{Pkg.Types.PackageSpec}; coverage::Bool, test_fn::Nothing, julia_args::Cmd, test_args::Cmd, force_latest_compatible_version::Bool, allow_earlier_backwards_compatible_versions::Bool, allow_reresolve::Bool, kwargs::@Kwargs{io::IOContext{IO}})
-   @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:475
- [5] test(pkgs::Vector{Pkg.Types.PackageSpec}; io::IOContext{IO}, kwargs::@Kwargs{})
-   @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:159
- [6] test(pkgs::Vector{Pkg.Types.PackageSpec})
-   @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:148
- [7] test(; name::Nothing, uuid::Nothing, version::Nothing, url::Nothing, rev::Nothing, path::Nothing, mode::Pkg.Types.PackageMode, subdir::Nothing, kwargs::@Kwargs{})
-   @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:174
- [8] test()
-   @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:165
- [9] top-level scope
-   @ none:1
+Test Summary:            | Pass  Total     Time
+FormulaCompiler.jl Tests | 2216   2216  2m50.7s
+     Testing FormulaCompiler tests passed 

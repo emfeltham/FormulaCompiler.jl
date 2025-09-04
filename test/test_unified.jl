@@ -113,4 +113,4 @@ using BenchmarkTools
     end
 end
 
-println("All tests passed!")
+@debug "All unified tests passed!"

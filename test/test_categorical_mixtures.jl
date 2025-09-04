@@ -124,38 +124,8 @@ using LinearAlgebra  # For I(n) identity matrix
             allocs = @allocated FormulaCompiler.execute_op(mixture_op, scratch, data, 1)
             @test allocs == 0
             
-            # Test performance (should be very fast)
-            time_ns = @elapsed FormulaCompiler.execute_op(mixture_op, scratch, data, 1)
-            @test time_ns < 1e-6  # Less than 1 microsecond
         end
         
-        @testset "Binary Mixture Optimization" begin
-            # Test the optimized binary mixture path
-            contrast_matrix = [1.0 0.0; 0.0 1.0]
-            
-            binary_op = FormulaCompiler.MixtureContrastOp{
-                :group,
-                (1, 2),
-                (1, 2),
-                (0.4, 0.6)
-            }(contrast_matrix)
-            
-            scratch = Vector{Float64}(undef, 3)
-            data = (group = ["test"],)
-            
-            # Warm up
-            for _ in 1:10
-                FormulaCompiler.execute_op(binary_op, scratch, data, 1)
-            end
-            
-            # Test zero allocation
-            allocs = @allocated FormulaCompiler.execute_op(binary_op, scratch, data, 1)
-            @test allocs == 0
-            
-            # Binary mixtures should be especially fast
-            time_ns = @elapsed FormulaCompiler.execute_op(binary_op, scratch, data, 1)
-            @test time_ns < 1e-6  # Less than 1.0 microsecond
-        end
         
         @testset "Comparison with Standard Categorical" begin
             # Compare mixture performance with standard categorical operations

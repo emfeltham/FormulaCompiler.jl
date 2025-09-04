@@ -315,13 +315,7 @@ end
         # For cat2 * cat3 interaction with both at non-reference levels:
         # Should have non-zero interaction term
         
-        println("  Model matrix structure:")
-        println("    Intercept: $(output[1])")
-        println("    cat2[B]: $(output[2])")
-        println("    cat3[Med]: $(output[3])")
-        println("    cat3[High]: $(output[4])")
-        println("    cat4 effects: $(output[5:7])")
-        println("    Interaction terms: $(output[8:end])")
+        @debug "Model matrix structure" intercept=output[1] cat2_B=output[2] cat3_Med=output[3] cat3_High=output[4] cat4_effects=output[5:7] interaction_terms=output[8:end]
     end
   
     @testset "Categorical Override Edge Cases" begin      
