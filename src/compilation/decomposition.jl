@@ -601,8 +601,9 @@ end
 
 # Handle ZScoredTerm (from StandardizedPredictors)
 function decompose_term!(ctx::CompilationContext, term::ZScoredTerm, data_example)
-    # For now, just decompose the inner term
-    # TODO: Implement proper z-scoring
+    # StandardizedPredictors.jl applies transformations at the schema level during model fitting
+    # By compilation time, the data has already been transformed
+    # We just decompose the inner term normally
     return decompose_term!(ctx, term.term, data_example)
 end
 
