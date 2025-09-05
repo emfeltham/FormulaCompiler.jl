@@ -176,23 +176,11 @@ The figures below are illustrative and hardware-dependent. See the Benchmark Pro
 
 ### Metaprogramming Effectiveness
 
-The metaprogramming achieves measurable performance improvements:
-
-| Scenario | Without Metaprogramming | With Metaprogramming | Improvement |
-|----------|------------------------|---------------------|-------------|
-| 50-term formula | 256 bytes, 850ns | 0 bytes, 47ns | 18x faster, zero alloc |
-| 5-variable derivatives | 1.2KB, 2.1μs | 0 bytes, 580ns | 4x faster, zero alloc |
-| Complex interactions | 576 bytes, 1.8μs | 0 bytes, 89ns | 20x faster, zero alloc |
+The metaprogramming eliminates allocations and dynamic dispatch in hot paths and preserves small-formula performance for large formulas. See the measured results on the index page and the Benchmark Protocol for how to reproduce them on your hardware.
 
 ### Compilation Time Trade-offs
 
-Metaprogramming has compile-time costs:
-
-- **First compilation**: ~200ms additional time for complex formulas
-- **Subsequent runs**: No penalty (compiled code cached)
-- **Memory usage**: ~10KB additional compiled code per formula variant
-
-The trade-off heavily favors runtime performance for statistical applications where formulas are compiled once and evaluated thousands of times.
+Metaprogramming increases first-compilation latency and compiled code size modestly for complex formulas; subsequent runs use cached code without additional cost. For statistical applications where a formula is compiled once and evaluated many times, this trade‑off is favorable.
 
 ## Implementation Patterns
 
