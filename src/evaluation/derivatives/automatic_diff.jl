@@ -66,7 +66,7 @@ derivative_modelrow!(J, de, 1)
 - **Gradient computation**: Custom optimization and inference
 - **Uncertainty propagation**: Delta method standard errors
 
-See also: [`derivative_modelrow_fd!`](@ref) for zero-allocation alternative, [`derivative_modelrow_zero_alloc!`](@ref)
+See also: [`derivative_modelrow_fd!`](@ref) for finite differences alternative
 """
 @inline function _dualtype_for_vars(nvars::Int)
     return ForwardDiff.Dual{Nothing, Float64, nvars}
@@ -169,56 +169,3 @@ function marginal_effects_eta_grad(
     return g
 end
 
-"""
-    derivative_modelrow_zero_alloc!(J, ze, row) -> J
-
-True zero-allocation automatic differentiation using pre-allocated DiffResult and static functions.
-
-Uses ForwardDiff best practices to eliminate ALL allocations by avoiding closure creation
-and using pre-allocated workspace. Follows the pattern from "zero alloc ad info.md".
-
-# Arguments  
-- `J::AbstractMatrix{Float64}`: Preallocated Jacobian buffer
-- `ze::ZeroAllocADEvaluator`: Zero-allocation evaluator from `build_ad_evaluator`
-- `row::Int`: Row index to evaluate
-
-# Returns
-- `J`: The same matrix, now containing Jacobian values (0 bytes allocated)
-
-# Performance
-- **Memory**: 0 bytes allocated (true zero-allocation AD)
-- **Speed**: Faster than closure-based approaches
-- **Accuracy**: Full automatic differentiation precision
-
-# Example
-```julia
-# Build zero-allocation evaluator
-ze = build_ad_evaluator(compiled, data; vars=[:x, :z])
-
-# True zero-allocation evaluation
-J = Matrix{Float64}(undef, length(compiled), length(vars))
-derivative_modelrow_zero_alloc!(J, ze, 1)  # 0 bytes allocated!
-```
-"""
-function derivative_modelrow_zero_alloc!(J::AbstractMatrix{Float64}, ze::ZeroAllocADEvaluator, row::Int)
-    @assert size(J, 1) == length(ze.compiled_base) "Jacobian row mismatch"
-    @assert size(J, 2) == length(ze.vars) "Jacobian column mismatch"
-    
-    # Set row and prepare input values
-    ze.row = row
-    for (i, s) in enumerate(ze.vars)
-        ze.x_buffer[i] = getproperty(ze.base_data, s)[row]
-    end
-    
-    # Use pre-allocated DiffResult and config - no closure creation!
-    static_func = x -> static_jacobian_eval(x, Base.RefValue(ze))
-    ForwardDiff.jacobian!(ze.jacobian_result, static_func, ze.x_buffer, ze.jacobian_config)
-    
-    # Extract Jacobian from DiffResult into output matrix
-    jacobian_matrix = ForwardDiff.jacobian(ze.jacobian_result)[1]  # Get first (and only) derivative
-    for i in 1:size(J, 1), j in 1:size(J, 2)
-        J[i, j] = jacobian_matrix[i, j]
-    end
-    
-    return J
-end
