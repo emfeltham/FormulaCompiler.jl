@@ -11,9 +11,9 @@ FormulaCompiler.jl achieves zero-allocation performance through:
 2. **Type stability**: Ensure all operations are type-predictable
 3. **Memory reuse**: Pre-allocate and reuse output vectors
 4. **Efficient data structures**: Use column tables for optimal access patterns
-5. **Zero-allocation automatic differentiation**: Pre-conversion strategy eliminates AD memory overhead
+5. **Low-allocation automatic differentiation**: Preallocation and specialization minimize AD memory overhead
 
-**Zero-Allocation Automatic Differentiation**: FormulaCompiler.jl achieves zero-allocation automatic differentiation for statistical formulas through a pre-conversion approach, providing performance improvements while maintaining machine precision accuracy.
+**Automatic Differentiation**: FormulaCompiler.jl provides ForwardDiff-based derivatives with small, bounded allocations per call, and a finite-difference backend with zero allocations. Choose the backend per workload and accuracy needs.
 
 For a detailed understanding of how compile-time specialization is implemented, including the use of metaprogramming for complex formulas and derivative computation, see [Metaprogramming](../metaprogramming.md).
 
@@ -51,18 +51,14 @@ using Tables, DataFrames
 
 df = DataFrame(x = randn(10000), y = randn(10000))
 
-# Best: Column table format
+# Best: Column table format (convert once)
 data = Tables.columntable(df)  # Convert once
 compiled = compile_formula(model, data)
 
-# Good: Direct DataFrame (but slower)
-compiled = compile_formula(model, df)
-
-# Benchmark the difference
+# Benchmark the effect of data format
 using BenchmarkTools
 
-@benchmark $compiled($row_vec, $data, 1)        # Fastest
-@benchmark $compiled($row_vec, $df, 1)          # Slower due to column access
+@benchmark $compiled($row_vec, $data, 1)        # Preferred path
 ```
 
 ## Memory Management
@@ -302,10 +298,8 @@ for i in 1:1000
     result = modelrow(model, data, i)  # Recompiles every time!
 end
 
-# DON'T: Use DataFrames for row access in tight loops
-for i in 1:1000
-    compiled(row_vec, df, i)  # Slower than column table
-end
+# DON'T: Pass DataFrames directly to compiled evaluators in tight loops
+#        Convert once to a column table outside the loop
 
 # DON'T: Forget to pre-allocate
 results = []
@@ -358,6 +352,7 @@ function performance_regression_test(model, data, target_time_ns=200)
         end
     end * 1e9 / 100  # Convert to ns per evaluation
     
+    # Absolute times vary by hardware and Julia version; tune target_time_ns accordingly.
     if time_ns > target_time_ns
         @warn "Performance regression detected: $(round(time_ns))ns > $(target_time_ns)ns"
     else

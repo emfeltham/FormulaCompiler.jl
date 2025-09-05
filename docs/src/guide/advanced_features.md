@@ -369,7 +369,7 @@ df = DataFrame(
 
 # Compile and evaluate with zero allocations
 compiled = compile_formula(model, Tables.columntable(df))
-compiled(output, Tables.columntable(df), 1)  # ~50ns, 0 bytes
+compiled(output, Tables.columntable(df), 1)  # Zero allocations; time varies by hardware
 ```
 
 For comprehensive coverage of categorical mixtures including validation, helper functions, and marginal effects integration, see the [Categorical Mixtures](categorical_mixtures.md) guide.

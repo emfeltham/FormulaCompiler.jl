@@ -5,20 +5,20 @@
 [![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/stable/)
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/dev/)
 
-Efficient model matrix evaluation for Julia statistical models. Implements position-mapping compilation to achieve performance improvements over traditional model matrix construction through compile-time specialization.
+Efficient per-row model matrix evaluation for Julia statistical models using position-mapped compilation and compile-time specialization.
 
 ## Key Features
 
 - **Memory efficiency**: Optimized evaluation approach minimizes memory allocation during computation
-- **Performance improvement**: Computational advantages over traditional model matrix construction methods
-- **Comprehensive compatibility**: Supports all valid StatsModels.jl formulas, including complex interactions and functions
+- **Performance**: Faster single-row evaluation than building full model matrices
+- **Compatibility**: Supports StatsModels.jl formulas, including interactions and transformations
 - **Scenario analysis**: Memory-efficient variable override system for counterfactual analysis
 - **Unified architecture**: Single compilation pipeline accommodates diverse formula structures
 - **Ecosystem integration**: Compatible with GLM.jl, MixedModels.jl, and StandardizedPredictors.jl
 
 ## How It Works
 
-The workflow involves fitting a statistical model, preparing data in column-table format, compiling the formula for optimized evaluation, and then evaluating individual rows efficiently.
+Fit a model, convert data to a column table, compile once, then evaluate rows quickly without allocations.
 
 ## Installation
 
@@ -48,7 +48,7 @@ compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 # Memory-efficient evaluation suitable for repeated calls
-compiled(row_vec, data, 1)  # Efficient evaluation
+compiled(row_vec, data, 1)  # Zero allocations after warmup
 ```
 
 ## Core Interfaces
@@ -162,15 +162,16 @@ using GLM
 
 # Linear models
 linear_model = lm(@formula(mpg ~ hp * cyl + log(wt)), mtcars)
-compiled = compile_formula(linear_model)
+data_mtcars = Tables.columntable(mtcars)
+compiled = compile_formula(linear_model, data_mtcars)
 
 # Generalized linear models
 logit_model = glm(@formula(vs ~ hp + wt), mtcars, Binomial(), LogitLink())
-compiled_logit = compile_formula(logit_model)
+compiled_logit = compile_formula(logit_model, data_mtcars)
 
 # Both work identically
 row_vec = Vector{Float64}(undef, length(compiled))
-compiled(row_vec, Tables.columntable(mtcars), 1)
+compiled(row_vec, data_mtcars, 1)
 ```
 
 ### MixedModels.jl Integration
@@ -184,13 +185,13 @@ using MixedModels
 mixed_model = fit(MixedModel, @formula(y ~ x + z + (1|group) + (1+x|cluster)), df)
 
 # Compiles only the fixed effects: y ~ x + z
-compiled = compile_formula(mixed_model)
+compiled = compile_formula(mixed_model, Tables.columntable(df))
 
 # Random effects are automatically stripped
 fixed_form = fixed_effects_form(mixed_model)  # Returns: y ~ x + z
 ```
 
-### StandardizedPredictors.jl integration
+### StandardizedPredictors.jl Integration
 
 Standardized predictors are integrated (currently only `ZScore()`):
 
@@ -199,7 +200,7 @@ using StandardizedPredictors
 
 contrasts = Dict(:x => ZScore(), :z => ZScore())
 model = lm(@formula(y ~ x + z + group), df, contrasts=contrasts)
-compiled = compile_formula(model)  # Standardization built-in
+compiled = compile_formula(model, Tables.columntable(df))  # Standardization built-in
 ```
 
 ### Derivatives and Marginal Effects

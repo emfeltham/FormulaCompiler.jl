@@ -45,7 +45,7 @@ compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 # Memory-efficient evaluation suitable for repeated calls
-compiled(row_vec, data, 1)  # Fast evaluation
+compiled(row_vec, data, 1)  # Zero allocations after warmup
 ```
 
 ## Performance Comparison
@@ -90,7 +90,7 @@ FormulaCompiler.jl offers **dual backends** for derivatives and marginal effects
 ```julia
 # Choose your backend based on requirements
 marginal_effects_eta!(g, de, beta, row; backend=:fd)  # 0 allocations
-marginal_effects_eta!(g, de, beta, row; backend=:ad)  # ~368 bytes, faster
+marginal_effects_eta!(g, de, beta, row; backend=:ad)  # about ~368 bytes on typical systems (see Benchmark Protocol)
 ```
 
 ### When to Use Each Backend
@@ -115,3 +115,4 @@ marginal_effects_eta!(g, de, beta, row; backend=:ad)  # ~368 bytes, faster
 - Check out [Examples](examples.md) for real-world use cases
 - Review the [Mathematical Foundation](mathematical_foundation.md) for comprehensive theory and implementation details
 - Review the [API Reference](api.md) for complete function documentation
+- Reproduce results with the [Benchmark Protocol](benchmarks.md)

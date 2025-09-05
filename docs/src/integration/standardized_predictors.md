@@ -85,7 +85,7 @@ compiled = compile_formula(model, data)
 
 ```julia
 # Execution layer work happens here:
-compiled(output, data, row)  # 0 allocations, 1-10ns per call
+compiled(output, data, row)  # 0 allocations; time varies by hardware
 ```
 
 ### Why This Architecture Matters

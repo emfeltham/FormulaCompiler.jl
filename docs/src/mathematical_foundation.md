@@ -164,11 +164,11 @@ Dual numbers compute derivatives exactly:
 f(a + b\varepsilon) = f(a) + bf'(a)\varepsilon
 ```
 
-#### Zero-Allocation Automatic Differentiation
+#### Low-Allocation Automatic Differentiation
 
 A fundamental challenge in statistical automatic differentiation is the type conversion bottleneck between statistical data (typically `Float64`) and dual numbers required for AD computation. Traditional approaches convert `Float64` to `Dual` on every data access, creating allocation overhead that scales with formula complexity.
 
-FormulaCompiler implements a **pre-conversion strategy** that eliminates runtime allocations entirely:
+FormulaCompiler implements a **pre-conversion strategy** that minimizes runtime allocations:
 
 **Phase 1: Construction-Time Pre-Conversion**
 
@@ -203,14 +203,14 @@ Rather than using ForwardDiff's `jacobian!` and `gradient!` drivers (which conta
 
 This achieves the mathematical correctness of ForwardDiff with custom zero-allocation orchestration.
 
-**Computational Complexity**
+**Computational Complexity and Allocations**
 
 The pre-conversion strategy transforms the memory allocation pattern:
 
 - **Traditional AD**: $O(\text{accesses} \times \text{conversions})$ runtime allocations
-- **Zero-allocation AD**: $O(\text{data size})$ construction cost, $O(0)$ runtime allocations
+- **Low-allocation AD**: $O(\text{data size})$ construction cost; runtime allocations are typically small and environment‑dependent
 
-For typical statistical formulas accessing data 10-20 times per evaluation, this eliminates hundreds of bytes of allocation per derivative computation while providing 3-5x performance improvements.
+For typical statistical formulas accessing data 10–20 times per evaluation, this approach removes repeated conversion costs and reduces runtime allocations to small, bounded overheads while providing practical speedups.
 
 ### Finite Differences
 
@@ -379,11 +379,11 @@ O(p) \text{ with compile-time } O(\text{complexity}(\text{formula}))
 ### Backend Selection Trade-offs
 
 | Backend | Speed | Memory | Accuracy | Use Case |
-|---------|-------|---------|----------|----------|
+|---------|-------|--------|----------|----------|
 | `:fd` | Medium | 0 bytes | Good (≈1e-8) | Production AME, large samples |
-| `:ad` | **Fast** | **0 bytes** | **Excellent (machine precision)** | **All applications** |
+| `:ad` | Fast | Small, bounded (typically ≤512 bytes) | Excellent (machine precision) | High accuracy, interactive workflows |
 
-**Recommendation**: The automatic differentiation backend now achieves zero allocations while providing superior speed and accuracy. It is recommended for all derivative computations unless finite difference behavior is specifically required for compatibility.
+**Recommendation**: Choose the backend per workload: use `:fd` for strict zero‑allocation guarantees or large batch AME; use `:ad` for accuracy and speed when small, bounded allocations are acceptable.
 
 ## Implementation Notes
 

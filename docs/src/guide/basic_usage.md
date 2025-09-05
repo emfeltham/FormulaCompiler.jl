@@ -116,19 +116,14 @@ data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 ```
 
-### Working with DataFrames Directly
+### Using DataFrames (via Tables.columntable)
 
-You can work with DataFrames, but column tables are more efficient:
+Convert DataFrames to column tables once, then reuse the result:
 
 ```julia
-# This works but is slower
-compiled = compile_formula(model, df)
-compiled(row_vec, df, 1)
-
-# This is faster
-data = Tables.columntable(df)
+data = Tables.columntable(df)      # Convert once
 compiled = compile_formula(model, data)
-compiled(row_vec, data, 1)
+compiled(row_vec, data, 1)        # Zero allocations after warmup
 ```
 
 ## Supported Formula Features
@@ -332,7 +327,7 @@ row_vec = Vector{Float64}(undef, length(compiled))
 # Benchmark evaluation
 result = @benchmark $compiled($row_vec, $data, 1)
 
-# Validate performance characteristics
+# Validate performance characteristics (absolute times vary by hardware and Julia version)
 @assert result.memory == 0 "Expected zero allocations, got $(result.memory) bytes"
 @assert result.allocs == 0 "Expected zero allocations, got $(result.allocs) allocations"
 

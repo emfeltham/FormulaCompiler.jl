@@ -4,7 +4,7 @@ sequenceDiagram
     participant Data as Data Table
     participant Output as Output Vector
     
-    Note over User,Output: Single Row Evaluation (~50ns total)
+    Note over User,Output: Single Row Evaluation (tens of ns total)
     
     User->>Compiled: compiled(output, data, row_idx)
     Note over Compiled: Type-stable dispatch<br>All positions embedded in types

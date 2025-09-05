@@ -172,6 +172,8 @@ end
 
 ## Performance Impact
 
+The figures below are illustrative and hardware-dependent. See the Benchmark Protocol for environment setup and reproduction guidance.
+
 ### Metaprogramming Effectiveness
 
 The metaprogramming achieves measurable performance improvements:

@@ -5,7 +5,7 @@
 FormulaCompiler.jl supports **categorical mixtures** - weighted combinations of categorical levels that enable efficient profile-based marginal effects computation. This feature allows you to specify fractional values like `mix("A" => 0.3, "B" => 0.7)` directly in your data, which are then compiled into zero-allocation evaluators. For boolean variables, use simple numeric probabilities (e.g., `treated = 0.7` for 70% treatment rate).
 
 **Key benefits:**
-- **Zero-allocation execution**: ~50ns per row, 0 bytes allocated
+- **Zero-allocation execution**: tens of nanoseconds per row, 0 bytes allocated (typical; see Benchmark Protocol)
 - **Compile-time optimization**: All mixture weights embedded in type parameters
 - **Marginal effects ready**: Direct support for statistical packages like Margins.jl
 - **Memory efficient**: O(1) memory usage regardless of data size
@@ -29,7 +29,7 @@ compiled = compile_formula(model, Tables.columntable(df))
 
 # Zero-allocation evaluation
 output = Vector{Float64}(undef, length(compiled))
-compiled(output, Tables.columntable(df), 1)  # ~50ns, 0 bytes
+compiled(output, Tables.columntable(df), 1)  # Zero allocations; time varies by hardware
 ```
 
 ## Mixture Object Interface
@@ -85,7 +85,7 @@ FormulaCompiler provides several utilities for creating mixture data:
 ```julia
 # Create mixture column for reference grids
 mixture_spec = mix("A" => 0.3, "B" => 0.7)  # Your mixture constructor
-column = create_mixture_column(mixture_spec, 1000)  # 1000 identical rows
+column = FormulaCompiler.create_mixture_column(mixture_spec, 1000)  # 1000 identical rows
 
 # Create balanced (equal weight) mixtures
 balanced_dict = create_balanced_mixture(["A", "B", "C"])
@@ -95,7 +95,7 @@ balanced_mixture = mix(balanced_dict...)
 # Expand base data with mixture specifications
 base_data = (x = [1.0, 2.0], y = [0.1, 0.2])
 mixtures = Dict(:group => mix("A" => 0.5, "B" => 0.5))
-expanded = expand_mixture_grid(base_data, mixtures)
+expanded = FormulaCompiler.expand_mixture_grid(base_data, mixtures)
 ```
 
 ### Reference Grid Creation
@@ -112,7 +112,7 @@ reference_grid = DataFrame(
 
 # Method 2: Using helper functions  
 base_grid = DataFrame(x = [1.0, 2.0, 3.0])
-mixture_grid = expand_mixture_grid(
+mixture_grid = FormulaCompiler.expand_mixture_grid(
     Tables.columntable(base_grid), 
     Dict(:treatment => mix("Control" => 0.3, "Treated" => 0.7))
 )
@@ -143,13 +143,13 @@ You can also validate mixture data manually:
 
 ```julia
 # Validate entire dataset
-validate_mixture_consistency!(data)
+FormulaCompiler.validate_mixture_consistency!(data)
 
 # Validate individual components
-validate_mixture_weights([0.3, 0.7])        # ✓ Valid
-validate_mixture_weights([0.3, 0.6])        # ✗ Sum ≠ 1.0
-validate_mixture_levels(["A", "B", "C"])    # ✓ Valid  
-validate_mixture_levels(["A", "A", "B"])    # ✗ Duplicates
+FormulaCompiler.validate_mixture_weights([0.3, 0.7])        # ✓ Valid
+FormulaCompiler.validate_mixture_weights([0.3, 0.6])        # ✗ Sum ≠ 1.0
+FormulaCompiler.validate_mixture_levels(["A", "B", "C"])    # ✓ Valid  
+FormulaCompiler.validate_mixture_levels(["A", "A", "B"])    # ✗ Duplicates
 ```
 
 ## Performance Characteristics
@@ -160,18 +160,18 @@ validate_mixture_levels(["A", "A", "B"])    # ✗ Duplicates
 - **Overall overhead**: <20% increase for mixture-containing formulas
 
 ### Execution Performance
-- **Simple mixtures**: ~50ns per row (same as standard categorical)
-- **Complex mixtures**: ~100ns per row (within 2x of standard categorical)
+- **Simple mixtures**: tens of nanoseconds per row (similar to standard categorical)
+- **Complex mixtures**: still on the order of tens to low hundreds of nanoseconds per row
 - **Memory usage**: 0 bytes allocated during execution
 - **Scaling**: Performance independent of mixture complexity
 
 ### Benchmarks
 
 ```julia
-# Performance comparison (typical results)
-@benchmark compiled(output, data, 1)  # Standard categorical: ~45ns
-@benchmark compiled(output, mix_data, 1)  # Mixture categorical: ~55ns
-# Overhead: ~20% (well within target of <100% increase)
+# Performance comparison (indicative)
+@benchmark compiled(output, data, 1)
+@benchmark compiled(output, mix_data, 1)
+# Overhead should remain modest; measure on your system.
 ```
 
 ## Integration with Marginal Effects

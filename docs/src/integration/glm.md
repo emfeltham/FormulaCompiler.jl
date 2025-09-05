@@ -34,7 +34,7 @@ compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 # Zero-allocation evaluation
-compiled(row_vec, data, 1)  # ~50ns, 0 allocations
+compiled(row_vec, data, 1)  # Zero allocations; time varies by hardware
 ```
 
 ### Generalized Linear Models
@@ -208,15 +208,16 @@ function fc_single_row(compiled, data, row_vec, row_idx)
 end
 
 # Benchmark comparison
+# Note: Absolute times vary by hardware and Julia version; see the Benchmark Protocol.
 println("Traditional approach:")
 @benchmark traditional_single_row($model, 1)
 
 println("\nFormulaCompiler approach:")
 @benchmark fc_single_row($compiled, $data, $row_vec, 1)
 
-# Expected results:
+# Expected results (indicative):
 # Traditional: ~10μs, 1 allocation
-# FormulaCompiler: ~50ns, 0 allocations (~200x speedup)
+# FormulaCompiler: tens of ns, 0 allocations (order-of-magnitude faster)
 ```
 
 ### Large Model Performance

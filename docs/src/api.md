@@ -24,31 +24,43 @@ DataScenario
 create_scenario
 ```
 
-## Near-Zero-Allocation Derivatives
+## Derivatives
 
-FormulaCompiler.jl provides a sophisticated automatic differentiation system that achieves near-theoretical optimal allocation performance through aggressive optimization.
+Dual-backend derivatives with preallocated buffers for efficiency.
 
 ### Performance Characteristics
-- **Core evaluation**: Exactly 0 allocations  
-- **Finite differences (FD)**: Exactly 0 allocations (optimized implementation)
-- **ForwardDiff derivatives**: ≤512 bytes per call (ForwardDiff internals)
-- **Marginal effects**: ≤512 bytes per call for AD backend (optimized with preallocated buffers)
-- **Allocation efficiency**: >99.75% compared to naive AD approaches
+- **Core evaluation**: 0 allocations after warmup  
+- **Finite differences (FD)**: 0 allocations
+- **ForwardDiff derivatives**: typically ≤512 bytes per call (ForwardDiff internals)
+- **Marginal effects**: same allocation characteristics as the chosen backend
 - **Validation**: Cross-validated against finite differences (rtol=1e-6, atol=1e-8)
+
+See the Benchmark Protocol for environment and reproduction notes.
 
 ```@docs
 build_derivative_evaluator
+build_zero_alloc_ad_evaluator
 derivative_modelrow!
 derivative_modelrow
+derivative_modelrow_zero_alloc!
 derivative_modelrow_fd!
 derivative_modelrow_fd
+derivative_modelrow_fd_pos!
+fd_jacobian_column!
+fd_jacobian_column_pos!
 contrast_modelrow!
 contrast_modelrow
 continuous_variables
 marginal_effects_eta!
 marginal_effects_eta
+marginal_effects_eta_fd!
+marginal_effects_eta_grad!
 marginal_effects_mu!
 marginal_effects_mu
+me_eta_grad_beta!
+me_mu_grad_beta!
+delta_method_se
+accumulate_ame_gradient!
 ```
 
 ---
@@ -246,6 +258,19 @@ compiled = compile_formula(model, data)
 n_terms = length(compiled)           # e.g., 4
 ```
 
+## Categorical Mixtures
+
+Utilities for constructing and validating categorical mixtures used in efficient profile-based marginal effects.
+
+```@docs
+mix
+CategoricalMixture
+MixtureWithLevels
+validate_mixture_against_data
+create_balanced_mixture
+mixture_to_scenario_value
+```
+
 ## Type System
 
 ### Core Types
@@ -291,6 +316,19 @@ vars = continuous_variables(compiled, data)  # or [:x, :z]
 de = build_derivative_evaluator(compiled, data; vars=vars)
 ```
 
+### `build_zero_alloc_ad_evaluator(compiled, data; vars)`
+
+Build an AD-based derivative evaluator configured to minimize allocations further than the default (environment-permitting).
+
+Notes:
+- Preserves accuracy of ForwardDiff; may reduce transient allocations below typical ≤512 bytes depending on environment.
+- Falls back gracefully to standard AD behavior when zero allocation cannot be guaranteed.
+
+Example:
+```julia
+de_za = build_zero_alloc_ad_evaluator(compiled, data; vars=[:x, :z])
+```
+
 ### `derivative_modelrow!(J, evaluator, row)`
 
 Fill Jacobian matrix with derivatives of model row with respect to selected variables.
@@ -308,6 +346,18 @@ Fill Jacobian matrix with derivatives of model row with respect to selected vari
 ```julia
 J = Matrix{Float64}(undef, length(compiled), length(de.vars))
 derivative_modelrow!(J, de, 1)  # Fill J with derivatives
+```
+
+### `derivative_modelrow_zero_alloc!(J, evaluator, row)`
+
+AD Jacobian with additional zero-allocation safeguards (where supported).
+
+Performance:
+- Matches `derivative_modelrow!` numerics; aims to reduce transient allocations beyond ForwardDiff defaults.
+
+Example:
+```julia
+derivative_modelrow_zero_alloc!(J, de_za, 1)
 ```
 
 ### `marginal_effects_eta!(g, evaluator, beta, row)`
@@ -332,6 +382,24 @@ Compute marginal effects on linear predictor η = Xβ using chain rule.
 β = coef(model)
 g = Vector{Float64}(undef, length(de.vars))
 marginal_effects_eta!(g, de, β, 1)
+```
+
+### `marginal_effects_eta_fd!(g, evaluator, beta, row)`
+
+Finite-difference marginal effects on η; zero-allocation path for reproducible performance verification.
+
+Example:
+```julia
+marginal_effects_eta_fd!(g, de, β, 1)
+```
+
+### `marginal_effects_eta_grad!(g, evaluator, beta, row)`
+
+Direct gradient computation for η-scale marginal effects; pairs with parameter-gradient utilities when needed.
+
+Example:
+```julia
+marginal_effects_eta_grad!(g, de, β, 1)
 ```
 
 ### `marginal_effects_mu!(g, evaluator, beta, row; link)`
@@ -359,6 +427,49 @@ using GLM
 marginal_effects_mu!(g, de, β, 1; link=LogitLink())
 ```
 
+### `fd_jacobian_column!(col, evaluator, j, row)` and `fd_jacobian_column_pos!(col, evaluator, j, row)`
+
+Compute a single Jacobian column via finite differences; the `_pos!` variant writes into a positional view/buffer.
+
+Use cases:
+- Verify AD results per variable; micro-benchmark derivative cost per covariate.
+
+Example:
+```julia
+fd_jacobian_column!(col_buf, de, j, 1)
+```
+
+### `me_eta_grad_beta!(gβ, evaluator, row)` and `me_mu_grad_beta!(gβ, evaluator, row; link)`
+
+Gradients of marginal effects with respect to parameters β, for delta-method uncertainty.
+
+Example:
+```julia
+gβ = Vector{Float64}(undef, length(coef(model)))
+me_eta_grad_beta!(gβ, de, 1)
+```
+
+### `delta_method_se(gβ, Σ)`
+
+Compute delta-method standard error given parameter-gradient `gβ` and covariance matrix `Σ`.
+
+Returns:
+- `Float64`: Standard error `sqrt(gβ' * Σ * gβ)`
+
+Example:
+```julia
+se = delta_method_se(gβ, vcov(model))
+```
+
+### `accumulate_ame_gradient!(gβ, evaluator, β, rows; backend=:fd)`
+
+Accumulate average marginal effect parameter-gradient across a set of rows; supports `:fd` or `:ad` backends.
+
+Example:
+```julia
+accumulate_ame_gradient!(gβ, de, β, 1:100; backend=:fd)
+```
+
 ### `continuous_variables(compiled, data)`
 
 Extract continuous variable names from compiled operations, excluding categoricals.
@@ -374,6 +485,18 @@ Extract continuous variable names from compiled operations, excluding categorica
 ```julia
 vars = continuous_variables(compiled, data)  # e.g., [:x, :z, :age]
 de = build_derivative_evaluator(compiled, data; vars=vars)
+```
+
+## Override Helpers
+
+### `create_override_data(data; overrides...)` and `create_override_vector(value, length)`
+
+Low-level helpers for constructing scenario override containers and constant vectors. Prefer high-level `create_scenario` in user code.
+
+Example:
+```julia
+ov = create_override_vector(1.0, length(data.x))
+data_over = create_override_data(data; x = ov)
 ```
 
 ## Performance Notes

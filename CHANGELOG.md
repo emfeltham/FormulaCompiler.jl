@@ -74,3 +74,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 *This represents the first significant release of FormulaCompiler.jl, providing a foundation for high-performance statistical computing in Julia.*
+## [Unreleased]
+
+### Added
+- Benchmark Protocol (docs/src/benchmarks.md) with environment, setup, targets, and reporting template.
+- Automatic Mermaid regeneration in docs build (docs/make.jl) using `mmdc` if available.
+- Expanded API docs: added missing low-level derivatives and variance utilities; categorical mixtures utilities.
+
+### Changed
+- Documentation tone and claims: qualified absolute timings (e.g., “tens of nanoseconds”); emphasized “zero allocations after warmup”.
+- Clarified derivatives backend trade-offs (FD 0 bytes; AD small, bounded allocations) and updated recommendations.
+- Corrected examples to pass column-table data to `compile_formula(model, data)` consistently.
+- Standardized headings and cross-references; added Benchmark Protocol links.

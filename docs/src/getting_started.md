@@ -148,7 +148,7 @@ using BenchmarkTools
 @benchmark $compiled($row_vec, $data, 1)
 ```
 
-You should see zero allocations and good evaluation performance:
+You should see zero allocations and good evaluation performance. Absolute times vary by hardware and Julia version; focus on allocation behavior and relative trends. See the Benchmark Protocol for reproduction details:
 ```
 BenchmarkTools.Trial: Many samples with many evaluations.
  Memory estimate: 0 bytes, allocs estimate: 0.
