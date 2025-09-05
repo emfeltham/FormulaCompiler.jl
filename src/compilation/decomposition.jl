@@ -350,6 +350,8 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
         func_sym = :sin
     elseif isa(func_name, typeof(cos))
         func_sym = :cos
+    elseif isa(func_name, typeof(inv))
+        func_sym = :inv
     elseif isa(func_name, typeof(+))
         func_sym = :+
     elseif isa(func_name, typeof(-))

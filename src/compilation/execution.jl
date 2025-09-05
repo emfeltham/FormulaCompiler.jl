@@ -258,6 +258,10 @@ end
     scratch[Out] = cos(scratch[In])
 end
 
+@inline function execute_op(::UnaryOp{:inv, In, Out}, scratch, data, row_idx) where {In, Out}
+    scratch[Out] = inv(scratch[In])
+end
+
 @inline function execute_op(::UnaryOp{:-, In, Out}, scratch, data, row_idx) where {In, Out}
     scratch[Out] = -scratch[In]
 end
