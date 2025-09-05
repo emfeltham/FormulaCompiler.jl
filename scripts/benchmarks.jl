@@ -320,6 +320,24 @@ function bench_scaling(; n=30_000)
     )
 end
 
+function bench_scale_n(; ns=(10_000, 100_000, 1_000_000))
+    results = BenchResult[]
+    for n in ns
+        df = make_data(n)
+        # Complex, interaction-heavy formula; fit model to apply schema (categoricals)
+        formula = @formula(y ~ x * group + log1p(z) + x & z + x & log1p(z))
+        model = lm(formula, df)
+        data = Tables.columntable(df)
+        compiled = compile_formula(model, data)
+        row = Vector{Float64}(undef, length(compiled))
+        i = min(n, 25)
+        compiled(row, data, i) # warmup
+        t = @benchmark $compiled($row, $data, $i)
+        push!(results, summarize_trial("scale_n: n=$(n)", t))
+    end
+    return results
+end
+
 function bench_mixtures(; n=20_000)
     df = make_data(n)
     model = fit_glm(df)
@@ -346,6 +364,7 @@ const ALL_BENCHES = (
     :se,
     :mixed,
     :scaling,
+    :scale_n,
     :mixtures,
 )
 
@@ -374,6 +393,9 @@ function run_selected(selected::Vector{Symbol}; fast::Bool=false)
         elseif b == :scaling
             r1, r2 = fast ? bench_scaling(n=5_000) : bench_scaling()
             append!(results, [r1, r2])
+        elseif b == :scale_n
+            rs = bench_scale_n()
+            append!(results, rs)
         elseif b == :mixtures
             push!(results, fast ? bench_mixtures(n=5_000) : bench_mixtures())
         else
@@ -430,19 +452,19 @@ if abspath(PROGRAM_FILE) == @__FILE__
     results = run_selected(args.bench_syms; fast=args.fast)
     if args.out !== nothing
         ts = Dates.format(now(), dateformat"yyyymmdd_HHMMSS")
-        if args.file === nothing
+        out_file = args.file
+        if out_file === nothing
             mkpath("results")
             ext = args.out === :md ? ".md" : ".csv"
             tagpart = isempty(args.tag) ? "" : "_" * args.tag
-            path = joinpath("results", "benchmarks_" * ts * tagpart * ext)
-            args.file = path
+            out_file = joinpath("results", "benchmarks_" * ts * tagpart * ext)
         end
         if args.out === :md
-            emit_markdown(args.file, results; tag=args.tag)
-            println("\nWrote Markdown results to ", args.file)
+            emit_markdown(out_file, results; tag=args.tag)
+            println("\nWrote Markdown results to ", out_file)
         elseif args.out === :csv
-            emit_csv(args.file, results; tag=args.tag)
-            println("\nWrote CSV results to ", args.file)
+            emit_csv(out_file, results; tag=args.tag)
+            println("\nWrote CSV results to ", out_file)
         end
     end
 end

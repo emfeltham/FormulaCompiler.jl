@@ -1,0 +1,6 @@
+benchmark,key,median_ns,min_ns,min_mem_B,env
+scale_n,n=10000,13.6,12.1,0,"Julia 1.11.2; Threads 2; apple-m1; Darwin; FC 1.0.0; GLM 1.9.0; MM 4.38.1; FD 1.1.0"
+scale_n,n=100000,13.6,12.1,0,"Julia 1.11.2; Threads 2; apple-m1; Darwin; FC 1.0.0; GLM 1.9.0; MM 4.38.1; FD 1.1.0"
+scale_n,n=1000000,13.7,12.1,0,"Julia 1.11.2; Threads 2; apple-m1; Darwin; FC 1.0.0; GLM 1.9.0; MM 4.38.1; FD 1.1.0"
+scaling,simple,6.8,6.4,0,"Julia 1.11.2; Threads 1; apple-m1; Darwin; FC 1.0.0; GLM 1.9.0; MM 4.38.1; FD 1.1.0"
+scaling,complex,13.6,12.1,0,"Julia 1.11.2; Threads 1; apple-m1; Darwin; FC 1.0.0; GLM 1.9.0; MM 4.38.1; FD 1.1.0"

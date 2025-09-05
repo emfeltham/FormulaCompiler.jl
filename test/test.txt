@@ -178,3 +178,6 @@ Precompiling project for configuration --code-coverage=none --color=auto --check
    3480.6 ms  ✓ FormulaCompiler
   1 dependency successfully precompiled in 4 seconds. 162 already precompiled.
      Testing Running tests...
+Test Summary:            | Pass  Total     Time
+FormulaCompiler.jl Tests | 2308   2308  3m06.4s
+     Testing FormulaCompiler tests passed 

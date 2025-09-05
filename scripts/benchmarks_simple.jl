@@ -7,7 +7,7 @@ using Dates
 # -----------------
 # Options (edit me)
 # -----------------
-selected = [:core, :alloc, :scenario, :deriv, :margins, :se] # choose from: :core :alloc :scenario :deriv :margins :se :mixed :scaling :mixtures
+selected = [:core, :alloc, :scenario, :deriv, :margins, :se, :scale_n] # choose from: :core :alloc :scenario :deriv :margins :se :mixed :scaling :mixtures
 fast = false # true for smaller n (quick iteration)
 out = :md # :md, :csv, or nothing (e.g., out = nothing)
 file = "" # output path; leave empty for auto under results/
