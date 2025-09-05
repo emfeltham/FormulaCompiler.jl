@@ -123,6 +123,63 @@ Critical for interaction terms and compound expressions.
 struct BinaryOp{Func, InPos1, InPos2, OutPos} <: AbstractOp end
 
 """
+    ComparisonOp{Op, InPos, Constant, OutPos} <: AbstractOp
+
+**Comparison Operation**: Compares scratch position value against literal constant.
+
+## Position Mapping Role
+- **Input**: Single scratch position containing value to compare
+- **Constant**: Compile-time literal constant (embedded in type)
+- **Output**: Single scratch position containing comparison result (0.0 or 1.0)
+- **Operations**: :(<=), :(>=), :(<), :(>), :(==), :(!=)
+
+## Examples
+```julia
+ComparisonOp{:(<=), 2, 5.0, 3}()   # (scratch[2] <= 5.0) → scratch[3]
+ComparisonOp{:(>), 1, 0.0, 4}()    # (scratch[1] > 0.0) → scratch[4]
+ComparisonOp{:(==), 5, 1.0, 6}()   # (scratch[5] == 1.0) → scratch[6]
+```
+
+## Boolean Output
+Comparison results are converted to Float64 for model matrix compatibility:
+- `true` → `1.0`
+- `false` → `0.0`
+
+## Type Parameter Benefits
+- **Zero runtime storage**: Constants embedded at compile time
+- **Type specialization**: Each comparison operator gets optimized method
+- **Aggressive optimization**: Compiler can inline constant comparisons
+"""
+struct ComparisonOp{Op, InPos, Constant, OutPos} <: AbstractOp end
+
+"""
+    NegationOp{InPos, OutPos} <: AbstractOp
+
+**Boolean Negation Operation**: Applies logical negation to scratch position value.
+
+## Position Mapping Role  
+- **Input**: Single scratch position containing boolean-like value
+- **Output**: Single scratch position containing negated result (0.0 or 1.0)
+- **Function**: Logical NOT operation (!)
+
+## Examples
+```julia
+NegationOp{3, 4}()   # !scratch[3] → scratch[4]
+NegationOp{1, 5}()   # !scratch[1] → scratch[5]
+```
+
+## Boolean Conversion
+Input values are converted to boolean then negated:
+- Non-zero values treated as `true` → negated to `0.0`  
+- Zero values treated as `false` → negated to `1.0`
+- Result always Float64 for model matrix compatibility
+
+## Usage in Formulas
+Enables direct support for `!flag` syntax in formulas without preprocessing.
+"""
+struct NegationOp{InPos, OutPos} <: AbstractOp end
+
+"""
     ContrastOp{Column, OutPositions} <: AbstractOp
 
 **Categorical Contrast Operation**: Expands categorical variables using contrast matrices.

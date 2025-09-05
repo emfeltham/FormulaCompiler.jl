@@ -310,6 +310,36 @@ end
     scratch[Out] = scratch[In1] ^ scratch[In2]
 end
 
+# Comparison operations
+@inline function execute_op(::ComparisonOp{:(<=), InPos, Constant, OutPos}, scratch, data, row_idx) where {InPos, Constant, OutPos}
+    scratch[OutPos] = Float64(scratch[InPos] <= Constant)
+end
+
+@inline function execute_op(::ComparisonOp{:(>=), InPos, Constant, OutPos}, scratch, data, row_idx) where {InPos, Constant, OutPos}
+    scratch[OutPos] = Float64(scratch[InPos] >= Constant)
+end
+
+@inline function execute_op(::ComparisonOp{:(<), InPos, Constant, OutPos}, scratch, data, row_idx) where {InPos, Constant, OutPos}
+    scratch[OutPos] = Float64(scratch[InPos] < Constant)
+end
+
+@inline function execute_op(::ComparisonOp{:(>), InPos, Constant, OutPos}, scratch, data, row_idx) where {InPos, Constant, OutPos}
+    scratch[OutPos] = Float64(scratch[InPos] > Constant)
+end
+
+@inline function execute_op(::ComparisonOp{:(==), InPos, Constant, OutPos}, scratch, data, row_idx) where {InPos, Constant, OutPos}
+    scratch[OutPos] = Float64(scratch[InPos] == Constant)
+end
+
+@inline function execute_op(::ComparisonOp{:(!=), InPos, Constant, OutPos}, scratch, data, row_idx) where {InPos, Constant, OutPos}
+    scratch[OutPos] = Float64(scratch[InPos] != Constant)
+end
+
+# Boolean negation operation
+@inline function execute_op(::NegationOp{InPos, OutPos}, scratch, data, row_idx) where {InPos, OutPos}
+    scratch[OutPos] = Float64(!(scratch[InPos] != 0.0))
+end
+
 ###############################################################################
 # DYNAMIC CATEGORICAL LEVEL EXTRACTION (From restart branch)
 ###############################################################################

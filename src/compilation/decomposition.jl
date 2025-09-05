@@ -358,6 +358,20 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
         func_sym = :*
     elseif isa(func_name, typeof(/))
         func_sym = :/
+    elseif isa(func_name, typeof(<=))
+        func_sym = :(<=)
+    elseif isa(func_name, typeof(>=))
+        func_sym = :(>=)
+    elseif isa(func_name, typeof(<))
+        func_sym = :(<)
+    elseif isa(func_name, typeof(>))
+        func_sym = :(>)
+    elseif isa(func_name, typeof(==))
+        func_sym = :(==)
+    elseif isa(func_name, typeof(!=))
+        func_sym = :(!=)
+    elseif isa(func_name, typeof(!))
+        func_sym = :!
     else
         # Handle power function specially
         if func_name isa typeof(^)
@@ -374,10 +388,31 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
         push!(arg_positions, isa(pos, Int) ? pos : pos[1])  # Handle multi-output
     end
     
-    # Create operation based on arity
+    # Create operation based on arity and function type
     out_pos = allocate_position!(ctx)
     
-    if length(arg_positions) == 1
+    # Handle special logic operations
+    if func_sym == :! && length(arg_positions) == 1
+        # Boolean negation
+        push!(ctx.operations, NegationOp{arg_positions[1], out_pos}())
+    elseif func_sym in [:(<=), :(>=), :(<), :(>), :(==), :(!=)] && length(arg_positions) == 2
+        # Comparison operations - need to extract constant from second argument
+        # For now, assume second argument is a constant term
+        # TODO: Need better constant extraction logic
+        constant_term = term.args[2]
+        if isa(constant_term, ConstantTerm)
+            constant_value = constant_term.n
+        else
+            # Try to evaluate as literal constant
+            # This is a simplified approach - may need enhancement
+            try
+                constant_value = Float64(constant_term)
+            catch
+                error("Comparison operations currently only support literal constants, got: $constant_term")
+            end
+        end
+        push!(ctx.operations, ComparisonOp{func_sym, arg_positions[1], constant_value, out_pos}())
+    elseif length(arg_positions) == 1
         push!(ctx.operations, UnaryOp{func_sym, arg_positions[1], out_pos}())
     elseif length(arg_positions) == 2
         push!(ctx.operations, BinaryOp{func_sym, arg_positions[1], arg_positions[2], out_pos}())
