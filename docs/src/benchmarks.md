@@ -83,6 +83,10 @@ Benchmarks
 - Simple vs complex formulas; small vs larger `OutputSize`
 - Report time growth and allocation behavior (should remain 0 for core paths)
 
+9) Size Invariance (Per-Row)
+- Use `scale_n` to run the same per-row evaluation on increasing data sizes (e.g., 10k, 100k, 1M)
+- Expectation: per-row latency and allocations remain effectively constant (0 B) as `n` increases
+
 Reporting Template
 - Environment summary
 - For each benchmark: code snippet, median/min time, allocations, brief interpretation
