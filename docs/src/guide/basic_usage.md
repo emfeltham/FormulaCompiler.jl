@@ -185,15 +185,15 @@ partial_scenario = create_scenario("partial", data; treated = 0.7)  # 70% treate
 ```julia
 using CategoricalArrays
 
-# ✅ Required: Convert string columns to categorical
+# Required: Convert string columns to categorical
 df.group = categorical(df.group)
 @formula(y ~ x + group)  # Automatic contrast coding
 
-# ❌ Not supported: Raw string variables
+# Not supported: Raw string variables
 df.category = ["A", "B", "C"]  # String vector
 @formula(y ~ x + category)     # Will cause compilation errors
 
-# ✅ Correct approach
+# Correct approach
 df.category = categorical(["A", "B", "C"])
 @formula(y ~ x + category)     # Works correctly
 ```
@@ -308,7 +308,7 @@ for i in 1:min(5, nrow(df))
     if !isapprox(row_vec, expected; rtol=1e-12)
         @warn "Mismatch in row $i" row_vec expected
     else
-        println("✓ Row $i matches GLM modelmatrix")
+        println("Row $i matches GLM modelmatrix")
     end
 end
 ```
@@ -331,7 +331,7 @@ result = @benchmark $compiled($row_vec, $data, 1)
 @assert result.memory == 0 "Expected zero allocations, got $(result.memory) bytes"
 @assert result.allocs == 0 "Expected zero allocations, got $(result.allocs) allocations"
 
-println("✓ Zero-allocation validation passed")
+println("Zero-allocation validation passed")
 println("Memory: $(result.memory) bytes")
 println("Allocations: $(result.allocs)")
 ```
@@ -346,7 +346,7 @@ function validate_data_compatibility(model, data)
         compiled = compile_formula(model, data)
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
-        println("✓ Data format compatible")
+        println("Data format compatible")
         return true
     catch e
         @error "Data format incompatible" exception=e
@@ -534,10 +534,10 @@ function comprehensive_validation(model, data)
     # 1. Compilation check
     try
         compiled = compile_formula(model, data)
-        println("✓ Compilation successful")
+        println("Compilation successful")
         println("  Formula length: $(length(compiled))")
     catch e
-        println("✗ Compilation failed: $e")
+        println("Compilation failed: $e")
         return false
     end
     
@@ -547,9 +547,9 @@ function comprehensive_validation(model, data)
     
     alloc_result = @allocated compiled(row_vec, data, 1)
     if alloc_result == 0
-        println("✓ Zero allocations achieved")
+        println("Zero allocations achieved")
     else
-        println("⚠ Non-zero allocations: $alloc_result bytes")
+        println("WARNING: Non-zero allocations: $alloc_result bytes")
     end
     
     # 3. Correctness check (first 3 rows)
@@ -562,9 +562,9 @@ function comprehensive_validation(model, data)
             expected = mm[i, :]
             
             if isapprox(row_vec, expected; rtol=1e-12)
-                println("✓ Row $i matches reference implementation")
+                println("Row $i matches reference implementation")
             else
-                println("✗ Row $i mismatch detected")
+                println("Row $i mismatch detected")
                 println("  Expected: $(expected[1:min(3, length(expected))])...")
                 println("  Got:      $(row_vec[1:min(3, length(row_vec))])...")
                 return false
@@ -572,7 +572,7 @@ function comprehensive_validation(model, data)
         end
     end
     
-    println("✓ All validation checks passed")
+    println("All validation checks passed")
     return true
 end
 

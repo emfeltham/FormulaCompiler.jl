@@ -214,13 +214,19 @@ For typical statistical formulas accessing data 10–20 times per evaluation, th
 
 ### Finite Differences
 
-For the finite difference backend:
+For the finite difference backend (central differences):
 
 ```math
 \frac{\partial x_j}{\partial v_i} \approx \frac{f_j(v_i + h) - f_j(v_i - h)}{2h}
 ```
 
-where $h = \epsilon^{1/3} \max(1, |v_i|)$ and $\epsilon$ is machine precision.
+Step size:
+
+```math
+h = \epsilon^{1/3} \cdot \max(1, |v_i|)
+```
+
+Justification: The central-difference truncation error is $O(h^2)$ while floating-point rounding contributes $O(\epsilon / h)$. Balancing these terms yields an $h$ proportional to $\epsilon^{1/3}$ (scaled by the variable magnitude), which is a standard, robust choice in double precision.
 
 ### Single-Column Extraction
 
@@ -336,10 +342,20 @@ By linearity of expectation:
 Common link functions and their derivatives:
 
 | Link | $g(\mu)$ | $g^{-1}(\eta)$ | $\frac{d\mu}{d\eta}$ | $\frac{d^2\mu}{d\eta^2}$ |
-|------|----------|----------------|----------------------|--------------------------|
+|------|------------|-------------------|-------------------------------|-----------------------------------|
 | Identity | $\mu$ | $\eta$ | $1$ | $0$ |
 | Log | $\log(\mu)$ | $\exp(\eta)$ | $\exp(\eta)$ | $\exp(\eta)$ |
-| Logit | $\log(\frac{\mu}{1-\mu})$ | $\frac{1}{1+e^{-\eta}}$ | $\mu(1-\mu)$ | $\mu(1-\mu)(1-2\mu)$ |
+| Logit | $\log\!\left(\tfrac{\mu}{1-\mu}\right)$ | $\mu = \sigma(\eta)$ | $\mu(1-\mu)$ | $\mu(1-\mu)(1-2\mu)$ |
+| Probit | $\Phi^{-1}(\mu)$ | $\mu = \Phi(\eta)$ | $\phi(\eta)$ | $-\eta\,\phi(\eta)$ |
+| Cloglog | $\log(-\log(1-\mu))$ | $\mu = 1 - e^{-e^{\eta}}$ | $e^{\eta - e^{\eta}}$ | $e^{\eta - e^{\eta}}(1 - e^{\eta})$ |
+| Cauchit | $\tan(\pi(\mu - 1/2))$ | $\mu = \tfrac{1}{2} + \tfrac{1}{\pi} \arctan(\eta)$ | $\tfrac{1}{\pi} \cdot \tfrac{1}{1+\eta^2}$ | $-\tfrac{2\eta}{\pi} \cdot \tfrac{1}{(1+\eta^2)^2}$ |
+| Inverse | $\mu^{-1}$ | $\mu = \eta^{-1}$ | $-\eta^{-2}$ | $2\eta^{-3}$ |
+| Sqrt | $2\sqrt{\mu}$ | $\mu = (\tfrac{\eta}{2})^2$ | $\tfrac{\eta}{2}$ | $\tfrac{1}{2}$ |
+| InverseSquare | $\mu^{-2}$ | $\mu = \eta^{-1/2}$ | $-\tfrac{1}{2} \eta^{-3/2}$ | $\tfrac{3}{4} \eta^{-5/2}$ |
+
+Notes:
+- For Logit, $\mu = \sigma(\eta) = 1/(1+e^{-\eta})$ and $\phi, \Phi$ denote standard Normal PDF/CDF for Probit.
+- Carefully handle domain constraints when evaluating links (e.g., $\mu \in (0,1)$ for binary GLMs).
 
 ## Computational Efficiency
 

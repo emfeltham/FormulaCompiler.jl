@@ -219,23 +219,23 @@ simple_scenario = create_scenario("simple", data;
 #### Categorical Override Best Practices
 
 ```julia
-# ✅ Recommended: Use existing values
+# Recommended: Use existing values
 existing_val = df.category[findfirst(x -> x == "Target", df.category)]
 scenario = create_scenario("test", data; category = existing_val)
 
-# ✅ Good: Create with matching levels  
+# Good: Create with matching levels  
 target_idx = findfirst(==("Target"), levels(df.category))
 target_val = CategoricalValue(df.category.pool, target_idx)
 scenario = create_scenario("test", data; category = target_val)
 
-# ✅ Convenient: String with valid level
+# Convenient: String with valid level
 scenario = create_scenario("test", data; category = "Target")  # If "Target" ∈ levels
 
-# ❌ Error: Mismatched levels
+# Error: Mismatched levels
 wrong_val = categorical(["Target"])[1]  # Different level pool
 scenario = create_scenario("test", data; category = wrong_val)  # CategoricalValue error!
 
-# ❌ Error: Invalid level
+# Error: Invalid level
 scenario = create_scenario("test", data; category = "Invalid")  # Level not found!
 ```
 

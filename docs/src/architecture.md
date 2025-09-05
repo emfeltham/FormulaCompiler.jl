@@ -94,6 +94,9 @@ Check allocations and timings with BenchmarkTools:
 @benchmark $compiled($row_vec, $data, 1)
 ```
 
+Figure generation
+- During docs builds, diagrams under `docs/src/assets/*.mmd` are automatically regenerated to SVG if the Mermaid CLI (`mmdc`) is available (see `docs/make.jl`).
+
 ## Future Directions
 
 - Parallel row evaluation for batches

@@ -11,6 +11,18 @@ Environment
 - Threads: `Threads.nthreads()` and BLAS threads (`BLAS.get_num_threads()`)
 - Packages: `Pkg.status()` for FormulaCompiler, GLM, MixedModels, ForwardDiff, Tables, DataFrames
 
+Runner Script
+- A convenience runner is provided at `scripts/benchmarks.jl`.
+- Examples:
+  - `julia --project=. scripts/benchmarks.jl` (default subset)
+  - `julia --project=. scripts/benchmarks.jl core deriv margins se` (select tasks)
+- Prints per-benchmark median/min time and minimum memory; include this output with your Environment section.
+
+Minimal runner
+- Edit options at the top of `scripts/benchmarks_simple.jl` and run:
+  - `julia --project=. scripts/benchmarks_simple.jl`
+- Set `selected`, `fast`, `out`, `file`, `tag` in the script; no CLI flags needed.
+
 Setup
 - Activate project: `Pkg.activate("..")`; `Pkg.instantiate()`
 - Using: `using BenchmarkTools, FormulaCompiler, GLM, MixedModels, Tables, DataFrames, CategoricalArrays, Random`
@@ -53,7 +65,7 @@ Benchmarks
 5) Marginal Effects (η and μ)
 - `β = coef(model)`; `g = similar(rand(length(vars)))`
 - η-scale AD: `@benchmark marginal_effects_eta!($g, $de, $β, 25; backend=:ad)`
-- η-scale FD: `@benchmark marginal_effects_eta!($g, $de, $β, 25; backend=:fd)` (or `marginal_effects_eta_fd!`)
+- η-scale FD: `@benchmark marginal_effects_eta!($g, $de, $β, 25; backend=:fd)`
 - μ-scale with link (e.g., Logit): `@benchmark marginal_effects_mu!($g, $de, $β, 25; link=LogitLink(), backend=:ad)` and `backend=:fd`
 - Targets: FD 0 bytes; AD ≤512 bytes
 
