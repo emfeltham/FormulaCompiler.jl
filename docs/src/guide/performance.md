@@ -11,12 +11,15 @@ FormulaCompiler.jl achieves zero-allocation performance through:
 2. **Type stability**: Ensure all operations are type-predictable
 3. **Memory reuse**: Pre-allocate and reuse output vectors
 4. **Efficient data structures**: Use column tables for optimal access patterns
+5. **Low-allocation automatic differentiation**: Preallocation and specialization minimize AD memory overhead
+
+**Automatic Differentiation**: FormulaCompiler.jl provides ForwardDiff-based derivatives with small, bounded allocations per call, and a finite-difference backend with zero allocations. Choose the backend per workload and accuracy needs.
 
 For a detailed understanding of how compile-time specialization is implemented, including the use of metaprogramming for complex formulas and derivative computation, see [Metaprogramming](../metaprogramming.md).
 
 ## Runtime Execution Flow
 
-Here's what happens during each ~50ns evaluation:
+Here's what happens during each evaluation:
 
 ![Diagram](../assets/src_guide_performance_diagram_4.svg)
 
@@ -30,14 +33,14 @@ compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 # Use many times (zero allocations)
-for i in 1:1_000_000
+for i in 1:1000
     compiled(row_vec, data, i % nrow(data) + 1)
     # Process result...
 end
 
 # Bad: Compile every time
-for i in 1:1_000_000
-    result = modelrow(model, data, i % nrow(data) + 1)  # Compiles AND allocates!
+for i in 1:1000
+    result = modelrow(model, data, i % nrow(data) + 1)  # Compiles and allocates
 end
 ```
 
@@ -48,18 +51,14 @@ using Tables, DataFrames
 
 df = DataFrame(x = randn(10000), y = randn(10000))
 
-# Best: Column table format
+# Best: Column table format (convert once)
 data = Tables.columntable(df)  # Convert once
 compiled = compile_formula(model, data)
 
-# Good: Direct DataFrame (but slower)
-compiled = compile_formula(model, df)
-
-# Benchmark the difference
+# Benchmark the effect of data format
 using BenchmarkTools
 
-@benchmark $compiled($row_vec, $data, 1)        # Fastest
-@benchmark $compiled($row_vec, $df, 1)          # Slower due to column access
+@benchmark $compiled($row_vec, $data, 1)        # Preferred path
 ```
 
 ## Memory Management
@@ -299,10 +298,8 @@ for i in 1:1000
     result = modelrow(model, data, i)  # Recompiles every time!
 end
 
-# DON'T: Use DataFrames for row access in tight loops
-for i in 1:1000
-    compiled(row_vec, df, i)  # Slower than column table
-end
+# DON'T: Pass DataFrames directly to compiled evaluators in tight loops
+#        Convert once to a column table outside the loop
 
 # DON'T: Forget to pre-allocate
 results = []
@@ -341,7 +338,7 @@ results .+= 1.0  # In-place broadcasting
 ### Continuous Performance Testing
 
 ```julia
-function performance_regression_test(model, data, target_time_ns=100)
+function performance_regression_test(model, data, target_time_ns=200)
     compiled = compile_formula(model, data)
     row_vec = Vector{Float64}(undef, length(compiled))
     
@@ -350,11 +347,12 @@ function performance_regression_test(model, data, target_time_ns=100)
     
     # Time single evaluation
     time_ns = @elapsed begin
-        for _ in 1:1000
+        for _ in 1:100
             compiled(row_vec, data, 1)
         end
-    end * 1e9 / 1000  # Convert to ns per evaluation
+    end * 1e9 / 100  # Convert to ns per evaluation
     
+    # Absolute times vary by hardware and Julia version; tune target_time_ns accordingly.
     if time_ns > target_time_ns
         @warn "Performance regression detected: $(round(time_ns))ns > $(target_time_ns)ns"
     else

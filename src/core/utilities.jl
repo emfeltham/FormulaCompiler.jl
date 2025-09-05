@@ -81,7 +81,7 @@ end
     is_mixture_column(col)
 
 Detect if a column contains categorical mixture specifications.
-Uses duck typing to identify objects with `levels` and `weights` properties.
+Uses type-safe checking for CategoricalMixture objects.
 
 # Example
 ```julia
@@ -96,21 +96,20 @@ function is_mixture_column(col)
     isempty(col) && return false
     first_element = col[1]
     
-    # Check if first element has mixture properties
-    has_mixture_props = hasproperty(first_element, :levels) && hasproperty(first_element, :weights)
-    
-    if !has_mixture_props
+    # Check if column contains mixture objects by checking for expected properties
+    # This will be overridden once CategoricalMixture is defined
+    if !hasfield(typeof(first_element), :levels) || !hasfield(typeof(first_element), :weights)
         return false
     end
     
     # For mixture columns, all elements should have the same mixture specification
     # This is required for compile-time mixture support
-    first_spec = extract_mixture_spec(first_element)
+    first_spec = (levels=first_element.levels, weights=first_element.weights)
     for element in col
-        if !hasproperty(element, :levels) || !hasproperty(element, :weights)
+        if !hasfield(typeof(element), :levels) || !hasfield(typeof(element), :weights)
             return false  # Not all elements are mixtures
         end
-        spec = extract_mixture_spec(element)
+        spec = (levels=element.levels, weights=element.weights)
         if spec != first_spec
             return false  # Inconsistent mixture specifications
         end
@@ -194,8 +193,8 @@ function validate_mixture_column!(col_name, col_data)
             continue  # Skip first element (used as reference)
         end
         
-        if !hasproperty(row_mixture, :levels) || !hasproperty(row_mixture, :weights)
-            throw(ArgumentError("Inconsistent mixture specification in column $col_name at row $i: not a mixture object"))
+        if !hasfield(typeof(row_mixture), :levels) || !hasfield(typeof(row_mixture), :weights)
+            throw(ArgumentError("Inconsistent mixture specification in column $col_name at row $i: expected mixture object, got $(typeof(row_mixture))"))
         end
         
         spec = extract_mixture_spec(row_mixture)
@@ -404,4 +403,59 @@ function create_balanced_mixture(levels::AbstractVector)
     weight = 1.0 / n_levels
     
     return Dict(string(level) => weight for level in levels)
+end
+
+"""
+    _get_baseline_level(model, var) -> baseline_level
+
+Extract baseline level from model's contrast coding (statistically principled).
+
+This function implements the design decision to use the model's actual contrast
+coding rather than making assumptions from the data.
+
+# Arguments
+- `model`: Fitted statistical model
+- `var::Symbol`: Categorical variable name
+
+# Returns
+- Baseline level used in the model's contrast coding
+
+# Throws
+- `ArgumentError`: If baseline level cannot be determined
+
+# Examples
+```julia
+baseline = _get_baseline_level(model, :region)  # Returns "North" if that's the baseline
+```
+"""
+function _get_baseline_level(model, var::Symbol)
+    # Use FormulaCompiler's proven approach: extract baseline from processed schema
+    # Works for both GLM.jl and MixedModels.jl via unified StatsModels.jl pipeline
+    
+    model_formula = StatsModels.formula(model)
+    
+    # Handle different RHS structures
+    matrix_term = if isa(model_formula.rhs, StatsModels.MatrixTerm)
+        model_formula.rhs  # GLM case: RHS is MatrixTerm directly
+    else
+        model_formula.rhs[1]  # MixedModels case: RHS is tuple, MatrixTerm is first element
+    end
+    
+    # Find CategoricalTerm for the requested variable
+    for term in matrix_term.terms
+        if isa(term, StatsModels.CategoricalTerm) && term.sym == var
+            contrasts = term.contrasts
+            baseline_levels = setdiff(contrasts.levels, StatsModels.coefnames(contrasts))
+            if length(baseline_levels) == 1
+                return baseline_levels[1]
+            elseif length(baseline_levels) == 0
+                throw(ArgumentError("No baseline level found for variable $var. All levels have coefficients."))
+            else
+                throw(ArgumentError("Multiple baseline levels found for variable $var: $baseline_levels"))
+            end
+        end
+    end
+    
+    throw(ArgumentError("Could not find categorical variable $var in model formula terms. " *
+                      "Ensure the variable is categorical and present in the model."))
 end

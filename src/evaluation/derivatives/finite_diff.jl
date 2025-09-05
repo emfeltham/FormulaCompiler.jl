@@ -142,13 +142,13 @@ Notes:
     push!(stmts, :(yminus = de.fd_yminus))
     push!(stmts, :(xbase = de.fd_xbase))
     push!(stmts, :(nterms = length(de)))
-    # Fill xbase with unrolled tuple access
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
-    end
-    # Set row for overrides (unrolled)
+    # Set row for overrides (unrolled) BEFORE reading base values
     for i in 1:N
         push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    # Fill xbase from the underlying base vectors to avoid reading a stale replacement
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
     end
     # Main unrolled finite difference loop across variables
     for j in 1:N
@@ -187,11 +187,13 @@ end
     push!(stmts, :(yminus = de.fd_yminus))
     push!(stmts, :(xbase = de.fd_xbase))
     push!(stmts, :(nterms = length(de)))
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
-    end
+    # Set row for overrides BEFORE reading base values
     for i in 1:N
         push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    # Fill xbase from underlying base vectors
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
     end
     for j in 1:N
         push!(stmts, :(x = xbase[$j]))
@@ -251,83 +253,6 @@ function derivative_modelrow_fd(
     return J
 end
 
-"""
-    marginal_effects_eta_fd!(g, evaluator, beta, row; step=:auto)
-
-Zero-allocation marginal effects using finite differences (with override system).
-"""
-@generated function marginal_effects_eta_fd!(
-    g::AbstractVector{Float64},
-    de::DerivativeEvaluator,
-    beta::AbstractVector{<:Real},
-    row::Int;
-    step=:auto,
-)
-    quote
-        # Direct access to preallocated buffers
-        yplus = de.fd_yplus
-        yminus = de.fd_yminus
-        xbase = de.fd_xbase
-        J = de.jacobian_buffer
-        
-        nvars = length(de.vars)
-        nterms = length(de)
-        
-        # Get base values using pre-cached columns (no getproperty)
-        @inbounds for j in 1:nvars
-            xbase[j] = de.fd_columns[j][row]
-        end
-        
-        # Set row for overrides
-        @inbounds for i in 1:nvars
-            de.overrides[i].row = row
-        end
-        
-        # Main finite difference loop - compile-time optimized
-        @inbounds for j in 1:nvars
-            x = xbase[j]
-            # Set all overrides to base values
-            for k in 1:nvars
-                de.overrides[k].replacement = xbase[k]
-            end
-            # Step selection (auto uses cbrt(eps(Float64)))
-            h = step === :auto ? (FD_AUTO_EPS_SCALE * max(1.0, abs(x))) : step
-            # Plus
-            de.overrides[j].replacement = x + h
-            de.compiled_base(yplus, de.data_over, row)
-            # Minus  
-            de.overrides[j].replacement = x - h
-            de.compiled_base(yminus, de.data_over, row)
-            # Store Jacobian column with FMA optimization
-            inv_2h = 1.0 / (2.0 * h)
-            @fastmath for i in 1:nterms
-                J[i, j] = (yplus[i] - yminus[i]) * inv_2h
-            end
-        end
-        
-        # Matrix multiplication: g = J' * β (fully optimized with FMA)
-        @inbounds @fastmath for j in 1:nvars
-            sum_val = 0.0
-            for i in 1:nterms
-                sum_val = muladd(J[i, j], beta[i], sum_val)
-            end
-            g[j] = sum_val
-        end
-        
-        return g
-    end
-end
-
-function marginal_effects_eta_fd(
-    de::DerivativeEvaluator,
-    beta::AbstractVector{<:Real},
-    row::Int;
-    step=:auto,
-)
-    g = Vector{Float64}(undef, length(de.vars))
-    marginal_effects_eta_fd!(g, de, beta, row; step=step)
-    return g
-end
 
 """
     fd_jacobian_column!(Jk, de, row, var; step=:auto)
@@ -383,14 +308,14 @@ end
     push!(stmts, :(xbase = de.fd_xbase))
     push!(stmts, :(nterms = length(de)))
     
-    # Fill xbase with unrolled tuple access
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
-    end
-    
-    # Set row for overrides (unrolled)
+    # Set row for overrides BEFORE reading base values
     for i in 1:N
         push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    
+    # Fill xbase from underlying base vectors (avoid stale replacement)
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
     end
     
     # Single variable finite difference computation
@@ -434,12 +359,14 @@ end
     push!(stmts, :(xbase = de.fd_xbase))
     push!(stmts, :(nterms = length(de)))
     
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
-    end
-    
+    # Set row for overrides BEFORE reading base values
     for i in 1:N
         push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    
+    # Fill xbase from underlying base vectors
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
     end
     
     push!(stmts, :(x = xbase[var_idx]))

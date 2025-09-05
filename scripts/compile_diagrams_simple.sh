@@ -10,17 +10,17 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DOCS_DIR="$PROJECT_DIR/docs"
 DIAGRAMS_DIR="$DOCS_DIR/diagrams/generated"
 
-echo "🔄 Starting Mermaid diagram compilation..."
+echo "Starting Mermaid diagram compilation..."
 
 # Check for mermaid CLI
 if ! command -v mmdc &> /dev/null; then
-    echo "❌ Mermaid CLI (mmdc) not found. Install with: npm install -g @mermaid-js/mermaid-cli"
+    echo "ERROR: Mermaid CLI (mmdc) not found. Install with: npm install -g @mermaid-js/mermaid-cli"
     exit 1
 fi
 
 # Create output directory
 mkdir -p "$DIAGRAMS_DIR"
-echo "✓ Created diagrams directory"
+echo "Created diagrams directory"
 
 # Process each markdown file with mermaid content
 diagram_num=0
@@ -59,7 +59,7 @@ process_markdown_file() {
                 local diagram_name=$(basename "$mmd_file" .mmd)
                 
                 if mmdc -i "$mmd_file" -o "$svg_file" -b white 2>/dev/null; then
-                    echo "  ✓ Compiled: $diagram_name.svg"
+                    echo "  Compiled: $diagram_name.svg"
                     
                     # Calculate relative path from markdown to SVG
                     local rel_path="../diagrams/generated/$(basename "$svg_file")"
@@ -68,7 +68,7 @@ process_markdown_file() {
                     # This is a simple replacement - could be enhanced
                     
                 else
-                    echo "  ❌ Failed to compile: $diagram_name"
+                    echo "  ERROR: Failed to compile: $diagram_name"
                     rm -f "$svg_file"
                 fi
             fi
@@ -92,9 +92,9 @@ find "$DOCS_DIR" -name "*.md" -type f | while read -r file; do
 done
 
 echo ""
-echo "✅ Diagram compilation complete!"
-echo "📁 Generated files are in: $DIAGRAMS_DIR"
+echo "Diagram compilation complete!"
+echo "Generated files are in: $DIAGRAMS_DIR"
 echo ""
-echo "📝 Note: This script created .mmd and .svg files but did not modify the markdown files."
+echo "Note: This script created .mmd and .svg files but did not modify the markdown files."
 echo "   You can manually replace the mermaid code blocks with image references like:"
 echo "   ![Diagram](../diagrams/generated/filename_1.svg)"

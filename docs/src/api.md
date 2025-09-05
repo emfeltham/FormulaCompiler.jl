@@ -24,17 +24,18 @@ DataScenario
 create_scenario
 ```
 
-## Near-Zero-Allocation Derivatives
+## Derivatives
 
-FormulaCompiler.jl provides a sophisticated automatic differentiation system that achieves near-theoretical optimal allocation performance through aggressive optimization.
+Dual-backend derivatives with preallocated buffers for efficiency.
 
 ### Performance Characteristics
-- **Core evaluation**: Exactly 0 allocations  
-- **Finite differences (FD)**: Exactly 0 allocations (optimized implementation)
-- **ForwardDiff derivatives**: ≤512 bytes per call (ForwardDiff internals)
-- **Marginal effects**: ≤512 bytes per call for AD backend (optimized with preallocated buffers)
-- **Allocation efficiency**: >99.75% compared to naive AD approaches
+- **Core evaluation**: 0 allocations after warmup  
+- **Finite differences (FD)**: 0 allocations
+- **ForwardDiff derivatives**: typically ≤512 bytes per call (ForwardDiff internals)
+- **Marginal effects**: same allocation characteristics as the chosen backend
 - **Validation**: Cross-validated against finite differences (rtol=1e-6, atol=1e-8)
+
+See the Benchmark Protocol for environment and reproduction notes.
 
 ```@docs
 build_derivative_evaluator
@@ -42,13 +43,21 @@ derivative_modelrow!
 derivative_modelrow
 derivative_modelrow_fd!
 derivative_modelrow_fd
+derivative_modelrow_fd_pos!
+fd_jacobian_column!
+fd_jacobian_column_pos!
 contrast_modelrow!
 contrast_modelrow
 continuous_variables
 marginal_effects_eta!
 marginal_effects_eta
+marginal_effects_eta_grad!
 marginal_effects_mu!
 marginal_effects_mu
+me_eta_grad_beta!
+me_mu_grad_beta!
+delta_method_se
+accumulate_ame_gradient!
 ```
 
 ---
@@ -246,6 +255,19 @@ compiled = compile_formula(model, data)
 n_terms = length(compiled)           # e.g., 4
 ```
 
+## Categorical Mixtures
+
+Utilities for constructing and validating categorical mixtures used in efficient profile-based marginal effects.
+
+```@docs
+mix
+CategoricalMixture
+MixtureWithLevels
+validate_mixture_against_data
+create_balanced_mixture
+mixture_to_scenario_value
+```
+
 ## Type System
 
 ### Core Types
@@ -291,6 +313,8 @@ vars = continuous_variables(compiled, data)  # or [:x, :z]
 de = build_derivative_evaluator(compiled, data; vars=vars)
 ```
 
+<!-- Removed build_ad_evaluator: the standard build_derivative_evaluator is the supported AD entry; for zero-alloc guarantees use FD helpers. -->
+
 ### `derivative_modelrow!(J, evaluator, row)`
 
 Fill Jacobian matrix with derivatives of model row with respect to selected variables.
@@ -309,6 +333,8 @@ Fill Jacobian matrix with derivatives of model row with respect to selected vari
 J = Matrix{Float64}(undef, length(compiled), length(de.vars))
 derivative_modelrow!(J, de, 1)  # Fill J with derivatives
 ```
+
+<!-- Removed zero-allocation AD variant: standard AD path is recommended and small/bounded allocations are acceptable in most cases. -->
 
 ### `marginal_effects_eta!(g, evaluator, beta, row)`
 
@@ -332,6 +358,17 @@ Compute marginal effects on linear predictor η = Xβ using chain rule.
 β = coef(model)
 g = Vector{Float64}(undef, length(de.vars))
 marginal_effects_eta!(g, de, β, 1)
+```
+
+<!-- Removed standalone FD marginal effects: use `marginal_effects_eta!(...; backend=:fd)` -->
+
+### `marginal_effects_eta_grad!(g, evaluator, beta, row)`
+
+Direct gradient computation for η-scale marginal effects; pairs with parameter-gradient utilities when needed.
+
+Example:
+```julia
+marginal_effects_eta_grad!(g, de, β, 1)
 ```
 
 ### `marginal_effects_mu!(g, evaluator, beta, row; link)`
@@ -359,6 +396,151 @@ using GLM
 marginal_effects_mu!(g, de, β, 1; link=LogitLink())
 ```
 
+### `fd_jacobian_column!(col, evaluator, row, var)`
+
+Compute a single column of the Jacobian matrix via finite differences, extracting derivatives with respect to one specific variable.
+
+**Arguments:**
+- `col`: Pre-allocated output vector of length `length(compiled)` (model matrix terms)
+- `evaluator`: `DerivativeEvaluator` from `build_derivative_evaluator`
+- `row`: Row index to evaluate (Int)
+- `var`: Variable Symbol within `evaluator.vars`
+
+**Performance:**
+- 0 bytes allocated (after warmup)
+- More efficient than computing full Jacobian when only one variable is needed
+- Uses optimized single-variable finite difference step
+
+**Use Cases:**
+- Extract derivatives for one specific variable
+- Verify ForwardDiff results per variable
+- Micro-benchmark derivative computation cost per covariate
+- Memory-constrained environments where full Jacobian storage is expensive
+
+**Example:**
+```julia
+de = build_derivative_evaluator(compiled, data; vars=[:x, :z])
+col_x = Vector{Float64}(undef, length(compiled))
+fd_jacobian_column!(col_x, de, row_idx, :x)  # 0 bytes
+
+# Compare with full Jacobian approach
+J_full = Matrix{Float64}(undef, length(compiled), length(de.vars))
+derivative_modelrow_fd!(J_full, de, row_idx)  # More memory, computes both variables
+col_x_from_full = J_full[:, 1]  # Extract same column
+```
+
+### `fd_jacobian_column_pos!(col, evaluator, row, j)`
+
+Positional variant of `fd_jacobian_column!` that writes directly into a positional buffer or view.
+
+**Arguments:**
+- `col`: Pre-allocated output buffer (can be a view into larger matrix)
+- `evaluator`: `DerivativeEvaluator`
+- `row`: Row index to evaluate (Int)
+- `j`: Variable index within `evaluator.vars` (Int)
+
+**Performance:**
+- 0 bytes allocated
+- Optimized for cases where output buffer is part of larger data structure
+- Avoids intermediate allocations when writing to matrix views
+
+**Use Cases:**
+- Writing directly into pre-allocated matrix columns
+- Integration with existing numerical pipelines that use positional buffers
+- Performance-critical loops where even small allocations matter
+
+**Example:**
+```julia
+# Pre-allocate matrix for storing multiple variable derivatives
+n_vars = length(de.vars)
+derivative_matrix = Matrix{Float64}(undef, length(compiled), n_vars)
+
+# Fill columns one at a time using positional variant
+for j in 1:n_vars
+    col_view = view(derivative_matrix, :, j)
+    fd_jacobian_column_pos!(col_view, de, row_idx, j)  # 0 bytes
+end
+```
+
+### `me_eta_grad_beta!(gβ, evaluator, row)` and `me_mu_grad_beta!(gβ, evaluator, row; link)`
+
+Gradients of marginal effects with respect to parameters β, for delta-method uncertainty.
+
+Example:
+```julia
+gβ = Vector{Float64}(undef, length(coef(model)))
+me_eta_grad_beta!(gβ, de, 1)
+```
+
+### `delta_method_se(gβ, Σ)`
+
+Compute delta-method standard error for marginal effects using the gradient vector and parameter covariance matrix.
+
+**Arguments:**
+- `gβ`: Gradient vector of the marginal effect with respect to model parameters (Vector{Float64})
+- `Σ`: Parameter covariance matrix (typically `vcov(model)`)
+
+**Returns:**
+- `Float64`: Standard error computed as `sqrt(gβ' * Σ * gβ)`
+
+**Mathematical Foundation:**
+Uses the delta method to propagate parameter uncertainty to derived quantities (marginal effects).
+For a function `g(β)` with gradient `∇g(β)`, the variance is approximately `∇g(β)' * Var(β) * ∇g(β)`.
+
+**Performance:**
+- 0 bytes allocated
+- Validates against negative variance (throws informative error if detected)
+
+**Example:**
+```julia
+# Get parameter gradient for marginal effect at row 1
+gβ = Vector{Float64}(undef, length(coef(model)))
+me_eta_grad_beta!(gβ, de, 1)
+
+# Compute standard error
+se = delta_method_se(gβ, vcov(model))
+println("Marginal effect SE: $se")
+```
+
+### `accumulate_ame_gradient!(gβ, evaluator, β, rows; backend=:fd)`
+
+Accumulate the gradient of average marginal effects (AME) with respect to model parameters across multiple rows.
+
+**Arguments:**
+- `gβ`: Pre-allocated gradient accumulator vector of length `length(coef(model))`
+- `evaluator`: `DerivativeEvaluator` from `build_derivative_evaluator`
+- `β`: Model coefficients vector
+- `rows`: Row indices to accumulate over (Vector{Int} or range)
+- `backend`: Computation backend (`:fd` for finite differences, `:ad` for ForwardDiff)
+
+**Implementation:**
+Computes `gβ += ∇_β[mean_i(dη_i/dx_j)]` where the gradient is taken with respect to parameters β.
+This is essential for computing standard errors of average marginal effects via the delta method.
+
+**Performance:**
+- **`:fd` backend**: 0 bytes allocated per row
+- **`:ad` backend**: Small allocations per row (~400 bytes), faster computation
+- Accumulates efficiently without storing individual row gradients
+
+**Mathematical Background:**
+For average marginal effects `AME = (1/n) * Σᵢ ME_i`, the parameter gradient is:
+`∇_β AME = (1/n) * Σᵢ ∇_β ME_i`
+
+**Example:**
+```julia
+# Initialize gradient accumulator
+gβ = zeros(Float64, length(coef(model)))
+
+# Accumulate AME gradient over rows 1-100
+accumulate_ame_gradient!(gβ, de, coef(model), 1:100; backend=:fd)
+
+# Compute average (divide by number of rows)
+gβ ./= 100
+
+# Get standard error for AME
+ame_se = delta_method_se(gβ, vcov(model))
+```
+
 ### `continuous_variables(compiled, data)`
 
 Extract continuous variable names from compiled operations, excluding categoricals.
@@ -376,6 +558,18 @@ vars = continuous_variables(compiled, data)  # e.g., [:x, :z, :age]
 de = build_derivative_evaluator(compiled, data; vars=vars)
 ```
 
+## Override Helpers
+
+### `create_override_data(data; overrides...)` and `create_override_vector(value, length)`
+
+Low-level helpers for constructing scenario override containers and constant vectors. Prefer high-level `create_scenario` in user code.
+
+Example:
+```julia
+ov = create_override_vector(1.0, length(data.x))
+data_over = create_override_data(data; x = ov)
+```
+
 ## Performance Notes
 
 - **Core functions** (`modelrow!`, `compiled(row_vec, data, row)`) achieve exactly 0 bytes allocated
@@ -385,3 +579,87 @@ de = build_derivative_evaluator(compiled, data; vars=vars)
 - Use `Tables.columntable` format for best performance
 - Pre-allocate output vectors/matrices and reuse them across evaluations
 - Build derivative evaluators once and reuse across many calls
+
+### Single-Column vs Full Jacobian: When to Use Each
+
+**Use `fd_jacobian_column!` when:**
+- You need derivatives for only one or few specific variables
+- Memory is constrained (large model matrices, many variables)
+- Performing variable-by-variable sensitivity analysis
+- Validating ForwardDiff results for individual covariates
+
+**Use full Jacobian (`derivative_modelrow_fd!`) when:**
+- You need derivatives for most/all variables  
+- Computing marginal effects that require multiple variables
+- Building gradient vectors that combine multiple partial derivatives
+- Memory is abundant and computational efficiency is prioritized
+
+**Performance Comparison:**
+```julia
+# Single variable: column extraction is ~3x more efficient
+fd_jacobian_column!(col, de, 1, row)     # 0 bytes, minimal computation
+
+# Multiple variables: full Jacobian amortizes setup costs  
+derivative_modelrow_fd!(J, de, row)      # 0 bytes, but computes all variables
+```
+
+### AD Allocation Behavior: Standard vs Zero-Allocation Variants
+
+FormulaCompiler provides two AD approaches with different allocation characteristics:
+
+**Standard AD Path (Recommended for Most Users):**
+- **Functions**: `build_derivative_evaluator`, `derivative_modelrow!`
+- **Allocations**: Small, bounded (≤512 bytes per call)
+- **Reliability**: Consistent behavior across environments
+- **Performance**: Fast with predictable memory usage
+- **Use case**: General-purpose derivative computation
+
+**Zero-Allocation Options:**
+- **Guaranteed zero-alloc**: Use finite differences for single-column or ME computations (e.g., `fd_jacobian_column!`, `marginal_effects_eta!(...; backend=:fd)`).
+- **AD path**: Standard `derivative_modelrow!` typically allocates ≤512 bytes due to ForwardDiff internals; prefer this for accuracy and speed when tiny allocations are acceptable.
+
+**Why Small AD Allocations Are Usually Acceptable:**
+- ForwardDiff's ≤512 bytes are typically negligible compared to data processing overhead
+- Small allocations are bounded and predictable (not scaling with data size)  
+- Standard path provides consistent behavior across Julia/ForwardDiff versions
+- Zero-allocation variants add complexity without significant benefit in most applications
+
+**Decision Guide:**
+```julia
+# Standard AD (recommended for most cases)
+de = build_derivative_evaluator(compiled, data; vars=vars)
+derivative_modelrow!(J, de, row)  # ≤512 bytes, reliable
+
+# Guaranteed zero allocations: FD backend
+marginal_effects_eta!(g, de, β, row; backend=:fd)  # 0 bytes, always
+```
+
+### Complete Variance/SE Workflow Example
+
+```julia
+using FormulaCompiler, GLM, DataFrames, Tables
+
+# Fit model
+df = DataFrame(y = randn(1000), x = randn(1000), z = randn(1000))
+model = lm(@formula(y ~ x + z), df)
+data = Tables.columntable(df)
+
+# Compile and build derivative evaluator
+compiled = compile_formula(model, data)
+de = build_derivative_evaluator(compiled, data; vars=[:x, :z])
+
+# 1. Single-row marginal effect with SE
+gβ_single = Vector{Float64}(undef, length(coef(model)))
+me_eta_grad_beta!(gβ_single, de, 1)  # 0 bytes
+se_row1 = delta_method_se(gβ_single, vcov(model))  # 0 bytes
+
+# 2. Average marginal effect with SE
+gβ_ame = zeros(Float64, length(coef(model)))
+n_rows = 100
+accumulate_ame_gradient!(gβ_ame, de, coef(model), 1:n_rows; backend=:fd)  # 0 bytes per row
+gβ_ame ./= n_rows  # Convert to average
+se_ame = delta_method_se(gβ_ame, vcov(model))  # 0 bytes
+
+println("Single-row ME SE: $se_row1")
+println("Average ME SE: $se_ame")
+```

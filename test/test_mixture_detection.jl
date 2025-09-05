@@ -705,4 +705,4 @@ end
     end
 end
 
-println("✅ Phase 1, 2, 3 & 4 mixture detection, compilation, execution and validation tests completed successfully!")
+@debug "Phase 1-4 mixture detection tests completed successfully"

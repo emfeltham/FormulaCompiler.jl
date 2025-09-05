@@ -39,7 +39,7 @@ Compilation produces a single position‑mapped evaluator (`UnifiedCompiled`) in
 - Store op tuple and a preallocated scratch buffer sized to maximum position
 - Provide a callable that writes directly into a user‑supplied output vector
 
-Result: `compiled(row_vec, data, row)` runs at ~50ns with 0 allocations after warmup.
+Result: `compiled(row_vec, data, row)` runs in tens of nanoseconds with 0 allocations after warmup (typical; see Benchmark Protocol).
 
 ## Operation Set
 
@@ -94,10 +94,12 @@ Check allocations and timings with BenchmarkTools:
 @benchmark $compiled($row_vec, $data, 1)
 ```
 
+Figure generation
+- During docs builds, diagrams under `docs/src/assets/*.mmd` are automatically regenerated to SVG if the Mermaid CLI (`mmdc`) is available (see `docs/make.jl`).
+
 ## Future Directions
 
 - Parallel row evaluation for batches
 - Expanded function library and transformations
 - AD‑friendly derivatives and sensitivity analysis
 - Streaming and distributed execution patterns
-

@@ -20,18 +20,29 @@ Base.getindex(v::SingleRowOverrideVector, i::Int) = (i == v.row ? v.replacement 
 
 """
 Typed single-row override vector that preserves element type T
+For zero-allocation AD, pre-converts base data to target type during construction
 """
 mutable struct TypedSingleRowOverrideVector{T} <: AbstractVector{T}
-    base::AbstractVector
+    base_converted::Vector{T}  # Pre-converted to target type for zero allocations
     row::Int
     replacement::T
+    
+    # Constructor that pre-converts base data
+    function TypedSingleRowOverrideVector{T}(base::AbstractVector, row::Int, replacement::T) where {T}
+        # Pre-convert entire base vector to avoid per-access allocations
+        base_converted = Vector{T}(undef, length(base))
+        for i in eachindex(base)
+            base_converted[i] = convert(T, base[i])
+        end
+        return new{T}(base_converted, row, replacement)
+    end
 end
 
-Base.size(v::TypedSingleRowOverrideVector) = size(v.base)
-Base.length(v::TypedSingleRowOverrideVector) = length(v.base)
+Base.size(v::TypedSingleRowOverrideVector) = size(v.base_converted)
+Base.length(v::TypedSingleRowOverrideVector) = length(v.base_converted)
 Base.IndexStyle(::Type{<:TypedSingleRowOverrideVector}) = IndexLinear()
 Base.eltype(::Type{TypedSingleRowOverrideVector{T}}) where {T} = T
-@inline Base.getindex(v::TypedSingleRowOverrideVector{T}, i::Int) where {T} = (i == v.row ? v.replacement : convert(T, getindex(v.base, i)))
+@inline Base.getindex(v::TypedSingleRowOverrideVector{T}, i::Int) where {T} = (i == v.row ? v.replacement : v.base_converted[i])
 
 """
 Concrete Float64 override vector for FD evaluator (fully concrete base vector)

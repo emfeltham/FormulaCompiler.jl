@@ -315,13 +315,7 @@ end
         # For cat2 * cat3 interaction with both at non-reference levels:
         # Should have non-zero interaction term
         
-        println("  Model matrix structure:")
-        println("    Intercept: $(output[1])")
-        println("    cat2[B]: $(output[2])")
-        println("    cat3[Med]: $(output[3])")
-        println("    cat3[High]: $(output[4])")
-        println("    cat4 effects: $(output[5:7])")
-        println("    Interaction terms: $(output[8:end])")
+        @debug "Model matrix structure" intercept=output[1] cat2_B=output[2] cat3_Med=output[3] cat3_High=output[4] cat4_effects=output[5:7] interaction_terms=output[8:end]
     end
   
     @testset "Categorical Override Edge Cases" begin      
@@ -378,5 +372,98 @@ end
             output = Vector{Float64}(undef, 3)
             @test_nowarn compiled(output, scenario.data, 1)
         end
+    end
+end
+
+@testset "Baseline Level Extraction" begin
+    df, data = create_categorical_test_data(100)
+    
+    @testset "Basic baseline extraction" begin
+        # Test with simple categorical variable
+        fx = @formula(response ~ cat3)
+        model = lm(fx, df)
+        
+        # Extract baseline level 
+        baseline = FormulaCompiler._get_baseline_level(model, :cat3)
+        
+        # Should be one of the three levels
+        @test baseline in ["Low", "Med", "High"]
+        
+        # The baseline should NOT appear in the coefficient names
+        coef_names = String.(coefnames(model))
+        for name in coef_names
+            @test !contains(name, string(baseline)) || name == "(Intercept)"
+        end
+    end
+    
+    @testset "Multiple categorical variables" begin
+        fx = @formula(response ~ cat2 + cat3 + cat4)
+        model = lm(fx, df)
+        
+        # Extract baselines for each categorical
+        baseline_cat2 = FormulaCompiler._get_baseline_level(model, :cat2)
+        baseline_cat3 = FormulaCompiler._get_baseline_level(model, :cat3)
+        baseline_cat4 = FormulaCompiler._get_baseline_level(model, :cat4)
+        
+        @test baseline_cat2 in ["A", "B"]
+        @test baseline_cat3 in ["Low", "Med", "High"]  
+        @test baseline_cat4 in ["W", "X", "Y", "Z"]
+        
+        # Each baseline should be unique and not appear in coefficients
+        coef_names = String.(coefnames(model))
+        for baseline in [baseline_cat2, baseline_cat3, baseline_cat4]
+            coef_with_baseline = filter(name -> contains(name, baseline), coef_names)
+            # Only the intercept should contain the baseline reference pattern
+            @test all(name == "(Intercept)" for name in coef_with_baseline)
+        end
+    end
+    
+    @testset "Interaction terms" begin
+        fx = @formula(response ~ cat2 * cat3)
+        model = lm(fx, df)
+        
+        baseline_cat2 = FormulaCompiler._get_baseline_level(model, :cat2)
+        baseline_cat3 = FormulaCompiler._get_baseline_level(model, :cat3)
+        
+        @test baseline_cat2 in ["A", "B"]
+        @test baseline_cat3 in ["Low", "Med", "High"]
+        
+        # With interactions, baseline combinations don't appear in coefficient names
+        coef_names = String.(coefnames(model))
+        baseline_interaction = "$(baseline_cat2) & $(baseline_cat3)"
+        
+        # The baseline × baseline interaction should not appear
+        @test !any(contains(name, baseline_cat2) && contains(name, baseline_cat3) for name in coef_names)
+    end
+    
+    @testset "Error cases" begin
+        fx = @formula(response ~ cat3)
+        model = lm(fx, df)
+        
+        # Test with non-existent variable
+        @test_throws ArgumentError FormulaCompiler._get_baseline_level(model, :nonexistent)
+        
+        # Test with continuous variable  
+        @test_throws ArgumentError FormulaCompiler._get_baseline_level(model, :x)
+    end
+    
+    @testset "Different contrast types" begin
+        # Test with effects coding (if available)
+        df_effects = copy(df)
+        df_effects.cat3_effects = categorical(df_effects.cat3)
+        
+        # Set contrasts to effects coding (center on overall mean)
+        contrasts_dict = Dict(:cat3_effects => EffectsCoding())
+        fx = @formula(response ~ cat3_effects)
+        model = lm(fx, df_effects, contrasts=contrasts_dict)
+        
+        # Should still be able to extract baseline
+        baseline = FormulaCompiler._get_baseline_level(model, :cat3_effects)
+        @test baseline in ["Low", "Med", "High"]
+        
+        # With effects coding, the baseline is the omitted level
+        coef_names = String.(coefnames(model))
+        baseline_in_coefs = any(contains(name, baseline) for name in coef_names)
+        @test !baseline_in_coefs  # Baseline shouldn't appear in coefficient names
     end
 end

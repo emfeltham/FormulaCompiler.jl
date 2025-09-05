@@ -340,6 +340,8 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
         func_sym = :exp
     elseif isa(func_name, typeof(log))
         func_sym = :log
+    elseif isa(func_name, typeof(log1p))
+        func_sym = :log1p
     elseif isa(func_name, typeof(sqrt))
         func_sym = :sqrt
     elseif isa(func_name, typeof(abs))
@@ -348,6 +350,8 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
         func_sym = :sin
     elseif isa(func_name, typeof(cos))
         func_sym = :cos
+    elseif isa(func_name, typeof(inv))
+        func_sym = :inv
     elseif isa(func_name, typeof(+))
         func_sym = :+
     elseif isa(func_name, typeof(-))
@@ -356,6 +360,20 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
         func_sym = :*
     elseif isa(func_name, typeof(/))
         func_sym = :/
+    elseif isa(func_name, typeof(<=))
+        func_sym = :(<=)
+    elseif isa(func_name, typeof(>=))
+        func_sym = :(>=)
+    elseif isa(func_name, typeof(<))
+        func_sym = :(<)
+    elseif isa(func_name, typeof(>))
+        func_sym = :(>)
+    elseif isa(func_name, typeof(==))
+        func_sym = :(==)
+    elseif isa(func_name, typeof(!=))
+        func_sym = :(!=)
+    elseif isa(func_name, typeof(!))
+        func_sym = :!
     else
         # Handle power function specially
         if func_name isa typeof(^)
@@ -372,10 +390,25 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
         push!(arg_positions, isa(pos, Int) ? pos : pos[1])  # Handle multi-output
     end
     
-    # Create operation based on arity
+    # Create operation based on arity and function type
     out_pos = allocate_position!(ctx)
     
-    if length(arg_positions) == 1
+    # Handle special logic operations
+    if func_sym == :! && length(arg_positions) == 1
+        # Boolean negation
+        push!(ctx.operations, NegationOp{arg_positions[1], out_pos}())
+    elseif func_sym in [:(<=), :(>=), :(<), :(>), :(==), :(!=)] && length(arg_positions) == 2
+        # Comparison operations - handle both constant and function RHS
+        constant_term = term.args[2]
+        if isa(constant_term, ConstantTerm)
+            # Fast path: constant RHS embedded in type
+            constant_value = constant_term.n
+            push!(ctx.operations, ComparisonOp{func_sym, arg_positions[1], constant_value, out_pos}())
+        else
+            # General path: function RHS evaluated at runtime
+            push!(ctx.operations, ComparisonBinaryOp{func_sym, arg_positions[1], arg_positions[2], out_pos}())
+        end
+    elseif length(arg_positions) == 1
         push!(ctx.operations, UnaryOp{func_sym, arg_positions[1], out_pos}())
     elseif length(arg_positions) == 2
         push!(ctx.operations, BinaryOp{func_sym, arg_positions[1], arg_positions[2], out_pos}())
@@ -497,7 +530,9 @@ function decompose_mixture_term(ctx::CompilationContext, term::CategoricalTerm, 
     positions = allocate_positions!(ctx, n_contrasts)
     
     # Encode mixture spec in type parameters for specialization
-    level_indices = tuple((findfirst(==(string(l)), mixture_spec.levels) for l in mixture_spec.levels)...)
+    # Map each mixture level to its index in the contrast matrix
+    contrasts = term.contrasts
+    level_indices = tuple((findfirst(==(l), contrasts.levels) for l in mixture_spec.levels)...)
     weights = tuple(mixture_spec.weights...)
     
     # Create mixture contrast operation with type-embedded mixture specification
@@ -597,8 +632,9 @@ end
 
 # Handle ZScoredTerm (from StandardizedPredictors)
 function decompose_term!(ctx::CompilationContext, term::ZScoredTerm, data_example)
-    # For now, just decompose the inner term
-    # TODO: Implement proper z-scoring
+    # StandardizedPredictors.jl applies transformations at the schema level during model fitting
+    # By compilation time, the data has already been transformed
+    # We just decompose the inner term normally
     return decompose_term!(ctx, term.term, data_example)
 end
 

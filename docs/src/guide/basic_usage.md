@@ -116,19 +116,14 @@ data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 ```
 
-### Working with DataFrames Directly
+### Using DataFrames (via Tables.columntable)
 
-You can work with DataFrames, but column tables are more efficient:
+Convert DataFrames to column tables once, then reuse the result:
 
 ```julia
-# This works but is slower
-compiled = compile_formula(model, df)
-compiled(row_vec, df, 1)
-
-# This is faster
-data = Tables.columntable(df)
+data = Tables.columntable(df)      # Convert once
 compiled = compile_formula(model, data)
-compiled(row_vec, data, 1)
+compiled(row_vec, data, 1)        # Zero allocations after warmup
 ```
 
 ## Supported Formula Features
@@ -147,6 +142,42 @@ FormulaCompiler.jl handles all standard StatsModels.jl formula syntax:
 @formula(y ~ (x > 0) + (z < mean(z)))
 ```
 
+### Boolean Variables
+
+**Boolean variables** (`Vector{Bool}`) are treated as continuous variables, matching StatsModels behavior exactly:
+
+```julia
+# Boolean data - treated as continuous
+df = DataFrame(
+    outcome = randn(100),
+    x = randn(100),
+    treated = rand(Bool, 100)  # true/false values
+)
+
+model = lm(@formula(outcome ~ x + treated), df)
+compiled = compile_formula(model, Tables.columntable(df))
+
+# Numerical encoding: false → 0.0, true → 1.0
+# This matches StatsModels exactly
+```
+
+**For counterfactual analysis**, use boolean or numeric overrides:
+
+```julia
+# Boolean scenarios - individual counterfactuals
+treated_scenario = create_scenario("treated", data; treated = true)
+control_scenario = create_scenario("control", data; treated = false)
+
+# Numeric scenarios - population analysis  
+partial_scenario = create_scenario("partial", data; treated = 0.7)  # 70% treated
+```
+
+**Key Points**:
+- `Vector{Bool}` columns work automatically - no conversion needed
+- Produces identical results to StatsModels
+- Supports both boolean (`true`/`false`) and numeric (`0.7`) overrides
+- Zero-allocation performance maintained
+
 ### Categorical Variables
 
 **Required**: FormulaCompiler only supports categorical variables created with `CategoricalArrays.jl`. Raw string variables are not supported.
@@ -154,15 +185,15 @@ FormulaCompiler.jl handles all standard StatsModels.jl formula syntax:
 ```julia
 using CategoricalArrays
 
-# ✅ Required: Convert string columns to categorical
+# Required: Convert string columns to categorical
 df.group = categorical(df.group)
 @formula(y ~ x + group)  # Automatic contrast coding
 
-# ❌ Not supported: Raw string variables
+# Not supported: Raw string variables
 df.category = ["A", "B", "C"]  # String vector
 @formula(y ~ x + category)     # Will cause compilation errors
 
-# ✅ Correct approach
+# Correct approach
 df.category = categorical(["A", "B", "C"])
 @formula(y ~ x + category)     # Works correctly
 ```
@@ -277,7 +308,7 @@ for i in 1:min(5, nrow(df))
     if !isapprox(row_vec, expected; rtol=1e-12)
         @warn "Mismatch in row $i" row_vec expected
     else
-        println("✓ Row $i matches GLM modelmatrix")
+        println("Row $i matches GLM modelmatrix")
     end
 end
 ```
@@ -296,11 +327,11 @@ row_vec = Vector{Float64}(undef, length(compiled))
 # Benchmark evaluation
 result = @benchmark $compiled($row_vec, $data, 1)
 
-# Validate performance characteristics
+# Validate performance characteristics (absolute times vary by hardware and Julia version)
 @assert result.memory == 0 "Expected zero allocations, got $(result.memory) bytes"
 @assert result.allocs == 0 "Expected zero allocations, got $(result.allocs) allocations"
 
-println("✓ Zero-allocation validation passed")
+println("Zero-allocation validation passed")
 println("Memory: $(result.memory) bytes")
 println("Allocations: $(result.allocs)")
 ```
@@ -315,7 +346,7 @@ function validate_data_compatibility(model, data)
         compiled = compile_formula(model, data)
         row_vec = Vector{Float64}(undef, length(compiled))
         compiled(row_vec, data, 1)
-        println("✓ Data format compatible")
+        println("Data format compatible")
         return true
     catch e
         @error "Data format incompatible" exception=e
@@ -439,7 +470,7 @@ compiled_linear = compile_formula(linear_model, data)
 
 # Logistic regression
 df_binary = DataFrame(
-    success = rand(Bool, 1000),
+    success = rand(Bool, 1000),  # Boolean response: true/false → 1.0/0.0
     x = randn(1000),
     group = rand(["A", "B"], 1000)
 )
@@ -465,7 +496,7 @@ using MixedModels
 df_mixed = DataFrame(
     y = randn(1000),
     x = randn(1000),
-    treatment = rand(Bool, 1000),
+    treatment = rand(Bool, 1000),  # Boolean predictor: treated/untreated
     subject = rand(1:100, 1000),
     cluster = rand(1:50, 1000)
 )
@@ -503,10 +534,10 @@ function comprehensive_validation(model, data)
     # 1. Compilation check
     try
         compiled = compile_formula(model, data)
-        println("✓ Compilation successful")
+        println("Compilation successful")
         println("  Formula length: $(length(compiled))")
     catch e
-        println("✗ Compilation failed: $e")
+        println("Compilation failed: $e")
         return false
     end
     
@@ -516,9 +547,9 @@ function comprehensive_validation(model, data)
     
     alloc_result = @allocated compiled(row_vec, data, 1)
     if alloc_result == 0
-        println("✓ Zero allocations achieved")
+        println("Zero allocations achieved")
     else
-        println("⚠ Non-zero allocations: $alloc_result bytes")
+        println("WARNING: Non-zero allocations: $alloc_result bytes")
     end
     
     # 3. Correctness check (first 3 rows)
@@ -531,9 +562,9 @@ function comprehensive_validation(model, data)
             expected = mm[i, :]
             
             if isapprox(row_vec, expected; rtol=1e-12)
-                println("✓ Row $i matches reference implementation")
+                println("Row $i matches reference implementation")
             else
-                println("✗ Row $i mismatch detected")
+                println("Row $i mismatch detected")
                 println("  Expected: $(expected[1:min(3, length(expected))])...")
                 println("  Got:      $(row_vec[1:min(3, length(row_vec))])...")
                 return false
@@ -541,7 +572,7 @@ function comprehensive_validation(model, data)
         end
     end
     
-    println("✓ All validation checks passed")
+    println("All validation checks passed")
     return true
 end
 

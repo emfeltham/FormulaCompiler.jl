@@ -173,19 +173,6 @@ function create_categorical_override(value::Bool, original_column::CategoricalAr
     return OverrideVector(categorical_value, length(original_column))
 end
 
-# Method for categorical mixtures (from Margins.jl)
-# This imports the MixtureWithLevels type from Margins.jl
-function create_categorical_override(mixture_obj, original_column::CategoricalArray)
-    # Check if this is a MixtureWithLevels object by duck typing
-    if hasproperty(mixture_obj, :levels) && hasproperty(mixture_obj, :weights) && hasproperty(mixture_obj, :original_levels)
-        # This is a categorical mixture - we need special handling
-        # For now, we'll create a special OverrideVector type that knows about mixtures
-        return CategoricalMixtureOverride(mixture_obj, length(original_column))
-    else
-        # Fallback to regular categorical override
-        return create_categorical_override(string(mixture_obj), original_column)
-    end
-end
 
 ###############################################################################
 # DATA SCENARIO INFRASTRUCTURE
@@ -404,22 +391,26 @@ Related Functions:
 - `OverrideVector`: The constant-memory vector type created by this function
 """
 function create_override_vector(value, original_column::AbstractVector)
-    # Handle categorical mixtures first
-    if hasproperty(value, :levels) && hasproperty(value, :weights) && hasproperty(value, :original_levels)
-        # This is a MixtureWithLevels object
+    # Handle FormulaCompiler's native CategoricalMixture type
+    if isdefined(FormulaCompiler, :CategoricalMixture) && value isa FormulaCompiler.CategoricalMixture
+        # Handle directly without creating MixtureWithLevels to avoid recursion
         if original_column isa CategoricalArray
-            return create_categorical_override(value, original_column)
-        elseif original_column isa Vector{Bool}
-            # Handle Bool mixture for non-categorical Bool column
-            # Convert to fractional representation (probability of true)
-            mixture = value.mixture
-            level_weight_dict = Dict(string.(mixture.levels) .=> mixture.weights)
+            # For CategoricalArray, create a mixture override
+            original_levels = string.(levels(original_column))
+            mixture_with_levels = FormulaCompiler.MixtureWithLevels(value, original_levels)
+            return CategoricalMixtureOverride(mixture_with_levels, length(original_column))
+        elseif eltype(original_column) <: Bool
+            # Handle Bool mixture directly using probability conversion
+            level_weight_dict = Dict(string.(value.levels) .=> value.weights)
             false_weight = get(level_weight_dict, "false", 0.0)
             true_weight = get(level_weight_dict, "true", 0.0)
-            prob_true = true_weight  # Probability of true
+            prob_true = true_weight
             return OverrideVector(Float64(prob_true), length(original_column))
         else
-            error("Categorical mixtures not supported for column type $(typeof(original_column))")
+            # Handle general categorical columns (String, Symbol, etc.) with mixture override
+            original_levels = sort(unique(string.(original_column)))
+            mixture_with_levels = FormulaCompiler.MixtureWithLevels(value, original_levels)
+            return CategoricalMixtureOverride(mixture_with_levels, length(original_column))
         end
     elseif original_column isa CategoricalArray
         # Categorical handling (including CategoricalArray{Bool})
@@ -1147,42 +1138,6 @@ function find_extreme_scenarios(collection::ScenarioCollection, compiled, row_id
 end
 
 ###############################################################################
-# COMPATIBILITY FIXES (OVERWRITES)
-###############################################################################
-
-"""
-    get_or_compile_specialized_formula(model, data)
-
-Get cached specialized formula or compile new one.
-FIXED: Cache key now includes data value information to handle scenarios correctly.
-"""
-function get_or_compile_specialized_formula(model, data)
-    # FIXED: Create cache key that includes override information
-    # Check if any columns are OverrideVectors and include their values
-    override_info = Tuple{Symbol, Any}[]
-    for (key, col) in pairs(data)
-        if col isa OverrideVector
-            push!(override_info, (key, col.override_value))
-        end
-    end
-    
-    # Include override info in cache key to prevent incorrect sharing
-    cache_key = if isempty(override_info)
-        (model, hash(keys(data)))
-    else
-        (model, hash(keys(data)), override_info)
-    end
-    
-    if haskey(SPECIALIZED_MODEL_CACHE, cache_key)
-        return SPECIALIZED_MODEL_CACHE[cache_key]
-    else
-        specialized = compile_formula(model, data)
-        SPECIALIZED_MODEL_CACHE[cache_key] = specialized
-        return specialized
-    end
-end
-
-###############################################################################
 # UTILITY FUNCTIONS
 ###############################################################################
 
@@ -1194,126 +1149,3 @@ Check if an OverrideVector contains categorical values.
 is_categorical_override(v::OverrideVector) = eltype(v) <: CategoricalValue
 is_categorical_override(v) = false
 
-###############################################################################
-# TESTING FUNCTIONS
-###############################################################################
-
-"""
-    test_override_compatibility()
-
-Test that overrides work correctly with the new compilation system.
-"""
-function test_override_compatibility()
-    println("Testing Override Compatibility with New Schema System")
-    println("=" ^ 60)
-    
-    # Test 1: Simple categorical override
-    println("\nTest 1: Simple categorical override")
-    df = DataFrame(
-        x = randn(100), 
-        group = categorical(rand(["A", "B", "C"], 100)),
-        y = randn(100)
-    )
-    model = lm(@formula(y ~ x + group), df)
-    data = Tables.columntable(df)
-    
-    scenario = create_scenario("group_B", data; group = "B")
-    compiled = compile_formula(model, scenario.data)
-    
-    # Test execution
-    output = Vector{Float64}(undef, length(compiled))
-    compiled(output, scenario.data, 1)
-    println("  ✅ Basic categorical override works")
-    println("  Output: ", round.(output, digits=3))
-    
-    # Test 2: Mixed continuous-categorical interaction with override
-    println("\nTest 2: Mixed interaction with overrides")
-    model2 = lm(@formula(y ~ x * group), df)
-    scenario2 = create_scenario("fixed_values", data; x = 2.0, group = "A")
-    compiled2 = compile_formula(model2, scenario2.data)
-    
-    output2 = Vector{Float64}(undef, length(compiled2))
-    compiled2(output2, scenario2.data, 1)
-    println("  ✅ Mixed interaction with overrides works")
-    println("  Output: ", round.(output2, digits=3))
-    
-    # Test 3: Cache key differentiation
-    println("\nTest 3: Cache key differentiation")
-    scenario3a = create_scenario("test3a", data; x = 1.0)
-    scenario3b = create_scenario("test3b", data; x = 2.0)
-    
-    # These should compile to different cached formulas
-    spec3a = get_or_compile_specialized_formula(model, scenario3a.data)
-    spec3b = get_or_compile_specialized_formula(model, scenario3b.data)
-    
-    # Test that they produce different results
-    out3a = Vector{Float64}(undef, length(spec3a))
-    out3b = Vector{Float64}(undef, length(spec3b))
-    spec3a(out3a, scenario3a.data, 1)
-    spec3b(out3b, scenario3b.data, 1)
-    
-    if out3a ≈ out3b
-        error("Different scenarios produced identical results - cache key issue!")
-    end
-    println("  ✅ Cache correctly differentiates scenarios")
-    
-    # Test 4: All override types
-    println("\nTest 4: Various override value types")
-    
-    # String override (most common)
-    s4a = create_scenario("string", data; group = "C")
-    
-    # Symbol override
-    s4b = create_scenario("symbol", data; group = :B)
-    
-    # Integer index override
-    s4c = create_scenario("index", data; group = 2)  # "B" is the 2nd level
-    
-    for (name, scenario) in [("string", s4a), ("symbol", s4b), ("index", s4c)]
-        compiled = compile_formula(model, scenario.data)
-        output = Vector{Float64}(undef, length(compiled))
-        compiled(output, scenario.data, 1)
-        println("  ✅ Override with $name works")
-    end
-    
-    # Test 5: Scenario collections
-    println("\nTest 5: Scenario collections")
-    collection = create_scenario_grid("test_grid", data, Dict(
-        :x => [1.0, 2.0],
-        :group => ["A", "B"]
-    ))
-    
-    println("  Created $(length(collection)) scenarios")
-    for scenario in collection
-        compiled = compile_formula(model, scenario.data)
-        output = Vector{Float64}(undef, length(compiled))
-        compiled(output, scenario.data, 1)
-    end
-    println("  ✅ All scenarios in collection work")
-    
-    # Test 6: Verify constant output for override
-    println("\nTest 6: Verify constant output for categorical override")
-    scenario6 = create_scenario("constant_B", data; group = "B")
-    compiled6 = compile_formula(model, scenario6.data)
-    
-    # All rows should produce same group effect since override is constant
-    outputs = []
-    for i in 1:5
-        output = Vector{Float64}(undef, length(compiled6))
-        compiled6(output, scenario6.data, i)
-        push!(outputs, output[3:4])  # Group effect columns
-    end
-    
-    # Check all are identical
-    all_same = all(out -> out ≈ outputs[1], outputs)
-    if all_same
-        println("  ✅ Override produces constant output across rows")
-    else
-        error("Override should produce constant output but doesn't!")
-    end
-    
-    println(repeat("=", 60))
-    println("All override compatibility tests passed! ✅")
-    
-    return true
-end

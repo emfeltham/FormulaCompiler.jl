@@ -5,32 +5,20 @@
 [![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/stable/)
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/dev/)
 
-Computationally efficient model matrix evaluation for Julia statistical models. Implements position-mapping compilation to achieve substantial performance improvements over traditional model matrix construction through compile-time specialization.
+Efficient per-row model matrix evaluation for Julia statistical models using position-mapped compilation and compile-time specialization.
 
 ## Key Features
 
 - **Memory efficiency**: Optimized evaluation approach minimizes memory allocation during computation
-- **Performance improvement**: Substantial computational advantages over traditional model matrix construction methods
-- **Comprehensive compatibility**: Supports all valid StatsModels.jl formulas, including complex interactions and functions
+- **Performance**: Faster single-row evaluation than building full model matrices
+- **Compatibility**: Supports StatsModels.jl formulas, including interactions and transformations
 - **Scenario analysis**: Memory-efficient variable override system for counterfactual analysis
 - **Unified architecture**: Single compilation pipeline accommodates diverse formula structures
 - **Ecosystem integration**: Compatible with GLM.jl, MixedModels.jl, and StandardizedPredictors.jl
 
 ## How It Works
 
-```mermaid
-flowchart TD
-    A["Fit Statistical Model<br>GLM.lm, MixedModels.fit"] --> B["Prepare Data<br>Tables.columntable"]
-    B --> C["Compile Formula<br>compile_formula"] 
-    C --> D["Create Output Vector<br>Vector{Float64}"]
-    D --> E["Evaluate Rows<br>compiled(output, data, idx)"]
-    E --> F["Process Results<br>Efficient evaluation, minimal allocations"]
-    
-    style A fill:#e1f5fe
-    style C fill:#f3e5f5
-    style E fill:#e8f5e8
-    style F fill:#fff3e0
-```
+Fit a model, convert data to a column table, compile once, then evaluate rows quickly without allocations.
 
 ## Installation
 
@@ -60,7 +48,7 @@ compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 # Memory-efficient evaluation suitable for repeated calls
-compiled(row_vec, data, 1)  # Efficient evaluation with minimal allocations
+compiled(row_vec, data, 1)  # Zero allocations after warmup
 ```
 
 ## Core Interfaces
@@ -77,7 +65,7 @@ row_vec = Vector{Float64}(undef, length(compiled))
 compiled(row_vec, data, 1)    # Row 1
 compiled(row_vec, data, 100)  # Row 100
 
-# Evaluate multiple rows efficiently
+# Evaluate multiple rows
 matrix = Matrix{Float64}(undef, 10, length(compiled))
 modelrow!(matrix, compiled, data, 1:10)
 ```
@@ -102,7 +90,7 @@ modelrow!(row_vec, model, data, 1)  # Uses cache
 # Create evaluator object
 evaluator = ModelRowEvaluator(model, df)
 
-# Memory-efficient evaluation
+# Efficient evaluation
 result = evaluator(1)           # Row 1
 evaluator(row_vec, 1)          # In-place evaluation
 ```
@@ -174,15 +162,16 @@ using GLM
 
 # Linear models
 linear_model = lm(@formula(mpg ~ hp * cyl + log(wt)), mtcars)
-compiled = compile_formula(linear_model)
+data_mtcars = Tables.columntable(mtcars)
+compiled = compile_formula(linear_model, data_mtcars)
 
 # Generalized linear models
 logit_model = glm(@formula(vs ~ hp + wt), mtcars, Binomial(), LogitLink())
-compiled_logit = compile_formula(logit_model)
+compiled_logit = compile_formula(logit_model, data_mtcars)
 
 # Both work identically
 row_vec = Vector{Float64}(undef, length(compiled))
-compiled(row_vec, Tables.columntable(mtcars), 1)
+compiled(row_vec, data_mtcars, 1)
 ```
 
 ### MixedModels.jl Integration
@@ -196,13 +185,13 @@ using MixedModels
 mixed_model = fit(MixedModel, @formula(y ~ x + z + (1|group) + (1+x|cluster)), df)
 
 # Compiles only the fixed effects: y ~ x + z
-compiled = compile_formula(mixed_model)
+compiled = compile_formula(mixed_model, Tables.columntable(df))
 
 # Random effects are automatically stripped
 fixed_form = fixed_effects_form(mixed_model)  # Returns: y ~ x + z
 ```
 
-### StandardizedPredictors.jl integration
+### StandardizedPredictors.jl Integration
 
 Standardized predictors are integrated (currently only `ZScore()`):
 
@@ -211,7 +200,7 @@ using StandardizedPredictors
 
 contrasts = Dict(:x => ZScore(), :z => ZScore())
 model = lm(@formula(y ~ x + z + group), df, contrasts=contrasts)
-compiled = compile_formula(model)  # Standardization built-in
+compiled = compile_formula(model, Tables.columntable(df))  # Standardization built-in
 ```
 
 ### Derivatives and Marginal Effects
@@ -251,13 +240,13 @@ println("AME standard error for x: ", se_ame)
 
 ### Memory Efficiency
 
-The scenario system employs `OverrideVector` for memory-efficient data representation:
+The scenario system employs `OverrideVector` for efficient data representation:
 
 ```julia
-# Traditional approach: substantial memory allocation for large datasets
+# Traditional approach: memory allocation for large datasets
 traditional = fill(42.0, 1_000_000)  # ~8MB allocation
 
-# FormulaCompiler approach: constant memory overhead
+# FormulaCompiler approach: reduced memory overhead
 efficient = OverrideVector(42.0, 1_000_000)  # ~32 bytes allocation
 
 # Identical computational interface
@@ -266,13 +255,14 @@ traditional[500_000] == efficient[500_000]  # true
 
 ## Supported Formula Features
 
-- Basic terms: `x`, `log(z)`, `x^2`, `(x > 0)`
-- Categorical variables: All contrast types, ordered/unordered
-- Interactions: `x * group`, `x * y * z`, `log(z) * group`
-- Functions: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`, boolean operators
-- Complex formulas: `x * log(z) * group + sqrt(abs(y)) + (x > mean(x))`
-- Standardized predictors: ZScore, custom transformations
-- Mixed models: Automatic fixed-effects extraction
+- **Basic terms**: `x`, `log(z)`, `x^2`, `(x > 0)`  
+- **Boolean variables**: `Vector{Bool}` treated as continuous (false → 0.0, true → 1.0)
+- **Categorical variables**: All contrast types, ordered/unordered
+- **Interactions**: `x * group`, `x * y * z`, `log(z) * group`  
+- **Functions**: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`, boolean operators
+- **Complex formulas**: `x * log(z) * group + sqrt(abs(y)) + (x > mean(x))`
+- **Standardized predictors**: ZScore, custom transformations
+- **Mixed models**: Automatic fixed-effects extraction
 
 ## Performance Tips
 
@@ -320,22 +310,22 @@ compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 @benchmark compiled(row_vec, data, 1)
-# Substantial performance improvement with minimal memory allocation
+# Performance improvement with reduced memory allocation
 ```
 
-**Derivative computation performance**: 
-- ForwardDiff-based operations achieve minimal per-call allocations due to automatic differentiation requirements
-- Finite difference backend provides memory-efficient alternative with validation against automatic differentiation results
-- Marginal effects computations utilize preallocated buffers to minimize overhead
+**Derivative computation**: 
+- ForwardDiff-based operations involve some per-call allocations due to automatic differentiation requirements
+- Finite difference backend provides alternative with validation against automatic differentiation results
+- Marginal effects computations utilize preallocated buffers
 
-**Current implementation notes**: The automatic differentiation backend for batch gradient operations (`accumulate_ame_gradient!`) currently exceeds minimal allocation targets. Users requiring strict memory constraints should utilize the `:fd` backend, which provides mathematically equivalent results with reduced memory overhead.
+The automatic differentiation backend for batch gradient operations (`accumulate_ame_gradient!`) involves allocations. Users with strict memory constraints should utilize the `:fd` backend, which provides mathematically equivalent results with reduced memory overhead.
 
 ## Architecture
 
-FormulaCompiler achieves computational efficiency through a unified compilation pipeline that transforms statistical formulas into specialized, type-stable execution paths:
+FormulaCompiler achieves efficiency through a unified compilation pipeline that transforms statistical formulas into specialized, type-stable execution paths:
 
-- **Position mapping**: Operations utilize compile-time position specialization for optimal performance
-- **Adaptive dispatch**: Empirically determined threshold (≤25 operations: recursive dispatch, >25 operations: generated functions) to optimize compilation behavior
+- **Position mapping**: Operations utilize compile-time position specialization
+- **Adaptive dispatch**: Threshold-based approach (≤25 operations: recursive dispatch, >25 operations: generated functions) chosen based on Julia's compilation limits
 - **Unified design**: Single compilation system accommodates diverse formula structures without special-case handling
 
 ## Use Cases

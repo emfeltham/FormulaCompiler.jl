@@ -1,4 +1,26 @@
 using Documenter, FormulaCompiler
+using Glob
+
+# Attempt to regenerate Mermaid diagrams from .mmd sources if the CLI is available.
+function _regen_mermaid_assets()
+    mmdc = Sys.which("mmdc")
+    if mmdc === nothing
+        @info "Mermaid CLI (mmdc) not found; skipping diagram regeneration"
+        return
+    end
+    assets_dir = joinpath(@__DIR__, "src", "assets")
+    for mmd in Glob.glob("*.mmd", assets_dir)
+        svg = replace(mmd, ".mmd" => ".svg")
+        try
+            run(`$(mmdc) -i $(mmd) -o $(svg) -b transparent`)
+            @info "Regenerated diagram" mmd svg
+        catch e
+            @warn "Failed to regenerate diagram; continuing" mmd exception=e
+        end
+    end
+end
+
+_regen_mermaid_assets()
 
 makedocs(
     sitename = "FormulaCompiler.jl",

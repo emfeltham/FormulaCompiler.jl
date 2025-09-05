@@ -3,7 +3,6 @@
 
 include("types.jl")
 include("execution.jl")
-include("scratch.jl")
 include("decomposition.jl")
 
 # Import mixture validation functions

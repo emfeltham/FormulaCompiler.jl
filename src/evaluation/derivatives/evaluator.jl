@@ -1,6 +1,13 @@
 # evaluator.jl - DerivativeEvaluator construction and setup
 
 """
+    _is_numeric_vector(col) -> Bool
+
+Check if a column is a numeric vector that can be converted to Float64.
+"""
+_is_numeric_vector(col::AbstractVector) = eltype(col) <: Number
+
+"""
     build_derivative_evaluator(compiled, data; vars, chunk=:auto) -> DerivativeEvaluator
 
 Build a reusable automatic differentiation evaluator for computing Jacobians and marginal effects.
@@ -32,24 +39,28 @@ differentiation and finite differences with backend selection for optimal perfor
 - **Validation**: Tested across diverse formula types and variable combinations
 
 # Variable Type Handling
-- **Integer variables**: Automatically converted to Float64 for differentiation
-- **Float64 variables**: Used directly without conversion
-- **Type validation**: Rejects non-numeric variables with informative error messages
+- **All numeric types**: Automatically converted to Float64 for differentiation (Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, Float32, Float64)
+- **Type validation**: Rejects non-numeric variables with informative error messages  
 - **Memory optimization**: Conversion overhead incurred once during construction
 
 # Example
 ```julia
 using FormulaCompiler, GLM
 
-# Setup model with mixed variable types
-df = DataFrame(y = randn(1000), x = randn(1000), age = rand(18:80, 1000), 
-               group = rand([\"A\", \"B\"], 1000))
-model = lm(@formula(y ~ x * group + age + log(abs(x))), df)
+# Setup model with diverse variable types
+df = DataFrame(
+    y = randn(1000), 
+    x = randn(1000),                    # Float64
+    age = rand(Int16(18):Int16(80), 1000),  # Int16  
+    score = rand(UInt8(0):UInt8(100), 1000), # UInt8
+    group = rand([\"A\", \"B\"], 1000)
+)
+model = lm(@formula(y ~ x * group + age + score), df)
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 
 # Build derivative evaluator for continuous variables
-vars = [:x, :age]  # Mix of Float64 and Int64 variables
+vars = [:x, :age, :score]  # Mix of Float64, Int16, and UInt8
 de = build_derivative_evaluator(compiled, data; vars=vars)
 
 # Jacobian computation
@@ -111,7 +122,7 @@ function build_derivative_evaluator(
     for (i, s) in enumerate(vars)
         col = getproperty(data, s)
         # Convert integer columns to Float64 for derivative computation
-        float_col = if col isa Vector{Int64} || col isa Vector{Int32} || col isa Vector{Int}
+        float_col = if _is_numeric_vector(col)
             convert(Vector{Float64}, col)
         else
             col::Vector{Float64}
@@ -140,24 +151,49 @@ function build_derivative_evaluator(
     gscalar = GradClosure(g, beta_ref)
     gradcfg = ForwardDiff.GradientConfig(gscalar, xbuf, ch)
 
-    # Final evaluator with concrete closure/config types
-    de = DerivativeEvaluator{T, Ops, S, O, typeof(data), typeof(data_over), nvars, typeof(fd_columns), typeof(g), typeof(cfg), typeof(gscalar), typeof(gradcfg)}(
+    # Preallocate DiffResult containers for zero-allocation AD paths
+    jac_result = ForwardDiff.DiffResult(
+        Vector{Float64}(undef, length(compiled)),
+        (Matrix{Float64}(undef, length(compiled), nvars),),
+    )
+    grad_result = ForwardDiff.DiffResult(0.0, Vector{Float64}(undef, nvars))
+
+    # Build typed single-cache for manual dual path (Dual tag = Nothing)
+    DualT = ForwardDiff.Dual{Nothing, Float64, nvars}
+    compiled_dual_vec = UnifiedCompiled{DualT, Ops, S, O}(compiled.ops)
+    rowvec_dual_vec = Vector{DualT}(undef, length(compiled))
+    x_dual_vec = Vector{DualT}(undef, nvars)
+    data_over_dual_vec, overrides_dual_vec = build_row_override_data_typed(data, vars, 1, DualT)
+    # Precompute unit partials for each variable to avoid per-call construction
+    partials_unit_vec = Vector{ForwardDiff.Partials{nvars, Float64}}(undef, nvars)
+    for i in 1:nvars
+        partials_unit_vec[i] = ForwardDiff.Partials{nvars, Float64}(ntuple(j -> (i == j ? 1.0 : 0.0), Val(nvars)))
+    end
+
+    # Final evaluator with concrete closure/config/result types
+    de = DerivativeEvaluator{T, Ops, S, O, typeof(data), typeof(data_over), nvars, typeof(fd_columns), typeof(g), typeof(cfg), typeof(gscalar), typeof(gradcfg), typeof(jac_result), typeof(grad_result), typeof(data_over_dual_vec), typeof(overrides_dual_vec)}(
         compiled,
         data,
         vars,
         xbuf,
         overrides,
         data_over,
-        nothing,
-        nothing,
+        DualCacheDict(),  # Initialize empty dual cache
+        compiled_dual_vec,
+        rowvec_dual_vec,
+        overrides_dual_vec,
+        data_over_dual_vec,
+        x_dual_vec,
+        partials_unit_vec,
         rowvec_float,
-        nothing,
-        nothing,
         g,
         cfg,
         gscalar,
         gradcfg,
         beta_ref,
+        Vector{Float64}(undef, length(compiled)),
+        jac_result,
+        grad_result,
         1,
         Matrix{Float64}(undef, length(compiled), nvars),
         Vector{Float64}(undef, nvars),
@@ -173,3 +209,4 @@ function build_derivative_evaluator(
     
     return de
 end
+

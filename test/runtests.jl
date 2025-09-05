@@ -1,6 +1,7 @@
 # test/runtests.jl
 # Main test runner for FormulaCompiler.jl
 # julia --project="test" test/runtests.jl > test/tests.txt 2>&1
+# julia --project="." -e "import Pkg; Pkg.test()" > test/test.txt 2>&1
 
 using Test
 using Random
@@ -29,6 +30,8 @@ include(joinpath(@__DIR__, "support", "testing_utilities.jl"))
     # Models
     include("test_allocations.jl") # Performance
     include("test_models.jl") # Correctness
+    include("test_logic.jl") # Logic operators (comparisons and boolean negation)
+    include("test_tough_formula.jl") # Complex formula compilation test
 
     # Override and scenario system
     include("test_overrides.jl") # Override and scenario functionality
@@ -42,4 +45,11 @@ include(joinpath(@__DIR__, "support", "testing_utilities.jl"))
     include("test_derivatives.jl")
     include("test_links.jl")
     include("test_derivative_allocations.jl")
+    # Regression tests
+    include("test_derivatives_log_profile_regression.jl")
+    # Edge-case regression and stability tests
+    include("test_derivatives_domain_edge_cases.jl")
+    
+    # External package integration
+    include("test_standardized_predictors.jl") # StandardizedPredictors.jl integration
 end

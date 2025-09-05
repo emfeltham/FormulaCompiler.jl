@@ -6,7 +6,7 @@ When computing derivatives in counterfactual scenarios with categorical override
 
 ## The Pattern
 
-### ✅ Recommended: Standalone Functions with Scenarios
+### Recommended: Standalone Functions with Scenarios
 
 ```julia
 using FormulaCompiler, GLM, Tables
@@ -45,7 +45,7 @@ for scenario in scenarios
 end
 ```
 
-### ❌ Problematic: Cached Evaluator with Scenarios
+### Problematic: Cached Evaluator with Scenarios
 
 ```julia
 # DON'T DO THIS: Type mismatch between evaluator and scenario data
@@ -71,9 +71,9 @@ Computing `∂μ/∂x` at `group="A"` vs `group="B"` produces different results,
 
 | Approach | Memory | Time | Statistical Correctness |
 |----------|--------|------|------------------------|
-| Standalone + scenarios | ~0 bytes | ~0.1ms/profile | ✅ Correct |
-| Recompilation | ~1MB | ~1ms/profile | ✅ Correct |
-| Cached evaluator | Type errors | N/A | ❌ Broken |
+| Standalone + scenarios | ~0 bytes | ~0.1ms/profile | Correct |
+| Recompilation | ~1MB | ~1ms/profile | Correct |
+| Cached evaluator | Type errors | N/A | Broken |
 
 The standalone approach achieves both performance and correctness goals.
 

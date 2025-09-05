@@ -170,13 +170,17 @@ df = DataFrame(
     y = randn(1000),
     price = randn(1000),          # Float64 continuous
     quantity = rand(1:100, 1000), # Int64 continuous (auto-converted)
-    available = rand(Bool, 1000), # Bool categorical
+    available = rand(Bool, 1000), # Bool continuous (true→1.0, false→0.0)
     region = categorical(rand(["North", "South"], 1000))  # Categorical
 )
 
 model = lm(@formula(y ~ price * region + log(quantity + 1) + available), df)
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
+
+# Boolean variables are treated as continuous (matching StatsModels behavior)
+# available: true → 1.0, false → 0.0 in model matrix
+# This produces identical results to StatsModels
 
 # Identify continuous variables automatically
 continuous_vars = continuous_variables(compiled, data)  # [:price, :quantity]
@@ -365,7 +369,7 @@ df = DataFrame(
 
 # Compile and evaluate with zero allocations
 compiled = compile_formula(model, Tables.columntable(df))
-compiled(output, Tables.columntable(df), 1)  # ~50ns, 0 bytes
+compiled(output, Tables.columntable(df), 1)  # Zero allocations; time varies by hardware
 ```
 
 For comprehensive coverage of categorical mixtures including validation, helper functions, and marginal effects integration, see the [Categorical Mixtures](categorical_mixtures.md) guide.

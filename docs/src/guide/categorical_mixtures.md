@@ -2,10 +2,10 @@
 
 ## Overview
 
-FormulaCompiler.jl now supports **categorical mixtures** - weighted combinations of categorical levels that enable efficient profile-based marginal effects computation. This feature allows you to specify fractional categorical values like `mix("A" => 0.3, "B" => 0.7)` directly in your data, which are then compiled into zero-allocation evaluators.
+FormulaCompiler.jl supports **categorical mixtures** - weighted combinations of categorical levels that enable efficient profile-based marginal effects computation. This feature allows you to specify fractional values like `mix("A" => 0.3, "B" => 0.7)` directly in your data, which are then compiled into zero-allocation evaluators. For boolean variables, use simple numeric probabilities (e.g., `treated = 0.7` for 70% treatment rate).
 
 **Key benefits:**
-- **Zero-allocation execution**: ~50ns per row, 0 bytes allocated
+- **Zero-allocation execution**: tens of nanoseconds per row, 0 bytes allocated (typical; see Benchmark Protocol)
 - **Compile-time optimization**: All mixture weights embedded in type parameters
 - **Marginal effects ready**: Direct support for statistical packages like Margins.jl
 - **Memory efficient**: O(1) memory usage regardless of data size
@@ -29,7 +29,7 @@ compiled = compile_formula(model, Tables.columntable(df))
 
 # Zero-allocation evaluation
 output = Vector{Float64}(undef, length(compiled))
-compiled(output, Tables.columntable(df), 1)  # ~50ns, 0 bytes
+compiled(output, Tables.columntable(df), 1)  # Zero allocations; time varies by hardware
 ```
 
 ## Mixture Object Interface
@@ -49,25 +49,34 @@ mixture = MixtureExample(["Control", "Treatment"], [0.4, 0.6])
 
 ## Creating Mixture Data
 
-### Boolean Variables and Mixtures
+### Boolean Variables and Population Analysis
 
-**Boolean variables** in statistical models are handled identically to binary categorical variables in FormulaCompiler. If you need Boolean mixtures (e.g., "70% treated, 30% untreated"), convert Boolean variables to categorical first:
+**Boolean variables** work seamlessly with FormulaCompiler's continuous interpretation. For population-level analysis and marginal effects, simply use numeric probabilities directly:
 
 ```julia
-# Instead of Boolean mixtures, convert to categorical:
+# Population analysis with boolean probabilities - much simpler!
 df = DataFrame(
     x = [1.0, 2.0, 3.0],
-    treated = [mix("false" => 0.3, "true" => 0.7),   # 30% untreated, 70% treated
-               mix("false" => 0.3, "true" => 0.7),
-               mix("false" => 0.3, "true" => 0.7)]
+    treated = fill(0.7, 3)  # 70% treatment probability for population analysis
 )
 
-# Or create a helper function:
-bool_mix(prob_true) = mix("false" => 1-prob_true, "true" => prob_true)
-df.treated = fill(bool_mix(0.7), nrow(df))  # 70% probability of treatment
+# Fits naturally with FormulaCompiler's boolean handling
+compiled = compile_formula(model, Tables.columntable(df))
+output = Vector{Float64}(undef, length(compiled))
+compiled(output, Tables.columntable(df), 1)  # treated effect = 0.7
 ```
 
-This approach leverages the existing categorical mixture system and provides identical mathematical results to hypothetical Boolean mixtures.
+**Benefits of Numeric Approach:**
+- **Simpler**: No complex mixture objects needed
+- **Direct**: `treated = 0.7` is clearer than `mix("false" => 0.3, "true" => 0.7)`
+- **Efficient**: Zero-allocation performance maintained
+- **Compatible**: Works with all scenario and counterfactual tools
+- **StatsModels consistent**: Matches how boolean variables are actually handled
+
+**Use Cases:**
+- **Individual scenarios**: `treated = true` or `treated = false`  
+- **Population analysis**: `treated = 0.6` (60% treatment rate)
+- **Marginal effects**: Varying treatment probabilities across reference grids
 
 ### Helper Functions
 
@@ -76,7 +85,7 @@ FormulaCompiler provides several utilities for creating mixture data:
 ```julia
 # Create mixture column for reference grids
 mixture_spec = mix("A" => 0.3, "B" => 0.7)  # Your mixture constructor
-column = create_mixture_column(mixture_spec, 1000)  # 1000 identical rows
+column = FormulaCompiler.create_mixture_column(mixture_spec, 1000)  # 1000 identical rows
 
 # Create balanced (equal weight) mixtures
 balanced_dict = create_balanced_mixture(["A", "B", "C"])
@@ -86,7 +95,7 @@ balanced_mixture = mix(balanced_dict...)
 # Expand base data with mixture specifications
 base_data = (x = [1.0, 2.0], y = [0.1, 0.2])
 mixtures = Dict(:group => mix("A" => 0.5, "B" => 0.5))
-expanded = expand_mixture_grid(base_data, mixtures)
+expanded = FormulaCompiler.expand_mixture_grid(base_data, mixtures)
 ```
 
 ### Reference Grid Creation
@@ -103,7 +112,7 @@ reference_grid = DataFrame(
 
 # Method 2: Using helper functions  
 base_grid = DataFrame(x = [1.0, 2.0, 3.0])
-mixture_grid = expand_mixture_grid(
+mixture_grid = FormulaCompiler.expand_mixture_grid(
     Tables.columntable(base_grid), 
     Dict(:treatment => mix("Control" => 0.3, "Treated" => 0.7))
 )
@@ -134,13 +143,13 @@ You can also validate mixture data manually:
 
 ```julia
 # Validate entire dataset
-validate_mixture_consistency!(data)
+FormulaCompiler.validate_mixture_consistency!(data)
 
 # Validate individual components
-validate_mixture_weights([0.3, 0.7])        # ✓ Valid
-validate_mixture_weights([0.3, 0.6])        # ✗ Sum ≠ 1.0
-validate_mixture_levels(["A", "B", "C"])    # ✓ Valid  
-validate_mixture_levels(["A", "A", "B"])    # ✗ Duplicates
+FormulaCompiler.validate_mixture_weights([0.3, 0.7])        # ✓ Valid
+FormulaCompiler.validate_mixture_weights([0.3, 0.6])        # ✗ Sum ≠ 1.0
+FormulaCompiler.validate_mixture_levels(["A", "B", "C"])    # ✓ Valid  
+FormulaCompiler.validate_mixture_levels(["A", "A", "B"])    # ✗ Duplicates
 ```
 
 ## Performance Characteristics
@@ -151,18 +160,18 @@ validate_mixture_levels(["A", "A", "B"])    # ✗ Duplicates
 - **Overall overhead**: <20% increase for mixture-containing formulas
 
 ### Execution Performance
-- **Simple mixtures**: ~50ns per row (same as standard categorical)
-- **Complex mixtures**: ~100ns per row (within 2x of standard categorical)
+- **Simple mixtures**: tens of nanoseconds per row (similar to standard categorical)
+- **Complex mixtures**: still on the order of tens to low hundreds of nanoseconds per row
 - **Memory usage**: 0 bytes allocated during execution
 - **Scaling**: Performance independent of mixture complexity
 
 ### Benchmarks
 
 ```julia
-# Performance comparison (typical results)
-@benchmark compiled(output, data, 1)  # Standard categorical: ~45ns
-@benchmark compiled(output, mix_data, 1)  # Mixture categorical: ~55ns
-# Overhead: ~20% (well within target of <100% increase)
+# Performance comparison (indicative)
+@benchmark compiled(output, data, 1)
+@benchmark compiled(output, mix_data, 1)
+# Overhead should remain modest; measure on your system.
 ```
 
 ## Integration with Marginal Effects
@@ -388,9 +397,8 @@ compiled = compile_formula(model, Tables.columntable(mix_data))
 ### Current Limitations
 
 1. **Consistent specifications**: All rows must have identical mixture specifications
-2. **Compile-time binding**: Cannot change mixture weights at runtime
-3. **Duck typing dependency**: Mixture objects must have `levels` and `weights` properties
-4. **Boolean mixtures**: Not directly supported - convert Boolean variables to categorical first (see [Boolean Variables](#boolean-variables-and-mixtures) section)
+2. **Compile-time binding**: Cannot change mixture weights at runtime  
+3. **Duck typing dependency**: Mixture objects must have `levels`, `weights`, and `original_levels` properties
 
 ### Design Trade-offs
 

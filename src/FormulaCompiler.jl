@@ -103,6 +103,14 @@ using StandardizedPredictors: ZScoredTerm
 include("core/utilities.jl")
 export not, OverrideVector
 
+# Mixture system
+include("mixtures/types.jl")
+include("mixtures/constructors.jl") 
+include("mixtures/validation.jl")
+export CategoricalMixture, MixtureWithLevels
+export mix
+export validate_mixture_against_data, create_balanced_mixture, mixture_to_scenario_value
+
 ################################# Integration #################################
 
 # External package integration
@@ -138,7 +146,6 @@ export contrast_modelrow!, contrast_modelrow
 export continuous_variables
 export marginal_effects_eta!, marginal_effects_eta
 export marginal_effects_eta_grad!, marginal_effects_eta_grad
-export marginal_effects_eta_fd!, marginal_effects_eta_fd
 export marginal_effects_mu!, marginal_effects_mu
 export fd_jacobian_column!, me_eta_grad_beta!, me_mu_grad_beta!
 export delta_method_se, accumulate_ame_gradient!
