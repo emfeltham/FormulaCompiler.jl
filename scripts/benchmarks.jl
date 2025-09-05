@@ -97,10 +97,28 @@ function emit_markdown(path::AbstractString, results::Vector{BenchResult}; tag::
         catch
         end
         println(io, "- OS: ", Sys.KERNEL)
-        println(io, "- Packages: FormulaCompiler ", Base.PkgId(FormulaCompiler).version,
-                    ", GLM ", Base.PkgId(GLM).version,
-                    ", MixedModels ", Base.PkgId(MixedModels).version,
-                    ", ForwardDiff ", Base.PkgId(ForwardDiff).version)
+        # Safe package version lookup via Project.toml parsing
+        _pkgver(mod) = try
+            dir = Base.pkgdir(mod)
+            toml = joinpath(dir, "Project.toml")
+            if isfile(toml)
+                try
+                    parsed = TOML.parsefile(toml)
+                    v = get(parsed, "version", nothing)
+                    v === nothing ? "unknown" : string(v)
+                catch
+                    "unknown"
+                end
+            else
+                "unknown"
+            end
+        catch
+            "unknown"
+        end
+        println(io, "- Packages: FormulaCompiler ", _pkgver(FormulaCompiler),
+                    ", GLM ", _pkgver(GLM),
+                    ", MixedModels ", _pkgver(MixedModels),
+                    ", ForwardDiff ", _pkgver(ForwardDiff))
         println(io)
         # Results
         println(io, "## Results")
