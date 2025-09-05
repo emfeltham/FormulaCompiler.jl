@@ -344,6 +344,31 @@ end
     scratch[OutPos] = Float64(!(scratch[InPos] != 0.0))
 end
 
+# Binary comparison operations
+@inline function execute_op(::ComparisonBinaryOp{:(<=), LHSPos, RHSPos, OutPos}, scratch, data, row_idx) where {LHSPos, RHSPos, OutPos}
+    scratch[OutPos] = Float64(scratch[LHSPos] <= scratch[RHSPos])
+end
+
+@inline function execute_op(::ComparisonBinaryOp{:(>=), LHSPos, RHSPos, OutPos}, scratch, data, row_idx) where {LHSPos, RHSPos, OutPos}
+    scratch[OutPos] = Float64(scratch[LHSPos] >= scratch[RHSPos])
+end
+
+@inline function execute_op(::ComparisonBinaryOp{:(<), LHSPos, RHSPos, OutPos}, scratch, data, row_idx) where {LHSPos, RHSPos, OutPos}
+    scratch[OutPos] = Float64(scratch[LHSPos] < scratch[RHSPos])
+end
+
+@inline function execute_op(::ComparisonBinaryOp{:(>), LHSPos, RHSPos, OutPos}, scratch, data, row_idx) where {LHSPos, RHSPos, OutPos}
+    scratch[OutPos] = Float64(scratch[LHSPos] > scratch[RHSPos])
+end
+
+@inline function execute_op(::ComparisonBinaryOp{:(==), LHSPos, RHSPos, OutPos}, scratch, data, row_idx) where {LHSPos, RHSPos, OutPos}
+    scratch[OutPos] = Float64(scratch[LHSPos] == scratch[RHSPos])
+end
+
+@inline function execute_op(::ComparisonBinaryOp{:(!=), LHSPos, RHSPos, OutPos}, scratch, data, row_idx) where {LHSPos, RHSPos, OutPos}
+    scratch[OutPos] = Float64(scratch[LHSPos] != scratch[RHSPos])
+end
+
 ###############################################################################
 # DYNAMIC CATEGORICAL LEVEL EXTRACTION (From restart branch)
 ###############################################################################

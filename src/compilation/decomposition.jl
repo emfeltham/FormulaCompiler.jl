@@ -398,22 +398,16 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
         # Boolean negation
         push!(ctx.operations, NegationOp{arg_positions[1], out_pos}())
     elseif func_sym in [:(<=), :(>=), :(<), :(>), :(==), :(!=)] && length(arg_positions) == 2
-        # Comparison operations - need to extract constant from second argument
-        # For now, assume second argument is a constant term
-        # TODO: Need better constant extraction logic
+        # Comparison operations - handle both constant and function RHS
         constant_term = term.args[2]
         if isa(constant_term, ConstantTerm)
+            # Fast path: constant RHS embedded in type
             constant_value = constant_term.n
+            push!(ctx.operations, ComparisonOp{func_sym, arg_positions[1], constant_value, out_pos}())
         else
-            # Try to evaluate as literal constant
-            # This is a simplified approach - may need enhancement
-            try
-                constant_value = Float64(constant_term)
-            catch
-                error("Comparison operations currently only support literal constants, got: $constant_term")
-            end
+            # General path: function RHS evaluated at runtime
+            push!(ctx.operations, ComparisonBinaryOp{func_sym, arg_positions[1], arg_positions[2], out_pos}())
         end
-        push!(ctx.operations, ComparisonOp{func_sym, arg_positions[1], constant_value, out_pos}())
     elseif length(arg_positions) == 1
         push!(ctx.operations, UnaryOp{func_sym, arg_positions[1], out_pos}())
     elseif length(arg_positions) == 2

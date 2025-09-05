@@ -30,6 +30,7 @@ include(joinpath(@__DIR__, "support", "testing_utilities.jl"))
     # Models
     include("test_allocations.jl") # Performance
     include("test_models.jl") # Correctness
+    include("test_logic.jl") # Logic operators (comparisons and boolean negation)
 
     # Override and scenario system
     include("test_overrides.jl") # Override and scenario functionality

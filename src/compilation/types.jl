@@ -153,6 +153,35 @@ Comparison results are converted to Float64 for model matrix compatibility:
 struct ComparisonOp{Op, InPos, Constant, OutPos} <: AbstractOp end
 
 """
+    ComparisonBinaryOp{Op, LHSPos, RHSPos, OutPos} <: AbstractOp
+
+**Binary Comparison Operation**: Compares two scratch position values.
+
+## Position Mapping Role
+- **LHS Input**: Left-hand side scratch position (e.g., variable value)
+- **RHS Input**: Right-hand side scratch position (e.g., function result)  
+- **Output**: Single scratch position containing comparison result (0.0 or 1.0)
+- **Operations**: :(<=), :(>=), :(<), :(>), :(==), :(!=)
+
+## Examples
+```julia
+ComparisonBinaryOp{:(<=), 2, 3, 4}()   # (scratch[2] <= scratch[3]) → scratch[4]
+ComparisonBinaryOp{:(>), 1, 5, 6}()    # (scratch[1] > scratch[5]) → scratch[6]
+```
+
+## Use Cases
+Enables comparisons with function calls on right side:
+- `(x <= inv(2))` - compare variable against function result
+- `(y > log(10))` - compare against logarithm
+- `(z == sqrt(4))` - compare against square root
+
+## Performance
+Slight overhead vs ComparisonOp (constant RHS) due to additional scratch access,
+but maintains zero-allocation execution through position mapping.
+"""
+struct ComparisonBinaryOp{Op, LHSPos, RHSPos, OutPos} <: AbstractOp end
+
+"""
     NegationOp{InPos, OutPos} <: AbstractOp
 
 **Boolean Negation Operation**: Applies logical negation to scratch position value.

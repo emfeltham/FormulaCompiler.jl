@@ -48,6 +48,25 @@ using Test
         end
     end
     
+    @testset "Function Calls in Comparisons" begin
+        # Test comparisons with function calls on RHS (uses ComparisonBinaryOp)
+        model = lm(@formula(y ~ x + (x <= inv(2)) + (x > sqrt(4))), df)
+        data = Tables.columntable(df)
+        compiled = compile_formula(model, data)
+        
+        # Check correctness against reference
+        ref_mm = modelmatrix(model)
+        output = Vector{Float64}(undef, length(compiled))
+        
+        for i in 1:min(10, size(ref_mm, 1))  # Test first 10 rows
+            compiled(output, data, i)
+            @test output ≈ ref_mm[i, :] atol=1e-10
+        end
+        
+        # Verify we're using ComparisonBinaryOp for function calls
+        @test any(contains(string(t), "ComparisonBinaryOp") for t in compiled.ops)
+    end
+    
     @testset "Complex Logic Combinations" begin
         # Test combination of issues from tough_formula.md
         df.close_dist = df.x .<= 2.0
