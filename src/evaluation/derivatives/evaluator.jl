@@ -211,7 +211,7 @@ function build_derivative_evaluator(
 end
 
 """
-    build_zero_alloc_ad_evaluator(compiled, data; vars, chunk=:auto) -> ZeroAllocADEvaluator
+    build_ad_evaluator(compiled, data; vars, chunk=:auto) -> ZeroAllocADEvaluator
 
 Build a true zero-allocation automatic differentiation evaluator using ForwardDiff best practices.
 
@@ -230,7 +230,7 @@ Eliminates all closure creation and uses pre-allocated DiffResult objects to ach
 
 See also: [`build_derivative_evaluator`](@ref) for standard evaluator
 """
-function build_zero_alloc_ad_evaluator(
+function build_ad_evaluator(
     compiled::UnifiedCompiled{T, Ops, S, O},
     data::NamedTuple;
     vars::Vector{Symbol},
@@ -240,7 +240,7 @@ function build_zero_alloc_ad_evaluator(
     allowed = continuous_variables(compiled, data)
     bad = [v for v in vars if !(v in allowed)]
     if !isempty(bad)
-        msg = "build_zero_alloc_ad_evaluator only supports continuous variables. " *
+        msg = "build_ad_evaluator only supports continuous variables. " *
               "Non-continuous/categorical vars requested: $(bad). " *
               "For categorical profile workflows, use the scenario system."
         throw(ArgumentError(msg))

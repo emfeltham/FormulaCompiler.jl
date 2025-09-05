@@ -179,7 +179,7 @@ and using pre-allocated workspace. Follows the pattern from "zero alloc ad info.
 
 # Arguments  
 - `J::AbstractMatrix{Float64}`: Preallocated Jacobian buffer
-- `ze::ZeroAllocADEvaluator`: Zero-allocation evaluator from `build_zero_alloc_ad_evaluator`
+- `ze::ZeroAllocADEvaluator`: Zero-allocation evaluator from `build_ad_evaluator`
 - `row::Int`: Row index to evaluate
 
 # Returns
@@ -193,7 +193,7 @@ and using pre-allocated workspace. Follows the pattern from "zero alloc ad info.
 # Example
 ```julia
 # Build zero-allocation evaluator
-ze = build_zero_alloc_ad_evaluator(compiled, data; vars=[:x, :z])
+ze = build_ad_evaluator(compiled, data; vars=[:x, :z])
 
 # True zero-allocation evaluation
 J = Matrix{Float64}(undef, length(compiled), length(vars))

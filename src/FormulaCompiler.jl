@@ -139,7 +139,7 @@ export ModelRowEvaluator, modelrow!, modelrow
 
 # ForwardDiff-based derivative evaluation (zero-alloc after warmup)
 include("evaluation/derivatives.jl")
-export build_derivative_evaluator, build_zero_alloc_ad_evaluator, derivative_modelrow!, derivative_modelrow, derivative_modelrow_zero_alloc!
+export build_derivative_evaluator, build_ad_evaluator, derivative_modelrow!, derivative_modelrow, derivative_modelrow_zero_alloc!
 export derivative_modelrow_fd!, derivative_modelrow_fd
 export derivative_modelrow_fd_pos!
 export contrast_modelrow!, contrast_modelrow
