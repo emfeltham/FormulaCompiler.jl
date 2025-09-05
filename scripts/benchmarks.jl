@@ -4,6 +4,7 @@
 #   julia --project=. scripts/benchmarks.jl core deriv margins se
 
 using BenchmarkTools
+using Dates
 using FormulaCompiler
 using GLM
 using MixedModels
@@ -13,6 +14,7 @@ using CategoricalArrays
 using ForwardDiff
 using Random
 using LinearAlgebra
+import TOML
 
 # -----------------------------
 # Utilities
@@ -49,11 +51,75 @@ function env_summary(io::IO=stdout)
     catch
     end
     println(io, "- OS: ", Sys.KERNEL)
-    println(io, "- Packages: FormulaCompiler ", Base.PkgId(FormulaCompiler).version,
-            ", GLM ", Base.PkgId(GLM).version,
-            ", MixedModels ", Base.PkgId(MixedModels).version,
-            ", ForwardDiff ", Base.PkgId(ForwardDiff).version)
+    # Safe package version lookup via Project.toml parsing
+    _pkgver(mod) = try
+        dir = Base.pkgdir(mod)
+        toml = joinpath(dir, "Project.toml")
+        if isfile(toml)
+            try
+                parsed = TOML.parsefile(toml)
+                v = get(parsed, "version", nothing)
+                v === nothing ? "unknown" : string(v)
+            catch
+                "unknown"
+            end
+        else
+            "unknown"
+        end
+    catch
+        "unknown"
+    end
+    println(io, "- Packages: FormulaCompiler ", _pkgver(FormulaCompiler),
+            ", GLM ", _pkgver(GLM),
+            ", MixedModels ", _pkgver(MixedModels),
+            ", ForwardDiff ", _pkgver(ForwardDiff))
     println(io)
+end
+
+# ---------------------------------
+# Emitters (Markdown / CSV)
+# ---------------------------------
+
+function emit_markdown(path::AbstractString, results::Vector{BenchResult}; tag::AbstractString="")
+    mkpath(dirname(path))
+    open(path, "w") do io
+        ts = Dates.format(now(), dateformat"yyyy-mm-dd HH:MM:SS")
+        println(io, "# Benchmark Results", isempty(tag) ? "" : " — " * tag)
+        println(io)
+        println(io, "Generated: ", ts)
+        println(io)
+        # Environment summary
+        println(io, "## Environment")
+        println(io, "- Julia: ", VERSION)
+        println(io, "- Threads: ", Threads.nthreads())
+        try
+            println(io, "- CPU: ", get(ENV, "CPU_NAME", Sys.CPU_NAME))
+        catch
+        end
+        println(io, "- OS: ", Sys.KERNEL)
+        println(io, "- Packages: FormulaCompiler ", Base.PkgId(FormulaCompiler).version,
+                    ", GLM ", Base.PkgId(GLM).version,
+                    ", MixedModels ", Base.PkgId(MixedModels).version,
+                    ", ForwardDiff ", Base.PkgId(ForwardDiff).version)
+        println(io)
+        # Results
+        println(io, "## Results")
+        println(io, "| Name | Median (ns) | Min (ns) | Min Mem (B) |")
+        println(io, "|------|-------------|----------|-------------|")
+        for r in results
+            println(io, "| ", r.name, " | ", round(r.median_ns; digits=1), " | ", round(r.minimum_ns; digits=1), " | ", r.min_alloc_bytes, " |")
+        end
+    end
+end
+
+function emit_csv(path::AbstractString, results::Vector{BenchResult}; tag::AbstractString="")
+    mkpath(dirname(path))
+    open(path, "w") do io
+        println(io, "name,median_ns,minimum_ns,min_alloc_bytes,tag")
+        for r in results
+            println(io, string(r.name, ",", round(r.median_ns; digits=1), ",", round(r.minimum_ns; digits=1), ",", r.min_alloc_bytes, ",", tag))
+        end
+    end
 end
 
 # -----------------------------
@@ -150,10 +216,11 @@ function bench_derivatives(; n=20_000)
     J = Matrix{Float64}(undef, length(compiled), length(vars))
     derivative_modelrow!(J, de, i) # warmup
     t_ad = @benchmark derivative_modelrow!($J, $de, $i)
-    # FD single column (first variable)
+    # FD single column (first variable as Symbol)
     col = Vector{Float64}(undef, length(compiled))
-    fd_jacobian_column!(col, de, 1, i) # warmup
-    t_fd = @benchmark fd_jacobian_column!($col, $de, 1, $i)
+    var_sym = vars[1]
+    fd_jacobian_column!(col, de, i, var_sym) # warmup
+    t_fd = @benchmark fd_jacobian_column!($col, $de, $i, $var_sym)
     return (
         summarize_trial("deriv: AD full J", t_ad),
         summarize_trial("deriv: FD single col", t_fd),
@@ -264,33 +331,33 @@ const ALL_BENCHES = (
     :mixtures,
 )
 
-function run_selected(selected::Vector{Symbol})
+function run_selected(selected::Vector{Symbol}; fast::Bool=false)
     env_summary()
     results = BenchResult[]
     for b in selected
         if b == :core
-            push!(results, bench_core())
+            push!(results, fast ? bench_core(n=5_000) : bench_core())
         elseif b == :alloc
-            r1, r2 = bench_alloc_vs_inplace()
+            r1, r2 = fast ? bench_alloc_vs_inplace(n=3_000) : bench_alloc_vs_inplace()
             append!(results, [r1, r2])
         elseif b == :scenario
-            r1, r2 = bench_scenario_overhead()
+            r1, r2 = fast ? bench_scenario_overhead(n=5_000) : bench_scenario_overhead()
             append!(results, [r1, r2])
         elseif b == :deriv
-            r1, r2 = bench_derivatives()
+            r1, r2 = fast ? bench_derivatives(n=5_000) : bench_derivatives()
             append!(results, [r1, r2])
         elseif b == :margins
-            r1, r2, r3, r4 = bench_marginal_effects()
+            r1, r2, r3, r4 = fast ? bench_marginal_effects(n=5_000) : bench_marginal_effects()
             append!(results, [r1, r2, r3, r4])
         elseif b == :se
-            push!(results, bench_delta_se())
+            push!(results, fast ? bench_delta_se(n=2_000) : bench_delta_se())
         elseif b == :mixed
-            push!(results, bench_mixedmodels())
+            push!(results, fast ? bench_mixedmodels(n=3_000) : bench_mixedmodels())
         elseif b == :scaling
-            r1, r2 = bench_scaling()
+            r1, r2 = fast ? bench_scaling(n=5_000) : bench_scaling()
             append!(results, [r1, r2])
         elseif b == :mixtures
-            push!(results, bench_mixtures())
+            push!(results, fast ? bench_mixtures(n=5_000) : bench_mixtures())
         else
             @warn "Unknown benchmark key" b
         end
@@ -303,24 +370,61 @@ function run_selected(selected::Vector{Symbol})
 end
 
 function parse_args()
-    if isempty(ARGS)
-        return [:core, :alloc, :scenario, :deriv, :margins, :se]
-    end
-    syms = Symbol[]
+    # Simple flag parser: supports --out=md|csv, --file=path, --tag=string, --fast, and bench keys
+    out::Union{Nothing,Symbol} = nothing
+    file::Union{Nothing,String} = nothing
+    tag::String = ""
+    fast::Bool = false
+    bench_syms = Symbol[]
     for a in ARGS
-        s = Symbol(a)
-        if s ∉ ALL_BENCHES
-            @warn "Ignoring unknown benchmark key" a
+        if startswith(a, "--out=")
+            v = split(a, "=", limit=2)[2]
+            if v in ("md", "markdown")
+                out = :md
+            elseif v in ("csv")
+                out = :csv
+            else
+                @warn "Unknown --out value" v
+            end
+        elseif startswith(a, "--file=")
+            file = split(a, "=", limit=2)[2]
+        elseif startswith(a, "--tag=")
+            tag = split(a, "=", limit=2)[2]
+        elseif a == "--fast" || a == "--fast=true" || a == "--fast=1"
+            fast = true
+        elseif a == "--fast=false" || a == "--fast=0"
+            fast = false
         else
-            push!(syms, s)
+            s = Symbol(a)
+            if s ∉ ALL_BENCHES
+                @warn "Ignoring unknown benchmark key" a
+            else
+                push!(bench_syms, s)
+            end
         end
     end
-    isempty(syms) && (syms = [:core])
-    return syms
+    isempty(bench_syms) && (bench_syms = [:core, :alloc, :scenario, :deriv, :margins, :se])
+    return (; out, file, tag, fast, bench_syms)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    selected = parse_args()
-    run_selected(selected)
+    args = parse_args()
+    results = run_selected(args.bench_syms; fast=args.fast)
+    if args.out !== nothing
+        ts = Dates.format(now(), dateformat"yyyymmdd_HHMMSS")
+        if args.file === nothing
+            mkpath("results")
+            ext = args.out === :md ? ".md" : ".csv"
+            tagpart = isempty(args.tag) ? "" : "_" * args.tag
+            path = joinpath("results", "benchmarks_" * ts * tagpart * ext)
+            args.file = path
+        end
+        if args.out === :md
+            emit_markdown(args.file, results; tag=args.tag)
+            println("\nWrote Markdown results to ", args.file)
+        elseif args.out === :csv
+            emit_csv(args.file, results; tag=args.tag)
+            println("\nWrote CSV results to ", args.file)
+        end
+    end
 end
-

@@ -25,18 +25,18 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🔄 Starting Mermaid diagram compilation...${NC}"
+echo -e "${BLUE}Starting Mermaid diagram compilation...${NC}"
 
 # Check if mermaid CLI is available
 if ! command -v mmdc &> /dev/null; then
-    echo -e "${RED}❌ Mermaid CLI (mmdc) not found. Please install with:${NC}"
+    echo -e "${RED}ERROR: Mermaid CLI (mmdc) not found. Please install with:${NC}"
     echo "npm install -g @mermaid-js/mermaid-cli"
     exit 1
 fi
 
 # Create diagrams directory
 mkdir -p "$DIAGRAMS_DIR"
-echo -e "${GREEN}✓ Created diagrams directory: $DIAGRAMS_DIR${NC}"
+echo -e "${GREEN}Created diagrams directory: $DIAGRAMS_DIR${NC}"
 
 # Counter for naming diagrams
 diagram_counter=0
@@ -81,12 +81,12 @@ process_file() {
             # Save mermaid content to .mmd file
             local mmd_file="${DIAGRAMS_DIR}/${diagram_name}.mmd"
             echo "$current_diagram" > "$mmd_file"
-            echo -e "  ${GREEN}✓ Saved: $(basename "$mmd_file")${NC}"
+            echo -e "  ${GREEN}Saved: $(basename "$mmd_file")${NC}"
             
             # Compile to SVG
             local svg_file="${DIAGRAMS_DIR}/${diagram_name}.svg"
             if mmdc -i "$mmd_file" -o "$svg_file" -b white 2>/dev/null; then
-                echo -e "  ${GREEN}✓ Compiled: $(basename "$svg_file")${NC}"
+                echo -e "  ${GREEN}Compiled: $(basename "$svg_file")${NC}"
                 
                 # Generate relative path from markdown file to SVG (macOS compatible)
                 local file_dir=$(dirname "$file")
@@ -95,7 +95,7 @@ process_file() {
                 # Add SVG reference to updated content
                 echo "![Diagram]($svg_rel_path)" >> "$temp_file"
             else
-                echo -e "  ${RED}❌ Failed to compile: $diagram_name${NC}"
+                echo -e "  ${RED}ERROR: Failed to compile: $diagram_name${NC}"
                 # Fall back to original mermaid block
                 echo '```mermaid' >> "$temp_file"
                 echo "$current_diagram" >> "$temp_file"
@@ -122,19 +122,19 @@ process_file() {
     # Replace original file if we found mermaid diagrams
     if [[ "$mermaid_found" == true ]]; then
         mv "$temp_file" "$file"
-        echo -e "  ${GREEN}✓ Updated markdown file${NC}"
+        echo -e "  ${GREEN}Updated markdown file${NC}"
     else
         rm "$temp_file"
     fi
 }
 
 # Find and process all markdown files
-echo -e "${BLUE}📋 Finding markdown files...${NC}"
+echo -e "${BLUE}Finding markdown files...${NC}"
 
 find "$DOCS_DIR" -name "*.md" -type f | while read -r file; do
     process_file "$file"
     echo
 done
 
-echo -e "${GREEN}✅ Diagram compilation complete!${NC}"
-echo -e "${BLUE}📁 Generated files are in: $DIAGRAMS_DIR${NC}"
+echo -e "${GREEN}Diagram compilation complete!${NC}"
+echo -e "${BLUE}Generated files are in: $DIAGRAMS_DIR${NC}"

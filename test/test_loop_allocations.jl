@@ -38,40 +38,40 @@ end
 
 # Test suite
 function run_allocation_tests()
-    println("📊 Creating test data ($N_ROWS rows)...")
+    println("Creating test data ($N_ROWS rows)...")
     df = create_test_data()
     model = lm(@formula(y ~ x + age + group), df)
     data = Tables.columntable(df)
     compiled = compile_formula(model, data)
     output = Vector{Float64}(undef, length(compiled))
     
-    println("✅ Setup complete")
+    println("Setup complete")
     println("   - Model: $(length(compiled)) parameters")
     println("   - Compiled type: $(typeof(compiled))")
     println()
     
     # Warmup phase
-    println("🔥 Warmup phase...")
+    println("Warmup phase...")
     for i in 1:10
         compiled(output, data, 1)
         modelrow!(output, compiled, data, 1)
     end
-    println("✅ Warmup complete")
+    println("Warmup complete")
     println()
     
     # Test results storage
     results = Dict{String, Float64}()
     
     # Test 1: Single direct compiled() call
-    println("🧪 Test 1: Single compiled() call (post-warmup)")
+    println("Test 1: Single compiled() call (post-warmup)")
     allocs_single = @allocated compiled(output, data, 1)
     results["single_compiled"] = allocs_single
-    status_single = allocs_single == 0 ? "✅ PASS" : "❌ FAIL"
+    status_single = allocs_single == 0 ? "PASS" : "FAIL"
     println("   Result: $allocs_single bytes $status_single")
     println()
     
     # Test 2: Loop of direct compiled() calls
-    println("🧪 Test 2: Loop of direct compiled() calls ($N_TEST_CALLS iterations)")
+    println("Test 2: Loop of direct compiled() calls ($N_TEST_CALLS iterations)")
     function test_compiled_loop(compiled, output, data, n_calls)
         for i in 1:n_calls
             row = ((i-1) % N_ROWS) + 1
@@ -82,13 +82,13 @@ function run_allocation_tests()
     allocs_loop = @allocated test_compiled_loop(compiled, output, data, N_TEST_CALLS)
     allocs_per_call = allocs_loop / N_TEST_CALLS
     results["loop_compiled"] = allocs_per_call
-    status_loop = allocs_per_call == EXPECTED_ALLOCATION_PER_CALL ? "✅ PASS" : "❌ FAIL"
+    status_loop = allocs_per_call == EXPECTED_ALLOCATION_PER_CALL ? "PASS" : "FAIL"
     println("   Total allocation: $allocs_loop bytes")
     println("   Per call: $allocs_per_call bytes $status_loop")
     println()
     
     # Test 3: Loop of modelrow!() calls (pre-compiled)
-    println("🧪 Test 3: Loop of modelrow!(compiled) calls ($N_TEST_CALLS iterations)")
+    println("Test 3: Loop of modelrow!(compiled) calls ($N_TEST_CALLS iterations)")
     function test_modelrow_loop(output, compiled, data, n_calls)
         for i in 1:n_calls
             row = ((i-1) % N_ROWS) + 1
@@ -99,14 +99,14 @@ function run_allocation_tests()
     allocs_modelrow_loop = @allocated test_modelrow_loop(output, compiled, data, N_TEST_CALLS)
     allocs_modelrow_per_call = allocs_modelrow_loop / N_TEST_CALLS
     results["loop_modelrow_precompiled"] = allocs_modelrow_per_call
-    status_modelrow = allocs_modelrow_per_call == EXPECTED_ALLOCATION_PER_CALL ? "✅ PASS" : "❌ FAIL"
+    status_modelrow = allocs_modelrow_per_call == EXPECTED_ALLOCATION_PER_CALL ? "PASS" : "FAIL"
     println("   Total allocation: $allocs_modelrow_loop bytes")
     println("   Per call: $allocs_modelrow_per_call bytes $status_modelrow")
     println("   Overhead vs direct: $(allocs_modelrow_per_call - allocs_per_call) bytes/call")
     println()
     
     # Test 4: Loop of modelrow!(model) calls (with cache lookup)
-    println("🧪 Test 4: Loop of modelrow!(model) calls with caching ($N_TEST_CALLS iterations)")
+    println("Test 4: Loop of modelrow!(model) calls with caching ($N_TEST_CALLS iterations)")
     function test_modelrow_model_loop(output, model, data, n_calls)
         for i in 1:n_calls
             row = ((i-1) % N_ROWS) + 1
@@ -124,7 +124,7 @@ function run_allocation_tests()
     
     # Test 5: Derivative functions if available
     if isdefined(FormulaCompiler, :marginal_effects_eta!) && isdefined(FormulaCompiler, :build_derivative_evaluator)
-        println("🧪 Test 5: marginal_effects_eta! loop ($N_TEST_CALLS iterations)")
+        println("Test 5: marginal_effects_eta! loop ($N_TEST_CALLS iterations)")
         try
             vars = [:x, :age]
             de = build_derivative_evaluator(compiled, data; vars=vars)
@@ -141,16 +141,16 @@ function run_allocation_tests()
             allocs_me_loop = @allocated test_me_loop(g, de, coefs, N_TEST_CALLS)
             allocs_me_per_call = allocs_me_loop / N_TEST_CALLS
             results["loop_marginal_effects"] = allocs_me_per_call
-            status_me = allocs_me_per_call == EXPECTED_ALLOCATION_PER_CALL ? "✅ PASS" : "❌ FAIL"
+            status_me = allocs_me_per_call == EXPECTED_ALLOCATION_PER_CALL ? "PASS" : "FAIL"
             println("   Total allocation: $allocs_me_loop bytes")
             println("   Per call: $allocs_me_per_call bytes $status_me")
         catch e
-            println("   ❌ Error testing marginal_effects_eta!: $e")
+            println("   Error testing marginal_effects_eta!: $e")
             results["loop_marginal_effects"] = NaN
         end
         println()
     else
-        println("🚫 Test 5: marginal_effects_eta! not available in this version")
+        println("Test 5: marginal_effects_eta! not available in this version")
         results["loop_marginal_effects"] = NaN
         println()
     end
@@ -161,17 +161,17 @@ end
 # Summary and analysis
 function summarize_results(results)
     println("=" ^ 60)
-    println("📋 ALLOCATION TEST SUMMARY")
+    println("ALLOCATION TEST SUMMARY")
     println("=" ^ 60)
     
     # Zero-allocation status
     all_zero = true
     core_loops_zero = true
     
-    println("🎯 Zero-Allocation Status:")
+    println("Zero-Allocation Status:")
     for (test, allocation) in results
         if test in ["loop_compiled", "loop_modelrow_precompiled", "loop_marginal_effects"]
-            status = isnan(allocation) ? "N/A" : (allocation == 0.0 ? "✅ ZERO" : "❌ ALLOCATES")
+            status = isnan(allocation) ? "N/A" : (allocation == 0.0 ? "ZERO" : "ALLOCATES")
             println("   $test: $(isnan(allocation) ? "N/A" : string(allocation)) bytes/call $status")
             if !isnan(allocation) && allocation > 0
                 all_zero = false
@@ -183,10 +183,10 @@ function summarize_results(results)
     end
     
     println()
-    println("🔍 Analysis:")
+    println("Analysis:")
     
     if haskey(results, "loop_compiled") && results["loop_compiled"] > 0
-        println("❌ CORE ISSUE: Direct compiled() calls allocate $(results["loop_compiled"]) bytes/call in loops")
+        println("CORE ISSUE: Direct compiled() calls allocate $(results["loop_compiled"]) bytes/call in loops")
         println("   This confirms Margins.jl's findings - FormulaCompiler is NOT zero-allocation")
         println("   Root cause likely: fill!(scratch, zero(T)) in execution.jl:91")
     end
@@ -194,7 +194,7 @@ function summarize_results(results)
     if haskey(results, "loop_modelrow_precompiled") && haskey(results, "loop_compiled")
         overhead = results["loop_modelrow_precompiled"] - results["loop_compiled"]
         if overhead > 0
-            println("⚠️  WRAPPER OVERHEAD: modelrow! adds $overhead bytes/call overhead")
+            println("WARNING: WRAPPER OVERHEAD: modelrow! adds $overhead bytes/call overhead")
             println("   Likely causes: @assert statements, function call overhead")
         end
     end
@@ -202,23 +202,23 @@ function summarize_results(results)
     if haskey(results, "loop_modelrow_cached") && haskey(results, "loop_modelrow_precompiled")
         cache_overhead = results["loop_modelrow_cached"] - results["loop_modelrow_precompiled"]
         if cache_overhead > 0
-            println("💾 CACHE OVERHEAD: Dictionary lookup adds $cache_overhead bytes/call")
+            println("CACHE OVERHEAD: Dictionary lookup adds $cache_overhead bytes/call")
         end
     end
     
     println()
-    println("🎯 VERDICT:")
+    println("VERDICT:")
     if core_loops_zero
-        println("✅ FormulaCompiler achieves zero-allocation loop performance")
+        println("FormulaCompiler achieves zero-allocation loop performance")
         println("   Zero-allocation claims are ACCURATE")
     else
-        println("❌ FormulaCompiler does NOT achieve zero-allocation loop performance")  
+        println("FormulaCompiler does NOT achieve zero-allocation loop performance")  
         println("   Margins.jl's analysis is CORRECT")
         println("   Zero-allocation claims are MISLEADING for practical usage")
     end
     
     println()
-    println("📖 Recommendations:")
+    println("Recommendations:")
     if !core_loops_zero
         println("   1. Fix core allocation in src/compilation/execution.jl:91")
         println("      Replace: fill!(scratch, zero(T))")
@@ -226,7 +226,7 @@ function summarize_results(results)
         println("   2. Run this test again to verify fix")
         println("   3. See ALLOCATION_LOOP_FIX.md for detailed implementation plan")
     else
-        println("   ✅ Core loop performance is optimal")
+        println("   Core loop performance is optimal")
         println("   Consider optimizing wrapper functions if needed")
     end
     
@@ -235,7 +235,7 @@ end
 
 # Main execution
 if abspath(PROGRAM_FILE) == @__FILE__
-    println("🚀 Running FormulaCompiler allocation tests...")
+    println("Running FormulaCompiler allocation tests...")
     println()
     
     results = run_allocation_tests()
@@ -243,10 +243,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     # Exit with appropriate code
     if core_zero
-        println("\n🎉 SUCCESS: Core loop performance verified!")
+        println("\nSUCCESS: Core loop performance verified!")
         exit(0)
     else
-        println("\n💥 FAILURE: Loop allocations detected - fix needed")
+        println("\nFAILURE: Loop allocations detected - fix needed")
         exit(1)
     end
 end
