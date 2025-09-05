@@ -4,7 +4,7 @@ The latest version of Julia in the `release` channel is 1.11.6+0.aarch64.apple.d
 
 in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and update the `release` channel to that version.
      Testing FormulaCompiler
-      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_w1G4pF/Project.toml`
+      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_rw8vdl/Project.toml`
   [6e4b80f9] BenchmarkTools v1.6.0
   [336ed68f] CSV v0.10.15
 ⌅ [324d7699] CategoricalArrays v0.10.8
@@ -22,7 +22,7 @@ in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and upda
   [37e2e46d] LinearAlgebra v1.11.0
   [9a3f8284] Random v1.11.0
   [8dfed614] Test v1.11.0
-      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_w1G4pF/Manifest.toml`
+      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_rw8vdl/Manifest.toml`
   [79e6a3ab] Adapt v4.3.0
   [66dad0bd] AliasTables v1.1.3
   [4c555306] ArrayLayouts v1.11.2
@@ -174,10 +174,7 @@ in your terminal shell to install Julia 1.11.6+0.aarch64.apple.darwin14 and upda
   [8e850ede] nghttp2_jll v1.59.0+0
   [3f19e933] p7zip_jll v17.4.0+2
         Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading.
-Precompiling project for configuration --code-coverage=none --color=auto --check-bounds=yes --warn-overwrite=yes --depwarn=yes --inline=yes --startup-file=no --track-allocation=none...
-   3480.6 ms  ✓ FormulaCompiler
-  1 dependency successfully precompiled in 4 seconds. 162 already precompiled.
      Testing Running tests...
 Test Summary:            | Pass  Total     Time
-FormulaCompiler.jl Tests | 2308   2308  3m06.4s
+FormulaCompiler.jl Tests | 2315   2315  3m24.5s
      Testing FormulaCompiler tests passed 
