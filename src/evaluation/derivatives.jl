@@ -3,26 +3,6 @@
 # High-level public API and exports for the derivative system.
 # The implementation is organized into focused modules in the derivatives/ subdirectory.
 
-# TODO(derivatives): See DERIVATIVE_PLAN.md → Typing Checklist & Acceptance Criteria.
-# - Eliminate Any on hot paths (closure/config/dual fields, overrides, column cache).
-# - Prefer gradient-based η path for strict zero-allocation marginal effects.
-# - Keep FD Jacobian as 0-alloc fallback; AD Jacobian 0-alloc may be env-dependent.
-#
-# Contributor TODOs (typing and allocation hygiene):
-# 1) Make evaluator fields concrete
-#    - g::Any             → store concrete closure type (DerivClosure{DE})
-#    - cfg::Any           → store concrete ForwardDiff.JacobianConfig{…}
-#    - rowvec_dual::Any   → Vector{<:ForwardDiff.Dual{…}} with concrete eltype
-#    - compiled_dual::Any → UnifiedCompiled{<:ForwardDiff.Dual{…},Ops,S,O}
-# 2) Column cache
-#    - fd_columns::Vector{Any} → Vector{<:AbstractVector{T}} or NTuple for fixed nvars
-# 3) Overrides
-#    - SingleRowOverrideVector <: AbstractVector{Any}
-#      replace with SingleRowOverrideVector{T} and build per-eltype data_over (Float64 & Dual)
-# 4) Config creation
-#    - Ensure JacobianConfig/GradientConfig are built once with concrete closure
-# 5) Tests
-#    - Tighten FD Jacobian to 0 allocations; η-gradient to 0; gate AD Jacobian per env caps
 
 # Load all derivative system modules
 include("derivatives/overrides.jl")
