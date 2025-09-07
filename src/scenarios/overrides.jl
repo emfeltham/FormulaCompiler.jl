@@ -179,32 +179,42 @@ end
 ###############################################################################
 
 """
-    DataScenario
+    DataScenario{NT<:NamedTuple, OT<:NamedTuple}
 
-Counterfactual scenario container with variable substitutions for efficient analysis.
+Type-stable counterfactual scenario container with variable substitutions for efficient analysis.
 
 A DataScenario represents a hypothetical version of the data where specified variables
 are held constant at chosen values, enabling systematic counterfactual analysis without
 data duplication.
 
+# Type Parameters  
+- `NT<:NamedTuple`: Type of the modified data structure with overrides applied
+- `OT<:NamedTuple`: Type of the override values for complete type stability
+
 # Fields
 - `name::String`: Descriptive identifier for the counterfactual scenario
-- `overrides::Dict{Symbol,Any}`: Variable substitutions applied in this scenario  
-- `data::NamedTuple`: Modified data structure with constant-value columns for overridden variables
+- `overrides::OT`: Type-stable variable substitutions applied in this scenario  
+- `data::NT`: Modified data structure with constant-value columns for overridden variables
 - `original_data::NamedTuple`: Reference to original unmodified data
 
 # Usage
 DataScenario objects are typically created via `create_scenario()` and used directly 
 with `compile_formula()` for zero-allocation counterfactual evaluation.
 
-# Memory Efficiency
+# Type Stability
+Complete type stability achieved through parameterization:
+- All override values stored in type-stable NamedTuple rather than Dict{Symbol,Any}
+- Data structure type preserved through NT parameter
+- Enables zero-allocation performance for marginal effects computation
+
+# Memory Efficiency  
 Uses OverrideVector for substituted variables, providing O(1) memory overhead
 regardless of dataset size compared to O(n) for naive data copying approaches.
 """
-mutable struct DataScenario
+struct DataScenario{NT<:NamedTuple, OT<:NamedTuple}
     name::String
-    overrides::Dict{Symbol,Any}
-    data::NamedTuple
+    overrides::OT
+    data::NT
     original_data::NamedTuple
 end
 
@@ -260,26 +270,26 @@ Related Functions:
 - `create_scenario_grid()`: Multiple scenario construction
 """
 function create_scenario(name::String, original_data::NamedTuple; overrides...)
-    override_dict = Dict{Symbol,Any}(overrides)
+    override_nt = NamedTuple(overrides)
     
-    if isempty(override_dict)
+    if isempty(overrides)
         modified_data = original_data
+        return DataScenario(name, override_nt, modified_data, original_data)
     else
-        modified_data = create_override_data(original_data, override_dict)
+        modified_data = create_override_data(original_data, override_nt)
+        return DataScenario(name, override_nt, modified_data, original_data)
     end
-    
-    return DataScenario(name, override_dict, modified_data, original_data)
 end
 
 function create_scenario(name::String, original_data::NamedTuple, overrides::Dict{Symbol,<:Any})
-    override_dict = Dict{Symbol,Any}(overrides)
+    override_nt = NamedTuple(overrides)
     
     if isempty(overrides)
-        return DataScenario(name, override_dict, original_data, original_data)
+        return DataScenario(name, override_nt, original_data, original_data)
     end
     
-    modified_data = create_override_data(original_data, override_dict)
-    return DataScenario(name, override_dict, modified_data, original_data)
+    modified_data = create_override_data(original_data, override_nt)
+    return DataScenario(name, override_nt, modified_data, original_data)
 end
 
 """
@@ -323,7 +333,7 @@ Related Functions:
 - `create_override_vector()`: Creates individual variable overrides
 - `compile_formula()`: Compiles modified data for evaluation
 """
-function create_override_data(original_data::NamedTuple, overrides::Dict{Symbol,Any})
+function create_override_data(original_data::NamedTuple, overrides::NamedTuple)
     # Start with original data
     modified_dict = Dict{Symbol, Any}()
     
@@ -331,7 +341,7 @@ function create_override_data(original_data::NamedTuple, overrides::Dict{Symbol,
     for (key, original_column) in pairs(original_data)
         if haskey(overrides, key)
             # Create override for this variable
-            override_value = overrides[key]
+            override_value = getproperty(overrides, key)
             modified_dict[key] = create_override_vector(override_value, original_column)
         else
             # Keep original column as reference (no copy)
@@ -458,61 +468,98 @@ end
 ###############################################################################
 
 """
-    set_override!(scenario::DataScenario, variable::Symbol, value)
+    with_override(scenario::DataScenario, variable::Symbol, value) -> DataScenario
 
-Add or update a variable override in the scenario.
-Rebuilds the scenario data to reflect the change.
+Create new scenario with an additional or updated variable override.
+Returns new DataScenario with the change applied (immutable design).
 
 # Example
 ```julia
 scenario = create_scenario("test", data; x = 1.0)
-set_override!(scenario, :y, 2.0)      # Add new override
-set_override!(scenario, :x, 5.0)      # Update existing override
+new_scenario = with_override(scenario, :y, 2.0)      # Add new override
+updated_scenario = with_override(new_scenario, :x, 5.0)  # Update existing override
 ```
 """
+function with_override(scenario::DataScenario, variable::Symbol, value)
+    # Create new override NamedTuple with updated value
+    override_dict = Dict{Symbol,Any}(pairs(scenario.overrides))
+    override_dict[variable] = value
+    new_overrides = NamedTuple(override_dict)
+    
+    # Create new scenario with updated overrides
+    new_data = create_override_data(scenario.original_data, new_overrides)
+    return DataScenario(scenario.name, new_overrides, new_data, scenario.original_data)
+end
+
+# Keep old mutable API for compatibility (though it doesn't actually mutate)
 function set_override!(scenario::DataScenario, variable::Symbol, value)
-    scenario.overrides[variable] = value
-    scenario.data = create_override_data(scenario.original_data, scenario.overrides)
-    return scenario
+    @warn "set_override! with immutable DataScenario doesn't actually mutate. Use with_override() instead." maxlog=1
+    return with_override(scenario, variable, value)
 end
 
 """
-    remove_override!(scenario::DataScenario, variable::Symbol)
+    without_override(scenario::DataScenario, variable::Symbol) -> DataScenario
 
-Remove a variable override from the scenario.
-The variable will revert to its original values.
+Create new scenario with a variable override removed.
+The variable will revert to its original values in the new scenario.
 
 # Example
 ```julia
-remove_override!(scenario, :x)  # x returns to original values
+new_scenario = without_override(scenario, :x)  # x returns to original values
 ```
 """
-function remove_override!(scenario::DataScenario, variable::Symbol)
+function without_override(scenario::DataScenario, variable::Symbol)
     if haskey(scenario.overrides, variable)
-        delete!(scenario.overrides, variable)
-        scenario.data = create_override_data(scenario.original_data, scenario.overrides)
+        # Create new override NamedTuple without the specified variable
+        override_dict = Dict{Symbol,Any}(pairs(scenario.overrides))
+        delete!(override_dict, variable)
+        new_overrides = NamedTuple(override_dict)
+        
+        # Create new scenario without the override
+        new_data = create_override_data(scenario.original_data, new_overrides)
+        return DataScenario(scenario.name, new_overrides, new_data, scenario.original_data)
+    else
+        return scenario  # No change needed
     end
-    return scenario
+end
+
+# Compatibility function
+function remove_override!(scenario::DataScenario, variable::Symbol)
+    @warn "remove_override! with immutable DataScenario doesn't actually mutate. Use without_override() instead." maxlog=1
+    return without_override(scenario, variable)
 end
 
 """
-    update_scenario!(scenario::DataScenario; overrides...)
+    with_overrides(scenario::DataScenario; overrides...) -> DataScenario
 
-Update multiple overrides at once.
+Create new scenario with multiple overrides updated at once.
 
 # Example
 ```julia
-update_scenario!(scenario; x = 2.0, y = 3.0, group = "B")
+new_scenario = with_overrides(scenario; x = 2.0, y = 3.0, group = "B")
 ```
 """
-function update_scenario!(scenario::DataScenario; overrides...)
+function with_overrides(scenario::DataScenario; overrides...)
     if !isempty(overrides)
+        # Merge existing overrides with new ones
+        override_dict = Dict{Symbol,Any}(pairs(scenario.overrides))
         for (key, value) in overrides
-            scenario.overrides[key] = value
+            override_dict[key] = value
         end
-        scenario.data = create_override_data(scenario.original_data, scenario.overrides)
+        new_overrides = NamedTuple(override_dict)
+        
+        # Create new scenario with updated overrides
+        new_data = create_override_data(scenario.original_data, new_overrides)
+        return DataScenario(scenario.name, new_overrides, new_data, scenario.original_data)
+    else
+        return scenario  # No changes
     end
-    return scenario
+end
+
+# Compatibility function
+function update_scenario!(scenario::DataScenario; overrides...)
+    @warn "update_scenario! with immutable DataScenario doesn't actually mutate. Use with_overrides() instead." maxlog=1
+    return with_overrides(scenario; overrides...)
 end
 
 """
