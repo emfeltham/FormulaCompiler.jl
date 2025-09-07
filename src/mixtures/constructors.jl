@@ -67,6 +67,59 @@ function mix(pairs...)
     return CategoricalMixture(levels, weights)
 end
 
+"""
+    mix_proportional(col) -> CategoricalMixture or Float64
+
+Create a mixture that reflects the observed proportions in the data column.
+This provides data-driven mixture specifications for population-representative analysis.
+
+For Bool columns, returns the observed probability of true.
+For categorical columns, computes observed frequency proportions.
+
+# Arguments
+- `col`: Data column (Vector of any categorical type)
+
+# Returns
+- `CategoricalMixture`: Mixture with levels and observed frequency weights for categorical data
+- `Float64`: For Bool columns, returns observed probability of true
+
+# Examples
+```julia
+# Boolean column -> observed probability of true
+mix_proportional([true, false, true, true]) # -> 0.75
+
+# Categorical -> Observed frequency proportions
+mix_proportional(["A", "B", "A", "A"]) # -> mix("A" => 0.75, "B" => 0.25)
+
+# CategoricalArray -> Uses observed proportions
+cat_col = categorical(["Red", "Blue", "Red", "Green"])
+mix_proportional(cat_col) # -> mix("Blue" => 0.25, "Green" => 0.25, "Red" => 0.5)
+```
+
+This function is ideal for creating reference grids that preserve the observed population
+composition, providing more representative counterfactual scenarios.
+"""
+function mix_proportional(col)
+    if eltype(col) <: Bool
+        return mean(col)  # Observed probability of true
+    end
+    
+    # Get observed frequency proportions
+    level_counts = Dict()
+    n_total = length(col)
+    
+    for value in col
+        str_value = string(value)
+        level_counts[str_value] = get(level_counts, str_value, 0) + 1
+    end
+    
+    # Convert to proportions
+    levels = sort(collect(keys(level_counts)))  # Sort for consistency
+    weights = [level_counts[level] / n_total for level in levels]
+    
+    return CategoricalMixture(levels, weights)
+end
+
 # Convenient display for CategoricalMixture
 function Base.show(io::IO, m::CategoricalMixture)
     pairs_str = join(["$(repr(l)) => $(w)" for (l, w) in zip(m.levels, m.weights)], ", ")
