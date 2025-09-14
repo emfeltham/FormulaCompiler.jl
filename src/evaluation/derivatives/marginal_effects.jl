@@ -94,6 +94,44 @@ function marginal_effects_eta!(
     return g
 end
 
+"""
+    marginal_effects_eta_ad_pos!(g, de, beta, row) -> g
+
+Positional, zero-allocation AD path for η-scale marginal effects. Avoids keyword
+overhead; equivalent to `marginal_effects_eta!(g, de, beta, row; backend=:ad)`.
+"""
+@inline function marginal_effects_eta_ad_pos!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int
+)
+    @assert length(g) == length(de.vars)
+    @assert length(beta) == length(de)
+    derivative_modelrow!(de.jacobian_buffer, de, row)
+    mul!(g, transpose(de.jacobian_buffer), beta)
+    return g
+end
+
+"""
+    marginal_effects_eta_fd_pos!(g, de, beta, row) -> g
+
+Positional, zero-allocation FD path for η-scale marginal effects. Avoids keyword
+overhead; equivalent to `marginal_effects_eta!(g, de, beta, row; backend=:fd)`.
+"""
+@inline function marginal_effects_eta_fd_pos!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int
+)
+    @assert length(g) == length(de.vars)
+    @assert length(beta) == length(de)
+    derivative_modelrow_fd_pos!(de.jacobian_buffer, de, row)
+    mul!(g, transpose(de.jacobian_buffer), beta)
+    return g
+end
+
 function marginal_effects_eta(
     de::DerivativeEvaluator,
     beta::AbstractVector{<:Real},
@@ -205,6 +243,56 @@ function marginal_effects_mu!(
 )
     # Compute dη/dx using selected backend and preallocated buffer
     marginal_effects_eta!(de.eta_gradient_buffer, de, beta, row; backend=backend)
+    # Compute η at row using preallocated buffer
+    de.compiled_base(de.xrow_buffer, de.base_data, row)
+    η = dot(beta, de.xrow_buffer)
+    scale = _dmu_deta(link, η)
+    @inbounds @fastmath for j in eachindex(de.eta_gradient_buffer)
+        g[j] = scale * de.eta_gradient_buffer[j]
+    end
+    return g
+end
+
+"""
+    marginal_effects_mu_ad_pos!(g, de, beta, row, link) -> g
+
+Positional, zero-allocation AD path for μ-scale marginal effects. Avoids keyword
+overhead; equivalent to `marginal_effects_mu!(g, de, beta, row; link=link, backend=:ad)`.
+"""
+@inline function marginal_effects_mu_ad_pos!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+    link
+)
+    # Compute dη/dx using AD positional path
+    marginal_effects_eta_ad_pos!(de.eta_gradient_buffer, de, beta, row)
+    # Compute η at row using preallocated buffer
+    de.compiled_base(de.xrow_buffer, de.base_data, row)
+    η = dot(beta, de.xrow_buffer)
+    scale = _dmu_deta(link, η)
+    @inbounds @fastmath for j in eachindex(de.eta_gradient_buffer)
+        g[j] = scale * de.eta_gradient_buffer[j]
+    end
+    return g
+end
+
+"""
+    marginal_effects_mu_fd_pos!(g, de, beta, row, link) -> g
+
+Positional, zero-allocation FD path for μ-scale marginal effects. Avoids keyword
+overhead; equivalent to `marginal_effects_mu!(g, de, beta, row; link=link, backend=:fd)`.
+"""
+@inline function marginal_effects_mu_fd_pos!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+    link
+)
+    # Compute dη/dx using FD positional path
+    marginal_effects_eta_fd_pos!(de.eta_gradient_buffer, de, beta, row)
     # Compute η at row using preallocated buffer
     de.compiled_base(de.xrow_buffer, de.base_data, row)
     η = dot(beta, de.xrow_buffer)
