@@ -2,18 +2,20 @@
 # Zero-allocation execution through compile-time dispatch
 
 """
-    RECURSION_LIMIT = 25
+    RECURSION_LIMIT = 10
 
 Threshold for switching between recursive and @generated execution strategies.
 
-Julia's tuple specialization is heuristic-based with no guaranteed cutoff. This value
-was empirically determined by lowering from 35 until zero-allocation was achieved
-across all test cases.
+Julia's tuple specialization is heuristic-based with no guaranteed cutoff. Lowered from 25
+to 10 to reduce compilation overhead for complex models with many parameters.
 
-- **≤25 ops**: Recursive execution (empirically reliable)
-- **>25 ops**: @generated execution (forced specialization)
+- **≤10 ops**: Recursive execution (reduced compilation)
+- **>10 ops**: @generated execution (forced specialization)
+
+Note: The original value of 25 was optimal for zero-allocation with simple models, but
+causes excessive compilation (90M+ allocations) for complex models with 100+ parameters.
 """
-const RECURSION_LIMIT = 25
+const RECURSION_LIMIT = 10
 
 """
     (compiled::UnifiedCompiled)(output, data, row_idx) -> nothing
@@ -312,6 +314,11 @@ end
 
 @inline function execute_op(::BinaryOp{:^, In1, In2, Out}, scratch, data, row_idx) where {In1, In2, Out}
     scratch[Out] = scratch[In1] ^ scratch[In2]
+end
+
+# Standardization operation
+@inline function execute_op(::StandardizeOp{InPos, OutPos, Center, Scale}, scratch, data, row_idx) where {InPos, OutPos, Center, Scale}
+    scratch[OutPos] = (scratch[InPos] - Center) / Scale
 end
 
 # Comparison operations
