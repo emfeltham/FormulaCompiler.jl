@@ -290,18 +290,45 @@ struct MixtureContrastOp{Column, OutPositions, LevelIndices, Weights} <: Abstrac
 end
 
 """
+    StandardizeOp{InPos, OutPos, Center, Scale} <: AbstractOp
+
+**Standardization Operation**: Applies z-score transformation (x - center) / scale.
+
+## Position Mapping Role
+- **Input**: Raw value at scratch position InPos
+- **Output**: Standardized value at scratch position OutPos
+- **Transformation**: `(raw_value - center) / scale`
+
+## Type Parameter Embedding
+- **InPos**: Scratch position containing raw value
+- **OutPos**: Scratch position for standardized result
+- **Center**: Centering constant (typically mean)
+- **Scale**: Scaling constant (typically standard deviation)
+
+## Usage
+Implements StandardizedPredictors.jl ZScoredTerm transformations:
+```julia
+StandardizeOp{3, 5, 2.1, 0.8}()  # (scratch[3] - 2.1) / 0.8 → scratch[5]
+```
+
+## Zero-Allocation Execution
+All parameters embedded at compile time enable fast, type-specialized execution.
+"""
+struct StandardizeOp{InPos, OutPos, Center, Scale} <: AbstractOp end
+
+"""
     CopyOp{InPos, OutIdx} <: AbstractOp
 
 **Output Copy Operation**: Transfers scratch values to final output vector.
 
 ## Position Mapping Role
-- **Input**: Scratch position (intermediate result)  
+- **Input**: Scratch position (intermediate result)
 - **Output**: Output vector index (final model matrix column)
 - **Purpose**: Maps internal scratch space to user-visible output
 
 ## Examples
 ```julia
-CopyOp{1, 1}()  # scratch[1] → output[1] (intercept)  
+CopyOp{1, 1}()  # scratch[1] → output[1] (intercept)
 CopyOp{3, 2}()  # scratch[3] → output[2] (transformed variable)
 CopyOp{7, 5}()  # scratch[7] → output[5] (interaction term)
 ```
@@ -310,10 +337,10 @@ CopyOp{7, 5}()  # scratch[7] → output[5] (interaction term)
 CopyOp operations execute after all computational operations complete.
 This separates internal computation from output formatting.
 
-## Model Matrix Correspondence  
+## Model Matrix Correspondence
 Output indices directly correspond to `modelmatrix(model)` columns:
 - `output[1]` = first model matrix column
-- `output[2]` = second model matrix column  
+- `output[2]` = second model matrix column
 - etc.
 """
 struct CopyOp{InPos, OutIdx} <: AbstractOp end

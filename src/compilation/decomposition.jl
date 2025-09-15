@@ -632,10 +632,22 @@ end
 
 # Handle ZScoredTerm (from StandardizedPredictors)
 function decompose_term!(ctx::CompilationContext, term::ZScoredTerm, data_example)
-    # StandardizedPredictors.jl applies transformations at the schema level during model fitting
-    # By compilation time, the data has already been transformed
-    # We just decompose the inner term normally
-    return decompose_term!(ctx, term.term, data_example)
+    # The transformation parameters (center and scale) are stored in the ZScoredTerm
+    # The data passed to compile_formula is raw, so we need to apply (x - center) / scale
+
+    # First decompose the inner term to get the raw value position
+    raw_pos = decompose_term!(ctx, term.term, data_example)
+
+    # Allocate a new position for the standardized value
+    std_pos = allocate_position!(ctx)
+
+    # Add standardization operation: (raw - center) / scale
+    push!(ctx.operations, StandardizeOp{raw_pos, std_pos, term.center, term.scale}())
+
+    # Store the standardized position in the position map
+    ctx.position_map[term] = std_pos
+
+    return std_pos
 end
 
 # Handle RandomEffectsTerm (from MixedModels)
