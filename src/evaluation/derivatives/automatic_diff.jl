@@ -45,7 +45,7 @@ compiled = compile_formula(model, data)
 
 # Build evaluator for continuous variables
 vars = [:x, :z]
-de = build_derivative_evaluator(compiled, data; vars=vars)
+de = build_derivative_evaluator(compiled, data, vars)
 
 # Compute Jacobian for row 1
 J = Matrix{Float64}(undef, length(compiled), length(vars))

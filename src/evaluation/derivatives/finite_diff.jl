@@ -255,43 +255,35 @@ end
 
 
 """
-    fd_jacobian_column!(Jk, de, row, var; step=:auto)
+    fd_jacobian_column!(Jk, de, row, var_idx)
 
-Fill `Jk` with the k-th Jacobian column ∂X/∂var at the given row using finite differences.
+Fill `Jk` with the k-th Jacobian column ∂X/∂var_idx at the given row using finite differences.
 
 Arguments:
 - `Jk::Vector{Float64}`: Preallocated buffer of length `n_terms`
 - `de::DerivativeEvaluator`: Built by `build_derivative_evaluator`
 - `row::Int`: Row index (1-based)
-- `var::Symbol`: Variable to differentiate with respect to (must be in `de.vars`)
-- `step`: Numeric step size or `:auto` (`eps()^(1/3) * max(1, |x|)`)
+- `var_idx::Int`: Variable index (1-based) corresponding to `de.vars[var_idx]`
 
 Returns:
-- The same `Jk` buffer, with `Jk[i] = ∂X[i]/∂var` for the given row
+- The same `Jk` buffer, with `Jk[i] = ∂X[i]/∂de.vars[var_idx]` for the given row
 
 Notes:
 - Zero allocations per call after warmup
 - Uses typed overrides and cached column access for performance
-- Variable must exist in `de.vars` from evaluator construction
+- Variable index must be valid: `1 ≤ var_idx ≤ length(de.vars)`
+- Uses automatic step sizing for optimal numerical accuracy
+- More efficient than symbol-based lookup, suitable for batch operations
 """
-function fd_jacobian_column!(
+@inline function fd_jacobian_column!(
     Jk::Vector{Float64},
     de::DerivativeEvaluator,
     row::Int,
-    var::Symbol;
-    step=:auto,
+    var_idx::Int,
 )
-    # Find variable index
-    var_idx = findfirst(==(var), de.vars)
-    var_idx === nothing && throw(ArgumentError("Variable $var not found in de.vars"))
-    
+    @assert 1 ≤ var_idx ≤ length(de.vars) "var_idx $var_idx out of bounds [1, $(length(de.vars))]"
     @assert length(Jk) == length(de)
-    
-    if step === :auto
-        return _fd_column_auto!(Jk, de, row, var_idx)
-    else
-        return _fd_column_step!(Jk, de, row, var_idx, Float64(step))
-    end
+    return _fd_column_auto!(Jk, de, row, var_idx)
 end
 
 # Internal FD single column (no keyword) with auto step
@@ -396,5 +388,7 @@ end
 
 Positional hot path for single-column finite-difference Jacobian.
 Uses variable index directly to avoid symbol lookup.
+
+Note: This is now an alias for fd_jacobian_column! since it was converted to positional-only.
 """
-@inline fd_jacobian_column_pos!(Jk::Vector{Float64}, de::DerivativeEvaluator, row::Int, var_idx::Int) = _fd_column_auto!(Jk, de, row, var_idx)
+@inline fd_jacobian_column_pos!(Jk::Vector{Float64}, de::DerivativeEvaluator, row::Int, var_idx::Int) = fd_jacobian_column!(Jk, de, row, var_idx)

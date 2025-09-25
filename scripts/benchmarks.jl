@@ -234,11 +234,11 @@ function bench_derivatives(; n=20_000)
     J = Matrix{Float64}(undef, length(compiled), length(vars))
     derivative_modelrow!(J, de, i) # warmup
     t_ad = @benchmark derivative_modelrow!($J, $de, $i)
-    # FD single column (first variable as Symbol)
+    # FD single column (first variable by index)
     col = Vector{Float64}(undef, length(compiled))
-    var_sym = vars[1]
-    fd_jacobian_column!(col, de, i, var_sym) # warmup
-    t_fd = @benchmark fd_jacobian_column!($col, $de, $i, $var_sym)
+    var_idx = 1
+    fd_jacobian_column!(col, de, i, var_idx) # warmup
+    t_fd = @benchmark fd_jacobian_column!($col, $de, $i, $var_idx)
     return (
         summarize_trial("deriv: AD full J", t_ad),
         summarize_trial("deriv: FD single col", t_fd),

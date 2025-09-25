@@ -46,7 +46,7 @@ continuous_vars = continuous_variables(compiled, Tables.columntable(df))
 # Returns: [:price, :quantity]
 
 # Use for derivative evaluator construction  
-de = build_derivative_evaluator(compiled, Tables.columntable(df); vars=continuous_vars)
+de = build_derivative_evaluator(compiled, Tables.columntable(df), continuous_vars)
 ```
 
 # Use Cases
@@ -167,7 +167,7 @@ function accumulate_ame_gradient!(
     de::DerivativeEvaluator,
     β::Vector{Float64},
     rows::AbstractVector{Int},
-    var::Symbol;
+    var::Symbol,
     link=GLM.IdentityLink(),
     backend::Symbol=:fd  # Default to :fd for zero-allocation AME
 )
@@ -176,27 +176,28 @@ function accumulate_ame_gradient!(
     # Use evaluator's fd_yminus buffer as temporary storage
     gβ_temp = de.fd_yminus
     fill!(gβ_sum, 0.0)
-    
+
+    # Convert symbol to index once (avoid linear search in hot loop)
+    var_idx = findfirst(==(var), de.vars)
+    var_idx === nothing && throw(ArgumentError("Variable $var not found in de.vars"))
+
     # Accumulate gradients across rows with backend selection
     for row in rows
         if link isa GLM.IdentityLink
             # η case: gβ = J_k (single Jacobian column)
             if backend === :fd
                 # Zero-allocation single-column FD (optimal for AME)
-                fd_jacobian_column!(gβ_temp, de, row, var)
+                fd_jacobian_column!(gβ_temp, de, row, var_idx)
             elseif backend === :ad
                 # Compute full Jacobian then extract column (less efficient but more accurate)
                 derivative_modelrow!(de.jacobian_buffer, de, row)
-                var_idx = findfirst(==(var), de.vars)
-                var_idx === nothing && throw(ArgumentError("Variable $var not found in de.vars"))
                 gβ_temp .= view(de.jacobian_buffer, :, var_idx)
             else
                 throw(ArgumentError("Invalid backend: $backend. Use :fd or :ad"))
             end
         else
-            # μ case: use existing FD-based chain rule function
-            # (could extend to AD backend if needed, but FD is zero-allocation)
-            me_mu_grad_beta!(gβ_temp, de, β, row, var; link=link)
+            # μ case: use indexed FD-based chain rule function
+            me_mu_grad_beta!(gβ_temp, de, β, row, var_idx, link)
         end
         gβ_sum .+= gβ_temp
     end

@@ -144,10 +144,9 @@ export derivative_modelrow_fd!, derivative_modelrow_fd
 export derivative_modelrow_fd_pos!
 export contrast_modelrow!, contrast_modelrow
 export continuous_variables
-export marginal_effects_eta!, marginal_effects_eta
-export marginal_effects_eta_grad!, marginal_effects_eta_grad
-export marginal_effects_mu!, marginal_effects_mu
-export fd_jacobian_column!, me_eta_grad_beta!, me_mu_grad_beta!
+export marginal_effects_eta_ad!, marginal_effects_eta_fd!
+export marginal_effects_mu_ad!, marginal_effects_mu_fd!
+export me_mu_grad_beta!
 export delta_method_se, accumulate_ame_gradient!
 
 ############################## Development Tools ##############################

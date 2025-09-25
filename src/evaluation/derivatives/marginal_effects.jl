@@ -48,100 +48,76 @@ compiled = compile_formula(model, data)
 
 # Build evaluator and compute marginal effects
 vars = [:x, :z]
-de = build_derivative_evaluator(compiled, data; vars=vars)
+de = build_derivative_evaluator(compiled, data, vars)
 β = coef(model)
 g = Vector{Float64}(undef, length(vars))
 
 # Automatic differentiation (accurate, small allocations)
-marginal_effects_eta!(g, de, β, 1; backend=:ad)
+marginal_effects_eta_ad!(g, de, β, 1)
 println(\"∂η/∂x = \$(g[1]), ∂η/∂z = \$(g[2])\")
 
 # Finite differences (zero allocations)
-marginal_effects_eta!(g, de, β, 1; backend=:fd)
+marginal_effects_eta_fd!(g, de, β, 1)
 ```
 
 # Use Cases
-- **Economic analysis**: Policy impact assessment via marginal effects
 - **Sensitivity analysis**: Parameter robustness evaluation
 - **Bootstrap inference**: Repeated marginal effects computation across samples
 - **Delta method**: Standard error computation for marginal effects
 
 See also: [`marginal_effects_mu!`](@ref) for effects on response scale, [`derivative_modelrow!`](@ref), [`build_derivative_evaluator`](@ref)
 """
-function marginal_effects_eta!(
+
+"""
+    marginal_effects_eta_ad!(g, de, beta, row, var_indices) -> g
+
+High-performance AD path for η-scale marginal effects with indexed variables.
+Computes marginal effects ∂η/∂x for variables specified by var_indices.
+"""
+@inline function marginal_effects_eta_ad!(
     g::AbstractVector{Float64},
     de::DerivativeEvaluator,
     beta::AbstractVector{<:Real},
-    row::Int;
-    backend::Symbol = :ad,
+    row::Int,
+    var_indices::AbstractVector{Int}
 )
-    @assert length(g) == length(de.vars)
-    @assert length(beta) == length(de)
-    
-    # Select backend for Jacobian computation
-    if backend === :fd
-        # Zero-allocation finite difference path using evaluator
-        derivative_modelrow_fd!(de.jacobian_buffer, de, row)
-    elseif backend === :ad
-        # ForwardDiff automatic differentiation path
-        derivative_modelrow!(de.jacobian_buffer, de, row)
-    else
-        throw(ArgumentError("Invalid backend: $backend. Use :ad or :fd"))
-    end
-    
-    # Matrix multiplication: g = J' * β (always zero-allocation)
-    mul!(g, transpose(de.jacobian_buffer), beta)
-    return g
-end
-
-"""
-    marginal_effects_eta_ad_pos!(g, de, beta, row) -> g
-
-Positional, zero-allocation AD path for η-scale marginal effects. Avoids keyword
-overhead; equivalent to `marginal_effects_eta!(g, de, beta, row; backend=:ad)`.
-"""
-@inline function marginal_effects_eta_ad_pos!(
-    g::AbstractVector{Float64},
-    de::DerivativeEvaluator,
-    beta::AbstractVector{<:Real},
-    row::Int
-)
-    @assert length(g) == length(de.vars)
+    @assert length(g) == length(var_indices)
     @assert length(beta) == length(de)
     derivative_modelrow!(de.jacobian_buffer, de, row)
-    mul!(g, transpose(de.jacobian_buffer), beta)
+    # Compute ∂η/∂x = (∂X/∂x)' × β for requested variables only
+    @inbounds for (i, var_idx) in enumerate(var_indices)
+        deta_dx = 0.0
+        for p in 1:length(beta)
+            deta_dx += de.jacobian_buffer[p, var_idx] * beta[p]
+        end
+        g[i] = deta_dx
+    end
     return g
 end
 
 """
-    marginal_effects_eta_fd_pos!(g, de, beta, row) -> g
+    marginal_effects_eta_fd!(g, de, beta, row, var_indices) -> g
 
-Positional, zero-allocation FD path for η-scale marginal effects. Avoids keyword
-overhead; equivalent to `marginal_effects_eta!(g, de, beta, row; backend=:fd)`.
+High-performance FD path for η-scale marginal effects with indexed variables.
+Computes marginal effects ∂η/∂x for variables specified by var_indices.
 """
-@inline function marginal_effects_eta_fd_pos!(
+@inline function marginal_effects_eta_fd!(
     g::AbstractVector{Float64},
     de::DerivativeEvaluator,
     beta::AbstractVector{<:Real},
-    row::Int
+    row::Int,
+    var_indices::AbstractVector{Int}
 )
-    @assert length(g) == length(de.vars)
+    @assert length(g) == length(var_indices)
     @assert length(beta) == length(de)
     derivative_modelrow_fd_pos!(de.jacobian_buffer, de, row)
-    mul!(g, transpose(de.jacobian_buffer), beta)
+    # Extract only the requested variables using indices
+    @inbounds for (i, var_idx) in enumerate(var_indices)
+        g[i] = dot(view(de.jacobian_buffer, :, var_idx), beta)
+    end
     return g
 end
 
-function marginal_effects_eta(
-    de::DerivativeEvaluator,
-    beta::AbstractVector{<:Real},
-    row::Int;
-    backend::Symbol = :ad,
-)
-    g = Vector{Float64}(undef, length(de.vars))
-    marginal_effects_eta!(g, de, beta, row; backend=backend)
-    return g
-end
 
 """
     marginal_effects_mu!(g, evaluator, beta, row; link=IdentityLink(), backend=:ad) -> g
@@ -211,7 +187,7 @@ compiled = compile_formula(model, data)
 
 # Build evaluator
 vars = [:x, :z]
-de = build_derivative_evaluator(compiled, data; vars=vars)
+de = build_derivative_evaluator(compiled, data, vars)
 β = coef(model)
 g = Vector{Float64}(undef, length(vars))
 
@@ -221,189 +197,367 @@ println(\"∂P(success)/∂x = \$(g[1])\")
 println(\"∂P(success)/∂z = \$(g[2])\")
 
 # Compare with effects on logit scale  
-marginal_effects_eta!(g, de, β, 1; backend=:ad)
+marginal_effects_eta_ad!(g, de, β, 1)
 println(\"∂logit(P)/∂x = \$(g[1])\")
 ```
 
 # Use Cases
-- **Economic interpretation**: Effects on meaningful outcome scales (probabilities, rates, etc.)
+- **Interpretation**: Effects on meaningful outcome scales (probabilities, rates, etc.)
 - **Policy analysis**: Impact assessment on interpretable response measures
 - **Medical research**: Treatment effects on probability or survival scales
 - **Comparative analysis**: Standardized effect sizes across different link functions
 
 See also: [`marginal_effects_eta!`](@ref) for effects on linear predictor scale, [`derivative_modelrow!`](@ref)
 """
-function marginal_effects_mu!(
-    g::AbstractVector{Float64},
-    de::DerivativeEvaluator,
-    beta::AbstractVector{<:Real},
-    row::Int;
-    link=GLM.IdentityLink(),
-    backend::Symbol = :ad,
-)
-    # Compute dη/dx using selected backend and preallocated buffer
-    marginal_effects_eta!(de.eta_gradient_buffer, de, beta, row; backend=backend)
-    # Compute η at row using preallocated buffer
-    de.compiled_base(de.xrow_buffer, de.base_data, row)
-    η = dot(beta, de.xrow_buffer)
-    scale = _dmu_deta(link, η)
-    @inbounds @fastmath for j in eachindex(de.eta_gradient_buffer)
-        g[j] = scale * de.eta_gradient_buffer[j]
-    end
-    return g
-end
 
 """
-    marginal_effects_mu_ad_pos!(g, de, beta, row, link) -> g
+    marginal_effects_mu_ad!(g, de, beta, row, var_indices, link) -> g
 
-Positional, zero-allocation AD path for μ-scale marginal effects. Avoids keyword
-overhead; equivalent to `marginal_effects_mu!(g, de, beta, row; link=link, backend=:ad)`.
+High-performance AD path for μ-scale marginal effects with indexed variables.
+Computes marginal effects ∂μ/∂x for variables specified by var_indices.
 """
-@inline function marginal_effects_mu_ad_pos!(
+@inline function marginal_effects_mu_ad!(
     g::AbstractVector{Float64},
     de::DerivativeEvaluator,
     beta::AbstractVector{<:Real},
     row::Int,
+    var_indices::AbstractVector{Int},
     link
 )
-    # Compute dη/dx using AD positional path
-    marginal_effects_eta_ad_pos!(de.eta_gradient_buffer, de, beta, row)
-    # Compute η at row using preallocated buffer
-    de.compiled_base(de.xrow_buffer, de.base_data, row)
-    η = dot(beta, de.xrow_buffer)
+    @assert length(g) == length(var_indices)
+    # Compute Jacobian once (reads data and evaluates formula once)
+    derivative_modelrow!(de.jacobian_buffer, de, row)
+
+    # Extract η from dual evaluation results (no redundant computation)
+    # The rowvec_dual_vec contains X_row as the value part of duals
+    η = 0.0
+    @inbounds for i in eachindex(de.rowvec_dual_vec)
+        η += beta[i] * ForwardDiff.value(de.rowvec_dual_vec[i])
+    end
+
+    # Compute link function derivative once
     scale = _dmu_deta(link, η)
-    @inbounds @fastmath for j in eachindex(de.eta_gradient_buffer)
-        g[j] = scale * de.eta_gradient_buffer[j]
+
+    # Apply chain rule: ∂μ/∂x = scale × (J'β) for requested variables only
+    @inbounds for (i, var_idx) in enumerate(var_indices)
+        deta_dx = 0.0
+        for p in 1:length(beta)
+            deta_dx += de.jacobian_buffer[p, var_idx] * beta[p]
+        end
+        g[i] = scale * deta_dx
     end
     return g
 end
 
 """
-    marginal_effects_mu_fd_pos!(g, de, beta, row, link) -> g
+    marginal_effects_mu_fd!(g, de, beta, row, var_indices, link) -> g
 
-Positional, zero-allocation FD path for μ-scale marginal effects. Avoids keyword
-overhead; equivalent to `marginal_effects_mu!(g, de, beta, row; link=link, backend=:fd)`.
+High-performance FD path for μ-scale marginal effects with indexed variables.
+Computes marginal effects ∂μ/∂x for variables specified by var_indices.
 """
-@inline function marginal_effects_mu_fd_pos!(
+@inline function marginal_effects_mu_fd!(
     g::AbstractVector{Float64},
     de::DerivativeEvaluator,
     beta::AbstractVector{<:Real},
     row::Int,
+    var_indices::AbstractVector{Int},
     link
 )
-    # Compute dη/dx using FD positional path
-    marginal_effects_eta_fd_pos!(de.eta_gradient_buffer, de, beta, row)
+    @assert length(g) == length(var_indices)
+    # Compute dη/dx using FD path for the specific variables
+    marginal_effects_eta_fd!(de.eta_gradient_buffer, de, beta, row, var_indices)
     # Compute η at row using preallocated buffer
     de.compiled_base(de.xrow_buffer, de.base_data, row)
     η = dot(beta, de.xrow_buffer)
     scale = _dmu_deta(link, η)
-    @inbounds @fastmath for j in eachindex(de.eta_gradient_buffer)
+    @inbounds @fastmath for j in eachindex(g)
         g[j] = scale * de.eta_gradient_buffer[j]
     end
     return g
 end
 
-function marginal_effects_mu(
+# Symbol-based convenience wrappers that provide the public API
+# These convert symbols to indices and call the indexed versions
+
+# Helper function for symbol-to-index conversion
+@inline function _symbols_to_indices!(var_indices::AbstractVector{Int}, evaluator_vars::Vector{Symbol}, requested_vars::AbstractVector{Symbol})
+    @assert length(var_indices) == length(requested_vars)
+    @inbounds for i in eachindex(requested_vars)
+        var = requested_vars[i]
+        idx = findfirst(==(var), evaluator_vars)
+        idx === nothing && throw(ArgumentError("Variable $(var) not found in derivative evaluator"))
+        var_indices[i] = idx
+    end
+    return var_indices
+end
+
+"""
+    marginal_effects_eta_ad!(g, de, beta, row, vars) -> g
+    marginal_effects_eta_ad!(g, de, beta, row) -> g
+
+High-performance AD-based η-scale marginal effects computation.
+Direct function call eliminates backend dispatch overhead.
+"""
+@inline function marginal_effects_eta_ad!(
+    g::AbstractVector{Float64},
     de::DerivativeEvaluator,
     beta::AbstractVector{<:Real},
-    row::Int;
-    link=GLM.IdentityLink(),
-    backend::Symbol = :ad,
-)
-    g = Vector{Float64}(undef, length(de.vars))
-    marginal_effects_mu!(g, de, beta, row; link=link, backend=backend)
-    return g
-end
-
-"""
-    me_eta_grad_beta!(gβ, de, β, row, var)
-
-Compute ∂m/∂β for m = marginal effect on η w.r.t. `var`: gβ .= J_k.
-
-Arguments:
-- `gβ::Vector{Float64}`: Preallocated buffer of length `n_terms`
-- `de::DerivativeEvaluator`: Built by `build_derivative_evaluator`
-- `β::Vector{Float64}`: Model coefficients
-- `row::Int`: Row index (1-based)
-- `var::Symbol`: Variable for marginal effect (must be in `de.vars`)
-
-Returns:
-- The same `gβ` buffer, with gradient of η marginal effect w.r.t. parameters
-
-Notes:
-- Zero allocations per call after warmup
-- For η marginal effects: ∂m/∂β = ∂X/∂var (single Jacobian column)
-- Uses zero-allocation single-column FD implementation
-"""
-function me_eta_grad_beta!(
-    gβ::Vector{Float64},
-    de::DerivativeEvaluator,
-    β::Vector{Float64},
     row::Int,
-    var::Symbol,
+    vars::AbstractVector{Symbol}
 )
-    @assert length(gβ) == length(de)
-    
-    # For η marginal effects, ∂m/∂β = J_k (single Jacobian column)
-    # Use zero-allocation single-column FD
-    fd_jacobian_column!(gβ, de, row, var)
-    return gβ
+    @assert length(g) == length(vars)
+    # Convert symbols to indices
+    var_indices = Vector{Int}(undef, length(vars))
+    _symbols_to_indices!(var_indices, de.vars, vars)
+    # Direct call to indexed AD implementation
+    return marginal_effects_eta_ad!(g, de, beta, row, var_indices)
+end
+
+# All variables convenience version
+@inline function marginal_effects_eta_ad!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int
+)
+    @assert length(g) == length(de.vars)
+    var_indices = collect(1:length(de.vars))
+    return marginal_effects_eta_ad!(g, de, beta, row, var_indices)
 end
 
 """
-    me_mu_grad_beta!(gβ, de, β, row, var; link=GLM.IdentityLink())
+    marginal_effects_eta_fd!(g, de, beta, row, vars) -> g
+    marginal_effects_eta_fd!(g, de, beta, row) -> g
 
-Compute ∂m/∂β for m = marginal effect on μ w.r.t. `var` using chain rule.
-
-Arguments:
-- `gβ::Vector{Float64}`: Preallocated buffer of length `n_terms`
-- `de::DerivativeEvaluator`: Built by `build_derivative_evaluator`
-- `β::Vector{Float64}`: Model coefficients
-- `row::Int`: Row index (1-based)
-- `var::Symbol`: Variable for marginal effect (must be in `de.vars`)
-- `link`: GLM link function
-
-Returns:
-- The same `gβ` buffer, with gradient of μ marginal effect w.r.t. parameters
-
-Formula:
-- gβ = g'(η) * J_k + (J_k' * β) * g''(η) * X_row
-- where g'(η) = dμ/dη, g''(η) = d²μ/dη², J_k = ∂X/∂var
-
-Notes:
-- Zero allocations per call after warmup
-- Uses preallocated evaluator buffers
-- Implements full chain rule for μ marginal effects
+High-performance finite-difference η-scale marginal effects computation.
+Zero allocations after warmup, direct function call.
 """
+@inline function marginal_effects_eta_fd!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+    vars::AbstractVector{Symbol}
+)
+    @assert length(g) == length(vars)
+    # Convert symbols to indices
+    var_indices = Vector{Int}(undef, length(vars))
+    _symbols_to_indices!(var_indices, de.vars, vars)
+    # Direct call to indexed FD implementation
+    return marginal_effects_eta_fd!(g, de, beta, row, var_indices)
+end
+
+# All variables convenience version
+@inline function marginal_effects_eta_fd!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int
+)
+    @assert length(g) == length(de.vars)
+    var_indices = collect(1:length(de.vars))
+    return marginal_effects_eta_fd!(g, de, beta, row, var_indices)
+end
+
+"""
+    marginal_effects_mu_ad!(g, de, beta, row, vars, link) -> g
+    marginal_effects_mu_ad!(g, de, beta, row, vars) -> g
+    marginal_effects_mu_ad!(g, de, beta, row, link) -> g
+    marginal_effects_mu_ad!(g, de, beta, row) -> g
+
+High-performance AD-based μ-scale marginal effects computation.
+Direct function call with concrete link type for optimal performance.
+"""
+# With explicit variables and link function
+@inline function marginal_effects_mu_ad!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+    vars::AbstractVector{Symbol},
+    link::GLM.Link
+)
+    @assert length(g) == length(vars)
+    # Convert symbols to indices
+    var_indices = Vector{Int}(undef, length(vars))
+    _symbols_to_indices!(var_indices, de.vars, vars)
+    # Direct call to indexed AD implementation
+    return marginal_effects_mu_ad!(g, de, beta, row, var_indices, link)
+end
+
+# With explicit variables, identity link default
+@inline function marginal_effects_mu_ad!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+    vars::AbstractVector{Symbol}
+)
+    return marginal_effects_mu_ad!(g, de, beta, row, vars, GLM.IdentityLink())
+end
+
+# All variables with explicit link function
+@inline function marginal_effects_mu_ad!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+    link::GLM.Link
+)
+    @assert length(g) == length(de.vars)
+    var_indices = collect(1:length(de.vars))
+    return marginal_effects_mu_ad!(g, de, beta, row, var_indices, link)
+end
+
+# All variables, identity link default
+@inline function marginal_effects_mu_ad!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int
+)
+    return marginal_effects_mu_ad!(g, de, beta, row, GLM.IdentityLink())
+end
+
+"""
+    marginal_effects_mu_fd!(g, de, beta, row, vars, link) -> g
+    marginal_effects_mu_fd!(g, de, beta, row, vars) -> g
+    marginal_effects_mu_fd!(g, de, beta, row, link) -> g
+    marginal_effects_mu_fd!(g, de, beta, row) -> g
+
+High-performance finite-difference μ-scale marginal effects computation.
+Zero allocations, direct function call with concrete link type.
+"""
+# With explicit variables and link function
+@inline function marginal_effects_mu_fd!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+    vars::AbstractVector{Symbol},
+    link::GLM.Link
+)
+    @assert length(g) == length(vars)
+    # Convert symbols to indices
+    var_indices = Vector{Int}(undef, length(vars))
+    _symbols_to_indices!(var_indices, de.vars, vars)
+    # Direct call to indexed FD implementation
+    return marginal_effects_mu_fd!(g, de, beta, row, var_indices, link)
+end
+
+# With explicit variables, identity link default
+@inline function marginal_effects_mu_fd!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+    vars::AbstractVector{Symbol}
+)
+    return marginal_effects_mu_fd!(g, de, beta, row, vars, GLM.IdentityLink())
+end
+
+# All variables with explicit link function
+@inline function marginal_effects_mu_fd!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int,
+    link::GLM.Link
+)
+    @assert length(g) == length(de.vars)
+    var_indices = collect(1:length(de.vars))
+    return marginal_effects_mu_fd!(g, de, beta, row, var_indices, link)
+end
+
+# All variables, identity link default
+@inline function marginal_effects_mu_fd!(
+    g::AbstractVector{Float64},
+    de::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int
+)
+    return marginal_effects_mu_fd!(g, de, beta, row, GLM.IdentityLink())
+end
+
+# Parameter gradient function (uses variable index for zero-allocation performance)
 function me_mu_grad_beta!(
     gβ::Vector{Float64},
     de::DerivativeEvaluator,
     β::Vector{Float64},
     row::Int,
-    var::Symbol;
-    link=GLM.IdentityLink(),
+    var_idx::Int,
+    link
 )
     @assert length(gβ) == length(de)
-    
+    @assert 1 ≤ var_idx ≤ length(de.vars) "var_idx $var_idx out of bounds [1, $(length(de.vars))]"
+
     # Step 1: Compute X_row and η, store X_row in xrow_buffer
     de.compiled_base(de.xrow_buffer, de.base_data, row)
     η = dot(β, de.xrow_buffer)
-    
+
     # Step 2: Get link function derivatives
     g_prime = _dmu_deta(link, η)      # dμ/dη
     g_double_prime = _d2mu_deta2(link, η)  # d²μ/dη²
-    
-    # Step 3: Get single Jacobian column J_k and store in fd_yplus buffer (reuse as temporary)
-    fd_jacobian_column!(de.fd_yplus, de, row, var)  # Now fd_yplus contains J_k
-    
+
+    # Step 3: Get single Jacobian column J_k using indexed version (NO LINEAR SEARCH!)
+    fd_jacobian_column!(de.fd_yplus, de, row, var_idx)  # Now fd_yplus contains J_k
+
     # Step 4: Compute J_k' * β (scalar)
     Jk_dot_beta = dot(de.fd_yplus, β)
-    
+
     # Step 5: Apply chain rule formula: gβ = g'(η) * J_k + (J_k' * β) * g''(η) * X_row
     # xrow_buffer contains X_row, fd_yplus contains J_k
     @inbounds @fastmath for i in eachindex(gβ)
         gβ[i] = g_prime * de.fd_yplus[i] + Jk_dot_beta * g_double_prime * de.xrow_buffer[i]
     end
-    
+
     return gβ
+end
+
+
+# Generic dispatcher functions for backend selection
+
+"""
+    marginal_effects_eta!(g, evaluator, beta, row; backend=:ad) -> g
+
+Generic dispatcher for η-scale marginal effects with backend selection.
+Dispatches to `marginal_effects_eta_ad!` or `marginal_effects_eta_fd!` based on backend.
+"""
+@inline function marginal_effects_eta!(
+    g::AbstractVector{Float64},
+    evaluator::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int;
+    backend::Symbol=:ad
+)
+    if backend === :ad
+        return marginal_effects_eta_ad!(g, evaluator, beta, row)
+    elseif backend === :fd
+        return marginal_effects_eta_fd!(g, evaluator, beta, row)
+    else
+        throw(ArgumentError("Unsupported backend: $backend. Use :ad or :fd"))
+    end
+end
+
+"""
+    marginal_effects_mu!(g, evaluator, beta, row; link=IdentityLink(), backend=:ad) -> g
+
+Generic dispatcher for μ-scale marginal effects with backend selection.
+Dispatches to `marginal_effects_mu_ad!` or `marginal_effects_mu_fd!` based on backend.
+"""
+@inline function marginal_effects_mu!(
+    g::AbstractVector{Float64},
+    evaluator::DerivativeEvaluator,
+    beta::AbstractVector{<:Real},
+    row::Int;
+    link=GLM.IdentityLink(),
+    backend::Symbol=:ad
+)
+    if backend === :ad
+        return marginal_effects_mu_ad!(g, evaluator, beta, row, link)
+    elseif backend === :fd
+        return marginal_effects_mu_fd!(g, evaluator, beta, row, link)
+    else
+        throw(ArgumentError("Unsupported backend: $backend. Use :ad or :fd"))
+    end
 end

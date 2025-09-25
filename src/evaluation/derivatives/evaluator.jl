@@ -8,7 +8,9 @@ Check if a column is a numeric vector that can be converted to Float64.
 _is_numeric_vector(col::AbstractVector) = eltype(col) <: Number
 
 """
-    build_derivative_evaluator(compiled, data; vars, chunk=:auto) -> DerivativeEvaluator
+    build_derivative_evaluator(compiled, data, vars) -> DerivativeEvaluator
+    build_derivative_evaluator(compiled, data, vars, chunk) -> DerivativeEvaluator
+    build_derivative_evaluator(compiled, data) -> DerivativeEvaluator
 
 Build a reusable automatic differentiation evaluator for computing Jacobians and marginal effects.
 
@@ -40,7 +42,7 @@ differentiation and finite differences with backend selection for optimal perfor
 
 # Variable Type Handling
 - **All numeric types**: Automatically converted to Float64 for differentiation (Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, Float32, Float64)
-- **Type validation**: Rejects non-numeric variables with informative error messages  
+- **Type validation**: Rejects non-numeric variables with informative error messages
 - **Memory optimization**: Conversion overhead incurred once during construction
 
 # Example
@@ -49,9 +51,9 @@ using FormulaCompiler, GLM
 
 # Setup model with diverse variable types
 df = DataFrame(
-    y = randn(1000), 
+    y = randn(1000),
     x = randn(1000),                    # Float64
-    age = rand(Int16(18):Int16(80), 1000),  # Int16  
+    age = rand(Int16(18):Int16(80), 1000),  # Int16
     score = rand(UInt8(0):UInt8(100), 1000), # UInt8
     group = rand([\"A\", \"B\"], 1000)
 )
@@ -59,31 +61,36 @@ model = lm(@formula(y ~ x * group + age + score), df)
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 
-# Build derivative evaluator for continuous variables
+# Build derivative evaluator for continuous variables (positional args)
 vars = [:x, :age, :score]  # Mix of Float64, Int16, and UInt8
-de = build_derivative_evaluator(compiled, data; vars=vars)
+de = build_derivative_evaluator(compiled, data, vars)
 
 # Jacobian computation
 J = Matrix{Float64}(undef, length(compiled), length(vars))
 derivative_modelrow!(J, de, 1)  # J[i,j] = ∂X[i]/∂vars[j]
 
-# Marginal effects on linear predictor η = Xβ  
+# Marginal effects on linear predictor η = Xβ
 β = coef(model)
 g_eta = Vector{Float64}(undef, length(vars))
-marginal_effects_eta!(g_eta, de, β, 1; backend=:ad)  # Small allocations
-marginal_effects_eta!(g_eta, de, β, 1; backend=:fd)  # Zero allocations
+marginal_effects_eta_ad!(g_eta, de, β, 1)  # Small allocations
+marginal_effects_eta_fd!(g_eta, de, β, 1)  # Zero allocations
 ```
 
-# Backend Selection
+# Method Overloads
 ```julia
-# Choose backend based on requirements
-marginal_effects_eta!(g, de, β, row; backend=:ad)  # Fast, accurate, small allocations
-marginal_effects_eta!(g, de, β, row; backend=:fd)  # Zero allocations, good accuracy
+# Primary version with explicit variables
+de = build_derivative_evaluator(compiled, data, [:x, :z])
+
+# With explicit chunk size
+de = build_derivative_evaluator(compiled, data, [:x, :z], ForwardDiff.Chunk{4}())
+
+# All continuous variables (convenience)
+de = build_derivative_evaluator(compiled, data)  # Uses all continuous vars
 ```
 
 # Use Cases
 - **Marginal effects computation**: Economic and policy analysis
-- **Sensitivity analysis**: Parameter robustness assessment  
+- **Sensitivity analysis**: Parameter robustness assessment
 - **Gradient-based optimization**: Custom model fitting and inference
 - **Bootstrap inference**: Repeated derivative computation across samples
 
@@ -91,17 +98,47 @@ marginal_effects_eta!(g, de, β, row; backend=:fd)  # Zero allocations, good acc
 Provides clear validation with specific guidance:
 ```julia
 # This will error with helpful message:
-de = build_derivative_evaluator(compiled, data; vars=[:x, :group])  
+de = build_derivative_evaluator(compiled, data, [:x, :group])
 # Error: Non-continuous/categorical vars: [:group]. Use scenario system for categorical profiles.
 ```
 
-See also: [`derivative_modelrow!`](@ref), [`marginal_effects_eta!`](@ref), [`continuous_variables`](@ref)
+See also: [`derivative_modelrow!`](@ref), [`marginal_effects_eta_ad!`](@ref), [`continuous_variables`](@ref)
 """
 function build_derivative_evaluator(
+    # Primary version: explicit variables
+    
     compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple;
+    data::NamedTuple,
+    vars::Vector{Symbol}
+) where {T, Ops, S, O}
+    return _build_derivative_evaluator_impl(compiled, data, vars, :auto)
+end
+
+# Version with explicit chunk size
+function build_derivative_evaluator(
+    compiled::UnifiedCompiled{T, Ops, S, O},
+    data::NamedTuple,
     vars::Vector{Symbol},
-    chunk=:auto,
+    chunk
+) where {T, Ops, S, O}
+    return _build_derivative_evaluator_impl(compiled, data, vars, chunk)
+end
+
+# Convenience version: all continuous variables
+function build_derivative_evaluator(
+    compiled::UnifiedCompiled{T, Ops, S, O},
+    data::NamedTuple
+) where {T, Ops, S, O}
+    vars = continuous_variables(compiled, data)
+    return _build_derivative_evaluator_impl(compiled, data, vars, :auto)
+end
+
+# Implementation function (extracted from original)
+function _build_derivative_evaluator_impl(
+    compiled::UnifiedCompiled{T, Ops, S, O},
+    data::NamedTuple,
+    vars::Vector{Symbol},
+    chunk
 ) where {T, Ops, S, O}
     # Validate that all requested vars are continuous (no categorical derivatives)
     allowed = continuous_variables(compiled, data)
@@ -138,11 +175,11 @@ function build_derivative_evaluator(
     # Pre-cache column references to avoid getproperty allocations (as NTuple)
     # Use the converted Float64 columns for FD computation
     fd_columns = ntuple(i -> getproperty(data_over, vars[i]), nvars)
-    
+
     # Create a mutable ref that will eventually point to the final evaluator
     beta_ref = Base.RefValue(Vector{Float64}())
     de_ref = Base.RefValue{DerivativeEvaluator}()
-    
+
     # Build typed closures and configs using the ref (which is still uninitialized)
     g = DerivClosure(de_ref)
     ch = chunk === :auto ? ForwardDiff.Chunk{nvars}() : chunk
@@ -203,10 +240,10 @@ function build_derivative_evaluator(
         Vector{Float64}(undef, nvars),
         fd_columns,
     )
-    
+
     # Now initialize the ref to point to the final evaluator
     de_ref[] = de
-    
+
     return de
 end
 
