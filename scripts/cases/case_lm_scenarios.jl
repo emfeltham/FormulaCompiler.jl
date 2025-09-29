@@ -45,18 +45,20 @@ let
 
     # Marginal effects and SE via delta method (η scale)
     vars = continuous_variables(compiled, data)
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de_fd = derivativevaluator(:fd, compiled, data, vars)
     β = collect(coef(model))
     i = 25
     gη = Vector{Float64}(undef, length(vars))
-    marginal_effects_eta!(gη, de, β, i; backend=:fd)
+    marginal_effects_eta!(gη, de_fd, β, i)
 
     gβ = zeros(Float64, length(β))
     rows = 1:2000
-    accumulate_ame_gradient!(gβ, de, β, rows; backend=:fd)
+    # Note: Need to specify which variable for AME gradient
+    var_for_ame = vars[1]  # Use first continuous variable
+    accumulate_ame_gradient!(gβ, de_fd, β, rows, var_for_ame)
     gβ ./= length(rows)
     se_ame = delta_method_se(gβ, Matrix{Float64}(vcov(model)))
-    println("AME (η) SE (delta method) over ", length(rows), " rows: ", se_ame)
+    println("AME (η) SE (delta method) for ", var_for_ame, " over ", length(rows), " rows: ", se_ame)
 
     # Artifact
     ts = Dates.format(now(), dateformat"yyyymmdd_HHMMSS")

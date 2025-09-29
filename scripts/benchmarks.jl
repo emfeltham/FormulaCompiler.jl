@@ -59,7 +59,7 @@ function env_summary(io::IO=stdout)
             try
                 parsed = TOML.parsefile(toml)
                 v = get(parsed, "version", nothing)
-                v === nothing ? "unknown" : string(v)
+                isnothing(v) ? "unknown" : string(v)
             catch
                 "unknown"
             end
@@ -105,7 +105,7 @@ function emit_markdown(path::AbstractString, results::Vector{BenchResult}; tag::
                 try
                     parsed = TOML.parsefile(toml)
                     v = get(parsed, "version", nothing)
-                    v === nothing ? "unknown" : string(v)
+                    isnothing(v) ? "unknown" : string(v)
                 catch
                     "unknown"
                 end
@@ -228,17 +228,18 @@ function bench_derivatives(; n=20_000)
     data = Tables.columntable(df)
     compiled = compile_formula(model, data)
     vars = continuous_variables(compiled, data)
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de_ad = derivativevaluator(:ad, compiled, data, vars)
+    de_fd = derivativevaluator(:fd, compiled, data, vars)
     i = 25
     # AD full Jacobian
     J = Matrix{Float64}(undef, length(compiled), length(vars))
-    derivative_modelrow!(J, de, i) # warmup
-    t_ad = @benchmark derivative_modelrow!($J, $de, $i)
+    derivative_modelrow!(J, de_ad, i) # warmup
+    t_ad = @benchmark derivative_modelrow!($J, $de_ad, $i)
     # FD single column (first variable by index)
     col = Vector{Float64}(undef, length(compiled))
     var_idx = 1
-    fd_jacobian_column!(col, de, i, var_idx) # warmup
-    t_fd = @benchmark fd_jacobian_column!($col, $de, $i, $var_idx)
+    fd_jacobian_column!(col, de_fd, i, var_idx) # warmup
+    t_fd = @benchmark fd_jacobian_column!($col, $de_fd, $i, $var_idx)
     return (
         summarize_trial("deriv: AD full J", t_ad),
         summarize_trial("deriv: FD single col", t_fd),
@@ -251,19 +252,20 @@ function bench_marginal_effects(; n=20_000)
     data = Tables.columntable(df)
     compiled = compile_formula(model, data)
     vars = continuous_variables(compiled, data)
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de_fd = derivativevaluator(:fd, compiled, data, vars)
+    de_ad = derivativevaluator(:ad, compiled, data, vars)
     β = collect(coef(model))
     i = 25
     g = Vector{Float64}(undef, length(vars))
     # FD (η)
-    marginal_effects_eta!(g, de, β, i; backend=:fd) # warmup
-    t_eta_fd = @benchmark marginal_effects_eta!($g, $de, $β, $i; backend=:fd)
+    marginal_effects_eta!(g, de_fd, β, i) # warmup
+    t_eta_fd = @benchmark marginal_effects_eta!($g, $de_fd, $β, $i)
     # AD (η)
-    marginal_effects_eta!(g, de, β, i; backend=:ad) # warmup
-    t_eta_ad = @benchmark marginal_effects_eta!($g, $de, $β, $i; backend=:ad)
+    marginal_effects_eta!(g, de_ad, β, i) # warmup
+    t_eta_ad = @benchmark marginal_effects_eta!($g, $de_ad, $β, $i)
     # μ (Logit as example link)
-    t_mu_fd = @benchmark marginal_effects_mu!($g, $de, $β, $i; link=LogitLink(), backend=:fd)
-    t_mu_ad = @benchmark marginal_effects_mu!($g, $de, $β, $i; link=LogitLink(), backend=:ad)
+    t_mu_fd = @benchmark marginal_effects_mu!($g, $de_fd, $β, $i, LogitLink())
+    t_mu_ad = @benchmark marginal_effects_mu!($g, $de_ad, $β, $i, LogitLink())
     return (
         summarize_trial("ME η: FD", t_eta_fd),
         summarize_trial("ME η: AD", t_eta_ad),
@@ -278,12 +280,12 @@ function bench_delta_se(; n=5_000)
     data = Tables.columntable(df)
     compiled = compile_formula(model, data)
     vars = continuous_variables(compiled, data)
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de_fd = derivativevaluator(:fd, compiled, data, vars)
     β = collect(coef(model))
     i = 25
     # Use η-scale gradient w.r.t β as example: gβ = J[:, var1]
     J = Matrix{Float64}(undef, length(compiled), length(vars))
-    derivative_modelrow!(J, de, i)
+    derivative_modelrow!(J, de_fd, i)
     gβ = view(J, :, 1)
     Σ = Matrix{Float64}(vcov(model))
     # Warm and bench
@@ -450,10 +452,10 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
     args = parse_args()
     results = run_selected(args.bench_syms; fast=args.fast)
-    if args.out !== nothing
+    if !isnothing(args.out)
         ts = Dates.format(now(), dateformat"yyyymmdd_HHMMSS")
         out_file = args.file
-        if out_file === nothing
+        if isnothing(out_file)
             mkpath("results")
             ext = args.out === :md ? ".md" : ".csv"
             tagpart = isempty(args.tag) ? "" : "_" * args.tag

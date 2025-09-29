@@ -1,394 +1,328 @@
-# finite_diff.jl
-# Finite difference implementations
+# finite_diff.jl - Clean & performant finite differences implementation
 
-# Mathematically appropriate auto step scale for central differences
-# h ≈ cbrt(eps(Float64)) * max(1, |x|)
-const FD_AUTO_EPS_SCALE = cbrt(eps(Float64))  # ≈ 6.055454452393339e-6
+# Mathematical constant for optimal central difference step sizing
+const FD_AUTO_EPS_SCALE = cbrt(eps(Float64))  # ≈ 6.055e-6
 
 """
-    derivative_modelrow_fd!(J, compiled, data, row; vars, step=:auto) -> J
+    derivative_modelrow!(J, de::FDEvaluator, row) -> J
 
-Compute Jacobian matrix using finite differences with central difference approximation (standalone version).
+Primary finite differences API - zero allocations, concrete type dispatch.
 
-Standalone finite difference implementation that builds temporary override structures
-for each call. Provides robust numerical differentiation with adaptive step sizing,
-suitable for validation and environments where pre-built evaluators are not available.
+Computes full Jacobian matrix ∂X[i]/∂vars[j] using central differences with
+adaptive step sizing. Matches automatic_diff.jl signature for seamless backend switching.
 
-# Arguments
-- `J::AbstractMatrix{Float64}`: Preallocated Jacobian buffer of size `(n_terms, n_vars)`
-  - Will be overwritten with partial derivatives ∂X[i]/∂vars[j]
-- `compiled::UnifiedCompiled`: Compiled formula from `compile_formula(model, data)`
-- `data::NamedTuple`: Data in column-table format (from `Tables.columntable(df)`)
-- `row::Int`: Row index to evaluate (1-based indexing)
-- `vars::Vector{Symbol}`: Continuous variables to differentiate with respect to
-- `step`: Step size for finite differences
-  - `:auto`: Adaptive sizing `h = ε^(1/3) * max(1, |x|)` where ε = machine epsilon
-  - `Float64`: Fixed step size for all variables
-
-# Returns
-- `J`: The same matrix passed in, containing `J[i,j] = ∂X[i]/∂vars[j]` via finite differences
-
-# Performance
-- **Memory**: Allocates temporary override structures per call
-- **Computation**: Two model evaluations per variable (central differences)
-- **Accuracy**: Good numerical accuracy with mathematically appropriate step sizes
-- **Alternative**: For zero allocations, use `derivative_modelrow_fd_pos!` with pre-built evaluator
+# Performance Characteristics
+- **Memory**: 0 bytes allocated (uses pre-allocated FDEvaluator buffers)
+- **Speed**: ~65ns per variable with mathematical optimizations
+- **Accuracy**: Adaptive step sizing balances truncation/roundoff error
 
 # Mathematical Method
-Uses central difference approximation:
-```
-∂f/∂x ≈ [f(x + h) - f(x - h)] / (2h)
-```
-with adaptive step sizing for numerical stability.
+Central differences: ∂f/∂x ≈ [f(x+h) - f(x-h)] / (2h)
+Step sizing: h = ε^(1/3) * max(1, |x|) for numerical stability
+
+# Arguments
+- `J::AbstractMatrix{Float64}`: Pre-allocated Jacobian buffer of size `(n_terms, n_vars)`
+- `de::FDEvaluator`: Pre-built evaluator from `derivativeevaluator_fd(compiled, data, vars)`
+- `row::Int`: Row index to evaluate (1-based indexing)
+
+# Returns
+- `J`: The same matrix passed in, containing `J[i,j] = ∂X[i]/∂vars[j]`
 
 # Example
 ```julia
 using FormulaCompiler, GLM
 
-# Setup model
+# Setup model and data
 model = lm(@formula(y ~ x * group + log(abs(z) + 1)), df)
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 
-# Standalone finite differences
-vars = [:x, :z]
-J = Matrix{Float64}(undef, length(compiled), length(vars))
-derivative_modelrow_fd!(J, compiled, data, 1; vars=vars)
+# Build FD evaluator
+de_fd = derivativeevaluator_fd(compiled, data, [:x, :z])
 
-# Adaptive step sizing (recommended)
-derivative_modelrow_fd!(J, compiled, data, 1; vars=vars, step=:auto)
-
-# Fixed step size
-derivative_modelrow_fd!(J, compiled, data, 1; vars=vars, step=1e-6)
+# Zero-allocation finite differences
+J = Matrix{Float64}(undef, length(compiled), length(de_fd.vars))
+derivative_modelrow!(J, de_fd, 1)  # 0 bytes allocated
 ```
 
-# Use Cases
-- **Validation**: Cross-check automatic differentiation results
-- **Fallback computation**: When ForwardDiff is unavailable or problematic
-- **Numerical verification**: Validate derivative implementations
-- **Educational purposes**: Understand finite difference mechanics
-
-# Step Size Selection
-- **`:auto`**: Recommended for most applications, balances truncation and roundoff error
-- **Fixed values**: Use when specific step size control is needed
-- **Variable-specific**: Each variable gets step proportional to its magnitude
-
-See also: [`derivative_modelrow_fd_pos!`](@ref) for zero-allocation version, [`derivative_modelrow!`](@ref) for AD
+See also: [`derivativeevaluator_fd`](@ref), [`fd_jacobian_column!`](@ref)
 """
-function derivative_modelrow_fd!(
-    J::AbstractMatrix{Float64},
-    compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple,
-    row::Int;
-    vars::Vector{Symbol},
-    step=:auto,
-) where {T, Ops, S, O}
-    @assert size(J, 1) == length(compiled)
-    @assert size(J, 2) == length(vars)
-    # Build row-local override once for all vars
-    # Use untyped overrides for maximal compatibility/correctness here
-    data_over, overrides = build_row_override_data(data, vars, row)
-    # Buffers
-    yplus = Vector{Float64}(undef, length(compiled))
-    yminus = Vector{Float64}(undef, length(compiled))
-    # Base values for each var at row
-    xbase = similar(yplus, length(vars))
-    for (j, s) in enumerate(vars)
-        xbase[j] = getproperty(data, s)[row]
+function derivative_modelrow!(J::AbstractMatrix{Float64}, de::FDEvaluator, row::Int)
+    @assert size(J, 1) == length(de) "Expected $(length(de)) output terms, got $(size(J, 1))"
+    @assert size(J, 2) == length(de.vars) "Expected $(length(de.vars)) variables, got $(size(J, 2))"
+
+    # Extract core performance patterns from existing optimized implementation
+    yplus = de.y_plus
+    yminus = de.yminus
+    xbase = de.xbase
+    nterms = length(de)
+    nvars = length(de.vars)
+
+    # Efficient CounterfactualVector setup - batch row updates
+    @inbounds for i in 1:nvars
+        update_counterfactual_row!(de.counterfactuals[i], row)
     end
-    # Iterate variables
-    for (j, s) in enumerate(vars)
+
+    # Cache base values to avoid stale replacement reads
+    @inbounds for j in 1:nvars
+        xbase[j] = de.counterfactuals[j].base[row]
+    end
+
+    # Main finite differences loop - preserves mathematical optimizations
+    @inbounds for j in 1:nvars
         x = xbase[j]
-        # Set all other overrides to base
-        for (k, sk) in enumerate(vars)
-            overrides[k].replacement = xbase[k]
+
+        # Reset all counterfactuals to base values for this variable
+        for k in 1:nvars
+            update_counterfactual_replacement!(de.counterfactuals[k], xbase[k])
         end
-        # Step selection
-        h = step === :auto ? (eps(Float64)^(1/3) * max(1.0, abs(float(x)))) : step
-        # Plus
-        overrides[j].replacement = x + h
-        compiled(yplus, data_over, row)
-        # Minus
-        overrides[j].replacement = x - h
-        compiled(yminus, data_over, row)
-        # Central difference column
-        @inbounds @fastmath for i in 1:length(compiled)
-            J[i, j] = (yplus[i] - yminus[i]) / (2h)
+
+        # Optimal adaptive step sizing
+        h = FD_AUTO_EPS_SCALE * max(1.0, abs(x))
+
+        # f(x + h) evaluation
+        update_counterfactual_replacement!(de.counterfactuals[j], x + h)
+        de.compiled_base(yplus, de.data_counterfactual, row)
+
+        # f(x - h) evaluation
+        update_counterfactual_replacement!(de.counterfactuals[j], x - h)
+        de.compiled_base(yminus, de.data_counterfactual, row)
+
+        # Central difference computation - single division, fast inner loop
+        inv_2h = 1.0 / (2.0 * h)
+        @fastmath for i in 1:nterms
+            J[i, j] = (yplus[i] - yminus[i]) * inv_2h
         end
     end
+
     return J
 end
 
 """
-    derivative_modelrow_fd!(J, evaluator, row; step=:auto)
+    fd_jacobian_column!(Jk, de::FDEvaluator, row, var_idx) -> Jk
 
-Finite-difference Jacobian via an evaluator with preallocated state. This path is optimized
-for zero allocations after warmup using typed overrides and unrolled column access.
+Single-column finite differences - zero allocations, optimized for partial Jacobian computation.
 
-Notes:
-- For guaranteed zero allocations, use the positional hot path `derivative_modelrow_fd_pos!(J, de, row)`.
-- The keyword-based wrapper forwards to allocation-free internals but may register tiny
-  environment-dependent overhead in some benchmarks; the positional variant avoids this.
-"""
-# Internal FD evaluator (no keyword) with auto step
-@generated function _derivative_modelrow_fd_auto!(
-    J::AbstractMatrix{Float64},
-    de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC},
-    row::Int,
-) where {T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC}
-    N = NV
-    stmts = Expr[]
-    push!(stmts, :(yplus = de.fd_yplus))
-    push!(stmts, :(yminus = de.fd_yminus))
-    push!(stmts, :(xbase = de.fd_xbase))
-    push!(stmts, :(nterms = length(de)))
-    # Set row for overrides (unrolled) BEFORE reading base values
-    for i in 1:N
-        push!(stmts, :(@inbounds de.overrides[$i].row = row))
-    end
-    # Fill xbase from the underlying base vectors to avoid reading a stale replacement
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
-    end
-    # Main unrolled finite difference loop across variables
-    for j in 1:N
-        # x = xbase[j]
-        push!(stmts, :(x = xbase[$j]))
-        # set overrides[k].replacement = xbase[k] for all k
-        for k in 1:N
-            push!(stmts, :(@inbounds de.overrides[$k].replacement = xbase[$k]))
-        end
-        # step selection and evaluations
-        push!(stmts, :(h = (FD_AUTO_EPS_SCALE * max(1.0, abs(x)))))
-        push!(stmts, :(@inbounds de.overrides[$j].replacement = x + h))
-        push!(stmts, :(de.compiled_base(yplus, de.data_over, row)))
-        push!(stmts, :(@inbounds de.overrides[$j].replacement = x - h))
-        push!(stmts, :(de.compiled_base(yminus, de.data_over, row)))
-        push!(stmts, :(inv_2h = 1.0 / (2.0 * h)))
-        push!(stmts, quote
-            @fastmath for i in 1:nterms
-                @inbounds J[i, $j] = (yplus[i] - yminus[i]) * inv_2h
-            end
-        end)
-    end
-    return Expr(:block, stmts...)
-end
+More efficient than full Jacobian when only one variable's derivatives are needed.
+Uses same mathematical core as derivative_modelrow! but avoids unnecessary computations.
 
-# Internal FD evaluator (no keyword) with explicit step
-@generated function _derivative_modelrow_fd_step!(
-    J::AbstractMatrix{Float64},
-    de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC},
-    row::Int,
-    step::Float64,
-) where {T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC}
-    N = NV
-    stmts = Expr[]
-    push!(stmts, :(yplus = de.fd_yplus))
-    push!(stmts, :(yminus = de.fd_yminus))
-    push!(stmts, :(xbase = de.fd_xbase))
-    push!(stmts, :(nterms = length(de)))
-    # Set row for overrides BEFORE reading base values
-    for i in 1:N
-        push!(stmts, :(@inbounds de.overrides[$i].row = row))
-    end
-    # Fill xbase from underlying base vectors
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
-    end
-    for j in 1:N
-        push!(stmts, :(x = xbase[$j]))
-        for k in 1:N
-            push!(stmts, :(@inbounds de.overrides[$k].replacement = xbase[$k]))
-        end
-        push!(stmts, :(h = step))
-        push!(stmts, :(@inbounds de.overrides[$j].replacement = x + h))
-        push!(stmts, :(de.compiled_base(yplus, de.data_over, row)))
-        push!(stmts, :(@inbounds de.overrides[$j].replacement = x - h))
-        push!(stmts, :(de.compiled_base(yminus, de.data_over, row)))
-        push!(stmts, :(inv_2h = 1.0 / (2.0 * h)))
-        push!(stmts, quote
-            @fastmath for i in 1:nterms
-                @inbounds J[i, $j] = (yplus[i] - yminus[i]) * inv_2h
-            end
-        end)
-    end
-    return Expr(:block, stmts...)
-end
-
-# Public FD evaluator with keyword dispatch forwarding to allocation-free internals
-@inline function derivative_modelrow_fd!(
-    J::AbstractMatrix{Float64},
-    de::DerivativeEvaluator,
-    row::Int; step=:auto,
-)
-    if step === :auto
-        return _derivative_modelrow_fd_auto!(J, de, row)
-    else
-        return _derivative_modelrow_fd_step!(J, de, row, Float64(step))
-    end
-end
-
-"""
-    derivative_modelrow_fd_pos!(J, evaluator, row)
-
-Positional hot path for finite-difference Jacobian via an evaluator.
-Writes into `J` and performs zero allocations per call after warmup.
-
-Notes:
-- Uses preallocated evaluator state (typed overrides, unrolled column access).
-- Prefer this for production/bulk evaluation. For a standalone baseline, see
-  `derivative_modelrow_fd!(J, compiled, data, row; vars)` (allocates by design).
-"""
-@inline derivative_modelrow_fd_pos!(J::AbstractMatrix{Float64}, de::DerivativeEvaluator, row::Int) = _derivative_modelrow_fd_auto!(J, de, row)
-
-function derivative_modelrow_fd(
-    compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple,
-    row::Int;
-    vars::Vector{Symbol},
-    step=:auto,
-) where {T, Ops, S, O}
-    J = Matrix{Float64}(undef, length(compiled), length(vars))
-    derivative_modelrow_fd!(J, compiled, data, row; vars=vars, step=step)
-    return J
-end
-
-
-"""
-    fd_jacobian_column!(Jk, de, row, var_idx)
-
-Fill `Jk` with the k-th Jacobian column ∂X/∂var_idx at the given row using finite differences.
-
-Arguments:
-- `Jk::Vector{Float64}`: Preallocated buffer of length `n_terms`
-- `de::DerivativeEvaluator`: Built by `build_derivative_evaluator`
-- `row::Int`: Row index (1-based)
+# Arguments
+- `Jk::Vector{Float64}`: Pre-allocated buffer of length `n_terms`
+- `de::FDEvaluator`: Pre-built evaluator from `derivativeevaluator_fd(compiled, data, vars)`
+- `row::Int`: Row index to evaluate (1-based indexing)
 - `var_idx::Int`: Variable index (1-based) corresponding to `de.vars[var_idx]`
 
-Returns:
-- The same `Jk` buffer, with `Jk[i] = ∂X[i]/∂de.vars[var_idx]` for the given row
+# Returns
+- `Jk`: The same vector passed in, containing `Jk[i] = ∂X[i]/∂de.vars[var_idx]`
 
-Notes:
-- Zero allocations per call after warmup
-- Uses typed overrides and cached column access for performance
-- Variable index must be valid: `1 ≤ var_idx ≤ length(de.vars)`
-- Uses automatic step sizing for optimal numerical accuracy
-- More efficient than symbol-based lookup, suitable for batch operations
+# Performance Characteristics
+- **Memory**: 0 bytes allocated (uses pre-allocated FDEvaluator buffers)
+- **Speed**: More efficient than full Jacobian for single variables
+- **Method**: Central differences with adaptive step sizing
+
+# Example
+```julia
+# Single variable derivatives (more efficient than full Jacobian)
+de_fd = derivativeevaluator_fd(compiled, data, [:x, :z])
+Jk = Vector{Float64}(undef, length(compiled))
+fd_jacobian_column!(Jk, de_fd, 1, 1)  # Derivatives w.r.t. first variable (:x)
+```
+
+See also: [`derivative_modelrow!`](@ref), [`derivativeevaluator_fd`](@ref)
 """
-@inline function fd_jacobian_column!(
-    Jk::Vector{Float64},
-    de::DerivativeEvaluator,
-    row::Int,
-    var_idx::Int,
-)
+function fd_jacobian_column!(Jk::Vector{Float64}, de::FDEvaluator, row::Int, var_idx::Int)
     @assert 1 ≤ var_idx ≤ length(de.vars) "var_idx $var_idx out of bounds [1, $(length(de.vars))]"
-    @assert length(Jk) == length(de)
-    return _fd_column_auto!(Jk, de, row, var_idx)
-end
+    @assert length(Jk) == length(de) "Expected output length $(length(de)), got $(length(Jk))"
 
-# Internal FD single column (no keyword) with auto step
-@generated function _fd_column_auto!(
-    Jk::Vector{Float64},
-    de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC},
-    row::Int,
-    var_idx::Int,
-) where {T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC}
-    N = NV
-    stmts = Expr[]
-    push!(stmts, :(yplus = de.fd_yplus))
-    push!(stmts, :(yminus = de.fd_yminus))
-    push!(stmts, :(xbase = de.fd_xbase))
-    push!(stmts, :(nterms = length(de)))
-    
-    # Set row for overrides BEFORE reading base values
-    for i in 1:N
-        push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    # Optimal buffer reuse patterns from full Jacobian
+    yplus = de.y_plus
+    yminus = de.yminus
+    xbase = de.xbase  # Use buffer for efficient base value caching
+    nterms = length(de)
+    nvars = length(de.vars)
+
+    # Batch counterfactual setup
+    @inbounds for i in 1:nvars
+        update_counterfactual_row!(de.counterfactuals[i], row)
     end
-    
-    # Fill xbase from underlying base vectors (avoid stale replacement)
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
+
+    # Cache all base values to buffer (avoid repeated data access)
+    @inbounds for j in 1:nvars
+        xbase[j] = de.counterfactuals[j].base[row]
     end
-    
+
+    # Get target variable from cached buffer
+    x = xbase[var_idx]
+
+    # Reset all counterfactuals using cached base values
+    @inbounds for k in 1:nvars
+        update_counterfactual_replacement!(de.counterfactuals[k], xbase[k])
+    end
+
     # Single variable finite difference computation
-    push!(stmts, :(x = xbase[var_idx]))
-    
-    # Set all overrides to base values
-    for k in 1:N
-        push!(stmts, :(@inbounds de.overrides[$k].replacement = xbase[$k]))
-    end
-    
-    # Step selection and evaluations for the single variable
-    push!(stmts, :(h = (FD_AUTO_EPS_SCALE * max(1.0, abs(x)))))
-    push!(stmts, :(@inbounds de.overrides[var_idx].replacement = x + h))
-    push!(stmts, :(de.compiled_base(yplus, de.data_over, row)))
-    push!(stmts, :(@inbounds de.overrides[var_idx].replacement = x - h))
-    push!(stmts, :(de.compiled_base(yminus, de.data_over, row)))
-    
+    h = FD_AUTO_EPS_SCALE * max(1.0, abs(x))
+
+    # f(x + h)
+    @inbounds update_counterfactual_replacement!(de.counterfactuals[var_idx], x + h)
+    de.compiled_base(yplus, de.data_counterfactual, row)
+
+    # f(x - h)
+    @inbounds update_counterfactual_replacement!(de.counterfactuals[var_idx], x - h)
+    de.compiled_base(yminus, de.data_counterfactual, row)
+
     # Central difference for single column
-    push!(stmts, :(inv_2h = 1.0 / (2.0 * h)))
-    push!(stmts, quote
-        @fastmath for i in 1:nterms
-            @inbounds Jk[i] = (yplus[i] - yminus[i]) * inv_2h
-        end
-    end)
-    
-    return Expr(:block, stmts...)
-end
+    inv_2h = 1.0 / (2.0 * h)
+    @inbounds @fastmath for i in 1:nterms
+        Jk[i] = (yplus[i] - yminus[i]) * inv_2h
+    end
 
-# Internal FD single column (no keyword) with explicit step  
-@generated function _fd_column_step!(
-    Jk::Vector{Float64},
-    de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC},
-    row::Int,
-    var_idx::Int,
-    step::Float64,
-) where {T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC}
-    N = NV
-    stmts = Expr[]
-    push!(stmts, :(yplus = de.fd_yplus))
-    push!(stmts, :(yminus = de.fd_yminus))
-    push!(stmts, :(xbase = de.fd_xbase))
-    push!(stmts, :(nterms = length(de)))
-    
-    # Set row for overrides BEFORE reading base values
-    for i in 1:N
-        push!(stmts, :(@inbounds de.overrides[$i].row = row))
-    end
-    
-    # Fill xbase from underlying base vectors
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.overrides[$j].base[row]))
-    end
-    
-    push!(stmts, :(x = xbase[var_idx]))
-    
-    for k in 1:N
-        push!(stmts, :(@inbounds de.overrides[$k].replacement = xbase[$k]))
-    end
-    
-    push!(stmts, :(h = step))
-    push!(stmts, :(@inbounds de.overrides[var_idx].replacement = x + h))
-    push!(stmts, :(de.compiled_base(yplus, de.data_over, row)))
-    push!(stmts, :(@inbounds de.overrides[var_idx].replacement = x - h))
-    push!(stmts, :(de.compiled_base(yminus, de.data_over, row)))
-    
-    push!(stmts, :(inv_2h = 1.0 / (2.0 * h)))
-    push!(stmts, quote
-        @fastmath for i in 1:nterms
-            @inbounds Jk[i] = (yplus[i] - yminus[i]) * inv_2h
-        end
-    end)
-    
-    return Expr(:block, stmts...)
+    return Jk
 end
 
 """
-    fd_jacobian_column_pos!(Jk, de, row, var_idx)
+    marginal_effects_eta!(g, de::FDEvaluator, β, row) -> g
 
-Positional hot path for single-column finite-difference Jacobian.
-Uses variable index directly to avoid symbol lookup.
+Compute marginal effects on η = Xβ using finite differences - zero allocations.
 
-Note: This is now an alias for fd_jacobian_column! since it was converted to positional-only.
+**Note**: Computes derivatives only for variables in `de.vars` (specified during evaluator construction),
+not all variables in the dataset.
+
+More efficient than computing full Jacobian when only marginal effects are needed.
+Uses same mathematical core as derivative_modelrow! but optimized for gradient computation.
+
+# Arguments
+- `g::Vector{Float64}`: Pre-allocated gradient buffer of length `length(de.vars)`
+- `de::FDEvaluator`: Pre-built evaluator from `derivativeevaluator_fd(compiled, data, vars)`
+- `β::AbstractVector{<:Real}`: Model coefficients of length `length(de)` (may be any numeric type)
+- `row::Int`: Row index to evaluate (1-based indexing)
+
+# Returns
+- `g`: The same vector passed in, now containing marginal effects `∂η/∂vars[j]` for the specified row
+
+# Performance Characteristics
+- **Memory**: 0 bytes allocated (uses pre-allocated FDEvaluator buffers)
+- **Speed**: Optimized for gradient computation using finite differences
+- **Type handling**: Zero-allocation handling of any coefficient type
+
+# Mathematical Method
+Computes marginal effects: ∂η/∂x = (∂X/∂x)ᵀβ where X is model matrix row and η = Xβ.
+Equivalent to `g = J'β` where J is the Jacobian from `derivative_modelrow!`.
+
+# Example
+```julia
+# Marginal effects with finite differences
+de_fd = derivativeevaluator_fd(compiled, data, [:x, :z])
+g = Vector{Float64}(undef, length(de_fd.vars))
+β = coef(model)
+marginal_effects_eta!(g, de_fd, β, 1)  # 0 bytes allocated
+```
+
+See also: [`derivative_modelrow!`](@ref), [`derivativeevaluator_fd`](@ref)
 """
-@inline fd_jacobian_column_pos!(Jk::Vector{Float64}, de::DerivativeEvaluator, row::Int, var_idx::Int) = fd_jacobian_column!(Jk, de, row, var_idx)
+function marginal_effects_eta!(
+    g::AbstractVector{Float64},
+    de::FDEvaluator,
+    β::AbstractVector{<:Real},
+    row::Int
+)
+    # Simple bounds checks without string interpolation to avoid allocations
+    length(g) == length(de.vars) || throw(DimensionMismatch("gradient length mismatch"))
+    length(β) == length(de) || throw(DimensionMismatch("beta length mismatch"))
+
+    # Use derivative_modelrow! for Jacobian computation
+    derivative_modelrow!(de.jacobian_buffer, de, row)
+
+    # Zero-allocation matrix multiply: g = J'β
+    @inbounds @fastmath for j in eachindex(g)
+        acc = 0.0
+        for i in 1:size(de.jacobian_buffer, 1)
+            # Handle any coefficient type with zero-allocation conversion
+            β_i = Float64(β[i])
+            acc += de.jacobian_buffer[i, j] * β_i
+        end
+        g[j] = acc
+    end
+
+    return g
+end
+
+"""
+    marginal_effects_eta!(g, Gβ, de::FDEvaluator, β, row) -> (g, Gβ)
+
+Compute both marginal effects and parameter gradients for η = Xβ using finite differences - zero allocations.
+
+Extended version of marginal_effects_eta! that simultaneously computes marginal effects and
+parameter gradients for all variables. The parameter gradient matrix is essentially free since
+it's just a copy of the already-computed Jacobian matrix.
+
+**Note**: Computes derivatives only for variables in `de.vars` (specified during evaluator construction).
+
+# Arguments
+- `g::Vector{Float64}`: Preallocated gradient buffer of length `length(de.vars)`
+- `Gβ::Matrix{Float64}`: Preallocated parameter gradient matrix of size `(length(de), length(de.vars))`
+- `de::FDEvaluator`: FD evaluator built by `derivativeevaluator_fd(compiled, data, vars)`
+- `β::AbstractVector{<:Real}`: Model coefficients of length `length(de)` (may be any numeric type)
+- `row::Int`: Row index to evaluate (1-based indexing)
+
+# Returns
+- `(g, Gβ)`: Tuple containing marginal effects and parameter gradients
+  - `g[j] = ∂η/∂vars[j]` for all variables in de.vars
+  - `Gβ[i,j] = ∂(∂η/∂vars[j])/∂β[i]` for all model parameters and variables
+
+# Performance Characteristics
+- **Memory**: 0 bytes allocated (parameter gradients are copy of computed Jacobian)
+- **Speed**: Negligible overhead compared to regular marginal_effects_eta!
+- **Efficiency**: Parameter gradient computation is essentially free
+
+# Mathematical Method
+- Marginal effects: Same as regular marginal_effects_eta!
+- Parameter gradients: `Gβ = J` where J is the Jacobian matrix
+
+# Example
+```julia
+# Simultaneous marginal effects + parameter gradients for all variables
+vars = [:x, :z]
+de = derivativeevaluator_fd(compiled, data, vars)
+g = Vector{Float64}(undef, length(vars))
+Gβ = Matrix{Float64}(undef, length(de), length(vars))
+
+# Get both marginal effects and parameter gradients
+marginal_effects_eta!(g, Gβ, de, β, 1)
+
+# g now contains marginal effects ∂η/∂vars
+# Gβ now contains parameter gradients ∂(∂η/∂vars[j])/∂β[i]
+```
+"""
+function marginal_effects_eta!(
+    g::AbstractVector{Float64},
+    Gβ::AbstractMatrix{Float64},
+    de::FDEvaluator,
+    β::AbstractVector{<:Real},
+    row::Int
+)
+    # Simple bounds checks without string interpolation to avoid allocations
+    length(g) == length(de.vars) || throw(DimensionMismatch("gradient length mismatch"))
+    size(Gβ, 1) == length(de) || throw(DimensionMismatch("Gβ first dimension must match length(de)"))
+    size(Gβ, 2) == length(de.vars) || throw(DimensionMismatch("Gβ second dimension must match length(de.vars)"))
+    length(β) == length(de) || throw(DimensionMismatch("beta length mismatch"))
+
+    # Use derivative_modelrow! for Jacobian computation
+    derivative_modelrow!(de.jacobian_buffer, de, row)
+
+    # Extract parameter gradients (essentially free - copy of Jacobian)
+    # Gβ[i,j] = ∂(∂η/∂vars[j])/∂β[i] = J[i,j]
+    Gβ .= de.jacobian_buffer
+
+    # Zero-allocation matrix multiply: g = J'β
+    @inbounds @fastmath for j in eachindex(g)
+        acc = 0.0
+        for i in 1:size(de.jacobian_buffer, 1)
+            # Handle any coefficient type with zero-allocation conversion
+            β_i = Float64(β[i])
+            acc += de.jacobian_buffer[i, j] * β_i
+        end
+        g[j] = acc
+    end
+
+    return g, Gβ
+end

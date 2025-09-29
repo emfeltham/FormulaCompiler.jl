@@ -8,9 +8,8 @@ Check if a column is a numeric vector that can be converted to Float64.
 _is_numeric_vector(col::AbstractVector) = eltype(col) <: Number
 
 """
-    build_derivative_evaluator(compiled, data, vars) -> DerivativeEvaluator
-    build_derivative_evaluator(compiled, data, vars, chunk) -> DerivativeEvaluator
-    build_derivative_evaluator(compiled, data) -> DerivativeEvaluator
+    derivativevaluator(backend, compiled, data, vars) -> FDEvaluator|ADEvaluator
+    derivativevaluator(backend, compiled, data) -> FDEvaluator|ADEvaluator
 
 Build a reusable automatic differentiation evaluator for computing Jacobians and marginal effects.
 
@@ -19,17 +18,18 @@ respect to continuous variables using ForwardDiff.jl. Supports both dual-number 
 differentiation and finite differences with backend selection for optimal performance.
 
 # Arguments
+- `backend::Symbol`: Backend selection (`:ad` for automatic differentiation, `:fd` for finite differences)
 - `compiled::UnifiedCompiled`: Result of `compile_formula(model, data)`
 - `data::NamedTuple`: Column-table data (from `Tables.columntable(df)`)
 - `vars::Vector{Symbol}`: Continuous variables to differentiate with respect to
   - **Restriction**: Must be continuous predictors (Float64, Int64, Int32, Int)
   - **Categorical variables**: Not supported; use scenario system for categorical profiles
   - **Validation**: Function validates variable types and provides clear error messages
-- `chunk`: ForwardDiff chunk size (`ForwardDiff.Chunk{N}()` or `:auto` for `Chunk{length(vars)}`)
 
 # Returns
-- `DerivativeEvaluator{...}`: Specialized evaluator with preallocated buffers
-  - Supports both automatic differentiation and finite differences backends
+- `FDEvaluator{...}` or `ADEvaluator{...}`: Specialized evaluator with preallocated buffers
+  - **FDEvaluator**: Finite differences backend with only FD infrastructure (6 type parameters)
+  - **ADEvaluator**: Automatic differentiation backend with only AD infrastructure (9 type parameters)
   - Contains type-specialized closures and configurations for optimal performance
   - Reusable across multiple row evaluations and derivative computations
 
@@ -61,9 +61,9 @@ model = lm(@formula(y ~ x * group + age + score), df)
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 
-# Build derivative evaluator for continuous variables (positional args)
+# Build derivative evaluator for continuous variables
 vars = [:x, :age, :score]  # Mix of Float64, Int16, and UInt8
-de = build_derivative_evaluator(compiled, data, vars)
+de = derivativevaluator(:ad, compiled, data, vars)  # Automatic differentiation backend
 
 # Jacobian computation
 J = Matrix{Float64}(undef, length(compiled), length(vars))
@@ -72,20 +72,19 @@ derivative_modelrow!(J, de, 1)  # J[i,j] = ∂X[i]/∂vars[j]
 # Marginal effects on linear predictor η = Xβ
 β = coef(model)
 g_eta = Vector{Float64}(undef, length(vars))
-marginal_effects_eta_ad!(g_eta, de, β, 1)  # Small allocations
-marginal_effects_eta_fd!(g_eta, de, β, 1)  # Zero allocations
+marginal_effects_eta!(g_eta, de, β, 1)  # Small allocations
+marginal_effects_eta!(g_eta, de, β, 1)  # Zero allocations
 ```
 
 # Method Overloads
 ```julia
-# Primary version with explicit variables
-de = build_derivative_evaluator(compiled, data, [:x, :z])
-
-# With explicit chunk size
-de = build_derivative_evaluator(compiled, data, [:x, :z], ForwardDiff.Chunk{4}())
+# Primary version with explicit backend and variables
+de = derivativevaluator(:ad, compiled, data, [:x, :z])  # Automatic differentiation
+de = derivativevaluator(:fd, compiled, data, [:x, :z])  # Finite differences
 
 # All continuous variables (convenience)
-de = build_derivative_evaluator(compiled, data)  # Uses all continuous vars
+de = derivativevaluator(:ad, compiled, data)  # Uses all continuous vars with AD
+de = derivativevaluator(:fd, compiled, data)  # Uses all continuous vars with FD
 ```
 
 # Use Cases
@@ -98,152 +97,146 @@ de = build_derivative_evaluator(compiled, data)  # Uses all continuous vars
 Provides clear validation with specific guidance:
 ```julia
 # This will error with helpful message:
-de = build_derivative_evaluator(compiled, data, [:x, :group])
+de = derivativevaluator(compiled, data, [:x, :group])
 # Error: Non-continuous/categorical vars: [:group]. Use scenario system for categorical profiles.
 ```
 
-See also: [`derivative_modelrow!`](@ref), [`marginal_effects_eta_ad!`](@ref), [`continuous_variables`](@ref)
+See also: [`derivative_modelrow!`](@ref), [`marginal_effects_eta!`](@ref), [`continuous_variables`](@ref)
 """
-function build_derivative_evaluator(
-    # Primary version: explicit variables
-    
+# Main constructor with positional backend argument
+function derivativevaluator(
+    backend::Symbol, compiled, data, vars::Vector{Symbol}
+)
+    if backend === :fd
+        return derivativeevaluator_fd(compiled, data, vars)
+    elseif backend === :ad
+        return derivativeevaluator_ad(compiled, data, vars)
+    else
+        throw(ArgumentError("Unknown backend: $backend. Use :fd or :ad"))
+    end
+end
+
+# Convenience version: all continuous variables
+function derivativevaluator(backend::Symbol, compiled, data)
+    vars = continuous_variables(compiled, data)
+    return derivativevaluator(backend, compiled, data, vars)
+end
+
+
+# Backend-specialized constructor functions
+
+"""
+    derivativeevaluator_fd(compiled, data, vars) -> FDEvaluator
+
+Create a finite differences specialized FDEvaluator using Float64 counterfactual vectors.
+
+Returns a concrete FDEvaluator with only FD infrastructure, no field pollution from AD.
+Uses NumericCounterfactualVector{Float64} for type-stable counterfactual operations.
+"""
+function derivativeevaluator_fd(
     compiled::UnifiedCompiled{T, Ops, S, O},
     data::NamedTuple,
     vars::Vector{Symbol}
 ) where {T, Ops, S, O}
-    return _build_derivative_evaluator_impl(compiled, data, vars, :auto)
-end
-
-# Version with explicit chunk size
-function build_derivative_evaluator(
-    compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple,
-    vars::Vector{Symbol},
-    chunk
-) where {T, Ops, S, O}
-    return _build_derivative_evaluator_impl(compiled, data, vars, chunk)
-end
-
-# Convenience version: all continuous variables
-function build_derivative_evaluator(
-    compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple
-) where {T, Ops, S, O}
-    vars = continuous_variables(compiled, data)
-    return _build_derivative_evaluator_impl(compiled, data, vars, :auto)
-end
-
-# Implementation function (extracted from original)
-function _build_derivative_evaluator_impl(
-    compiled::UnifiedCompiled{T, Ops, S, O},
-    data::NamedTuple,
-    vars::Vector{Symbol},
-    chunk
-) where {T, Ops, S, O}
-    # Validate that all requested vars are continuous (no categorical derivatives)
+    # Validate continuous variables
     allowed = continuous_variables(compiled, data)
     bad = [v for v in vars if !(v in allowed)]
     if !isempty(bad)
-        msg = "build_derivative_evaluator only supports continuous variables. " *
-              "Non-continuous/categorical vars requested: $(bad). " *
-              "For categorical profile workflows, use the scenario system " *
-              "(e.g., create_scenario()) combined with derivative evaluators."
-        throw(ArgumentError(msg))
+        throw(ArgumentError("derivativeevaluator_fd only supports continuous variables. Non-continuous vars: $(bad)"))
+    end
+
+    # Build Float64 counterfactual system only
+    data_counterfactual, counterfactuals = build_counterfactual_data(data, vars, 1, Float64)
+
+    # Direct field construction - no complex type parameters needed
+    return FDEvaluator(
+        compiled,                                              # compiled_base
+        data,                                                  # base_data
+        vars,                                                  # vars
+        counterfactuals,                                       # counterfactuals
+        data_counterfactual,                                   # data_counterfactual
+        Vector{Float64}(undef, length(compiled)),              # y_plus
+        Vector{Float64}(undef, length(compiled)),              # yminus
+        Vector{Float64}(undef, length(vars)),                  # xbase
+        Matrix{Float64}(undef, length(compiled), length(vars)), # jacobian_buffer
+        Vector{Float64}(undef, length(compiled)),              # xrow_buffer
+        1                                                      # row
+    )
+end
+
+"""
+    derivativeevaluator_ad(compiled, data, vars) -> ADEvaluator
+
+Create an automatic differentiation specialized ADEvaluator using Dual counterfactual vectors.
+
+Returns a concrete ADEvaluator with only AD infrastructure, no field pollution from FD.
+Uses NumericCounterfactualVector{Dual{...}} for type-stable dual number operations.
+"""
+function derivativeevaluator_ad(
+    compiled::UnifiedCompiled{T, Ops, S, O},
+    data::NamedTuple,
+    vars::Vector{Symbol}
+) where {T, Ops, S, O}
+    # Validate continuous variables
+    allowed = continuous_variables(compiled, data)
+    bad = [v for v in vars if !(v in allowed)]
+    if !isempty(bad)
+        throw(ArgumentError("derivativeevaluator_ad only supports continuous variables. Non-continuous vars: $(bad)"))
     end
 
     nvars = length(vars)
-    xbuf = Vector{Float64}(undef, nvars)
-    # Prebuild fully concrete overrides + merged data (Float64 path)
-    override_vecs = Vector{FDOverrideVector}(undef, nvars)
-    pairs = Pair{Symbol,FDOverrideVector}[]
-    for (i, s) in enumerate(vars)
-        col = getproperty(data, s)
-        # Convert integer columns to Float64 for derivative computation
-        float_col = if _is_numeric_vector(col)
-            convert(Vector{Float64}, col)
-        else
-            col::Vector{Float64}
-        end
-        ov = FDOverrideVector(float_col, 1, 0.0)
-        override_vecs[i] = ov
-        push!(pairs, s => ov)
-    end
-    # Merge with converted columns - use Float64 versions for derivative computation
-    data_over = merge(data, NamedTuple(pairs))
-    overrides = override_vecs
-    rowvec_float = Vector{Float64}(undef, length(compiled))
-    # Pre-cache column references to avoid getproperty allocations (as NTuple)
-    # Use the converted Float64 columns for FD computation
-    fd_columns = ntuple(i -> getproperty(data_over, vars[i]), nvars)
 
-    # Create a mutable ref that will eventually point to the final evaluator
-    beta_ref = Base.RefValue(Vector{Float64}())
-    de_ref = Base.RefValue{DerivativeEvaluator}()
-
-    # Build typed closures and configs using the ref (which is still uninitialized)
-    g = DerivClosure(de_ref)
-    ch = chunk === :auto ? ForwardDiff.Chunk{nvars}() : chunk
-    cfg = ForwardDiff.JacobianConfig(g, xbuf, ch)
-
-    gscalar = GradClosure(g, beta_ref)
-    gradcfg = ForwardDiff.GradientConfig(gscalar, xbuf, ch)
-
-    # Preallocate DiffResult containers for zero-allocation AD paths
-    jac_result = ForwardDiff.DiffResult(
-        Vector{Float64}(undef, length(compiled)),
-        (Matrix{Float64}(undef, length(compiled), nvars),),
-    )
-    grad_result = ForwardDiff.DiffResult(0.0, Vector{Float64}(undef, nvars))
-
-    # Build typed single-cache for manual dual path (Dual tag = Nothing)
+    # Build Dual counterfactual system
     DualT = ForwardDiff.Dual{Nothing, Float64, nvars}
-    compiled_dual_vec = UnifiedCompiled{DualT, Ops, S, O}(compiled.ops)
-    rowvec_dual_vec = Vector{DualT}(undef, length(compiled))
+    data_counterfactual, counterfactuals = build_counterfactual_data(data, vars, 1, DualT)
+
+    # Build dual-specialized compiled evaluator
+    UB = typeof(compiled)
+    OpsT = UB.parameters[2]
+    ST = UB.parameters[3]
+    OT = UB.parameters[4]
+    compiled_dual = UnifiedCompiled{DualT, OpsT, ST, OT}(compiled.ops)
+
+    # AD-specific buffers and infrastructure
     x_dual_vec = Vector{DualT}(undef, nvars)
-    data_over_dual_vec, overrides_dual_vec = build_row_override_data_typed(data, vars, 1, DualT)
-    # Precompute unit partials for each variable to avoid per-call construction
     partials_unit_vec = Vector{ForwardDiff.Partials{nvars, Float64}}(undef, nvars)
     for i in 1:nvars
         partials_unit_vec[i] = ForwardDiff.Partials{nvars, Float64}(ntuple(j -> (i == j ? 1.0 : 0.0), Val(nvars)))
     end
+    rowvec_dual_vec = Vector{DualT}(undef, length(compiled))
 
-    # Final evaluator with concrete closure/config/result types
-    de = DerivativeEvaluator{T, Ops, S, O, typeof(data), typeof(data_over), nvars, typeof(fd_columns), typeof(g), typeof(cfg), typeof(gscalar), typeof(gradcfg), typeof(jac_result), typeof(grad_result), typeof(data_over_dual_vec), typeof(overrides_dual_vec)}(
-        compiled,
-        data,
-        vars,
-        xbuf,
-        overrides,
-        data_over,
-        DualCacheDict(),  # Initialize empty dual cache
-        compiled_dual_vec,
-        rowvec_dual_vec,
-        overrides_dual_vec,
-        data_over_dual_vec,
-        x_dual_vec,
-        partials_unit_vec,
-        rowvec_float,
-        g,
-        cfg,
-        gscalar,
-        gradcfg,
-        beta_ref,
-        Vector{Float64}(undef, length(compiled)),
-        jac_result,
-        grad_result,
-        1,
-        Matrix{Float64}(undef, length(compiled), nvars),
-        Vector{Float64}(undef, nvars),
-        Vector{Float64}(undef, length(compiled)),
-        Vector{Float64}(undef, length(compiled)),
-        Vector{Float64}(undef, length(compiled)),
-        Vector{Float64}(undef, nvars),
-        fd_columns,
+    # Build concrete ForwardDiff configuration
+    de_ref = Base.RefValue{ADEvaluator}()
+    g = DerivClosure(de_ref)
+    ch = ForwardDiff.Chunk{nvars}()
+    cfg = ForwardDiff.JacobianConfig(g, Vector{Float64}(undef, nvars), ch)
+
+    # Direct field construction - concrete types
+    beta_buf = Vector{Float64}(undef, length(compiled))
+    beta_ref = Ref{Vector{Float64}}(beta_buf)
+
+    de = ADEvaluator(
+        compiled,                                              # compiled_base
+        compiled_dual,                                         # compiled_dual
+        data,                                                  # base_data
+        vars,                                                  # vars
+        counterfactuals,                                       # counterfactuals
+        data_counterfactual,                                   # data_counterfactual
+        x_dual_vec,                                           # x_dual_vec
+        partials_unit_vec,                                    # partials_unit_vec
+        rowvec_dual_vec,                                      # rowvec_dual_vec
+        Matrix{Float64}(undef, length(compiled), length(vars)), # jacobian_buffer
+        Vector{Float64}(undef, length(compiled)),              # xrow_buffer
+        g,                                                     # g
+        cfg,                                                   # cfg
+        1,                                                     # row
+        beta_ref,                                              # beta_ref
+        beta_buf                                               # beta_buf
     )
 
-    # Now initialize the ref to point to the final evaluator
+    # Initialize the ref for the closure
     de_ref[] = de
-
     return de
 end
+
 

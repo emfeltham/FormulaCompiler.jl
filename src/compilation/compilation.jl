@@ -99,7 +99,7 @@ mixed = fit(MixedModel, @formula(y ~ x + treatment + (1|subject)), df)
 compiled = compile_formula(mixed, data)  # Compiles fixed effects: y ~ x + treatment
 ```
 
-See also: [`modelrow!`](@ref), [`ModelRowEvaluator`](@ref), [`create_scenario`](@ref)
+See also: [`modelrow!`](@ref), [`ModelRowEvaluator`](@ref)
 """
 function compile_formula(model, data_example::NamedTuple)
     # Phase 2: Validate mixture columns are consistent

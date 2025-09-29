@@ -318,78 +318,20 @@ function modelrow_batch!(
 end
 
 ###############################################################################
-# SCENARIO-AWARE BATCH EVALUATION
+# POPULATION ANALYSIS NOTE
 ###############################################################################
 
-"""
-    modelrow_scenarios!(matrix, model, scenarios, row_idx; cache=true)
-
-Evaluate model row across multiple scenarios.
-Each scenario gets its own properly cached compiled formula.
-"""
-function modelrow_scenarios!(
-    matrix::AbstractMatrix{Float64},
-    model::Union{LinearModel, GeneralizedLinearModel, LinearMixedModel, GeneralizedLinearMixedModel, StatsModels.TableRegressionModel},
-    scenarios::Vector{DataScenario},
-    row_idx::Int;
-    cache::Bool=true
-)
-    n_scenarios = length(scenarios)
-    
-    # Get first scenario to determine output width
-    first_compiled = if cache
-        get_or_compile_formula(model, scenarios[1].data)
-    else
-        compile_formula(model, scenarios[1].data)
-    end
-    
-    output_width = length(first_compiled)
-    
-    @assert size(matrix, 1) >= n_scenarios "Matrix height insufficient for scenarios"
-    @assert size(matrix, 2) >= output_width "Matrix width insufficient for formula output"
-    
-    # Evaluate first scenario (already compiled)
-    row_view = view(matrix, 1, 1:output_width)
-    first_compiled(row_view, scenarios[1].data, row_idx)
-    
-    # Evaluate remaining scenarios
-    for (i, scenario) in enumerate(scenarios[2:end])
-        compiled = if cache
-            get_or_compile_formula(model, scenario.data)
-        else
-            compile_formula(model, scenario.data)
-        end
-        
-        row_view = view(matrix, i+1, 1:output_width)
-        compiled(row_view, scenario.data, row_idx)
-    end
-    
-    return matrix
-end
-
-"""
-    modelrow_scenarios!(matrix, compiled::UnifiedCompiled, scenarios, row_idx)
-
-Evaluate compiled formula across multiple scenarios.
-Note: Same compiled formula used for all scenarios - may not be appropriate if formula 
-depends on data structure.
-"""
-function modelrow_scenarios!(
-    matrix::AbstractMatrix{Float64},
-    compiled::UnifiedCompiled{Ops, S, O},
-    scenarios::Vector{DataScenario},
-    row_idx::Int
-) where {Ops, S, O}
-    @assert size(matrix, 1) >= length(scenarios) "Matrix height insufficient for scenarios"
-    @assert size(matrix, 2) == length(compiled) "Matrix width mismatch"
-    
-    for (i, scenario) in enumerate(scenarios)
-        row_view = view(matrix, i, :)
-        compiled(row_view, scenario.data, row_idx)
-    end
-    
-    return matrix
-end
+# Population analysis should use simple loops with existing row-wise functions:
+#
+# # Example pattern for population effects:
+# population_effects = Vector{Float64}(undef, n_rows)
+# for row in 1:n_rows
+#     # Use existing row-wise functions like marginal_effects_eta!
+#     # with CounterfactualVector for single-row perturbations
+#     population_effects[row] = compute_individual_effect(row)
+# end
+# population_ame = mean(population_effects)
+#
 
 ###############################################################################
 # CACHE MANAGEMENT
@@ -567,25 +509,3 @@ function modelrow(
     return matrix
 end
 
-"""
-    modelrow(model, scenario::DataScenario, row_idx) -> Vector{Float64}
-
-Evaluate model row using a data scenario (allocating version).
-"""
-function modelrow(model, scenario::DataScenario, row_idx::Int)
-    compiled = get_or_compile_formula(model, scenario.data)
-    row_vec = Vector{Float64}(undef, length(compiled))
-    compiled(row_vec, scenario.data, row_idx)
-    return row_vec
-end
-
-"""
-    modelrow(compiled::UnifiedCompiled, scenario::DataScenario, row_idx) -> Vector{Float64}
-
-Evaluate model row using a data scenario with UnifiedCompiled (allocating version).
-"""
-function modelrow(compiled::UnifiedCompiled{T, Ops, S, O}, scenario::DataScenario, row_idx::Int) where {T, Ops, S, O}
-    row_vec = Vector{Float64}(undef, length(compiled))
-    compiled(row_vec, scenario.data, row_idx)
-    return row_vec
-end

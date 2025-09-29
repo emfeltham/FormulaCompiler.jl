@@ -29,7 +29,7 @@ let
     data = Tables.columntable(df)
     compiled = compile_formula(model, data)
     vars = continuous_variables(compiled, data)
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de_fd = derivativevaluator(:fd, compiled, data, vars)
 
     # Representative row
     i = min(25, n)
@@ -37,20 +37,22 @@ let
     g = Vector{Float64}(undef, length(vars))
 
     # Marginal effects (η)
-    marginal_effects_eta!(g, de, β, i; backend=:fd)
+    marginal_effects_eta!(g, de_fd, β, i)
     println("η-scale ME (FD) @row ", i, ": ", g)
 
     # Marginal effects (μ) with Logit link
-    marginal_effects_mu!(g, de, β, i; link=LogitLink(), backend=:fd)
+    marginal_effects_mu!(g, de_fd, β, i, LogitLink())
     println("μ-scale ME (FD) @row ", i, ": ", g)
 
     # AME gradient accumulation (μ via chain rule in evaluator), SE via delta method
     gβ = zeros(Float64, length(β))
     rows = 1:1000
-    accumulate_ame_gradient!(gβ, de, β, rows; backend=:fd)
+    # Note: Need to specify which variable for AME gradient
+    var_for_ame = vars[1]  # Use first continuous variable
+    accumulate_ame_gradient!(gβ, de_fd, β, rows, var_for_ame)
     gβ ./= length(rows)
     se_ame = delta_method_se(gβ, Matrix{Float64}(vcov(model)))
-    println("AME (μ) SE (delta method) over first ", length(rows), " rows: ", se_ame)
+    println("AME (μ) SE (delta method) for ", var_for_ame, " over first ", length(rows), " rows: ", se_ame)
 
     # Mixture example: profile effects for group
     mixspec = mix("A" => 0.4, "B" => 0.4, "C" => 0.2)

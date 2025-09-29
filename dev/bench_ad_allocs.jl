@@ -19,7 +19,7 @@ end
 function bench_ad_zero_alloc(n::Int=10_000; row::Int=1)
     compiled, data = build_fixture(n)
     vars = [:x, :z]
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de_ad = derivativevaluator(:ad, compiled, data, vars)
 
     # Preallocate buffers
     J = Matrix{Float64}(undef, length(compiled), length(vars))
@@ -27,23 +27,23 @@ function bench_ad_zero_alloc(n::Int=10_000; row::Int=1)
     β = randn(length(compiled))
 
     # Warmup
-    derivative_modelrow!(J, de, row)
-    marginal_effects_eta_grad!(g, de, β, row)
+    derivative_modelrow!(J, de_ad, row)
+    marginal_effects_eta_grad!(g, de_ad, β, row)
 
     println("— AD Jacobian allocations (expect 0 after warmup) —")
-    jac_bench = @benchmark derivative_modelrow!($J, $de, $row)
+    jac_bench = @benchmark derivative_modelrow!($J, $de_ad, $row)
     show(stdout, MIME("text/plain"), jac_bench); println()
     println("min bytes:", minimum(jac_bench).memory)
 
     println("— AD η-gradient allocations (β::Vector{Float64}, expect 0) —")
-    eta_bench_vec = @benchmark marginal_effects_eta_grad!($g, $de, $β, $row)
+    eta_bench_vec = @benchmark marginal_effects_eta_grad!($g, $de_ad, $β, $row)
     show(stdout, MIME("text/plain"), eta_bench_vec); println()
     println("min bytes:", minimum(eta_bench_vec).memory)
 
     # Test non-Vector beta path (uses internal beta_buf)
     β_view = view(β, :)
     println("— AD η-gradient allocations (β::SubArray, expect 0) —")
-    eta_bench_view = @benchmark marginal_effects_eta_grad!($g, $de, $β_view, $row)
+    eta_bench_view = @benchmark marginal_effects_eta_grad!($g, $de_ad, $β_view, $row)
     show(stdout, MIME("text/plain"), eta_bench_view); println()
     println("min bytes:", minimum(eta_bench_view).memory)
 

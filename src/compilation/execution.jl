@@ -384,16 +384,12 @@ end
     extract_level_code(column_data, row_idx::Int) -> Int
 
 Extract level code with zero allocations using type-stable dispatch.
-Handles both regular CategoricalVector and OverrideVector for scenarios.
+Handles CategoricalVector and CounterfactualVector types for zero-allocation extraction.
 """
 @inline function extract_level_code(column_data::CategoricalVector, row_idx::Int)
     return Int(levelcode(column_data[row_idx]))
 end
 
-@inline function extract_level_code(column_data::OverrideVector{<:CategoricalValue}, row_idx::Int)
-    # For OverrideVector, all rows have the same value - extract once, no allocation
-    return Int(levelcode(column_data.override_value))
-end
 
 @inline function extract_level_code(column_data::AbstractVector, row_idx::Int)
     # Fallback for other vector types that contain categorical values
@@ -406,18 +402,9 @@ end
         # Handle String values that may come from ForwardDiff conversion
         # This can happen when categorical values get processed through dual number contexts
         # We need to look up the level index in the original categorical structure
-        if isa(column_data, OverrideVector) && isa(column_data.override_value, CategoricalValue)
-            # For override vectors, find the level code from the override value's pool
-            override_val = column_data.override_value
-            pool = override_val.pool
-            level_idx = findfirst(==(cat_value), pool.levels)
-            if level_idx === nothing
-                error("String value '$cat_value' not found in categorical levels $(pool.levels)")
-            end
-            return level_idx
-        else
-            error("Cannot extract level code from String '$cat_value' without categorical context")
-        end
+        # Note: OverrideVector removed - using CounterfactualVector system instead
+        # String categorical values should be handled by appropriate CounterfactualVector types
+        error("String categorical value '$cat_value' found, but OverrideVector system removed. Use CounterfactualVector types instead.")
     elseif isa(cat_value, Bool)
         # Handle boolean values: false = level 1, true = level 2
         return cat_value ? 2 : 1
@@ -454,24 +441,24 @@ end
     # Get categorical column data
     column_data = getproperty(data, Col)
     
-    # Check if this is a categorical mixture override
-    if column_data isa CategoricalMixtureOverride
+    # Check if this is a categorical mixture counterfactual vector
+    if column_data isa CategoricalMixtureCounterfactualVector
         # Handle categorical mixture: weighted combination of contrast rows
-        mixture_obj = column_data.mixture_obj
-        
+        mixture_obj = column_data[row_idx]  # Get mixture for current row (could be original or replacement)
+
         # Initialize positions to zero
         for (i, pos) in enumerate(Positions)
             scratch[pos] = 0.0
         end
-        
+
         # Map mixture level names to contrast matrix row indices
         original_levels = mixture_obj.original_levels
-        
+
         # Compute weighted combination
         for (level_name, weight) in zip(mixture_obj.levels, mixture_obj.weights)
             level_name_str = string(level_name)
             level_idx = findfirst(==(level_name_str), original_levels)
-            if level_idx !== nothing
+            if !isnothing(level_idx)
                 for (i, pos) in enumerate(Positions)
                     scratch[pos] += weight * op.contrast_matrix[level_idx, i]
                 end
