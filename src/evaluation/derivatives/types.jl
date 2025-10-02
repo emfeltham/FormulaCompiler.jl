@@ -141,7 +141,7 @@ mutable struct ADEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, G, JC, CF} <: Abs
 end
 
 # Union type for method dispatch compatibility
-const DerivativeEvaluator = Union{FDEvaluator, ADEvaluator}
+const derivativeevaluator = Union{FDEvaluator, ADEvaluator}
 
 Base.length(de::AbstractDerivativeEvaluator) = length(de.compiled_base)
 

@@ -275,7 +275,11 @@ function counterfactualvector(col::Vector{T}, row::Int) where {T}
 end
 
 # Backend-specialized dispatch (for ADEvaluator type stability - FDEvaluator uses basic dispatch)
-# Bool and Categorical are always backend-invariant (never change type)
+# Bool: Convert to Float64 for ContrastEvaluator (supports probabilistic contrasts)
+# Categorical: Always backend-invariant (never change type)
+counterfactualvector(col::Vector{Bool}, row::Int, ::Type{S}) where S<:AbstractFloat =
+    NumericCounterfactualVector{S}(convert(Vector{S}, col), row, zero(S))
+
 counterfactualvector(col::Vector{Bool}, row::Int, ::Type{S}) where S =
     BoolCounterfactualVector(col, row, false)
 
@@ -399,16 +403,20 @@ function update_counterfactual_for_var!(counterfactuals::Tuple, vars::Vector{Sym
         end
     else
         # Non-categorical variables (boolean, numeric, mixtures) - handle type conversion
-        if cf_vec isa NumericCounterfactualVector{T} where T
-            # Convert replacement to the correct numeric type
+        # IMPORTANT: Check BoolCounterfactualVector FIRST before NumericCounterfactualVector
+        # to ensure type-stable dispatch (Bool <: Real, so order matters for method resolution)
+        if cf_vec isa BoolCounterfactualVector
+            # Boolean variables - direct replacement (no conversion needed)
+            update_counterfactual_replacement!(cf_vec, replacement)
+        elseif cf_vec isa NumericCounterfactualVector{T} where T
+            # Numeric variables (Int, Float, etc.) - convert to correct type
             converted_replacement = convert(eltype(cf_vec), replacement)
             update_counterfactual_replacement!(cf_vec, converted_replacement)
         elseif cf_vec isa CategoricalMixtureCounterfactualVector
-            # For mixture variables, replacement should be another mixture object
-            # Validate it has the same structure (levels) if needed
+            # Mixture variables - replacement should be another mixture object
             update_counterfactual_replacement!(cf_vec, replacement)
         else
-            # Direct replacement for other types (boolean, etc.)
+            # Other types (TypedCounterfactualVector, etc.)
             update_counterfactual_replacement!(cf_vec, replacement)
         end
     end

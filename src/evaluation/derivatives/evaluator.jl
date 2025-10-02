@@ -1,4 +1,4 @@
-# evaluator.jl - DerivativeEvaluator construction and setup
+# evaluator.jl - derivativeevaluator construction and setup
 
 """
     _is_numeric_vector(col) -> Bool
@@ -8,8 +8,8 @@ Check if a column is a numeric vector that can be converted to Float64.
 _is_numeric_vector(col::AbstractVector) = eltype(col) <: Number
 
 """
-    derivativevaluator(backend, compiled, data, vars) -> FDEvaluator|ADEvaluator
-    derivativevaluator(backend, compiled, data) -> FDEvaluator|ADEvaluator
+    derivativeevaluator(backend, compiled, data, vars) -> FDEvaluator|ADEvaluator
+    derivativeevaluator(backend, compiled, data) -> FDEvaluator|ADEvaluator
 
 Build a reusable automatic differentiation evaluator for computing Jacobians and marginal effects.
 
@@ -63,7 +63,7 @@ compiled = compile_formula(model, data)
 
 # Build derivative evaluator for continuous variables
 vars = [:x, :age, :score]  # Mix of Float64, Int16, and UInt8
-de = derivativevaluator(:ad, compiled, data, vars)  # Automatic differentiation backend
+de = derivativeevaluator(:ad, compiled, data, vars)  # Automatic differentiation backend
 
 # Jacobian computation
 J = Matrix{Float64}(undef, length(compiled), length(vars))
@@ -79,12 +79,12 @@ marginal_effects_eta!(g_eta, de, β, 1)  # Zero allocations
 # Method Overloads
 ```julia
 # Primary version with explicit backend and variables
-de = derivativevaluator(:ad, compiled, data, [:x, :z])  # Automatic differentiation
-de = derivativevaluator(:fd, compiled, data, [:x, :z])  # Finite differences
+de = derivativeevaluator(:ad, compiled, data, [:x, :z])  # Automatic differentiation
+de = derivativeevaluator(:fd, compiled, data, [:x, :z])  # Finite differences
 
 # All continuous variables (convenience)
-de = derivativevaluator(:ad, compiled, data)  # Uses all continuous vars with AD
-de = derivativevaluator(:fd, compiled, data)  # Uses all continuous vars with FD
+de = derivativeevaluator(:ad, compiled, data)  # Uses all continuous vars with AD
+de = derivativeevaluator(:fd, compiled, data)  # Uses all continuous vars with FD
 ```
 
 # Use Cases
@@ -97,14 +97,14 @@ de = derivativevaluator(:fd, compiled, data)  # Uses all continuous vars with FD
 Provides clear validation with specific guidance:
 ```julia
 # This will error with helpful message:
-de = derivativevaluator(compiled, data, [:x, :group])
+de = derivativeevaluator(compiled, data, [:x, :group])
 # Error: Non-continuous/categorical vars: [:group]. Use scenario system for categorical profiles.
 ```
 
 See also: [`derivative_modelrow!`](@ref), [`marginal_effects_eta!`](@ref), [`continuous_variables`](@ref)
 """
 # Main constructor with positional backend argument
-function derivativevaluator(
+function derivativeevaluator(
     backend::Symbol, compiled, data, vars::Vector{Symbol}
 )
     if backend === :fd
@@ -117,9 +117,9 @@ function derivativevaluator(
 end
 
 # Convenience version: all continuous variables
-function derivativevaluator(backend::Symbol, compiled, data)
+function derivativeevaluator(backend::Symbol, compiled, data)
     vars = continuous_variables(compiled, data)
-    return derivativevaluator(backend, compiled, data, vars)
+    return derivativeevaluator(backend, compiled, data, vars)
 end
 
 

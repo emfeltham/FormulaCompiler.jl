@@ -120,7 +120,7 @@ function compile_formula(model, data_example::NamedTuple)
 end
 
 # Export main functions
-export UnifiedCompiled, compile_formula
+export UnifiedCompiled, compile_formula, extract_variable_names
 
 """
     compile_formula(formula::StatsModels.FormulaTerm, data) -> UnifiedCompiled
@@ -168,8 +168,82 @@ See also: [`compile_formula(model, data)`](@ref) for model-based compilation
 function compile_formula(formula::StatsModels.FormulaTerm, data_example::NamedTuple)
     # Phase 2: Validate mixture columns are consistent
     validate_mixture_consistency!(data_example)
-    
+
     ops_vec, scratch_size, output_size = decompose_formula(formula, data_example)
     ops_tuple = Tuple(ops_vec)
     return UnifiedCompiled{Float64, typeof(ops_tuple), scratch_size, output_size}(ops_tuple)
+end
+
+"""
+    extract_variable_names(compiled::UnifiedCompiled) -> Set{Symbol}
+
+Extract all variable names referenced in a compiled formula efficiently.
+
+Returns a set of all column names (symbols) that appear in LoadOp, ContrastOp,
+and MixtureContrastOp operations within the compiled formula. This provides an
+efficient way to determine which data columns are required for evaluation.
+
+# Arguments
+- `compiled::UnifiedCompiled`: Compiled formula from `compile_formula`
+
+# Returns
+- `Set{Symbol}`: Set of variable names (column symbols) used in the formula
+
+# Performance
+- **Time**: O(n_ops) where n_ops is number of operations (typically <100)
+- **Memory**: O(n_vars) where n_vars is number of unique variables (typically <20)
+- **Allocation**: Minimal (only the returned Set)
+
+# Example
+```julia
+using FormulaCompiler, GLM, DataFrames, Tables
+
+df = DataFrame(
+    y = randn(100),
+    x = randn(100),
+    z = randn(100),
+    group = rand(["A", "B"], 100)
+)
+model = lm(@formula(y ~ x * group + log(z)), df)
+compiled = compile_formula(model, Tables.columntable(df))
+
+vars = extract_variable_names(compiled)
+# Returns: Set([:x, :z, :group])
+```
+
+# Implementation Notes
+This function extracts variable names from type parameters of operation types,
+avoiding any runtime data access. It handles:
+- `LoadOp{Column, OutPos}`: Continuous/numeric variables
+- `ContrastOp{Column, OutPositions}`: Categorical variables
+- `MixtureContrastOp{Column, ...}`: Categorical mixture specifications
+
+# Use Cases
+- Validate that all required variables exist in data
+- Determine formula dependencies for data subsetting
+- Generate error messages showing which variables are missing
+- Reference grid validation in marginal effects analysis
+
+See also: [`compile_formula`](@ref), [`continuous_variables`](@ref)
+"""
+function extract_variable_names(compiled::UnifiedCompiled)
+    vars = Set{Symbol}()
+
+    for op in compiled.ops
+        # Extract column name from LoadOp
+        if op isa LoadOp
+            Column = typeof(op).parameters[1]
+            push!(vars, Column)
+        # Extract column name from ContrastOp
+        elseif op isa ContrastOp
+            Column = typeof(op).parameters[1]
+            push!(vars, Column)
+        # Extract column name from MixtureContrastOp
+        elseif op isa MixtureContrastOp
+            Column = typeof(op).parameters[1]
+            push!(vars, Column)
+        end
+    end
+
+    return vars
 end

@@ -4,18 +4,20 @@
 # The implementation is organized into focused modules in the derivatives/ subdirectory.
 
 # Load all derivative system modules
-include("derivatives/types.jl") 
+include("derivatives/types.jl")
 include("derivatives/evaluator.jl")
 include("derivatives/automatic_diff.jl")
 include("derivatives/finite_diff.jl")
 include("derivatives/marginal_effects.jl")
+include("derivatives/marginal_effects_automatic_diff.jl")
+include("derivatives/marginal_effects_finite_diff.jl")
 include("derivatives/contrasts.jl")
 include("derivatives/link_functions.jl")
 include("derivatives/gradients.jl")
 include("derivatives/utilities.jl")
 
 # Export public API
-export derivativevaluator,
+export derivativeevaluator,
        derivative_modelrow!, derivative_modelrow,
        derivative_modelrow_fd, derivative_modelrow_fd_pos!,
        # High-performance direct function calls

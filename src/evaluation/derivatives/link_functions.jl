@@ -51,6 +51,8 @@ end
 if isdefined(GLM, :InverseSquareLink)
     @inline function _dmu_deta(link::GLM.InverseSquareLink, η::Real)
         # μ = η^(-1/2); dμ/dη = -(1/2) * η^(-3/2)
+        # Domain: η > 0 (required for real-valued square roots)
+        η > 0 || throw(DomainError(η, "InverseSquareLink requires η > 0"))
         return -0.5 * η^(-1.5)
     end
 end
@@ -106,6 +108,8 @@ end
 if isdefined(GLM, :InverseSquareLink)
     @inline function _d2mu_deta2(link::GLM.InverseSquareLink, η::Real)
         # μ = η^(-1/2), dμ/dη = -(1/2) * η^(-3/2), d²μ/dη² = (3/4) * η^(-5/2)
+        # Domain: η > 0 (required for real-valued square roots)
+        η > 0 || throw(DomainError(η, "InverseSquareLink requires η > 0"))
         return 0.75 * η^(-2.5)
     end
 end

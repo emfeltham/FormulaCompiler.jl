@@ -71,11 +71,6 @@ compiled(row_vec, data, 500)   # 500th row
 - Functions: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`
 - Complex formulas: `x * log(z) * group + sqrt(abs(y))`
 
-## Performance
-
-- Single row: ~50ns, 0 allocations
-- 10-100x faster than `modelmatrix()[row, :]`
-- Memory efficient: O(1) for scenarios vs O(n) for data copies
 """
 module FormulaCompiler
 
@@ -138,30 +133,20 @@ export ModelRowEvaluator, modelrow!, modelrow
 
 # ForwardDiff-based derivative evaluation (zero-alloc after warmup)
 include("evaluation/derivatives.jl")
-export derivativevaluator, derivative_modelrow!, derivative_modelrow
-export derivative_modelrow_fd!, derivative_modelrow_fd
-export derivative_modelrow_fd_pos!
-export contrast_modelrow!, contrast_modelrow
+export derivativeevaluator, derivativeevaluator_fd, derivativeevaluator_ad
+export derivative_modelrow!, derivative_modelrow
+export contrast_modelrow!
 export continuous_variables
-export marginal_effects_eta!, marginal_effects_eta!
-export marginal_effects_mu!, marginal_effects_mu!
-export me_mu_grad_beta!
-export delta_method_se, accumulate_ame_gradient!
+export marginal_effects_eta!, marginal_effects_mu!
+export delta_method_se
 
 export _dmu_deta, _d2mu_deta2
 
 # Zero-allocation contrast evaluator for categorical and binary variables
 include("compilation/contrast_evaluator.jl")
 export ContrastEvaluator, contrastevaluator
+export contrast_gradient!, contrast_gradient
+export supported_link_functions
 
-############################## Development Tools ##############################
-# (No dev utilities included in production module.)
-
-############################## Future Features ##############################
-
-# Derivative system (under development)
-# include("derivatives/step1_foundation.jl")
-# include("derivatives/step2_functions.jl")
-# export compile_derivative_formula
 
 end # end module

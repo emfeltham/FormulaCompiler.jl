@@ -11,7 +11,7 @@ machine precision accuracy. Matches finite_diff.jl signature for seamless backen
 
 # Arguments
 - `J::AbstractMatrix{Float64}`: Preallocated Jacobian buffer of size `(n_terms, n_vars)`
-- `de::ADEvaluator`: AD evaluator built by `derivativevaluator(:ad, compiled, data, vars)`
+- `de::ADEvaluator`: AD evaluator built by `derivativeevaluator(:ad, compiled, data, vars)`
 - `row::Int`: Row index to evaluate (1-based indexing)
 
 # Returns
@@ -42,7 +42,7 @@ compiled = compile_formula(model, data)
 
 # Build AD evaluator for continuous variables
 vars = [:x, :z]
-de = derivativevaluator(:ad, compiled, data, vars)  # Note: :ad backend
+de = derivativeevaluator(:ad, compiled, data, vars)  # Note: :ad backend
 
 # Zero-allocation Jacobian computation
 J = Matrix{Float64}(undef, length(compiled), length(vars))
@@ -118,7 +118,7 @@ Uses same mathematical core as derivative_modelrow! but optimized for gradient c
 
 # Arguments
 - `g::Vector{Float64}`: Preallocated gradient buffer of length `length(de.vars)`
-- `de::ADEvaluator`: AD evaluator built by `derivativevaluator(:ad, compiled, data, vars)`
+- `de::ADEvaluator`: AD evaluator built by `derivativeevaluator(:ad, compiled, data, vars)`
 - `β::AbstractVector{<:Real}`: Model coefficients of length `length(de)` (may be any numeric type)
 - `row::Int`: Row index to evaluate (1-based indexing)
 
@@ -175,7 +175,7 @@ it's just the transpose of the already-computed Jacobian matrix.
 # Arguments
 - `g::Vector{Float64}`: Preallocated gradient buffer of length `length(de.vars)`
 - `Gβ::Matrix{Float64}`: Preallocated parameter gradient matrix of size `(length(de), length(de.vars))`
-- `de::ADEvaluator`: AD evaluator built by `derivativevaluator(:ad, compiled, data, vars)`
+- `de::ADEvaluator`: AD evaluator built by `derivativeevaluator(:ad, compiled, data, vars)`
 - `β::AbstractVector{<:Real}`: Model coefficients of length `length(de)` (may be any numeric type)
 - `row::Int`: Row index to evaluate (1-based indexing)
 
@@ -197,7 +197,7 @@ it's just the transpose of the already-computed Jacobian matrix.
 ```julia
 # Simultaneous marginal effects + parameter gradients for all variables
 vars = [:x, :z]
-de = derivativevaluator(:ad, compiled, data, vars)
+de = derivativeevaluator(:ad, compiled, data, vars)
 g = Vector{Float64}(undef, length(vars))
 Gβ = Matrix{Float64}(undef, length(de), length(vars))
 
@@ -256,7 +256,7 @@ and systematic sensitivity analysis.
 # Arguments
 - `J::Array{Float64,3}`: Preallocated Jacobian tensor of size `(length(rows), n_terms, n_vars)`
   - `J[k, i, j] = ∂X[i]/∂vars[j]` for row `rows[k]`
-- `de::ADEvaluator`: AD evaluator built by `derivativevaluator(:ad, compiled, data, vars)`
+- `de::ADEvaluator`: AD evaluator built by `derivativeevaluator(:ad, compiled, data, vars)`
 - `rows::AbstractVector{Int}`: Row indices to evaluate (1-based indexing)
 
 # Returns
@@ -314,7 +314,7 @@ computation, bootstrap inference, and systematic analysis.
 # Arguments
 - `G::Matrix{Float64}`: Preallocated gradient matrix of size `(length(rows), length(de.vars))`
   - `G[k, j] = ∂η/∂vars[j]` for row `rows[k]`
-- `de::ADEvaluator`: AD evaluator built by `derivativevaluator(:ad, compiled, data, vars)`
+- `de::ADEvaluator`: AD evaluator built by `derivativeevaluator(:ad, compiled, data, vars)`
 - `β::AbstractVector{<:Real}`: Model coefficients (same β used for all rows)
 - `rows::AbstractVector{Int}`: Row indices to evaluate (1-based indexing)
 

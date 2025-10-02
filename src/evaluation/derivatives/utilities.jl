@@ -1,4 +1,24 @@
-# utilities.jl - Utility functions for derivative operations
+# utilities.jl
+# Utility functions for derivative operations
+
+# Type barrier function for zero-allocation matrix multiply
+# Handles arbitrary Real coefficient types with zero overhead for Float64
+# (compiler eliminates Float64() conversion when β is already Float64)
+@noinline function _matrix_multiply_eta!(
+    g::AbstractVector{Float64},
+    jacobian_buffer::Matrix{Float64},
+    β::AbstractVector{<:Real}
+)
+    @inbounds @fastmath for j in eachindex(g)
+        acc = 0.0
+        for i in 1:size(jacobian_buffer, 1)
+            β_i = Float64(β[i])
+            acc += jacobian_buffer[i, j] * β_i
+        end
+        g[j] = acc
+    end
+    return g
+end
 
 """
     continuous_variables(compiled, data) -> Vector{Symbol}
@@ -45,8 +65,9 @@ compiled = compile_formula(model, Tables.columntable(df))
 continuous_vars = continuous_variables(compiled, Tables.columntable(df))
 # Returns: [:price, :quantity]
 
-# Use for derivative evaluator construction  
-de = derivativevaluator(compiled, Tables.columntable(df), continuous_vars)
+# Use for derivative evaluator construction
+de_fd = derivativeevaluator_fd(compiled, Tables.columntable(df), continuous_vars)
+de_ad = derivativeevaluator_ad(compiled, Tables.columntable(df), continuous_vars)
 ```
 
 # Use Cases
@@ -61,7 +82,7 @@ de = derivativevaluator(compiled, Tables.columntable(df), continuous_vars)
 - Applies type checking to ensure Real element types in the actual data
 - Returns sorted list for consistent ordering across calls
 
-See also: [`derivativevaluator`](@ref), [`derivative_modelrow!`](@ref)
+See also: [`derivativeevaluator_fd`](@ref), [`derivativeevaluator_ad`](@ref), [`derivative_modelrow!`](@ref)
 """
 function continuous_variables(compiled::UnifiedCompiled, data::NamedTuple)
     cont = Set{Symbol}()

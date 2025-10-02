@@ -399,12 +399,24 @@ end
     elseif isa(cat_value, Integer)
         return Int(cat_value)
     elseif isa(cat_value, String)
-        # Handle String values that may come from ForwardDiff conversion
-        # This can happen when categorical values get processed through dual number contexts
-        # We need to look up the level index in the original categorical structure
-        # Note: OverrideVector removed - using CounterfactualVector system instead
-        # String categorical values should be handled by appropriate CounterfactualVector types
-        error("String categorical value '$cat_value' found, but OverrideVector system removed. Use CounterfactualVector types instead.")
+        # Handle String values in Vector{String} columns (common with GLM/DataFrames)
+        # For normal String categorical data, we need to map to level codes
+        # This requires knowing the unique levels in the column to assign consistent codes
+
+        # Try to find unique levels in the parent column to assign consistent level codes
+        if column_data isa AbstractVector{String}
+            # Get unique levels from the column and sort for consistent indexing
+            unique_levels = sort!(unique(column_data))
+            level_idx = findfirst(==(cat_value), unique_levels)
+            if level_idx !== nothing
+                return level_idx
+            else
+                error("String value '$cat_value' not found in column levels")
+            end
+        else
+            # This case should be handled by CounterfactualVector types for complex scenarios
+            error("String categorical value '$cat_value' found in non-String column type $(typeof(column_data)). Use CounterfactualVector types for override scenarios.")
+        end
     elseif isa(cat_value, Bool)
         # Handle boolean values: false = level 1, true = level 2
         return cat_value ? 2 : 1
