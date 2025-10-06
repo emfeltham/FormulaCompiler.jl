@@ -30,7 +30,7 @@ let
 
     # Derivatives and marginal effects for fixed effects
     vars = continuous_variables(compiled, data)
-    de_fd = derivativevaluator(:fd, compiled, data, vars)
+    de_fd = derivativeevaluator(:fd, compiled, data, vars)
     β = collect(fixef(m))
     i = 50
     g = Vector{Float64}(undef, length(vars))

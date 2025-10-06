@@ -19,7 +19,7 @@ end
 function bench_ad_zero_alloc(n::Int=10_000; row::Int=1)
     compiled, data = build_fixture(n)
     vars = [:x, :z]
-    de_ad = derivativevaluator(:ad, compiled, data, vars)
+    de_ad = derivativeevaluator(:ad, compiled, data, vars)
 
     # Preallocate buffers
     J = Matrix{Float64}(undef, length(compiled), length(vars))
