@@ -100,12 +100,14 @@ function continuous_variables(compiled::UnifiedCompiled, data::NamedTuple)
     for c in cats
         delete!(cont, c)
     end
-    # Keep only columns that exist in data and are Real-typed (but not Bool)
+    # Keep only columns that exist in data and are Real-typed (but not Bool or Categorical)
     vars = Symbol[]
     for s in cont
         if hasproperty(data, s)
             col = getproperty(data, s)
-            if eltype(col) <: Real && !(eltype(col) <: Bool)
+            # Exclude categorical columns (including CategoricalCounterfactualVector which has UInt eltype)
+            is_categorical = col isa Union{CategoricalArray, CategoricalCounterfactualVector}
+            if eltype(col) <: Real && !(eltype(col) <: Bool) && !is_categorical
                 push!(vars, s)
             end
         end

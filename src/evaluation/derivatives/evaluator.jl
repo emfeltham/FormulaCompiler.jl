@@ -186,57 +186,50 @@ function derivativeevaluator_ad(
 
     nvars = length(vars)
 
-    # Build Dual counterfactual system
-    DualT = ForwardDiff.Dual{Nothing, Float64, nvars}
-    data_counterfactual, counterfactuals = build_counterfactual_data(data, vars, 1, DualT)
-
-    # Build dual-specialized compiled evaluator
+    # Build type parameters upfront
     UB = typeof(compiled)
     OpsT = UB.parameters[2]
     ST = UB.parameters[3]
     OT = UB.parameters[4]
+    NTBaseType = typeof(data)
+
+    chunk_len = ForwardDiff.pickchunksize(nvars)
+    chunk = ForwardDiff.Chunk{chunk_len}()
+    DualT = ForwardDiff.Dual{FC_AD_TAG, Float64, chunk_len}
+
+    data_counterfactual, counterfactuals = build_counterfactual_data(data, vars, 1, DualT)
     compiled_dual = UnifiedCompiled{DualT, OpsT, ST, OT}(compiled.ops)
 
-    # AD-specific buffers and infrastructure
-    x_dual_vec = Vector{DualT}(undef, nvars)
-    partials_unit_vec = Vector{ForwardDiff.Partials{nvars, Float64}}(undef, nvars)
-    for i in 1:nvars
-        partials_unit_vec[i] = ForwardDiff.Partials{nvars, Float64}(ntuple(j -> (i == j ? 1.0 : 0.0), Val(nvars)))
-    end
-    rowvec_dual_vec = Vector{DualT}(undef, length(compiled))
-
-    # Build concrete ForwardDiff configuration
-    de_ref = Base.RefValue{ADEvaluator}()
-    g = DerivClosure(de_ref)
-    ch = ForwardDiff.Chunk{nvars}()
-    cfg = ForwardDiff.JacobianConfig(g, Vector{Float64}(undef, nvars), ch)
-
-    # Direct field construction - concrete types
+    dual_output = Vector{DualT}(undef, length(compiled))
+    jacobian_buffer = Matrix{Float64}(undef, length(compiled), length(vars))
+    xrow_buffer = Vector{Float64}(undef, length(compiled))
     beta_buf = Vector{Float64}(undef, length(compiled))
     beta_ref = Ref{Vector{Float64}}(beta_buf)
 
-    de = ADEvaluator(
-        compiled,                                              # compiled_base
-        compiled_dual,                                         # compiled_dual
-        data,                                                  # base_data
-        vars,                                                  # vars
-        counterfactuals,                                       # counterfactuals
-        data_counterfactual,                                   # data_counterfactual
-        x_dual_vec,                                           # x_dual_vec
-        partials_unit_vec,                                    # partials_unit_vec
-        rowvec_dual_vec,                                      # rowvec_dual_vec
-        Matrix{Float64}(undef, length(compiled), length(vars)), # jacobian_buffer
-        Vector{Float64}(undef, length(compiled)),              # xrow_buffer
-        g,                                                     # g
-        cfg,                                                   # cfg
-        1,                                                     # row
-        beta_ref,                                              # beta_ref
-        beta_buf                                               # beta_buf
+
+    CFType = typeof(counterfactuals)
+    NTMergedType = typeof(data_counterfactual)
+
+    core = ADEvaluatorCore{DualT, OpsT, ST, OT, NTBaseType, NTMergedType, chunk_len, CFType}(
+        compiled,
+        compiled_dual,
+        data,
+        vars,
+        counterfactuals,
+        data_counterfactual,
+        dual_output,
+        jacobian_buffer,
+        xrow_buffer,
+        1,
+        beta_ref,
+        beta_buf
     )
 
-    # Initialize the ref for the closure
-    de_ref[] = de
-    return de
+    input_vec = Vector{Float64}(undef, nvars)
+    var_columns = ntuple(i -> getproperty(data, vars[i]), nvars)
+    g = DerivClosure(core)
+    cfg = ForwardDiff.JacobianConfig(g, input_vec, chunk, FC_AD_TAG())
+    ctx = JacobianContext(g, cfg, input_vec, var_columns)
+
+    return ADEvaluator(core, ctx)
 end
-
-

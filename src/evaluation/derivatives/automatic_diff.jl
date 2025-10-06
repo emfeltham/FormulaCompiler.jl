@@ -4,10 +4,10 @@
 """
     derivative_modelrow!(J, de::ADEvaluator, row) -> J
 
-Primary automatic differentiation API - zero allocations, concrete type dispatch.
+Primary automatic differentiation API - zero allocations via ForwardDiff.jacobian!.
 
-Computes full Jacobian matrix ∂X[i]/∂vars[j] using ForwardDiff dual numbers with
-machine precision accuracy. Matches finite_diff.jl signature for seamless backend switching.
+Phase 2 implementation using cached ForwardDiff configuration for zero allocations.
+Replaces manual dual construction with ForwardDiff's optimized jacobian! routine.
 
 # Arguments
 - `J::AbstractMatrix{Float64}`: Preallocated Jacobian buffer of size `(n_terms, n_vars)`
@@ -17,74 +17,48 @@ machine precision accuracy. Matches finite_diff.jl signature for seamless backen
 # Returns
 - `J`: The same matrix passed in, now containing `J[i,j] = ∂X[i]/∂vars[j]` for the specified row
 
-# Performance Characteristics
-- **Memory**: 0 bytes allocated (uses pre-allocated ADEvaluator buffers)
-- **Speed**: ~49ns per variable with dual number optimizations
+# Performance Characteristics (Phase 2)
+- **Memory**: 0 bytes allocated (cached buffers and ForwardDiff config)
+- **Speed**: Target ~60ns with ForwardDiff.jacobian! optimization
 - **Accuracy**: Machine precision derivatives via ForwardDiff dual arithmetic
-
-# Mathematical Method
-Automatic differentiation: f(x + εe) = f(x) + ε∇f(x)ᵀe
-Computes exact derivatives accounting for all formula transformations.
-
-# Dependencies
-Requires complete OVERRIDE.md Phase 1-3 implementation:
-- Pre-converted dual data in data_counterfactual
-- CounterfactualVector system with update_counterfactual_for_var! API
 
 # Example
 ```julia
 using FormulaCompiler, GLM
 
-# Setup model with interactions and functions
-model = lm(@formula(y ~ x * group + log(abs(z) + 1)), df)
+# Setup model
+model = lm(@formula(y ~ x + z), df)
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 
-# Build AD evaluator for continuous variables
-vars = [:x, :z]
-de = derivativeevaluator(:ad, compiled, data, vars)  # Note: :ad backend
+# Build AD evaluator
+de = derivativeevaluator(:ad, compiled, data, [:x, :z])
 
 # Zero-allocation Jacobian computation
-J = Matrix{Float64}(undef, length(compiled), length(vars))
+J = Matrix{Float64}(undef, length(compiled), length(de.vars))
 derivative_modelrow!(J, de, 1)  # 0 bytes allocated
-
-# Zero-allocation marginal effects
-β = coef(model)
-g = Vector{Float64}(undef, length(vars))
-marginal_effects_eta!(g, de, β, 1)  # 0 bytes allocated
 ```
-
 """
 function derivative_modelrow!(J::AbstractMatrix{Float64}, de::ADEvaluator, row::Int)
-    # AD evaluator method (dispatch on concrete ADEvaluator type)
+    ctx = de.ctx
+    core = de.core
+
     @assert size(J, 1) == length(de) "Jacobian row mismatch: expected $(length(de)) terms"
     @assert size(J, 2) == length(de.vars) "Jacobian column mismatch: expected $(length(de.vars)) variables"
 
-    # Direct field access - no buffer indirection needed
-    x_dual_vec = de.x_dual_vec
-    partials_unit_vec = de.partials_unit_vec
-    rowvec_dual_vec = de.rowvec_dual_vec
+    # Update evaluator row reference (used by closure)
+    set_row!(core, row)
 
-    # Set up dual numbers with proper base values and unit partials
-    N = length(de.vars)
-    @inbounds for i in 1:N
-        # Get base value and create dual number with unit partials
-        base_val = getproperty(de.base_data, de.vars[i])[row]
-        x_dual_vec[i] = typeof(x_dual_vec[i])(Float64(base_val), partials_unit_vec[i])
-        # Update counterfactual vectors for this row
-        update_counterfactual_for_var!(de.counterfactuals, de.vars, de.vars[i], row, x_dual_vec[i])
+    # Use preallocated input buffer from JacobianContext
+    input_vec = ctx.input_vec
+    columns = ctx.var_columns
+    @inbounds for i in eachindex(columns)
+        input_vec[i] = Float64(columns[i][row])
     end
 
-    # Evaluate using specialized dual system
-    de.compiled_dual(rowvec_dual_vec, de.data_counterfactual, row)
+    # Call ForwardDiff.jacobian! with cached config (zero allocations)
+    ForwardDiff.jacobian!(J, ctx.g, input_vec, ctx.cfg)
 
-    # Extract gradients from dual results
-    @inbounds for i in 1:size(J,1)
-        parts = ForwardDiff.partials(rowvec_dual_vec[i])
-        for j in 1:N
-            J[i,j] = parts[j]
-        end
-    end
     return J
 end
 
@@ -144,19 +118,21 @@ function marginal_effects_eta!(
     length(g) == length(de.vars) || throw(DimensionMismatch("gradient length mismatch"))
     length(β) == length(de) || throw(DimensionMismatch("beta length mismatch"))
 
+    core = de.core
+
     # Zero-allocation beta type handling
     if β isa Vector{Float64}
-        de.beta_ref[] = β              # No conversion needed
+        core.beta_ref[] = β              # No conversion needed
     else
-        copyto!(de.beta_buf, β)        # Convert to Float64 once
-        de.beta_ref[] = de.beta_buf    # Point to converted buffer
+        copyto!(core.beta_buf, β)        # Convert to Float64 once
+        core.beta_ref[] = core.beta_buf    # Point to converted buffer
     end
 
     # Use derivative_modelrow! for Jacobian computation (leverages OVERRIDE.md counterfactual system)
-    derivative_modelrow!(de.jacobian_buffer, de, row)
+    derivative_modelrow!(core.jacobian_buffer, de, row)
 
     # Type barrier for zero-allocation matrix multiply: g = J'β
-    _matrix_multiply_eta!(g, de.jacobian_buffer, de.beta_ref[])
+    _matrix_multiply_eta!(g, core.jacobian_buffer, core.beta_ref[])
 
     return g
 end
@@ -221,23 +197,25 @@ function marginal_effects_eta!(
     size(Gβ, 2) == length(de.vars) || throw(DimensionMismatch("Gβ second dimension must match length(de.vars)"))
     length(β) == length(de) || throw(DimensionMismatch("beta length mismatch"))
 
+    core = de.core
+
     # Zero-allocation beta type handling
     if β isa Vector{Float64}
-        de.beta_ref[] = β              # No conversion needed
+        core.beta_ref[] = β              # No conversion needed
     else
-        copyto!(de.beta_buf, β)        # Convert to Float64 once
-        de.beta_ref[] = de.beta_buf    # Point to converted buffer
+        copyto!(core.beta_buf, β)        # Convert to Float64 once
+        core.beta_ref[] = core.beta_buf    # Point to converted buffer
     end
 
     # Use derivative_modelrow! for Jacobian computation (leverages OVERRIDE.md counterfactual system)
-    derivative_modelrow!(de.jacobian_buffer, de, row)
+    derivative_modelrow!(core.jacobian_buffer, de, row)
 
     # Extract parameter gradients (essentially free - transpose of Jacobian)
     # Gβ[i,j] = ∂(∂η/∂vars[j])/∂β[i] = J[i,j]
-    Gβ .= de.jacobian_buffer
+    Gβ .= core.jacobian_buffer
 
     # Type barrier for zero-allocation matrix multiply: g = J'β
-    _matrix_multiply_eta!(g, de.jacobian_buffer, de.beta_ref[])
+    _matrix_multiply_eta!(g, core.jacobian_buffer, core.beta_ref[])
 
     return g, Gβ
 end
@@ -288,6 +266,7 @@ function derivative_modelrow!(
     de::ADEvaluator,
     rows::AbstractVector{Int}
 )
+    core = de.core
     # Validate dimensions
     size(J, 1) == length(rows) || throw(DimensionMismatch("J first dimension must match length(rows)"))
     size(J, 2) == length(de) || throw(DimensionMismatch("J second dimension must match length(de)"))
@@ -347,6 +326,7 @@ function marginal_effects_eta!(
     β::AbstractVector{<:Real},
     rows::AbstractVector{Int}
 )
+    core = de.core
     # Validate dimensions
     size(G, 1) == length(rows) || throw(DimensionMismatch("G first dimension must match length(rows)"))
     size(G, 2) == length(de.vars) || throw(DimensionMismatch("G second dimension must match length(de.vars)"))
@@ -354,20 +334,20 @@ function marginal_effects_eta!(
 
     # Single beta setup for entire batch (key optimization)
     if β isa Vector{Float64}
-        de.beta_ref[] = β              # No conversion needed
+        core.beta_ref[] = β              # No conversion needed
     else
-        copyto!(de.beta_buf, β)        # Convert to Float64 once
-        de.beta_ref[] = de.beta_buf    # Point to converted buffer
+        copyto!(core.beta_buf, β)        # Convert to Float64 once
+        core.beta_ref[] = core.beta_buf    # Point to converted buffer
     end
 
     # Batch processing: reuse setup, iterate rows efficiently
     for (k, row) in enumerate(rows)
         # Compute Jacobian for this row
-        derivative_modelrow!(de.jacobian_buffer, de, row)
+        derivative_modelrow!(core.jacobian_buffer, de, row)
 
         # Compute marginal effects using pre-setup beta
         G_k = view(G, k, :)  # View into k-th row
-        _matrix_multiply_eta!(G_k, de.jacobian_buffer, de.beta_ref[])
+        _matrix_multiply_eta!(G_k, core.jacobian_buffer, core.beta_ref[])
     end
 
     return G

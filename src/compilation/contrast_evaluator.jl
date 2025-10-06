@@ -39,9 +39,10 @@ for row in 1:n_rows
 end
 ```
 """
-mutable struct ContrastEvaluator{T, Ops, S, O, NTMerged, CounterfactualTuple}
+mutable struct ContrastEvaluator{T, Ops, S, O, NTMerged, CounterfactualTuple, CatLevelMaps, VarsTuple, VarMap}
     compiled::UnifiedCompiled{T, Ops, S, O}
-    vars::Vector{Symbol}
+    vars::VarsTuple  # Tuple of symbols for zero-allocation lookups
+    var_map::VarMap  # NamedTuple for compile-time index mapping
     data_counterfactual::NTMerged
     counterfactuals::CounterfactualTuple  # Tuple of CounterfactualVector{T} subtypes
 
@@ -49,12 +50,8 @@ mutable struct ContrastEvaluator{T, Ops, S, O, NTMerged, CounterfactualTuple}
     y_from_buf::Vector{Float64}
     y_to_buf::Vector{Float64}
 
-    # Pre-computed categorical level mappings for zero-allocation categorical contrasts
-    categorical_level_maps::Dict{Symbol, Dict{String, CategoricalValue}}
-
-    # Binary variable optimization metadata
-    binary_vars::Set{Symbol}  # Variables that are truly binary (0/1 or true/false)
-    binary_coef_indices::Dict{Symbol, Int}  # Mapping from binary var to coefficient index
+    # Tuple of CategoricalLevelMap structs (similar to UnifiedCompiled.ops pattern)
+    categorical_level_maps::CatLevelMaps
 
     # Gradient computation buffers for parameter gradients and uncertainty quantification
     gradient_buffer::Vector{Float64}  # Buffer for parameter gradients ∂(discrete_effect)/∂β
@@ -99,57 +96,59 @@ contrast_modelrow!(contrast_buf, evaluator, 1, :group, "Control", "Treatment")
 ```
 """
 function contrastevaluator(compiled, data, vars::Vector{Symbol})
-    # Use Float64 counterfactuals for contrast evaluation
-    data_counterfactual, counterfactuals = build_counterfactual_data(data, vars, 1, Float64)
+    # Preserve natural types for zero-allocation performance
+    # Initialize with row=0 so CounterfactualVectors don't shadow actual data initially
+    data_counterfactual, counterfactuals = build_counterfactual_data(data, vars, 0)
 
-    # Pre-compute categorical level mappings for zero-allocation performance
-    categorical_level_maps = Dict{Symbol, Dict{String, CategoricalValue}}()
+    # Build categorical level maps as tuple of CategoricalLevelMap structs
+    # (mirrors UnifiedCompiled.ops pattern)
+    level_map_structs = []
+
     for (i, var) in enumerate(vars)
         cf_vec = counterfactuals[i]
         if cf_vec isa CategoricalCounterfactualVector
-            # Build level map: String → CategoricalValue for this variable
-            level_map = Dict{String, CategoricalValue}()
             base_array = cf_vec.base
-            for level_str in levels(base_array)
-                # Find a CategoricalValue instance for this level
-                matching_idx = findfirst(x -> string(x) == level_str, base_array)
-                if matching_idx !== nothing
-                    level_map[level_str] = base_array[matching_idx]
-                end
+            levs = levels(base_array)  # Returns Vector{T} where T is level type (String, Int64, etc.)
+
+            # Build tuple of (level, ref_index) pairs using reference indices instead of CategoricalValue
+            # CRITICAL: CategoricalValue is not a bitstype - copying it allocates!
+            # Solution: Store reference indices (UInt8/UInt32/UInt64) which ARE bitstypes (zero allocations)
+            # IMPORTANT: Use the actual reference type R from the CategoricalArray, not hardcoded UInt32
+            R = typeof(cf_vec).parameters[2]  # Extract reference type (UInt8, UInt32, etc.)
+            pairs_vec = []
+            for (ref_idx, level) in enumerate(levs)
+                # ref_idx is 1-based, matches CategoricalArray.refs encoding
+                # Convert to the actual reference type R for type consistency
+                push!(pairs_vec, (level, R(ref_idx)))
             end
-            categorical_level_maps[var] = level_map
+            level_pairs = Tuple(pairs_vec)
+
+            # Create CategoricalLevelMap struct with variable name and level tuple as type parameters
+            # This is exactly like creating ContrastOp{:group, (4,5)}(matrix)
+            level_map = CategoricalLevelMap{var, typeof(level_pairs)}(level_pairs)
+            push!(level_map_structs, level_map)
         end
     end
 
-    # Detect binary variables and their coefficient positions for fast path optimization
-    binary_vars = Set{Symbol}()
-    binary_coef_indices = Dict{Symbol, Int}()
+    # Convert to tuple for type stability (exactly like UnifiedCompiled.ops)
+    categorical_level_maps = Tuple(level_map_structs)
 
-    for (i, var) in enumerate(vars)
-        cf_vec = counterfactuals[i]
-        col = getproperty(data, var)
+    # Convert vars to tuple for type stability and zero-allocation lookups
+    vars_tuple = Tuple(vars)
 
-        # Check if variable is truly binary
-        if _is_truly_binary_variable(cf_vec, col)
-            binary_vars = union(binary_vars, [var])
-            # Find coefficient index for this binary variable in the compiled formula
-            coef_idx = _find_binary_coefficient_index(compiled, var)
-            if coef_idx !== nothing
-                binary_coef_indices[var] = coef_idx
-            end
-        end
-    end
+    # Build NamedTuple index map for compile-time variable lookup
+    # Maps variable names to indices: NamedTuple{(:treatment, :education)}((1, 2))
+    var_map = NamedTuple{vars_tuple}(ntuple(i -> i, length(vars)))
 
     return ContrastEvaluator(
         compiled,
-        vars,
+        vars_tuple,
+        var_map,
         data_counterfactual,
         counterfactuals,
         Vector{Float64}(undef, length(compiled)),                # y_from_buf
         Vector{Float64}(undef, length(compiled)),                # y_to_buf
         categorical_level_maps,
-        binary_vars,
-        binary_coef_indices,
         Vector{Float64}(undef, length(compiled)),                # gradient_buffer
         Vector{Float64}(undef, length(compiled)),                # xrow_from_buf
         Vector{Float64}(undef, length(compiled)),                # xrow_to_buf
@@ -203,20 +202,29 @@ function contrast_modelrow!(
     # Hot path: assume inputs are valid (validation moved to construction time)
     # For debug/safety, validation can be enabled with @boundscheck
 
-    # Binary variable fast path optimization
-    if var in evaluator.binary_vars && haskey(evaluator.binary_coef_indices, var)
-        return _contrast_modelrow_binary_fast_path!(Δ, evaluator, var, from, to)
-    end
+    # CRITICAL: Reset ALL counterfactuals to inactive state (row=0) before evaluation
+    # This ensures each contrast is independent and prevents state bleeding between calls
+    # Bug fix: Without this, previous contrast_modelrow! calls contaminate subsequent ones
+    reset_all_counterfactuals!(evaluator.counterfactuals)
 
-    # General path for categorical and non-binary variables
-    # Update counterfactual for this variable
-    update_counterfactual_for_var!(evaluator.counterfactuals, evaluator.vars, var, row, from, evaluator.categorical_level_maps)
+    # Evaluate with "from" value
+    update_counterfactual_for_var!(evaluator, var, row, from)
     evaluator.compiled(evaluator.y_from_buf, evaluator.data_counterfactual, row)
 
-    update_counterfactual_for_var!(evaluator.counterfactuals, evaluator.vars, var, row, to, evaluator.categorical_level_maps)
+    # Reset again before "to" evaluation
+    reset_all_counterfactuals!(evaluator.counterfactuals)
+
+    # Evaluate with "to" value
+    update_counterfactual_for_var!(evaluator, var, row, to)
     evaluator.compiled(evaluator.y_to_buf, evaluator.data_counterfactual, row)
 
+    # Compute contrast
     Δ .= evaluator.y_to_buf .- evaluator.y_from_buf
+
+    # Clean up: Reset counterfactuals to inactive state after use
+    reset_all_counterfactuals!(evaluator.counterfactuals)
+
+    return Δ
 end
 
 # Convenience method for single contrast computation
@@ -229,77 +237,6 @@ function contrast_modelrow(
     Δ = Vector{Float64}(undef, length(evaluator))
     contrast_modelrow!(Δ, evaluator, row, var, from, to)
     return Δ
-end
-
-# Binary variable optimization helper functions
-
-"""
-    _is_truly_binary_variable(cf_vec, col) -> Bool
-
-Check if a variable is truly binary (only contains 0/1 or true/false values).
-
-# Arguments
-- `cf_vec`: CounterfactualVector for the variable
-- `col`: Original data column
-
-# Returns
-Boolean indicating if the variable is truly binary and eligible for fast path optimization.
-"""
-function _is_truly_binary_variable(cf_vec, col)
-    # Must be BoolCounterfactualVector or numeric with only 0/1 values
-    if cf_vec isa BoolCounterfactualVector
-        return true
-    elseif cf_vec isa NumericCounterfactualVector && eltype(col) <: Real
-        # Check if all values are 0 or 1
-        unique_vals = unique(col)
-        return length(unique_vals) <= 2 && all(v in (0, 1) for v in unique_vals)
-    else
-        return false
-    end
-end
-
-"""
-    _find_binary_coefficient_index(compiled, var) -> Union{Int, Nothing}
-
-Find the coefficient index for a binary variable in the compiled formula.
-
-For binary variables, we need to identify which position in the model matrix
-corresponds to the variable's coefficient to enable fast path computation.
-
-# Arguments
-- `compiled`: Compiled formula evaluator
-- `var`: Variable symbol to find coefficient for
-
-# Returns
-Coefficient index as Int, or Nothing if not found or not a simple binary coefficient.
-"""
-function _find_binary_coefficient_index(compiled, var)
-    # Find the coefficient index for a binary variable by examining the compiled operations
-    # For simple binary variables, we look for LoadOp operations that load the variable
-
-    ops = compiled.ops
-    for (i, op) in enumerate(ops)
-        # Check if this is a LoadOp for our variable
-        op_type = typeof(op)
-        if op_type <: LoadOp
-            # Extract type parameters from LoadOp{Column, OutPos}
-            type_params = op_type.parameters
-            if length(type_params) >= 2
-                column_param = type_params[1]
-                position_param = type_params[2]
-
-                # Check if this LoadOp is for our variable
-                if column_param == var
-                    # Return the position parameter
-                    return position_param
-                end
-            end
-        end
-    end
-
-    # If not found as a simple LoadOp, the variable might be part of a more complex term
-    # For now, return nothing to fall back to the general path
-    return nothing
 end
 
 """
@@ -326,21 +263,7 @@ function _validate_contrast_inputs!(evaluator::ContrastEvaluator, var::Symbol, f
     var_idx = findfirst(==(var), evaluator.vars)
     cf_vec = evaluator.counterfactuals[var_idx]
 
-    # 3. Validate binary variable usage
-    if var in evaluator.binary_vars
-        # Variable is binary - validate binary contrast syntax
-        if !_is_valid_binary_contrast(from, to)
-            error("Invalid binary contrast for variable :$var (detected as binary). Use binary values like 0→1, false→true, or \"0\"→\"1\". Got: $from → $to")
-        end
-    else
-        # Variable is categorical - check for misuse of binary syntax
-        if _looks_like_binary_contrast(from, to)
-            variable_type = _describe_variable_type(cf_vec)
-            error("Variable :$var is $variable_type, not binary. Use categorical level names for contrasts (e.g., \"Level1\" → \"Level2\"), not binary values like $from → $to")
-        end
-    end
-
-    # 4. Type compatibility validation
+    # 3. Type compatibility validation
     _validate_type_compatibility!(cf_vec, var, from, to)
 end
 
@@ -479,165 +402,6 @@ function _validate_mixture_values!(cf_vec::CategoricalMixtureCounterfactualVecto
     # Full mixture contrast validation would be implemented in future phases
     if !(from isa Union{String, Symbol}) || !(to isa Union{String, Symbol})
         error("Mixture variable :$var contrasts should use string or symbol level specifications")
-    end
-end
-
-"""
-    _contrast_modelrow_binary_fast_path!(Δ, evaluator, var, from, to) -> Δ
-
-Optimized binary variable contrast computation that skips full model evaluation.
-
-For truly binary variables (0/1 or true/false), the contrast is simply the
-coefficient difference multiplied by the variable change (1 - 0 = 1).
-
-# Arguments
-- `Δ::AbstractVector{Float64}`: Output contrast vector (modified in-place)
-- `evaluator::ContrastEvaluator`: Pre-configured contrast evaluator
-- `var::Symbol`: Binary variable to contrast
-- `from`: Reference level (should be 0 or false)
-- `to`: Target level (should be 1 or true)
-
-# Performance
-- **Zero allocations** - directly computes coefficient difference
-- **Skip model evaluation** - avoids two full formula evaluations
-- **Type specialization** - optimized for binary variable patterns
-
-# Validation
-Validates that from/to values are valid binary levels before optimization.
-"""
-function _contrast_modelrow_binary_fast_path!(
-    Δ::AbstractVector{Float64},
-    evaluator::ContrastEvaluator,
-    var::Symbol,
-    from, to
-)
-    # Validate binary contrast specification
-    if !_is_valid_binary_contrast(from, to)
-        error("Invalid binary contrast specification for variable $var: from=$from, to=$to. " *
-              "Expected binary values (0/1, false/true) or probabilities in [0.0, 1.0].")
-    end
-
-    # Get coefficient index for this binary variable
-    coef_idx = evaluator.binary_coef_indices[var]
-
-    # For binary variables, the contrast is simply the coefficient value
-    # when transitioning from 0→1 or false→true
-
-    # Zero out all coefficients manually (avoid fill! allocation)
-    @inbounds for i in eachindex(Δ)
-        Δ[i] = 0.0
-    end
-
-    # Set the coefficient for this binary variable
-    # The contrast magnitude depends on the direction (0→1 is +coef, 1→0 is -coef)
-    contrast_direction = _binary_contrast_direction(from, to)
-    @inbounds Δ[coef_idx] = contrast_direction
-
-    return Δ
-end
-
-"""
-    _is_valid_binary_contrast(from, to) -> Bool
-
-Validate that from/to values represent a valid binary contrast.
-
-Accepts:
-- Binary transitions: 0→1, 1→0, false→true, true→false, "0"→"1", "1"→"0"
-- Probability transitions: 0.0→0.6, 0.3→0.7, false→0.5, etc.
-- Zero contrasts: 0.5→0.5 (valid, produces zero effect)
-
-Returns true if both values can be standardized to Float64 in [0.0, 1.0].
-"""
-function _is_valid_binary_contrast(from, to)
-    # Convert to standardized form for validation
-    from_std = _standardize_binary_value(from)
-    to_std = _standardize_binary_value(to)
-
-    # Must both be valid binary/probability values (can be equal for zero contrast)
-    return from_std !== nothing && to_std !== nothing
-end
-
-"""
-    _binary_contrast_direction(from, to) -> Float64
-
-Determine the direction and magnitude of a binary contrast.
-
-Returns the difference `to - from`, representing the change in probability:
-- 0→1 (false→true): returns 1.0
-- 1→0 (true→false): returns -1.0
-- 0→0.6: returns 0.6 (60% of full effect)
-- 0.3→0.7: returns 0.4 (40% of full effect)
-
-# Mathematical Interpretation
-For Boolean variable z with coefficient β:
-- Contrast(z: p₁ → p₂) = (p₂ - p₁) * β
-- This is consistent with categorical mixture semantics in linear predictor space
-"""
-function _binary_contrast_direction(from, to)
-    from_std = _standardize_binary_value(from)
-    to_std = _standardize_binary_value(to)
-
-    if from_std === nothing || to_std === nothing
-        error("Invalid binary contrast direction: $from → $to")
-    end
-
-    # Return the difference in probability
-    # Works for both discrete (0→1) and continuous (0.3→0.7) contrasts
-    return to_std - from_std
-end
-
-"""
-    _standardize_binary_value(val) -> Union{Float64, Nothing}
-
-Convert various binary value representations to standardized form.
-
-Handles:
-- Binary values: 0, 1, false, true, "0", "1", "false", "true" (case insensitive)
-- Probability values: Float64 in [0.0, 1.0] (e.g., 0.6 represents 60% true)
-
-Returns: Float64 in [0.0, 1.0], or nothing if not a valid binary/probability value
-
-# Probability Interpretation
-For Boolean variables, Float64 values represent mixture probabilities:
-- `z = 0.6` means 60% true, 40% false
-- Plugged directly into linear predictor: η = β₀ + β_z*0.6
-- Consistent with categorical mixture semantics
-"""
-function _standardize_binary_value(val)
-    # Direct type dispatch for common cases (no allocation)
-    if val === 0 || val === false
-        return 0.0
-    elseif val === 1 || val === true
-        return 1.0
-    elseif val isa Float64
-        # Accept probabilities in [0, 1]
-        if 0.0 <= val <= 1.0
-            return val
-        else
-            return nothing
-        end
-    elseif val isa String
-        # Only allocate for string processing if needed
-        val_lower = lowercase(val)
-        if val_lower == "0" || val_lower == "false"
-            return 0.0
-        elseif val_lower == "1" || val_lower == "true"
-            return 1.0
-        else
-            return nothing
-        end
-    else
-        # Handle other numeric types without string conversion
-        if val == 0
-            return 0.0
-        elseif val == 1
-            return 1.0
-        elseif val isa Real && 0.0 <= val <= 1.0
-            # Accept other numeric probabilities
-            return Float64(val)
-        else
-            return nothing
-        end
     end
 end
 
@@ -828,25 +592,29 @@ function _contrast_gradient_linear_scale!(
     var::Symbol,
     from, to
 )
-    # Binary variable fast path
-    if var in evaluator.binary_vars && haskey(evaluator.binary_coef_indices, var)
-        return _contrast_gradient_binary_fast_path!(∇β, evaluator, var, from, to)
-    end
-
     # General path: compute X₁ - X₀ using model matrix evaluation
 
+    # Reset all counterfactuals to prevent state bleeding
+    reset_all_counterfactuals!(evaluator.counterfactuals)
+
     # Compute X₀ (baseline model matrix row)
-    update_counterfactual_for_var!(evaluator.counterfactuals, evaluator.vars, var, row, from, evaluator.categorical_level_maps)
+    update_counterfactual_for_var!(evaluator, var, row, from)
     evaluator.compiled(evaluator.xrow_from_buf, evaluator.data_counterfactual, row)
 
+    # Reset again before computing X₁
+    reset_all_counterfactuals!(evaluator.counterfactuals)
+
     # Compute X₁ (counterfactual model matrix row)
-    update_counterfactual_for_var!(evaluator.counterfactuals, evaluator.vars, var, row, to, evaluator.categorical_level_maps)
+    update_counterfactual_for_var!(evaluator, var, row, to)
     evaluator.compiled(evaluator.xrow_to_buf, evaluator.data_counterfactual, row)
 
     # ΔX = X₁ - X₀
     @inbounds @fastmath for i in eachindex(∇β)
         ∇β[i] = evaluator.xrow_to_buf[i] - evaluator.xrow_from_buf[i]
     end
+
+    # Clean up: Reset counterfactuals to inactive state
+    reset_all_counterfactuals!(evaluator.counterfactuals)
 
     return ∇β
 end
@@ -874,13 +642,23 @@ function _contrast_gradient_response_scale!(
     β::AbstractVector{<:Real},
     link
 )
+    # Reset all counterfactuals to prevent state bleeding
+    @inbounds for i in 1:length(evaluator.counterfactuals)
+        update_counterfactual_row!(evaluator.counterfactuals[i], 0)
+    end
+
     # Step 1: Compute X₀ and η₀ = X₀'β
-    update_counterfactual_for_var!(evaluator.counterfactuals, evaluator.vars, var, row, from, evaluator.categorical_level_maps)
+    update_counterfactual_for_var!(evaluator, var, row, from)
     evaluator.compiled(evaluator.xrow_from_buf, evaluator.data_counterfactual, row)
     η₀ = dot(β, evaluator.xrow_from_buf)
 
+    # Reset again before computing X₁
+    @inbounds for i in 1:length(evaluator.counterfactuals)
+        update_counterfactual_row!(evaluator.counterfactuals[i], 0)
+    end
+
     # Step 2: Compute X₁ and η₁ = X₁'β
-    update_counterfactual_for_var!(evaluator.counterfactuals, evaluator.vars, var, row, to, evaluator.categorical_level_maps)
+    update_counterfactual_for_var!(evaluator, var, row, to)
     evaluator.compiled(evaluator.xrow_to_buf, evaluator.data_counterfactual, row)
     η₁ = dot(β, evaluator.xrow_to_buf)
 
@@ -894,37 +672,10 @@ function _contrast_gradient_response_scale!(
         ∇β[i] = g_prime_η₁ * evaluator.xrow_to_buf[i] - g_prime_η₀ * evaluator.xrow_from_buf[i]
     end
 
-    return ∇β
-end
-
-"""
-    _contrast_gradient_binary_fast_path!(∇β, evaluator, var, from, to)
-
-Optimized gradient computation for binary variables: ∇β has single non-zero element.
-"""
-function _contrast_gradient_binary_fast_path!(
-    ∇β::AbstractVector{Float64},
-    evaluator::ContrastEvaluator,
-    var::Symbol,
-    from, to
-)
-    # Validate binary contrast specification
-    if !_is_valid_binary_contrast(from, to)
-        error("Invalid binary contrast specification for variable $var: from=$from, to=$to")
+    # Clean up: Reset counterfactuals to inactive state
+    @inbounds for i in 1:length(evaluator.counterfactuals)
+        update_counterfactual_row!(evaluator.counterfactuals[i], 0)
     end
-
-    # Get coefficient index for this binary variable
-    coef_idx = evaluator.binary_coef_indices[var]
-
-    # Zero out all gradients (avoid fill! allocation)
-    @inbounds for i in eachindex(∇β)
-        ∇β[i] = 0.0
-    end
-
-    # Set single non-zero gradient element
-    # For linear scale: ∇β = ΔX, which has ±1 at the coefficient position
-    contrast_direction = _binary_contrast_direction(from, to)
-    @inbounds ∇β[coef_idx] = contrast_direction
 
     return ∇β
 end

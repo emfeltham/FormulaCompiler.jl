@@ -34,7 +34,7 @@ All subtypes must implement:
 abstract type CounterfactualVector{T} <: AbstractVector{T} end
 
 # Common interface for all CounterfactualVector subtypes
-@inline Base.getindex(v::CounterfactualVector, i::Int) = (i == v.row ? v.replacement : v.base[i])
+@inline Base.@propagate_inbounds Base.getindex(v::CounterfactualVector, i::Int) = (i == v.row ? v.replacement : v.base[i])
 Base.size(v::CounterfactualVector) = size(v.base)
 Base.length(v::CounterfactualVector) = length(v.base)
 Base.IndexStyle(::Type{<:CounterfactualVector}) = IndexLinear()
@@ -133,10 +133,47 @@ cf_vec[3]  # → CategoricalValue("A") (original)
 cf_vec[4]  # → CategoricalValue("B") (original)
 ```
 """
-mutable struct CategoricalCounterfactualVector{T,R} <: CounterfactualVector{CategoricalValue{T,R}}
+mutable struct CategoricalCounterfactualVector{T,R} <: CounterfactualVector{R}
     base::CategoricalArray{T,1,R}
     row::Int
+    replacement::R  # Store reference index (UInt32) instead of CategoricalValue
+end
+
+# Constructor that accepts CategoricalValue and extracts the reference index
+function CategoricalCounterfactualVector{T,R}(base::CategoricalArray{T,1,R}, row::Int, replacement::CategoricalValue{T,R}) where {T,R}
+    # Extract the reference index from the CategoricalValue (zero allocations)
+    ref_idx = CategoricalArrays.refcode(replacement)
+    CategoricalCounterfactualVector{T,R}(base, row, ref_idx)
+end
+
+# Generic constructor that infers types from arguments
+function CategoricalCounterfactualVector(base::CategoricalArray{T,1,R}, row::Int, replacement::CategoricalValue{T,R}) where {T,R}
+    CategoricalCounterfactualVector{T,R}(base, row, replacement)
+end
+
+# Specialized getindex for CategoricalCounterfactualVector - returns reference index for zero allocations
+# Formula execution converts to Float64, so we return R (UInt32) which converts without allocation
+@inline Base.@propagate_inbounds function Base.getindex(v::CategoricalCounterfactualVector{T,R}, i::Int) where {T,R}
+    @inbounds return i == v.row ? v.replacement : v.base.refs[i]
+end
+
+# Update method for CategoricalCounterfactualVector - accepts CategoricalValue and extracts reference index
+function update_counterfactual_replacement!(
+    cv::CategoricalCounterfactualVector{T,R},
     replacement::CategoricalValue{T,R}
+) where {T,R}
+    cv.replacement = CategoricalArrays.refcode(replacement)
+    return cv
+end
+
+# Update method for CategoricalCounterfactualVector - accepts reference index directly
+# Used when replacement comes from level maps (which store ref indices for zero allocations)
+function update_counterfactual_replacement!(
+    cv::CategoricalCounterfactualVector{T,R},
+    replacement::R
+) where {T,R}
+    cv.replacement = replacement
+    return cv
 end
 
 """
@@ -259,7 +296,7 @@ counterfactualvector(col::Vector{Bool}, row::Int) = BoolCounterfactualVector(col
 counterfactualvector(col::Vector{T}, row::Int) where {T<:Real} = NumericCounterfactualVector{T}(col, row, zero(T))
 
 counterfactualvector(col::CategoricalArray{T,1,R}, row::Int) where {T,R} =
-    CategoricalCounterfactualVector{T,R}(col, row, col[1])  # Use first level as default
+    CategoricalCounterfactualVector{T,R}(col, row, R(1))  # Use first ref index (1) as default - zero allocations!
 
 counterfactualvector(col::AbstractVector{T}, row::Int) where {T} =
     TypedCounterfactualVector{T,typeof(col)}(col, row, col[1])
@@ -288,7 +325,7 @@ counterfactualvector(col::Vector{T}, row::Int, ::Type{S}) where {T<:Union{Abstra
     NumericCounterfactualVector{S}(convert(Vector{S}, col), row, zero(S))
 
 counterfactualvector(col::CategoricalArray{T,1,R}, row::Int, ::Type{S}) where {T,R,S} =
-    CategoricalCounterfactualVector{T,R}(col, row, col[1])
+    CategoricalCounterfactualVector{T,R}(col, row, R(1))  # Use first ref index - zero allocations!
 
 # Categorical mixture dispatch (backend-invariant - mixtures don't change type for AD)
 function counterfactualvector(col::Vector{T}, row::Int, ::Type{S}) where {T,S}
@@ -317,6 +354,25 @@ function update_counterfactual_replacement!(cv::CounterfactualVector{T}, replace
     return cv
 end
 
+# Generic Dual-to-Dual conversion for AD backend
+# Handles ForwardDiff's tagged Dual types (Dual{Tag{...}}) vs our placeholder (Dual{Nothing})
+# This enables the counterfactual system to accept arbitrary Dual tags from ForwardDiff.jacobian!
+function update_counterfactual_replacement!(
+    cv::NumericCounterfactualVector{D1},
+    replacement::D2
+) where {D1 <: ForwardDiff.Dual, D2 <: ForwardDiff.Dual}
+    if D1 === D2
+        cv.replacement = replacement
+        return cv
+    end
+
+    # Tags differ – reconstruct using target Dual type
+    v = ForwardDiff.value(replacement)
+    p = ForwardDiff.partials(replacement)
+    cv.replacement = D1(v, p)
+    return cv
+end
+
 # Step 2.3: Backend-Specific Data Builder Functions
 
 # Basic builder function (preserves original types - for FDEvaluator, ContrastEvaluator, and general use)
@@ -340,8 +396,9 @@ function build_counterfactual_data(base::NamedTuple, vars::Vector{Symbol}, row::
         counterfactualvector(col, row, T)  # Converts numeric types to uniform T (e.g., Dual)
     end
 
-    pairs = [var => cv for (var, cv) in zip(vars, counterfactual_vecs)]
-    data_counterfactual = merge(base, NamedTuple(pairs))
+    # Create NamedTuple from tuple of pairs for type stability
+    pairs_tuple = ntuple(i -> vars[i] => counterfactual_vecs[i], length(vars))
+    data_counterfactual = merge(base, NamedTuple(pairs_tuple))
 
     return data_counterfactual, Tuple(counterfactual_vecs)
 end
@@ -349,13 +406,60 @@ end
 # Step 2.4: Type-Safe Accessors
 # Safe accessors for working with counterfactual tuples
 
-function get_counterfactual_for_var(counterfactuals::Tuple, vars::Vector{Symbol}, var::Symbol)
-    idx = findfirst(==(var), vars)
-    idx === nothing && error("Variable $var not found in counterfactual vars")
-    return counterfactuals[idx]
+# Zero-allocation tuple lookup - use @generated to force unrolling
+@generated function get_counterfactual_for_var(counterfactuals::C, vars::V, var::Symbol) where {C<:Tuple, V<:Tuple}
+    N = length(V.parameters)
+    checks = Expr(:block)
+
+    for i in 1:N
+        push!(checks.args, quote
+            if var === vars[$i]
+                return counterfactuals[$i]
+            end
+        end)
+    end
+
+    push!(checks.args, :(error("Variable ", var, " not found in counterfactual vars")))
+
+    return quote
+        Base.@_inline_meta
+        @inbounds $checks
+    end
 end
 
-function update_counterfactual_for_var!(counterfactuals::Tuple, vars::Vector{Symbol}, var::Symbol,
+"""
+    get_cf_for_var(evaluator, var) -> CounterfactualVector
+
+Zero-allocation counterfactual vector lookup using NamedTuple compile-time indexing.
+
+Uses NamedTuple's `getproperty` for compile-time constant index resolution, eliminating
+the 32-byte allocation from runtime tuple search in `get_counterfactual_for_var`.
+
+# Arguments
+- `evaluator`: ContrastEvaluator with var_map::NamedTuple field
+- `var::Symbol`: Variable name to look up
+
+# Returns
+Counterfactual vector for the specified variable with perfect type stability.
+
+# Performance
+- **Zero allocations** - compile-time index resolution
+- **Type stable** - NamedTuple property access returns compile-time constant
+- **Inlined** - typically optimizes to direct tuple indexing
+
+# Example
+```julia
+evaluator = contrastevaluator(compiled, data, [:treatment, :age])
+cf_vec = get_cf_for_var(evaluator, :treatment)  # 0 bytes, type-stable
+```
+"""
+@inline function get_cf_for_var(evaluator, var::Symbol)
+    idx = getproperty(evaluator.var_map, var)  # Compile-time constant via NamedTuple
+    return evaluator.counterfactuals[idx]      # Type-stable indexing
+end
+
+# Version without categorical_level_maps (uses findfirst on base array - allocates)
+function update_counterfactual_for_var!(counterfactuals::Tuple, vars::Tuple, var::Symbol,
                                        row::Int, replacement)
     cf_vec = get_counterfactual_for_var(counterfactuals, vars, var)
     update_counterfactual_row!(cf_vec, row)
@@ -385,22 +489,61 @@ function update_counterfactual_for_var!(counterfactuals::Tuple, vars::Vector{Sym
     return cf_vec
 end
 
-# Optimized version with pre-computed categorical level mappings
-function update_counterfactual_for_var!(counterfactuals::Tuple, vars::Vector{Symbol}, var::Symbol,
-                                       row::Int, replacement, categorical_level_maps::Dict{Symbol, Dict{String, CategoricalValue}})
+# Helper to find categorical level in level maps (zero allocations)
+# Uses @generated function to unroll tuple search at compile time (like execute_ops)
+@generated function _find_categorical_level(categorical_level_maps::T, var::Symbol, replacement) where T
+    N = fieldcount(T)
+    search_exprs = Expr[]
+
+    for i in 1:N
+        LMType = fieldtype(T, i)
+        if LMType <: CategoricalLevelMap
+            VarSym = LMType.parameters[1]
+            LevelTupleType = LMType.parameters[2]
+            n_levels = fieldcount(LevelTupleType)
+
+            # Generate unrolled tuple iteration to avoid allocations
+            level_search = Expr[]
+            for j in 1:n_levels
+                push!(level_search, quote
+                    pair = lm.levels[$j]
+                    if pair[1] == replacement
+                        return pair[2]
+                    end
+                end)
+            end
+
+            push!(search_exprs, quote
+                if var === $(QuoteNode(VarSym))
+                    lm = categorical_level_maps[$i]
+                    @inbounds begin
+                        $(level_search...)
+                    end
+                    error("Level ", replacement, " not found in categorical variable ", var)
+                end
+            end)
+        end
+    end
+
+    push!(search_exprs, :(error("No level mapping found for categorical variable ", var)))
+
+    return quote
+        $(search_exprs...)
+    end
+end
+
+# Optimized version with pre-computed categorical level mappings (zero allocations)
+@inline function update_counterfactual_for_var!(counterfactuals::Tuple, vars::Tuple, var::Symbol,
+                                       row::Int, replacement, categorical_level_maps)
+    # No type annotation on categorical_level_maps
+    # Allows Julia to specialize for each specific tuple type
     cf_vec = get_counterfactual_for_var(counterfactuals, vars, var)
     update_counterfactual_row!(cf_vec, row)
 
     # Use pre-computed level mapping for categorical variables (zero allocations)
-    if cf_vec isa CategoricalCounterfactualVector && haskey(categorical_level_maps, var)
-        level_map = categorical_level_maps[var]
-        replacement_str = string(replacement)
-        if haskey(level_map, replacement_str)
-            cat_val = level_map[replacement_str]
-            update_counterfactual_replacement!(cf_vec, cat_val)
-        else
-            error("Level $replacement_str not found in pre-computed mapping for variable $var")
-        end
+    if cf_vec isa CategoricalCounterfactualVector
+        cat_val = _find_categorical_level(categorical_level_maps, var, replacement)
+        update_counterfactual_replacement!(cf_vec, cat_val)
     else
         # Non-categorical variables (boolean, numeric, mixtures) - handle type conversion
         # IMPORTANT: Check BoolCounterfactualVector FIRST before NumericCounterfactualVector
@@ -409,9 +552,16 @@ function update_counterfactual_for_var!(counterfactuals::Tuple, vars::Vector{Sym
             # Boolean variables - direct replacement (no conversion needed)
             update_counterfactual_replacement!(cf_vec, replacement)
         elseif cf_vec isa NumericCounterfactualVector{T} where T
-            # Numeric variables (Int, Float, etc.) - convert to correct type
-            converted_replacement = convert(eltype(cf_vec), replacement)
-            update_counterfactual_replacement!(cf_vec, converted_replacement)
+            # Numeric variables (Int, Float, etc.) - handle type conversion
+            # Phase 2 optimization: try direct assignment first (zero allocations when types match)
+            if replacement isa eltype(cf_vec)
+                # Types already match - direct assignment (0 bytes)
+                update_counterfactual_replacement!(cf_vec, replacement)
+            else
+                # Types don't match - convert (may allocate)
+                converted_replacement = convert(eltype(cf_vec), replacement)
+                update_counterfactual_replacement!(cf_vec, converted_replacement)
+            end
         elseif cf_vec isa CategoricalMixtureCounterfactualVector
             # Mixture variables - replacement should be another mixture object
             update_counterfactual_replacement!(cf_vec, replacement)
@@ -422,4 +572,124 @@ function update_counterfactual_for_var!(counterfactuals::Tuple, vars::Vector{Sym
     end
 
     return cf_vec
+end
+
+"""
+    update_counterfactual_for_var!(evaluator, var, row, replacement) -> CounterfactualVector
+
+Zero-allocation counterfactual update using ContrastEvaluator's NamedTuple index map.
+
+Uses `get_cf_for_var` for compile-time index resolution and multiple dispatch for
+type-stable updates. This is the optimized version for ContrastEvaluator.
+
+# Arguments
+- `evaluator`: ContrastEvaluator with var_map, counterfactuals, and categorical_level_maps
+- `var::Symbol`: Variable name to update
+- `row::Int`: Row index to set
+- `replacement`: New value for the counterfactual
+
+# Performance
+- **Zero allocations** - compile-time index + dispatch-based type handling
+- **Type stable** - multiple dispatch eliminates runtime type checks
+
+# Example
+```julia
+evaluator = contrastevaluator(compiled, data, [:treatment])
+update_counterfactual_for_var!(evaluator, :treatment, 1, "Drug")  # 0 bytes
+```
+"""
+@inline function update_counterfactual_for_var!(evaluator, var::Symbol, row::Int, replacement)
+    # Use NamedTuple-based lookup for zero allocations
+    cf_vec = get_cf_for_var(evaluator, var)
+    update_counterfactual_row!(cf_vec, row)
+
+    # Dispatch to type-specific update (no runtime isa checks!)
+    _update_replacement!(cf_vec, replacement, evaluator.categorical_level_maps, var)
+
+    return cf_vec
+end
+
+# Multiple dispatch versions - eliminates all runtime isa checks!
+# Each method is specialized at compile time based on cf_vec type
+
+"""
+    reset_all_counterfactuals!(counterfactuals::Tuple)
+
+Reset all counterfactuals to inactive state (row=0) with zero allocations.
+
+Uses manual specialization for common tuple sizes to avoid dynamic dispatch.
+Each tuple size gets its own method with unrolled updates.
+"""
+@inline function reset_all_counterfactuals!(counterfactuals::Tuple{T}) where T
+    update_counterfactual_row!(counterfactuals[1], 0)
+    nothing
+end
+
+@inline function reset_all_counterfactuals!(counterfactuals::Tuple{T1,T2}) where {T1,T2}
+    update_counterfactual_row!(counterfactuals[1], 0)
+    update_counterfactual_row!(counterfactuals[2], 0)
+    nothing
+end
+
+@inline function reset_all_counterfactuals!(counterfactuals::Tuple{T1,T2,T3}) where {T1,T2,T3}
+    update_counterfactual_row!(counterfactuals[1], 0)
+    update_counterfactual_row!(counterfactuals[2], 0)
+    update_counterfactual_row!(counterfactuals[3], 0)
+    nothing
+end
+
+@inline function reset_all_counterfactuals!(counterfactuals::Tuple{T1,T2,T3,T4}) where {T1,T2,T3,T4}
+    update_counterfactual_row!(counterfactuals[1], 0)
+    update_counterfactual_row!(counterfactuals[2], 0)
+    update_counterfactual_row!(counterfactuals[3], 0)
+    update_counterfactual_row!(counterfactuals[4], 0)
+    nothing
+end
+
+# Fallback for larger tuples - uses @generated to avoid allocations
+@generated function reset_all_counterfactuals!(counterfactuals::Tuple)
+    N = length(counterfactuals.parameters)
+    exprs = [:(update_counterfactual_row!(counterfactuals[$i], 0)) for i in 1:N]
+    quote
+        $(exprs...)
+        nothing
+    end
+end
+
+@inline function _update_replacement!(cf_vec::CategoricalCounterfactualVector, replacement,
+                                      categorical_level_maps, var::Symbol)
+    # Categorical: use pre-computed level mapping (0 bytes)
+    cat_val = _find_categorical_level(categorical_level_maps, var, replacement)
+    update_counterfactual_replacement!(cf_vec, cat_val)
+end
+
+@inline function _update_replacement!(cf_vec::NumericCounterfactualVector{T}, replacement::T,
+                                      categorical_level_maps, var::Symbol) where T
+    # Numeric with matching types: direct assignment (0 bytes)
+    update_counterfactual_replacement!(cf_vec, replacement)
+end
+
+@inline function _update_replacement!(cf_vec::NumericCounterfactualVector{T}, replacement,
+                                      categorical_level_maps, var::Symbol) where T
+    # Numeric with mismatched types: convert (may allocate)
+    converted = convert(T, replacement)
+    update_counterfactual_replacement!(cf_vec, converted)
+end
+
+@inline function _update_replacement!(cf_vec::BoolCounterfactualVector, replacement,
+                                      categorical_level_maps, var::Symbol)
+    # Boolean: direct replacement (0 bytes)
+    update_counterfactual_replacement!(cf_vec, replacement)
+end
+
+@inline function _update_replacement!(cf_vec::CategoricalMixtureCounterfactualVector, replacement,
+                                      categorical_level_maps, var::Symbol)
+    # Mixture: direct replacement (0 bytes)
+    update_counterfactual_replacement!(cf_vec, replacement)
+end
+
+@inline function _update_replacement!(cf_vec::CounterfactualVector, replacement,
+                                      categorical_level_maps, var::Symbol)
+    # Fallback for other types (0 bytes)
+    update_counterfactual_replacement!(cf_vec, replacement)
 end

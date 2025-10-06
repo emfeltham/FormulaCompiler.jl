@@ -54,6 +54,7 @@ function marginal_effects_eta!(
     β::AbstractVector{<:AbstractFloat},
     row::Int
 )
+    core = de.core
     # Simple bounds checks without string interpolation to avoid allocations
     length(g) == length(de.vars) || throw(DimensionMismatch("gradient length mismatch"))
     size(Gβ, 1) == length(de) || throw(DimensionMismatch("Gβ first dimension must match length(de)"))
@@ -61,14 +62,14 @@ function marginal_effects_eta!(
     length(β) == length(de) || throw(DimensionMismatch("beta length mismatch"))
 
     # Use derivative_modelrow! for Jacobian computation (leverages OVERRIDE.md counterfactual system)
-    derivative_modelrow!(de.jacobian_buffer, de, row)
+    derivative_modelrow!(core.jacobian_buffer, de, row)
 
     # Extract parameter gradients (essentially free - transpose of Jacobian)
     # Gβ[i,j] = ∂(∂η/∂vars[j])/∂β[i] = J[i,j]
-    Gβ .= de.jacobian_buffer
+    Gβ .= core.jacobian_buffer
 
     # Zero-allocation matrix multiply: g = J'β
-    _matrix_multiply_eta!(g, de.jacobian_buffer, β)
+    _matrix_multiply_eta!(g, core.jacobian_buffer, β)
 
     return nothing
 end
@@ -126,6 +127,7 @@ function marginal_effects_eta!(
     β::AbstractVector{<:AbstractFloat},
     rows::AbstractVector{Int}
 )
+    core = de.core
     # Validate dimensions
     size(G, 1) == length(rows) || throw(DimensionMismatch("G first dimension must match length(rows)"))
     size(G, 2) == length(de.vars) || throw(DimensionMismatch("G second dimension must match length(de.vars)"))
@@ -137,15 +139,15 @@ function marginal_effects_eta!(
     # Batch processing: iterate rows efficiently
     for (k, row) in enumerate(rows)
         # Compute Jacobian for this row
-        derivative_modelrow!(de.jacobian_buffer, de, row)
+        derivative_modelrow!(core.jacobian_buffer, de, row)
 
         # Compute marginal effects: G[k, :] = J' * β
         G_k = view(G, k, :)  # View into k-th row
-        _matrix_multiply_eta!(G_k, de.jacobian_buffer, β)
+        _matrix_multiply_eta!(G_k, core.jacobian_buffer, β)
 
         # Copy parameter gradients: Gβ_tensor[k, :, :] = J'
         Gβ_k = view(Gβ_tensor, k, :, :)  # View into k-th slice
-        Gβ_k .= transpose(de.jacobian_buffer)
+        Gβ_k .= transpose(core.jacobian_buffer)
     end
 
     return nothing

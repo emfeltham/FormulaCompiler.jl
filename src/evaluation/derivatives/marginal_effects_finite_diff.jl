@@ -74,6 +74,49 @@ function marginal_effects_eta!(
 end
 
 """
+    marginal_effects_eta!(g, de::FDEvaluator, β, row) -> g
+
+Convenience method matching ADEvaluator signature - computes only marginal effects without parameter gradients.
+
+This is a simpler interface that matches the AD backend signature, making it easier to write
+backend-agnostic code. It internally allocates a temporary Gβ matrix which is discarded.
+
+For performance-critical code where you need both marginal effects and parameter gradients,
+use the full signature: `marginal_effects_eta!(g, Gβ, de, β, row)`.
+
+# Arguments
+- `g::Vector{Float64}`: Preallocated gradient buffer of length `length(de.vars)`
+- `de::FDEvaluator`: FD evaluator built by `derivativeevaluator_fd(compiled, data, vars)`
+- `β::AbstractVector{<:Real}`: Model coefficients of length `length(de)`
+- `row::Int`: Row index to evaluate (1-based indexing)
+
+# Returns
+- `g`: Vector containing marginal effects `g[j] = ∂η/∂vars[j]`
+
+# Example
+```julia
+# Simple usage matching AD backend
+de_fd = derivativeevaluator_fd(compiled, data, [:x, :z])
+g = Vector{Float64}(undef, length(de_fd.vars))
+marginal_effects_eta!(g, de_fd, β, 1)  # Works like AD backend
+```
+"""
+function marginal_effects_eta!(
+    g::AbstractVector{Float64},
+    de::FDEvaluator,
+    β::AbstractVector{<:Real},
+    row::Int
+)
+    # Allocate temporary Gβ matrix
+    Gβ = Matrix{Float64}(undef, length(de), length(de.vars))
+
+    # Call the full version
+    marginal_effects_eta!(g, Gβ, de, β, row)
+
+    return g
+end
+
+"""
     marginal_effects_eta!(G, Gβ_tensor, de::FDEvaluator, β, rows) -> (G, Gβ_tensor)
 
 Batch computation of marginal effects and parameter gradients for multiple rows using finite differences - zero allocations after warmup.

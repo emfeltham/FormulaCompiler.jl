@@ -144,7 +144,7 @@ export _dmu_deta, _d2mu_deta2
 
 # Zero-allocation contrast evaluator for categorical and binary variables
 include("compilation/contrast_evaluator.jl")
-export ContrastEvaluator, contrastevaluator
+export ContrastEvaluator, contrastevaluator, CategoricalLevelMap
 export contrast_gradient!, contrast_gradient
 export supported_link_functions
 

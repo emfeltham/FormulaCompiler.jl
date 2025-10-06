@@ -290,6 +290,43 @@ struct MixtureContrastOp{Column, OutPositions, LevelIndices, Weights} <: Abstrac
 end
 
 """
+    CategoricalLevelMap{Var, LevelTuple}
+
+Stores pre-computed level mappings for a categorical variable in contrast evaluators.
+
+Similar to `ContrastOp`, this struct uses type parameters for compile-time specialization
+while storing runtime level data as a field.
+
+## Type Parameters
+- `Var::Symbol`: Variable name (e.g., `:group`, `:treatment`)
+- `LevelTuple`: Type of the levels tuple (e.g., `NTuple{3, Tuple{String, CategoricalValue{UInt32}}}`)
+
+## Fields
+- `levels`: Tuple of (level, CategoricalValue) pairs preserving natural level types
+
+## Example
+```julia
+# String categorical with 3 levels
+CategoricalLevelMap{:group, NTuple{3, Tuple{String, CategoricalValue{UInt32}}}}(
+    (("Control", catval1), ("Treatment", catval2), ("Placebo", catval3))
+)
+
+# Integer categorical with 5 levels
+CategoricalLevelMap{:age_group, NTuple{5, Tuple{Int64, CategoricalValue{UInt32}}}}(
+    ((1, catval1), (2, catval2), (3, catval3), (4, catval4), (5, catval5))
+)
+```
+
+## Performance
+- **Zero allocations**: All types concrete, fully specialized
+- **Natural types**: No String conversion needed for Int/Symbol levels
+- **Fast lookup**: Linear search through small tuple (2-10 levels typical)
+"""
+struct CategoricalLevelMap{Var, LevelTuple}
+    levels::LevelTuple
+end
+
+"""
     StandardizeOp{InPos, OutPos, Center, Scale} <: AbstractOp
 
 **Standardization Operation**: Applies z-score transformation (x - center) / scale.

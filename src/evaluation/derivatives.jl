@@ -19,7 +19,7 @@ include("derivatives/utilities.jl")
 # Export public API
 export derivativeevaluator,
        derivative_modelrow!, derivative_modelrow,
-       derivative_modelrow_fd, derivative_modelrow_fd_pos!,
+       derivative_modelrow_fd,
        # High-performance direct function calls
        marginal_effects_eta!, marginal_effects_eta!,
        marginal_effects_mu!, marginal_effects_mu!,
