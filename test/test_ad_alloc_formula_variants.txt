@@ -1,0 +1,125 @@
+The latest version of Julia in the `release` channel is 1.11.7+0.aarch64.apple.darwin14. You currently have `1.11.2+0.aarch64.apple.darwin14` installed. Run:
+
+  juliaup update
+
+in your terminal shell to install Julia 1.11.7+0.aarch64.apple.darwin14 and update the `release` channel to that version.
+Testing AD allocations with formula variants...
+================================================================================
+
+
+
+VARIANT 1: Simplest possible - just continuous variables
+────────────────────────────────────────────────────────────────────────────────
+
+Simple continuous only
+  Formula: response ~ dists_p_inv + are_related_dists_a_inv
+  Testing derivatives for: [:dists_p_inv, :are_related_dists_a_inv]
+  Result: 0 allocs, 0 bytes
+  Expected: 0 allocs, 0 bytes
+  ✓ PASS
+
+
+
+VARIANT 2: Add boolean variable (not a predicate)
+────────────────────────────────────────────────────────────────────────────────
+
+With boolean variable
+  Formula: response ~ socio4 + dists_p_inv + are_related_dists_a_inv
+  Testing derivatives for: [:dists_p_inv, :are_related_dists_a_inv]
+  Result: 0 allocs, 0 bytes
+  Expected: 0 allocs, 0 bytes
+  ✓ PASS
+
+
+
+VARIANT 3: Boolean interaction with continuous
+────────────────────────────────────────────────────────────────────────────────
+
+Boolean * continuous interaction
+  Formula: response ~ socio4 + dists_p_inv + socio4 & dists_p_inv
+  Testing derivatives for: [:dists_p_inv]
+  Result: 0 allocs, 0 bytes
+  Expected: 0 allocs, 0 bytes
+  ✓ PASS
+
+
+
+VARIANT 4: Boolean predicate (comparison)
+────────────────────────────────────────────────────────────────────────────────
+
+Boolean predicate with <=
+  Formula: response ~ dists_p_inv + :(dists_a_inv <= inv(2))
+  Testing derivatives for: [:dists_p_inv]
+  Result: 0 allocs, 0 bytes
+  Expected: 0 allocs, 0 bytes
+  ✓ PASS
+
+
+
+VARIANT 5: Categorical variable
+────────────────────────────────────────────────────────────────────────────────
+
+With categorical variable
+  Formula: response ~ dists_p_inv + relation
+  Testing derivatives for: [:dists_p_inv]
+  Result: 0 allocs, 0 bytes
+  Expected: 0 allocs, 0 bytes
+  ✓ PASS
+
+
+
+VARIANT 6: Categorical interaction with continuous
+────────────────────────────────────────────────────────────────────────────────
+
+Categorical * continuous interaction
+  Formula: response ~ dists_p_inv + dists_p_inv & relation
+  Testing derivatives for: [:dists_p_inv]
+  Result: 0 allocs, 0 bytes
+  Expected: 0 allocs, 0 bytes
+  ✓ PASS
+
+
+
+VARIANT 7: Complex categorical interactions (like complex_example.jl)
+────────────────────────────────────────────────────────────────────────────────
+
+Complex categorical interactions
+  Formula: response ~ socio4 + dists_p_inv + are_related_dists_a_inv + schoolyears_p + wealth_d1_4_p + relation + socio4 & dists_p_inv + socio4 & are_related_dists_a_inv + schoolyears_p & socio4 + wealth_d1_4_p & socio4 + relation & socio4
+  Testing derivatives for: [:dists_p_inv, :are_related_dists_a_inv, :schoolyears_p, :wealth_d1_4_p]
+  Result: 0 allocs, 0 bytes
+  Expected: 0 allocs, 0 bytes
+  ✓ PASS
+
+
+
+VARIANT 8: Full complex formula WITHOUT boolean predicate
+────────────────────────────────────────────────────────────────────────────────
+
+Full complex (no boolean predicate)
+  Formula: response ~ socio4 + dists_p_inv + are_related_dists_a_inv + schoolyears_p + wealth_d1_4_p + man_p + age_p + religion_c_p + same_building + population + hhi_religion + hhi_indigenous + coffee_cultivation + market + relation + degree_a_mean + degree_h + age_a_mean + age_h + age_h_nb_1_socio + schoolyears_a_mean + schoolyears_h + schoolyears_h_nb_1_socio + man_x + man_x_mixed_nb_1 + wealth_d1_4_a_mean + wealth_d1_4_h + wealth_d1_4_h_nb_1_socio + isindigenous_x + isindigenous_homop_nb_1 + religion_c_x + religion_homop_nb_1 + socio4 & dists_p_inv + socio4 & are_related_dists_a_inv + :(!socio4) & dists_a_inv + schoolyears_p & socio4 + schoolyears_p & are_related_dists_a_inv + wealth_d1_4_p & socio4 + wealth_d1_4_p & are_related_dists_a_inv + man_p & socio4 + man_p & are_related_dists_a_inv + age_p & socio4 + age_p & are_related_dists_a_inv + religion_c_p & socio4 + religion_c_p & are_related_dists_a_inv + same_building & socio4 + same_building & are_related_dists_a_inv + population & socio4 + population & are_related_dists_a_inv + hhi_religion & socio4 + hhi_religion & are_related_dists_a_inv + hhi_indigenous & socio4 + hhi_indigenous & are_related_dists_a_inv + coffee_cultivation & socio4 + coffee_cultivation & are_related_dists_a_inv + market & socio4 + market & are_related_dists_a_inv + relation & socio4 + relation & are_related_dists_a_inv + degree_a_mean & socio4 + degree_a_mean & are_related_dists_a_inv + degree_h & socio4 + degree_h & are_related_dists_a_inv + age_a_mean & socio4 + age_a_mean & are_related_dists_a_inv + age_h & socio4 + age_h & are_related_dists_a_inv + age_h_nb_1_socio & socio4 + age_h_nb_1_socio & are_related_dists_a_inv + age_h & age_h_nb_1_socio + schoolyears_a_mean & socio4 + schoolyears_a_mean & are_related_dists_a_inv + schoolyears_h & socio4 + schoolyears_h & are_related_dists_a_inv + schoolyears_h_nb_1_socio & socio4 + schoolyears_h_nb_1_socio & are_related_dists_a_inv + schoolyears_h & schoolyears_h_nb_1_socio + man_x & socio4 + man_x & are_related_dists_a_inv + man_x_mixed_nb_1 & socio4 + man_x_mixed_nb_1 & are_related_dists_a_inv + man_x & man_x_mixed_nb_1 + wealth_d1_4_a_mean & socio4 + wealth_d1_4_a_mean & are_related_dists_a_inv + wealth_d1_4_h & socio4 + wealth_d1_4_h & are_related_dists_a_inv + wealth_d1_4_h_nb_1_socio & socio4 + wealth_d1_4_h_nb_1_socio & are_related_dists_a_inv + wealth_d1_4_h & wealth_d1_4_h_nb_1_socio + isindigenous_x & socio4 + isindigenous_x & are_related_dists_a_inv + isindigenous_homop_nb_1 & socio4 + isindigenous_homop_nb_1 & are_related_dists_a_inv + isindigenous_x & isindigenous_homop_nb_1 + religion_c_x & socio4 + religion_c_x & are_related_dists_a_inv + religion_homop_nb_1 & socio4 + religion_homop_nb_1 & are_related_dists_a_inv + religion_c_x & religion_homop_nb_1 + religion_c_x & hhi_religion + isindigenous_x & hhi_indigenous + age_h & age_h_nb_1_socio & socio4 + age_h & age_h_nb_1_socio & are_related_dists_a_inv + schoolyears_h & schoolyears_h_nb_1_socio & socio4 + schoolyears_h & schoolyears_h_nb_1_socio & are_related_dists_a_inv + man_x & man_x_mixed_nb_1 & socio4 + man_x & man_x_mixed_nb_1 & are_related_dists_a_inv + wealth_d1_4_h & wealth_d1_4_h_nb_1_socio & socio4 + wealth_d1_4_h & wealth_d1_4_h_nb_1_socio & are_related_dists_a_inv + isindigenous_x & isindigenous_homop_nb_1 & socio4 + isindigenous_x & isindigenous_homop_nb_1 & are_related_dists_a_inv + religion_c_x & religion_homop_nb_1 & socio4 + religion_c_x & religion_homop_nb_1 & are_related_dists_a_inv
+  Testing derivatives for: [:age_h, :dists_p_inv, :are_related_dists_a_inv, :schoolyears_h]
+  Result: 0 allocs, 0 bytes
+  Expected: 0 allocs, 0 bytes
+  ✓ PASS
+
+
+
+VARIANT 9: Full complex formula WITH boolean predicate
+────────────────────────────────────────────────────────────────────────────────
+
+Full complex (with boolean predicate)
+  Formula: response ~ socio4 + dists_p_inv + are_related_dists_a_inv + schoolyears_p + wealth_d1_4_p + man_p + age_p + religion_c_p + same_building + population + hhi_religion + hhi_indigenous + coffee_cultivation + market + relation + degree_a_mean + degree_h + age_a_mean + age_h + age_h_nb_1_socio + schoolyears_a_mean + schoolyears_h + schoolyears_h_nb_1_socio + man_x + man_x_mixed_nb_1 + wealth_d1_4_a_mean + wealth_d1_4_h + wealth_d1_4_h_nb_1_socio + isindigenous_x + isindigenous_homop_nb_1 + religion_c_x + religion_homop_nb_1 + socio4 & dists_p_inv + socio4 & are_related_dists_a_inv + :(!socio4) & dists_a_inv + num_common_nbs & :(dists_a_inv <= inv(2)) + schoolyears_p & socio4 + schoolyears_p & are_related_dists_a_inv + wealth_d1_4_p & socio4 + wealth_d1_4_p & are_related_dists_a_inv + man_p & socio4 + man_p & are_related_dists_a_inv + age_p & socio4 + age_p & are_related_dists_a_inv + religion_c_p & socio4 + religion_c_p & are_related_dists_a_inv + same_building & socio4 + same_building & are_related_dists_a_inv + population & socio4 + population & are_related_dists_a_inv + hhi_religion & socio4 + hhi_religion & are_related_dists_a_inv + hhi_indigenous & socio4 + hhi_indigenous & are_related_dists_a_inv + coffee_cultivation & socio4 + coffee_cultivation & are_related_dists_a_inv + market & socio4 + market & are_related_dists_a_inv + relation & socio4 + relation & are_related_dists_a_inv + degree_a_mean & socio4 + degree_a_mean & are_related_dists_a_inv + degree_h & socio4 + degree_h & are_related_dists_a_inv + age_a_mean & socio4 + age_a_mean & are_related_dists_a_inv + age_h & socio4 + age_h & are_related_dists_a_inv + age_h_nb_1_socio & socio4 + age_h_nb_1_socio & are_related_dists_a_inv + age_h & age_h_nb_1_socio + schoolyears_a_mean & socio4 + schoolyears_a_mean & are_related_dists_a_inv + schoolyears_h & socio4 + schoolyears_h & are_related_dists_a_inv + schoolyears_h_nb_1_socio & socio4 + schoolyears_h_nb_1_socio & are_related_dists_a_inv + schoolyears_h & schoolyears_h_nb_1_socio + man_x & socio4 + man_x & are_related_dists_a_inv + man_x_mixed_nb_1 & socio4 + man_x_mixed_nb_1 & are_related_dists_a_inv + man_x & man_x_mixed_nb_1 + wealth_d1_4_a_mean & socio4 + wealth_d1_4_a_mean & are_related_dists_a_inv + wealth_d1_4_h & socio4 + wealth_d1_4_h & are_related_dists_a_inv + wealth_d1_4_h_nb_1_socio & socio4 + wealth_d1_4_h_nb_1_socio & are_related_dists_a_inv + wealth_d1_4_h & wealth_d1_4_h_nb_1_socio + isindigenous_x & socio4 + isindigenous_x & are_related_dists_a_inv + isindigenous_homop_nb_1 & socio4 + isindigenous_homop_nb_1 & are_related_dists_a_inv + isindigenous_x & isindigenous_homop_nb_1 + religion_c_x & socio4 + religion_c_x & are_related_dists_a_inv + religion_homop_nb_1 & socio4 + religion_homop_nb_1 & are_related_dists_a_inv + religion_c_x & religion_homop_nb_1 + religion_c_x & hhi_religion + isindigenous_x & hhi_indigenous + num_common_nbs & :(dists_a_inv <= inv(2)) & are_related_dists_a_inv + num_common_nbs & :(dists_a_inv <= inv(2)) & dists_p_inv + age_h & age_h_nb_1_socio & socio4 + age_h & age_h_nb_1_socio & are_related_dists_a_inv + schoolyears_h & schoolyears_h_nb_1_socio & socio4 + schoolyears_h & schoolyears_h_nb_1_socio & are_related_dists_a_inv + man_x & man_x_mixed_nb_1 & socio4 + man_x & man_x_mixed_nb_1 & are_related_dists_a_inv + wealth_d1_4_h & wealth_d1_4_h_nb_1_socio & socio4 + wealth_d1_4_h & wealth_d1_4_h_nb_1_socio & are_related_dists_a_inv + isindigenous_x & isindigenous_homop_nb_1 & socio4 + isindigenous_x & isindigenous_homop_nb_1 & are_related_dists_a_inv + religion_c_x & religion_homop_nb_1 & socio4 + religion_c_x & religion_homop_nb_1 & are_related_dists_a_inv
+  Testing derivatives for: [:age_h, :dists_p_inv, :are_related_dists_a_inv, :schoolyears_h]
+  Result: 0 allocs, 0 bytes
+  Expected: 0 allocs, 0 bytes
+  ✓ PASS
+
+
+
+================================================================================
+SUMMARY
+================================================================================
+This test isolates what causes AD allocations:
+  - Simple formulas should show 0 allocs
+  - Boolean predicates (<=, >=, etc.) cause allocations
+  - Other features should be investigated if they cause allocations

@@ -1,0 +1,68 @@
+The latest version of Julia in the `release` channel is 1.11.7+0.aarch64.apple.darwin14. You currently have `1.11.2+0.aarch64.apple.darwin14` installed. Run:
+
+  juliaup update
+
+in your terminal shell to install Julia 1.11.7+0.aarch64.apple.darwin14 and update the `release` channel to that version.
+
+=== modelrow() Allocations ===
+  Allocations: 0
+  Memory: 0 bytes
+  Median time: 250.0 ns
+
+=== derivative_modelrow!() Allocations (AD backend) ===
+  Variables: [:age_h, :dists_p_inv, :are_related_dists_a_inv, :schoolyears_h]
+  Allocations: 0
+  Memory: 0 bytes
+  Median time: 1542.0 ns
+  NOTE: Uses 53-column NamedTuple; cached columns keep allocations at zero
+
+=== derivative_modelrow!() Allocations (FD backend) ===
+  Variables: [:age_h, :dists_p_inv, :are_related_dists_a_inv, :schoolyears_h]
+  Allocations: 0
+  Memory: 0 bytes
+  Median time: 1958.0 ns
+
+=== Batch modelrow() n=100 ===
+  Total allocations: 0
+  Allocations/row: 0.0
+
+=== Batch modelrow() n=1000 ===
+  Total allocations: 0
+  Allocations/row: 0.0
+
+=== Batch modelrow() n=500000 ===
+  Total allocations: 0
+  Allocations/row: 0.0
+
+=== Batch derivative_modelrow!() AD n=100 ===
+  Total allocations: 0
+  Allocations/row: 0.0 (target: 0)
+
+=== Batch derivative_modelrow!() AD n=1000 ===
+  Total allocations: 0
+  Allocations/row: 0.0 (target: 0)
+
+=== Batch derivative_modelrow!() AD n=500000 ===
+  Total allocations: 0
+  Allocations/row: 0.0 (target: 0)
+
+=== Batch derivative_modelrow!() FD n=100 ===
+  Total allocations: 0
+  Allocations/row: 0.0
+
+=== Batch derivative_modelrow!() FD n=1000 ===
+  Total allocations: 0
+  Allocations/row: 0.0
+
+=== Batch derivative_modelrow!() FD n=500000 ===
+  Total allocations: 0
+  Allocations/row: 0.0
+
+=== NamedTuple Size Impact on AD Allocations ===
+  Allocations: 0
+  Memory: 0 bytes
+  Dataset columns: 53
+Test Summary:                                            | Pass  Total   Time
+FormulaCompiler Primitives - Complex Formula Allocations |   20     20  40.6s
+
+✓ All FormulaCompiler primitives allocation tests completed

@@ -3,5 +3,6 @@ The latest version of Julia in the `release` channel is 1.11.7+0.aarch64.apple.d
   juliaup update
 
 in your terminal shell to install Julia 1.11.7+0.aarch64.apple.darwin14 and update the `release` channel to that version.
-Test Summary:                                       | Pass  Total   Time
-Phase 1 Parameter Gradient Matrix Allocation Checks |   33     33  30.4s
+Test Summary:                             | Pass  Total   Time
+ContrastEvaluator Ground Truth Validation |   78     78  16.3s
+✅ All ContrastEvaluator ground truth validation tests passed!
