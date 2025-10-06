@@ -21,18 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nested mathematical functions: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, powers
 - Complex interactions: `x * log(z) * group + sqrt(abs(y))`
 
-**Memory-Efficient Override System**
-- `OverrideVector`: Constant vectors using O(1) memory regardless of size
+**Memory-Efficient Scenario System**
 - `DataScenario`: Individual scenario with variable overrides
 - `ScenarioCollection`: Batch scenario operations for policy analysis
 - `create_scenario_grid()`: Systematic parameter exploration with >99% memory savings
+- Population-level override system for batch counterfactual analysis
 
 **High-Performance Derivatives**
-- Dual-backend system: Both `:ad` and `:fd` achieve zero allocations
-- `:ad` (ForwardDiff) preferred: Higher accuracy (machine precision) and faster performance
-- `:fd` (finite differences): Alternative backend with explicit step size control
+- Dual-backend system with keyword argument selection (`:ad` or `:fd`)
+- `:ad` (ForwardDiff) backend: Higher accuracy (machine precision) and faster performance
+- `:fd` (finite differences) backend: Alternative with explicit step size control
 - Marginal effects for both η (linear predictor) and μ (via link functions)
 - Support for GLM link functions: Identity, Log, Logit, Probit, Cloglog, Cauchit, Inverse, Sqrt
+- `build_derivative_evaluator(...; backend=:ad)` pattern
 
 **Variance Computation Primitives**
 - Delta method standard error computation (`delta_method_se`)
@@ -49,8 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Performance Characteristics
 
 - **Core evaluation**: ~50ns per row, 0 allocations
-- **FD derivatives**: 0 allocations after warmup  
-- **AD derivatives**: ≤512 bytes per call
+- **Derivatives**: Backend-dependent allocation characteristics
 - **Memory efficiency**: >99% savings for scenario analysis vs naive approaches
 - **Speedup**: 10-100x faster than `modelmatrix()[row, :]`
 
@@ -77,12 +77,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.0] - 2025-09-29
 
 ### Added
-- **CounterfactualVector System**: Unified row-wise variable substitution architecture
-  - `NumericCounterfactualVector{T}`: Type-stable numeric variable substitution
-  - `CategoricalCounterfactualVector{T,R}`: Categorical variable substitution with type safety
-  - `BoolCounterfactualVector`: Boolean variable substitution
-  - `CategoricalMixtureCounterfactualVector{T}`: Categorical mixture support
-  - `update_counterfactual_row!`, `update_counterfactual_replacement!`: Efficient update operations
+- **CounterfactualVector System**: Type-stable row-wise variable substitution architecture
+  - `CounterfactualVector{T}`: Abstract supertype for all typed counterfactual vectors
+  - `BoolCounterfactualVector`: Type-stable boolean variable substitution
+  - `NumericCounterfactualVector{T<:Real}`: Type-stable numeric variable substitution (Int64, Float64, etc.)
+  - `StringCounterfactualVector`: Type-stable string variable substitution
+  - `CategoricalCounterfactualVector{T,R}`: Type-stable categorical variable substitution with reference type
+  - Mutable structs with `row::Int` and `replacement::T` fields for efficient updates
+  - O(1) memory complexity for single-row variable substitution without data copying
 - **Concrete Type API**: Separate evaluator types for maximum performance
   - `derivativeevaluator_fd()`: Returns concrete `FDEvaluator` type (zero allocations)
   - `derivativeevaluator_ad()`: Returns concrete `ADEvaluator` type (bounded allocations)
@@ -136,12 +138,53 @@ All mathematical correctness and performance characteristics are preserved while
 ## [Unreleased]
 
 ### Added
-- Benchmark Protocol (docs/src/benchmarks.md) with environment, setup, targets, and reporting template
-- Automatic Mermaid regeneration in docs build (docs/make.jl) using `mmdc` if available
-- Expanded API docs: added missing low-level derivatives and variance utilities; categorical mixtures utilities
+- **Categorical Mixture System**: Fractional categorical specifications for profile-based marginal effects
+  - `CategoricalMixture` and `MixtureWithLevels` types for weighted categorical combinations
+  - `CategoricalMixtureCounterfactualVector{T}`: Type-stable counterfactual vector for categorical mixtures
+  - `mix()` constructor for creating mixture specifications (e.g., `mix("A" => 0.6, "B" => 0.4)`)
+  - `create_mixture_column()`, `create_balanced_mixture()`, `expand_mixture_grid()` utilities
+  - Zero-allocation evaluation maintaining FormulaCompiler's performance guarantees
+  - Full integration with all contrast types and interaction terms
+  - Comprehensive validation with clear error messages
+- **Compressed Categorical Arrays**: Support for memory-efficient categorical representations
+  - UInt8, UInt16, UInt32 reference types in CategoricalArrays
+  - Correct handling in counterfactual scenarios and override system
+  - Integration with contrast coding system
+- **Benchmark Protocol**: Comprehensive benchmarking guidelines (docs/src/benchmarks.md)
+  - Environment specification, setup procedures, and performance targets
+  - Reporting template for consistent performance tracking
+- **Enhanced Test Suite**:
+  - `test_categorical_mixtures.jl`: Comprehensive mixture system validation
+  - `test_mixture_modelrows.jl`: ModelRow correctness with mixtures
+  - `test_compressed_categoricals.jl`: Compressed categorical array support
+  - `test_contrast_evaluator.jl`: Zero-allocation discrete contrasts
+  - `test_ad_alloc_formula_variants.jl`: Formula pattern allocation profiling
+  - `test_formulacompiler_primitives_allocations.jl`: Core primitive performance
+  - `test_documentation_examples.jl`: Documentation example validation
+  - Debugging utilities: allocation tracing, type stability analysis tools
 
 ### Changed
-- Documentation tone and claims: qualified absolute timings (e.g., "tens of nanoseconds"); emphasized "zero allocations after warmup"
-- Clarified derivatives backend trade-offs: both `:ad` and `:fd` achieve zero allocations, `:ad` preferred for higher accuracy
-- Corrected examples to pass column-table data to `compile_formula(model, data)` consistently
-- Standardized headings and cross-references; added Benchmark Protocol links
+- **Documentation Improvements**:
+  - Qualified absolute timings (e.g., "tens of nanoseconds"); emphasized "zero allocations after warmup"
+  - Clarified derivatives backend trade-offs: both `:ad` and `:fd` achieve zero allocations, `:ad` preferred for higher accuracy
+  - Corrected examples to consistently pass column-table data to `compile_formula(model, data)`
+  - Standardized headings and cross-references; added Benchmark Protocol links
+  - Expanded API documentation with low-level derivatives, variance utilities, and mixture functions
+  - Enhanced mathematical foundation documentation for derivatives and marginal effects
+- **Test Organization**:
+  - Updated test/README.md with comprehensive test suite documentation
+  - Added "Debugging/Diagnostic Utilities" section documenting non-test development tools
+  - Improved test descriptions with detailed coverage information
+  - Enhanced debugging guidance with code examples for common issues
+  - Corrected test file counts and references (24 test files in runtests.jl)
+- **Performance Metrics**: Updated with measured values
+  - Core evaluation: ~16ns per row (improved from ~50ns)
+  - Derivatives (FD): ~65ns Jacobian
+  - Derivatives (AD): ~49ns Jacobian
+  - Marginal effects η: ~57-82ns (AD/FD)
+  - Marginal effects μ: ~83-108ns (AD/FD)
+
+### Fixed
+- Categorical counterfactual handling: Improved validation and error messages for categorical structure preservation
+- Allocation patterns: Refined buffer management for guaranteed zero allocations in critical paths
+- Cross-validation: Enhanced numerical agreement testing between AD and FD backends (rtol=1e-6, atol=1e-8)
