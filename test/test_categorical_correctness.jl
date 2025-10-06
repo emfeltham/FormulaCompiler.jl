@@ -10,6 +10,7 @@ using StatsModels
 using CategoricalArrays
 using Tables
 using Random
+using FormulaCompiler: NumericCounterfactualVector, CategoricalCounterfactualVector, BoolCounterfactualVector
 
 """
     create_categorical_test_data(n=100)
@@ -44,17 +45,19 @@ Random.seed!(08540)
         fx = @formula(response ~ x + cat3)
         model = lm(fx, df)
 
-        overrides1 = Dict(:x => minimum(df.x))
-        overrides2 = Dict(:x => maximum(df.x))
-        scenario1 = create_scenario("Low", data, overrides1)
-        scenario2 = create_scenario("High", data, overrides2)
-        compiled_ = compile_formula(model, scenario1.data)
+        cf_x_low = NumericCounterfactualVector{Float64}(data.x, 1, minimum(df.x))
+        cf_x_high = NumericCounterfactualVector{Float64}(data.x, 1, maximum(df.x))
+        cf_data_low = merge(data, (x = cf_x_low,))
+        cf_data_high = merge(data, (x = cf_x_high,))
+        compiled_ = compile_formula(model, cf_data_low)
 
         output1 = Vector{Float64}(undef, size(modelmatrix(model), 2))
         output2 = Vector{Float64}(undef, size(modelmatrix(model), 2))
         for row_idx in [1,10,50]
-            compiled_(output1, scenario1.data, row_idx)
-            compiled_(output2, scenario2.data, row_idx)
+            FormulaCompiler.update_counterfactual_row!(cf_x_low, row_idx)
+            FormulaCompiler.update_counterfactual_row!(cf_x_high, row_idx)
+            compiled_(output1, cf_data_low, row_idx)
+            compiled_(output2, cf_data_high, row_idx)
             @test !(output1 == output2)
         end
     end
@@ -65,19 +68,21 @@ Random.seed!(08540)
         fx = @formula(response ~ x + cat3)
         model = lm(fx, df)
         
-        overrides1 = Dict(:cat3 => "Low")
-        overrides2 = Dict(:cat3 => "High")
-        scenario1 = create_scenario("Low", data, overrides1)
-        scenario2 = create_scenario("High", data, overrides2)
-        compiled_ = compile_formula(model, scenario1.data)
+        cat_low = CategoricalValue("Low", data.cat3)
+        cat_high = CategoricalValue("High", data.cat3)
+        cf_cat_low = CategoricalCounterfactualVector(data.cat3, 1, cat_low)
+        cf_cat_high = CategoricalCounterfactualVector(data.cat3, 1, cat_high)
+        cf_data_low = merge(data, (cat3 = cf_cat_low,))
+        cf_data_high = merge(data, (cat3 = cf_cat_high,))
+        compiled_ = compile_formula(model, cf_data_low)
 
         output1 = Vector{Float64}(undef, size(modelmatrix(model), 2))
         output2 = Vector{Float64}(undef, size(modelmatrix(model), 2))
         for row_idx in [1,10,50]
-            compiled_(output1, scenario1.data, row_idx)
-
-            compiled_(output2, scenario2.data, row_idx)
-
+            FormulaCompiler.update_counterfactual_row!(cf_cat_low, row_idx)
+            FormulaCompiler.update_counterfactual_row!(cf_cat_high, row_idx)
+            compiled_(output1, cf_data_low, row_idx)
+            compiled_(output2, cf_data_high, row_idx)
             @test !(output1 == output2)
         end
     end
@@ -95,10 +100,11 @@ end
         
         for level in ["Low", "Med", "High"]
             @testset "Level: $level" begin
-                # Create scenario
-                overrides = Dict(:cat3 => level)
-                scenario = create_scenario("cat3_$level", data, overrides)
-                compiled = compile_formula(model, scenario.data)
+                # Create counterfactual
+                cat_val = CategoricalValue(level, data.cat3)
+                cf_cat = CategoricalCounterfactualVector(data.cat3, 1, cat_val)
+                cf_data = merge(data, (cat3 = cf_cat,))
+                compiled = compile_formula(model, cf_data)
                 
                 # Create reference
                 ref_df = copy(df)
@@ -109,16 +115,18 @@ end
                 
                 # Test multiple rows
                 for row_idx in [1, 25, 50, 75, 100]
+                    FormulaCompiler.update_counterfactual_row!(cf_cat, row_idx)
                     output = Vector{Float64}(undef, size(ref_mm, 2))
-                    compiled(output, scenario.data, row_idx)
+                    compiled(output, cf_data, row_idx)
                     @test output ≈ ref_mm[row_idx, :] atol=1e-10
                 end
                 
                 # Verify constant categorical effect across all rows
                 outputs = []
                 for row_idx in 1:5
+                    FormulaCompiler.update_counterfactual_row!(cf_cat, row_idx)
                     output = Vector{Float64}(undef, size(ref_mm, 2))
-                    compiled(output, scenario.data, row_idx)
+                    compiled(output, cf_data, row_idx)
                     push!(outputs, copy(output))
                 end
                 
@@ -144,8 +152,15 @@ end
         
         for (name, overrides) in test_cases
             @testset "$name" begin
-                scenario = create_scenario(name, data, overrides)
-                compiled = compile_formula(model, scenario.data)
+                # Create counterfactual vectors
+                cat2_val = CategoricalValue(overrides[:cat2], data.cat2)
+                cat3_val = CategoricalValue(overrides[:cat3], data.cat3)
+                cat4_val = CategoricalValue(overrides[:cat4], data.cat4)
+                cf_cat2 = CategoricalCounterfactualVector(data.cat2, 1, cat2_val)
+                cf_cat3 = CategoricalCounterfactualVector(data.cat3, 1, cat3_val)
+                cf_cat4 = CategoricalCounterfactualVector(data.cat4, 1, cat4_val)
+                cf_data = merge(data, (cat2 = cf_cat2, cat3 = cf_cat3, cat4 = cf_cat4))
+                compiled = compile_formula(model, cf_data)
                 
                 # Reference
                 ref_df = DataFrame(df)
@@ -158,16 +173,25 @@ end
                 
                 # Test correctness
                 for row_idx in [1, 50, 100]
+                    FormulaCompiler.update_counterfactual_row!(cf_cat2, row_idx)
+                    FormulaCompiler.update_counterfactual_row!(cf_cat3, row_idx)
+                    FormulaCompiler.update_counterfactual_row!(cf_cat4, row_idx)
                     output = Vector{Float64}(undef, size(ref_mm, 2))
-                    compiled(output, scenario.data, row_idx)
+                    compiled(output, cf_data, row_idx)
                     @test output ≈ ref_mm[row_idx, :] atol=1e-10
                 end
-                
+
                 # All rows should produce identical output (all categoricals overridden)
                 out1 = Vector{Float64}(undef, size(ref_mm, 2))
                 out2 = Vector{Float64}(undef, size(ref_mm, 2))
-                compiled(out1, scenario.data, 1)
-                compiled(out2, scenario.data, 50)
+                FormulaCompiler.update_counterfactual_row!(cf_cat2, 1)
+                FormulaCompiler.update_counterfactual_row!(cf_cat3, 1)
+                FormulaCompiler.update_counterfactual_row!(cf_cat4, 1)
+                compiled(out1, cf_data, 1)
+                FormulaCompiler.update_counterfactual_row!(cf_cat2, 50)
+                FormulaCompiler.update_counterfactual_row!(cf_cat3, 50)
+                FormulaCompiler.update_counterfactual_row!(cf_cat4, 50)
+                compiled(out2, cf_data, 50)
                 @test out1 ≈ out2 atol=1e-12
             end
         end
@@ -179,9 +203,11 @@ end
         model = lm(fx, df)
         
         # Test each categorical level with fixed continuous
-        overrides = Dict(:x => 2.0, :cat3 => "Med")
-        scenario = create_scenario("interaction_test", data, overrides)
-        compiled = compile_formula(model, scenario.data)
+        cf_x = NumericCounterfactualVector{Float64}(data.x, 1, 2.0)
+        cat3_med = CategoricalValue("Med", data.cat3)
+        cf_cat3 = CategoricalCounterfactualVector(data.cat3, 1, cat3_med)
+        cf_data = merge(data, (x = cf_x, cat3 = cf_cat3))
+        compiled = compile_formula(model, cf_data)
         
         # Reference
         ref_df = DataFrame(df)
@@ -200,7 +226,9 @@ end
         
         output = Vector{Float64}(undef, size(ref_mm, 2))
         for row_idx in [1, 10, 50, 100]
-            compiled(output, scenario.data, row_idx)
+            FormulaCompiler.update_counterfactual_row!(cf_x, row_idx)
+            FormulaCompiler.update_counterfactual_row!(cf_cat3, row_idx)
+            compiled(output, cf_data, row_idx)
             @test output ≈ ref_mm[row_idx, :] atol=1e-10
             
             # Verify the interaction terms
@@ -234,9 +262,9 @@ end
         
         for value in [true, false]
             @testset "Binary = $value" begin
-                overrides = Dict(:binary => value)
-                scenario = create_scenario("binary_$value", data, overrides)
-                compiled = compile_formula(model, scenario.data)
+                cf_binary = BoolCounterfactualVector(data.binary, 1, value)
+                cf_data = merge(data, (binary = cf_binary,))
+                compiled = compile_formula(model, cf_data)
                 
                 # Reference
                 ref_df = DataFrame(df)
@@ -246,16 +274,18 @@ end
                 
                 # Test rows
                 for row_idx in [1, 50, 100]
+                    FormulaCompiler.update_counterfactual_row!(cf_binary, row_idx)
                     output = Vector{Float64}(undef, size(ref_mm, 2))
-                    compiled(output, scenario.data, row_idx)
+                    compiled(output, cf_data, row_idx)
                     @test output ≈ ref_mm[row_idx, :] atol=1e-10
                 end
-                
+
                 # Check that binary effect is constant
                 outputs = []
                 for row_idx in [1, 20, 40, 60, 80]
+                    FormulaCompiler.update_counterfactual_row!(cf_binary, row_idx)
                     output = Vector{Float64}(undef, size(ref_mm, 2))
-                    compiled(output, scenario.data, row_idx)
+                    compiled(output, cf_data, row_idx)
                     push!(outputs, output[3])  # Binary effect column
                 end
                 
@@ -276,8 +306,14 @@ end
             :cat4 => "Y"
         )
         
-        scenario = create_scenario("all_cat", data, overrides)
-        compiled = compile_formula(model, scenario.data)
+        cat2_b = CategoricalValue("B", data.cat2)
+        cat3_high = CategoricalValue("High", data.cat3)
+        cat4_y = CategoricalValue("Y", data.cat4)
+        cf_cat2 = CategoricalCounterfactualVector(data.cat2, 1, cat2_b)
+        cf_cat3 = CategoricalCounterfactualVector(data.cat3, 1, cat3_high)
+        cf_cat4 = CategoricalCounterfactualVector(data.cat4, 1, cat4_y)
+        cf_data = merge(data, (cat2 = cf_cat2, cat3 = cf_cat3, cat4 = cf_cat4))
+        compiled = compile_formula(model, cf_data)
         
         # Reference
         ref_df = DataFrame(df)
@@ -291,9 +327,12 @@ end
         outputs = Matrix{Float64}(undef, 10, size(ref_mm, 2))
         for i in 1:10
             row_idx = i * 10
+            FormulaCompiler.update_counterfactual_row!(cf_cat2, row_idx)
+            FormulaCompiler.update_counterfactual_row!(cf_cat3, row_idx)
+            FormulaCompiler.update_counterfactual_row!(cf_cat4, row_idx)
             output_view = view(outputs, i, :)
-            compiled(output_view, scenario.data, row_idx)
-            
+            compiled(output_view, cf_data, row_idx)
+
             # Compare with reference
             @test output_view ≈ ref_mm[row_idx, :] atol=1e-10
         end
@@ -326,26 +365,24 @@ end
             model = lm(fx, df)
             
             # Test String override
-            scenario_string = create_scenario("string", data; cat3 = "Med")
-            
-            # Test Symbol override
-            scenario_symbol = create_scenario("symbol", data; cat3 = :Med)
-            
-            # Test index override (2 = "Med" assuming Low, Med, High order)
-            scenario_index = create_scenario("index", data; cat3 = 2)
-            
+            cat3_med_str = CategoricalValue("Med", data.cat3)
+            cf_cat3_str = CategoricalCounterfactualVector(data.cat3, 1, cat3_med_str)
+            cf_data_str = merge(data, (cat3 = cf_cat3_str,))
+
+            # Test Symbol override - convert to string first
+            cat3_med_sym = CategoricalValue(string(:Med), data.cat3)
+            cf_cat3_sym = CategoricalCounterfactualVector(data.cat3, 1, cat3_med_sym)
+            cf_data_sym = merge(data, (cat3 = cf_cat3_sym,))
+
             # All should produce identical results
-            compiled_string = compile_formula(model, scenario_string.data)
-            compiled_symbol = compile_formula(model, scenario_symbol.data)
-            # compiled_index = compile_formula(model, scenario_index.data)
-            
+            compiled_string = compile_formula(model, cf_data_str)
+            compiled_symbol = compile_formula(model, cf_data_sym)
+
             out_string = Vector{Float64}(undef, 3)
             out_symbol = Vector{Float64}(undef, 3)
-            # out_index = Vector{Float64}(undef, 3)
-            
-            compiled_string(out_string, scenario_string.data, 1)
-            compiled_symbol(out_symbol, scenario_symbol.data, 1)
-            # compiled_index(out_index, scenario_index.data, 1)
+
+            compiled_string(out_string, cf_data_str, 1)
+            compiled_symbol(out_symbol, cf_data_sym, 1)
             
             @test out_string ≈ out_symbol atol=1e-12
             # @test out_string ≈ out_index atol=1e-12
@@ -356,21 +393,22 @@ end
             formula = @formula(response ~ cat3)
             model = lm(formula, df)
             
-            # This should throw an error
-            @test_throws Exception create_scenario("invalid", data; cat3 = "InvalidLevel")
+            # This should throw an error when creating CategoricalValue
+            @test_throws Exception CategoricalValue("InvalidLevel", data.cat3)
         end
         
         @testset "Ordered categorical override" begin
             formula = @formula(response ~ ordered_cat)
             model = lm(formula, df)
             
-            overrides = Dict(:ordered_cat => "Medium")
-            scenario = create_scenario("ordered", data, overrides)
-            compiled = compile_formula(model, scenario.data)
+            ordered_med = CategoricalValue("Medium", data.ordered_cat)
+            cf_ordered = CategoricalCounterfactualVector(data.ordered_cat, 1, ordered_med)
+            cf_data = merge(data, (ordered_cat = cf_ordered,))
+            compiled = compile_formula(model, cf_data)
             
             # Should work correctly with ordered categoricals
             output = Vector{Float64}(undef, 3)
-            @test_nowarn compiled(output, scenario.data, 1)
+            @test_nowarn compiled(output, cf_data, 1)
         end
     end
 end

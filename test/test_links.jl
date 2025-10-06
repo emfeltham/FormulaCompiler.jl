@@ -14,11 +14,12 @@ using LinearAlgebra: dot
     model = lm(@formula(y ~ 1 + x + z + x & group3), df)
     compiled = compile_formula(model, data)
     vars = [:x, :z]
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de = derivativeevaluator(:ad, compiled, data, vars)  # Use AD for link function tests
     β = coef(model)
 
     gη = Vector{Float64}(undef, length(vars))
-    marginal_effects_eta!(gη, de, β, 3)
+    Gβ = Matrix{Float64}(undef, length(β), length(vars))
+    marginal_effects_eta!(gη, Gβ, de, β, 3)
 
     links = Any[
         IdentityLink(), LogLink(), LogitLink(),
@@ -29,7 +30,7 @@ using LinearAlgebra: dot
     for L in links
         gμ = Vector{Float64}(undef, length(vars))
         # Warm path and correctness (allocations are validated in test_allocations.jl)
-        marginal_effects_mu!(gμ, de, β, 3; link=L)
+        marginal_effects_mu!(gμ, Gβ, de, β, L, 3)
         @test all(isfinite, gμ)
     end
 
@@ -40,19 +41,19 @@ using LinearAlgebra: dot
     η = dot(β, xrow)
     # Recompute gη for this row
     gη = Vector{Float64}(undef, length(vars))
-    marginal_effects_eta!(gη, de, β, row)
+    marginal_effects_eta!(gη, Gβ, de, β, row)
 
     # Identity: scale = 1
     gμ = Vector{Float64}(undef, length(vars))
-    marginal_effects_mu!(gμ, de, β, row; link=IdentityLink())
+    marginal_effects_mu!(gμ, Gβ, de, β, IdentityLink(), row)
     @test isapprox(gμ, gη; rtol=1e-8, atol=1e-10)
 
     # Log: scale = exp(η)
-    marginal_effects_mu!(gμ, de, β, row; link=LogLink())
+    marginal_effects_mu!(gμ, Gβ, de, β, LogLink(), row)
     @test isapprox(gμ, exp(η) .* gη; rtol=1e-8, atol=1e-10)
 
     # Logit: scale = σ(η)(1-σ(η))
     σ(x) = inv(1 + exp(-x))
-    marginal_effects_mu!(gμ, de, β, row; link=LogitLink())
+    marginal_effects_mu!(gμ, Gβ, de, β, LogitLink(), row)
     @test isapprox(gμ, (σ(η)*(1-σ(η))) .* gη; rtol=1e-8, atol=1e-10)
 end

@@ -2,6 +2,7 @@
 using Test
 using FormulaCompiler, GLM, DataFrames, Tables, CategoricalArrays
 using BenchmarkTools
+using FormulaCompiler: derivativeevaluator_fd, derivativeevaluator_ad, mix
 
 # Use native FormulaCompiler mixtures instead of duck-typed test mixtures
 
@@ -146,16 +147,19 @@ using BenchmarkTools
         
         @test !isempty(continuous_vars)  # Should have x and z
         
-        de = build_derivative_evaluator(compiled, Tables.columntable(test_df); vars=continuous_vars)
-        
+        de_fd = derivativeevaluator_fd(compiled, Tables.columntable(test_df), continuous_vars)
+        de_ad = derivativeevaluator_ad(compiled, Tables.columntable(test_df), continuous_vars)
+
         @testset "Marginal Effects with Mixtures" begin
             gradient_fd = Vector{Float64}(undef, length(continuous_vars))
+            Gβ_fd = Matrix{Float64}(undef, length(coef(model)), length(continuous_vars))
+            Gβ_ad = Matrix{Float64}(undef, length(coef(model)), length(continuous_vars))
             gradient_ad = Vector{Float64}(undef, length(continuous_vars))
-            
+
             for row_idx in 1:2
                 # Test both FD and AD backends
-                marginal_effects_eta!(gradient_fd, de, coef(model), row_idx; backend=:fd)
-                marginal_effects_eta!(gradient_ad, de, coef(model), row_idx; backend=:ad)
+                marginal_effects_eta!(gradient_fd, Gβ_fd, de_fd, coef(model), row_idx)
+                marginal_effects_eta!(gradient_ad, Gβ_ad, de_ad, coef(model), row_idx)
                 
                 # Should have derivatives for both x and z
                 @test length(gradient_fd) == length(continuous_vars)
@@ -176,12 +180,15 @@ using BenchmarkTools
             simple_vars = continuous_variables(simple_compiled, Tables.columntable(simple_test_df))
             
             if !isempty(simple_vars)
-                simple_de = build_derivative_evaluator(simple_compiled, Tables.columntable(simple_test_df); vars=simple_vars)
+                simple_de_fd = derivativeevaluator_fd(simple_compiled, Tables.columntable(simple_test_df), simple_vars)
+                simple_de_ad = derivativeevaluator_ad(simple_compiled, Tables.columntable(simple_test_df), simple_vars)
                 simple_grad_fd = Vector{Float64}(undef, length(simple_vars))
+                simple_Gβ_fd = Matrix{Float64}(undef, length(coef(simple_model)), length(simple_vars))
+                simple_Gβ_ad = Matrix{Float64}(undef, length(coef(simple_model)), length(simple_vars))
                 simple_grad_ad = Vector{Float64}(undef, length(simple_vars))
-                
-                marginal_effects_eta!(simple_grad_fd, simple_de, coef(simple_model), 1; backend=:fd)
-                marginal_effects_eta!(simple_grad_ad, simple_de, coef(simple_model), 1; backend=:ad)
+
+                marginal_effects_eta!(simple_grad_fd, simple_Gβ_fd, simple_de_fd, coef(simple_model), 1)
+                marginal_effects_eta!(simple_grad_ad, simple_Gβ_ad, simple_de_ad, coef(simple_model), 1)
                 
                 # Simple models should have good FD vs AD agreement
                 @test simple_grad_fd ≈ simple_grad_ad rtol=1e-6
@@ -190,11 +197,12 @@ using BenchmarkTools
         
         @testset "Zero Allocation Derivatives (FD)" begin
             gradient = Vector{Float64}(undef, length(continuous_vars))
+            Gβ = Matrix{Float64}(undef, length(coef(model)), length(continuous_vars))
             coeffs = coef(model)
-            
-            # Benchmark FD derivatives
-            bench_fd = @benchmark marginal_effects_eta!($gradient, $de, $coeffs, 1; backend=:fd) samples=1000 evals=1
-            
+
+            # Benchmark FD derivatives using 4-parameter API
+            bench_fd = @benchmark marginal_effects_eta!($gradient, $Gβ, $de_fd, $coeffs, 1) samples=1000 evals=1
+
             # Test zero allocation for FD backend
             @test bench_fd.allocs == 0
         end

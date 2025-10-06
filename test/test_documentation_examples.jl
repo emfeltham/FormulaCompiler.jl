@@ -2,6 +2,7 @@ using Test
 using FormulaCompiler, GLM, DataFrames, Tables, Statistics, StatsModels
 using RDatasets, CategoricalArrays
 using LinearAlgebra  # For I() function in formulas
+using FormulaCompiler: derivativeevaluator_fd, NumericCounterfactualVector, CategoricalCounterfactualVector, BoolCounterfactualVector
 
 @testset "Documentation Examples Validation" begin
     
@@ -18,15 +19,16 @@ using LinearAlgebra  # For I() function in formulas
         compiled(output, data, 1)
         @test length(output) == length(compiled)
         
-        # Scenario creation
-        scenario = create_scenario("test", data; x = 2.0)
-        @test scenario isa FormulaCompiler.DataScenario
+        # Counterfactual vector creation
+        cf_x = NumericCounterfactualVector{Float64}(data.x, 1, 2.0)
+        cf_data = merge(data, (x = cf_x,))
+        @test cf_x isa FormulaCompiler.NumericCounterfactualVector
         
         # Marginal effects
         vars = [:x]
-        de = build_derivative_evaluator(compiled, data; vars=vars)
+        de_fd = derivativeevaluator_fd(compiled, data, vars)
         g = Vector{Float64}(undef, length(vars))
-        marginal_effects_eta!(g, de, coef(model), 1; backend=:fd)
+        marginal_effects_eta!(g, de_fd, coef(model), 1)
         @test length(g) == length(vars)
     end
     
@@ -42,16 +44,17 @@ using LinearAlgebra  # For I() function in formulas
         @test compiled isa FormulaCompiler.UnifiedCompiled
         
         # Policy scenario - education boost
-        policy_scenario = create_scenario("education_boost", data; Educ = 16)
+        cf_educ = NumericCounterfactualVector{Int64}(data.Educ, 1, 16)
+        cf_data = merge(data, (Educ = cf_educ,))
         output = Vector{Float64}(undef, length(compiled))
-        compiled(output, policy_scenario.data, 1)
+        compiled(output, cf_data, 1)
         @test length(output) == length(compiled)
         
         # Marginal effects on continuous variables
         vars = [:Educ, :Exper]
-        de = build_derivative_evaluator(compiled, data; vars=vars)
+        de_fd = derivativeevaluator_fd(compiled, data, vars)
         g = Vector{Float64}(undef, length(vars))
-        marginal_effects_eta!(g, de, coef(model), 1; backend=:fd)
+        marginal_effects_eta!(g, de_fd, coef(model), 1)
         @test length(g) == length(vars)
     end
     
@@ -67,17 +70,19 @@ using LinearAlgebra  # For I() function in formulas
         @test compiled isa FormulaCompiler.UnifiedCompiled
         
         # Scenario analysis - lightweight high-performance car
-        scenario = create_scenario("lightweight_performance", data; 
-            WT = 2.5, HP = 200, Cyl = 6)
+        cf_wt = NumericCounterfactualVector{Float64}(data.WT, 1, 2.5)
+        cf_hp = NumericCounterfactualVector{Int64}(data.HP, 1, 200)
+        cf_cyl = NumericCounterfactualVector{Int64}(data.Cyl, 1, 6)
+        cf_data = merge(data, (WT = cf_wt, HP = cf_hp, Cyl = cf_cyl))
         output = Vector{Float64}(undef, length(compiled))
-        compiled(output, scenario.data, 1)
+        compiled(output, cf_data, 1)
         @test length(output) == length(compiled)
         
         # Marginal effects
         vars = [:WT, :HP]  # Only continuous variables
-        de = build_derivative_evaluator(compiled, data; vars=vars)
+        de_fd = derivativeevaluator_fd(compiled, data, vars)
         g = Vector{Float64}(undef, length(vars))
-        marginal_effects_eta!(g, de, coef(model), 1; backend=:fd)
+        marginal_effects_eta!(g, de_fd, coef(model), 1)
         @test length(g) == length(vars)
     end
     
@@ -97,17 +102,18 @@ using LinearAlgebra  # For I() function in formulas
         @test compiled isa FormulaCompiler.UnifiedCompiled
         
         # Treatment scenario - standardized patient profile
-        scenario = create_scenario("standard_patient", data; 
-            Age = 65, Sex = 1)
+        cf_age = NumericCounterfactualVector{Int64}(data.Age, 1, 65)
+        cf_sex = NumericCounterfactualVector{Int64}(data.Sex, 1, 1)
+        cf_data = merge(data, (Age = cf_age, Sex = cf_sex))
         output = Vector{Float64}(undef, length(compiled))
-        compiled(output, scenario.data, 1)
+        compiled(output, cf_data, 1)
         @test length(output) == length(compiled)
         
         # Marginal effects on age
         vars = [:Age]
-        de = build_derivative_evaluator(compiled, data; vars=vars)
+        de_fd = derivativeevaluator_fd(compiled, data, vars)
         g = Vector{Float64}(undef, length(vars))
-        marginal_effects_eta!(g, de, coef(model), 1; backend=:fd)
+        marginal_effects_eta!(g, de_fd, coef(model), 1)
         @test length(g) == length(vars)
     end
     
@@ -137,33 +143,35 @@ using LinearAlgebra  # For I() function in formulas
         compiled = compile_formula(model, data)
         @test compiled isa FormulaCompiler.UnifiedCompiled
         
-        # Scenario analysis - gender equity assessment  
+        # Scenario analysis - gender equity assessment
         # Use existing categorical values from the data to ensure level compatibility
         female_idx = findfirst(x -> string(x) == "Female", ucb_expanded.gender)
         dept_a_idx = findfirst(x -> string(x) == "A", ucb_expanded.dept)
-        
+
         if !isnothing(female_idx) && !isnothing(dept_a_idx)
             female_val = ucb_expanded.gender[female_idx]
             dept_a_val = ucb_expanded.dept[dept_a_idx]
-            
-            scenario = create_scenario("gender_analysis", data; 
-                gender = female_val, 
-                dept = dept_a_val)
+
+            cf_gender = CategoricalCounterfactualVector(data.gender, 1, female_val)
+            cf_dept = CategoricalCounterfactualVector(data.dept, 1, dept_a_val)
+            cf_data = merge(data, (gender = cf_gender, dept = cf_dept))
             output = Vector{Float64}(undef, length(compiled))
-            compiled(output, scenario.data, 1)
+            compiled(output, cf_data, 1)
             @test length(output) == length(compiled)
         else
             @test true  # Skip if values not found
         end
-        
-        # Test string overrides (should work automatically)
-        string_scenario = create_scenario("string_test", data;
-            gender = "Female",
-            dept = "A"
-        )
-        string_output = Vector{Float64}(undef, length(compiled))
-        compiled(string_output, string_scenario.data, 1)
-        @test length(string_output) == length(compiled)
+
+        # Test string overrides with categorical counterfactuals
+        # Find appropriate categorical values first
+        if !isnothing(female_idx) && !isnothing(dept_a_idx)
+            cf_gender_str = CategoricalCounterfactualVector(data.gender, 1, ucb_expanded.gender[female_idx])
+            cf_dept_str = CategoricalCounterfactualVector(data.dept, 1, ucb_expanded.dept[dept_a_idx])
+            cf_data_str = merge(data, (gender = cf_gender_str, dept = cf_dept_str))
+            string_output = Vector{Float64}(undef, length(compiled))
+            compiled(string_output, cf_data_str, 1)
+            @test length(string_output) == length(compiled)
+        end
     end
     
     @testset "Advanced Computational Patterns" begin
