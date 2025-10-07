@@ -104,7 +104,8 @@ include("mixtures/constructors.jl")
 include("mixtures/validation.jl")
 export CategoricalMixture, MixtureWithLevels
 export mix
-export validate_mixture_against_data, create_balanced_mixture, mixture_to_scenario_value
+export validate_mixture_against_data, mixture_to_scenario_value
+# DEPRECATED (2025-10-07): create_balanced_mixture moved to Margins.jl - will be removed in v2.0
 
 ################################# Integration #################################
 
@@ -137,10 +138,12 @@ export derivativeevaluator, derivativeevaluator_fd, derivativeevaluator_ad
 export derivative_modelrow!, derivative_modelrow
 export contrast_modelrow!
 export continuous_variables
-export marginal_effects_eta!, marginal_effects_mu!
-export delta_method_se
+# DEPRECATED (2025-10-07): Statistical interface moved to Margins.jl - will be removed in v2.0
+# export marginal_effects_eta!, marginal_effects_mu!
+# export delta_method_se
+# Use: `using Margins` to access these functions
 
-export _dmu_deta, _d2mu_deta2
+export _dmu_deta, _d2mu_deta2  # Link function derivatives (computational primitives)
 
 # Zero-allocation contrast evaluator for categorical and binary variables
 include("compilation/contrast_evaluator.jl")

@@ -40,3 +40,25 @@ function delta_method_se(gβ::AbstractVector{Float64}, Σ::AbstractMatrix{Float6
 
     return sqrt(result)
 end
+
+# =============================================================================
+# DEPRECATION NOTICE (2025-10-07)
+# =============================================================================
+# The delta_method_se function has been migrated to Margins.jl as part of the
+# separation between computational primitives (FormulaCompiler) and statistical
+# interface (Margins).
+#
+# This function will be REMOVED in FormulaCompiler v2.0
+#
+# Migration guide:
+#   Before (FormulaCompiler v1.x):
+#     using FormulaCompiler
+#     se = delta_method_se(gβ, Σ)
+#
+#   After (FormulaCompiler v1.1+ with Margins):
+#     using FormulaCompiler  # For primitives
+#     using Margins          # For statistical interface
+#     se = delta_method_se(gβ, Σ)  # Now from Margins.jl
+#
+# The function maintains the same API and performance characteristics.
+# =============================================================================

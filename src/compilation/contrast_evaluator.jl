@@ -578,6 +578,15 @@ function delta_method_se(
     return sqrt(max(0.0, variance))  # Ensure non-negative due to numerical precision
 end
 
+# =============================================================================
+# DEPRECATION NOTICE (2025-10-07)
+# =============================================================================
+# The delta_method_se wrapper function has been migrated to Margins.jl.
+# This function will be REMOVED in FormulaCompiler v2.0
+#
+# Migration: Add `using Margins` to access delta_method_se
+# =============================================================================
+
 # Internal implementation functions
 
 """

@@ -417,3 +417,13 @@ function _get_baseline_level(model, var::Symbol)
     throw(ArgumentError("Could not find categorical variable $var in model formula terms. " *
                       "Ensure the variable is categorical and present in the model."))
 end
+# =============================================================================
+# DEPRECATION NOTICE (2025-10-07)
+# =============================================================================
+# The mixture creation utilities (create_mixture_column, expand_mixture_grid,
+# create_balanced_mixture) have been migrated to Margins.jl.
+#
+# These functions will be REMOVED in FormulaCompiler v2.0
+#
+# Migration: Add `using Margins` to access these reference grid utilities
+# =============================================================================

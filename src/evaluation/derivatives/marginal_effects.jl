@@ -293,3 +293,25 @@ function marginal_effects_mu!(
 
     return nothing
 end
+
+# =============================================================================
+# DEPRECATION NOTICE (2025-10-07)
+# =============================================================================
+# The functions in this file have been migrated to Margins.jl as part of the
+# separation between computational primitives (FormulaCompiler) and statistical
+# interface (Margins).
+#
+# These functions will be REMOVED in FormulaCompiler v2.0
+#
+# Migration guide:
+#   Before (FormulaCompiler v1.x):
+#     using FormulaCompiler
+#     marginal_effects_eta!(g, Gβ, de, β, 1)
+#
+#   After (FormulaCompiler v1.1+ with Margins):
+#     using FormulaCompiler  # For primitives
+#     using Margins          # For statistical interface
+#     marginal_effects_eta!(g, Gβ, de, β, 1)  # Now from Margins.jl
+#
+# All functions maintain the same API and performance characteristics.
+# =============================================================================
