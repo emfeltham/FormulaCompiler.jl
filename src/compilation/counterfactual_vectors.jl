@@ -1,7 +1,7 @@
-# typed_overrides.jl - Type-stable counterfactual vector system
+# counterfactual_vectors.jl - Type-stable counterfactual vector system
 
 """
-Typed Counterfactual Vector System
+Counterfactual Vector System
 
 This file implements a type-stable counterfactual vector system for efficient statistical analysis.
 Provides type-stable counterfactual vectors with concrete typed variants.
