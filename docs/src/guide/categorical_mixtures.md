@@ -207,11 +207,11 @@ Mixtures work seamlessly with FormulaCompiler's derivative system:
 ```julia
 # Build derivative evaluator with mixture data
 vars = [:x]  # Continuous variables for derivatives
-de = build_derivative_evaluator(compiled, Tables.columntable(reference_data); vars=vars)
+de_fd = derivativeevaluator_fd(compiled, Tables.columntable(reference_data), vars)
 
 # Compute marginal effects with zero allocations
 gradient = Vector{Float64}(undef, length(vars))
-marginal_effects_eta!(gradient, de, coef(model), 1; backend=:fd)  # 0 bytes
+marginal_effects_eta!(gradient, de_fd, coef(model), 1)  # 0 bytes
 ```
 
 ## Advanced Usage
@@ -374,23 +374,35 @@ output = Vector{Float64}(undef, length(compiled))
 If you're currently using the override system for categorical mixtures:
 
 ```julia
-# Old approach (still works, but less efficient)
-base_data = DataFrame(x = [1.0, 2.0], group = ["A", "A"])
-mixture_obj = MixtureWithLevels(mix("A" => 0.3, "B" => 0.7), ["A", "B"])
-scenario = create_scenario("mixture", Tables.columntable(base_data); group = mixture_obj)
-compiled = compile_formula(model, scenario.data)
-
-# New approach (more efficient)
+# Pattern 1: Direct Mixture Data (Recommended - Compile-time Specialization)
 mix_data = DataFrame(x = [1.0, 2.0], group = [mix("A" => 0.3, "B" => 0.7), mix("A" => 0.3, "B" => 0.7)])
-compiled = compile_formula(model, Tables.columntable(mix_data))
+compiled = compile_formula(model, Tables.columntable(mix_data))  # → MixtureContrastOp (fastest)
+
+# Pattern 2: CounterfactualVector Mixtures (Flexible but slower)
+data_cf, cf_vecs = build_counterfactual_data(Tables.columntable(base_data), [:group], 1)
+mixture_replacement = mix("A" => 0.3, "B" => 0.7)
+update_counterfactual_replacement!(cf_vecs[1], mixture_replacement)
+compiled_cf = compile_formula(model, data_cf)  # → ContrastOp with runtime mixture handling
+
+# Pattern 3: Manual Population Analysis (Most flexible)
+base_data = DataFrame(x = [1.0, 2.0], group = ["A", "A"])
+results = []
+for (level, weight) in [("A", 0.3), ("B", 0.7)]
+    level_data = merge(Tables.columntable(base_data), (group = fill(level, 2),))
+    compiled = compile_formula(model, level_data)
+    # Evaluate and weight results manually
+    push!(results, (compiled, weight))
+end
 ```
 
 ### Performance Benefits
 
-| Approach | Compilation | Memory Usage | Execution Speed |
-|----------|-------------|--------------|-----------------|
-| Override system | Per-scenario | O(scenarios) | ~200ns |
-| Compile-time mixtures | Once | O(1) | ~55ns |
+| Approach | Compilation | Memory Usage | Allocations | Relative Speed |
+|----------|-------------|--------------|-------------|----------------|
+| Override system | Per-scenario | O(scenarios) | 0 bytes | Baseline |
+| Compile-time mixtures | Once | O(1) | 0 bytes | ~3-4x faster |
+
+**Note**: Both achieve zero allocations. Absolute timing varies by system; relative speedup is consistent.
 
 ## Limitations and Considerations
 

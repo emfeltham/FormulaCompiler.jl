@@ -34,12 +34,16 @@ result = @benchmark $compiled($output, $data, 1)
 
 ### Counterfactual Analysis
 ```julia
-# Single policy scenario using direct data modification
-n_rows = length(data.x)
-data_policy = merge(data, (x = fill(2.0, n_rows), group = fill("A", n_rows)))
-compiled(output, data_policy, 1)  # Evaluate with modified data
+# Single policy scenario using CounterfactualVector
+data_cf, cf_vecs = build_counterfactual_data(data, [:x, :group], 1)
+x_cf, group_cf = cf_vecs
 
-# Multi-scenario analysis
+# Set policy values
+update_counterfactual_replacement!(x_cf, 2.0)
+update_counterfactual_replacement!(group_cf, "A")
+compiled(output, data_cf, 1)  # Evaluate with overrides
+
+# Multi-scenario analysis (replaces scenario grid)
 x_values = [-1.0, 0.0, 1.0]
 group_values = ["A", "B"]
 results = Matrix{Float64}(undef, 6, length(compiled))  # 3×2 = 6 scenarios
@@ -47,8 +51,9 @@ results = Matrix{Float64}(undef, 6, length(compiled))  # 3×2 = 6 scenarios
 scenario_idx = 1
 for x_val in x_values
     for group_val in group_values
-        data_scenario = merge(data, (x = fill(x_val, n_rows), group = fill(group_val, n_rows)))
-        compiled(view(results, scenario_idx, :), data_scenario, 1)
+        update_counterfactual_replacement!(x_cf, x_val)
+        update_counterfactual_replacement!(group_cf, group_val)
+        compiled(view(results, scenario_idx, :), data_cf, 1)
         scenario_idx += 1
     end
 end
@@ -105,31 +110,47 @@ compiled = compile_formula(model, data)
 Analyze gender pay gap under different policy scenarios:
 
 ```julia
-# Define policy scenarios using direct data modification
+# Create counterfactual data for policy analysis
+data_cf, cf_vecs = build_counterfactual_data(data, [:Educ, :Exper], 1)
+educ_cf, exper_cf = cf_vecs
+
+# Define policy scenarios
 mean_educ = mean(wages.Educ)
 mean_exper = mean(wages.Exper)
-n_rows = length(data.Educ)
 
 output = Vector{Float64}(undef, length(compiled))
 β = coef(model)
 
-# Create scenario data
-scenarios = [
-    ("status_quo", data),
-    ("equal_education", merge(data, (Educ = fill(mean_educ, n_rows),))),
-    ("equal_experience", merge(data, (Exper = fill(mean_exper, n_rows),))),
-    ("standardized_worker", merge(data, (Educ = fill(mean_educ, n_rows), Exper = fill(mean_exper, n_rows))))
-]
-
 # Policy scenario analysis
-for (scenario_name, scenario_data) in scenarios
+scenario_names = ["status_quo", "equal_education", "equal_experience", "standardized_worker"]
+for (i, scenario_name) in enumerate(scenario_names)
+    # Set counterfactual values based on scenario
+    if scenario_name == "equal_education"
+        update_counterfactual_replacement!(educ_cf, mean_educ)
+        update_counterfactual_replacement!(exper_cf, getproperty(data, :Exper)[1])  # Keep original
+    elseif scenario_name == "equal_experience"
+        update_counterfactual_replacement!(educ_cf, getproperty(data, :Educ)[1])  # Keep original
+        update_counterfactual_replacement!(exper_cf, mean_exper)
+    elseif scenario_name == "standardized_worker"
+        update_counterfactual_replacement!(educ_cf, mean_educ)
+        update_counterfactual_replacement!(exper_cf, mean_exper)
+    # For status_quo, use original values (no overrides needed)
+    end
+
     # Sample analysis for first 100 workers
     wages_predicted = Float64[]
     for worker in 1:100
-        compiled(output, scenario_data, worker)
+        # For status_quo, use original data; otherwise use counterfactual data
+        if scenario_name == "status_quo"
+            compiled(output, data, worker)
+        else
+            update_counterfactual_row!(educ_cf, worker)
+            update_counterfactual_row!(exper_cf, worker)
+            compiled(output, data_cf, worker)
+        end
         push!(wages_predicted, exp(dot(β, output)))  # Convert from log scale
     end
-
+    
     mean_wage = mean(wages_predicted)
     println("$(scenario_name): Mean predicted wage = \$$(round(mean_wage, digits=2))")
 end
@@ -179,10 +200,13 @@ compiled = compile_formula(model, data)
 Analyze fuel efficiency under different design specifications:
 
 ```julia
-# Engineering design analysis using direct data modification
+# Create engineering design analysis with CounterfactualVector
 base_hp = mean(mtcars.HP)
 base_wt = mean(mtcars.WT)
-n_rows = length(data.HP)
+
+# Build counterfactual data for design variables
+data_cf, cf_vecs = build_counterfactual_data(data, [:HP, :WT, :Cyl], 1)
+hp_cf, wt_cf, cyl_cf = cf_vecs
 
 # Define design parameter combinations
 hp_values = [base_hp * 0.8, base_hp, base_hp * 1.2]      # -20%, baseline, +20% power
@@ -196,15 +220,13 @@ output = Vector{Float64}(undef, length(compiled))
 scenario_results = Float64[]
 scenario_descriptions = String[]
 for hp_val in hp_values, wt_val in wt_values, cyl_val in cyl_values
-    # Create scenario data
-    data_scenario = merge(data, (
-        HP = fill(hp_val, n_rows),
-        WT = fill(wt_val, n_rows),
-        Cyl = fill(cyl_val, n_rows)
-    ))
+    # Set design parameters
+    update_counterfactual_replacement!(hp_cf, hp_val)
+    update_counterfactual_replacement!(wt_cf, wt_val)
+    update_counterfactual_replacement!(cyl_cf, cyl_val)
 
     # Evaluate reference car design with these parameters
-    compiled(output, data_scenario, 1)
+    compiled(output, data_cf, 1)
     predicted_mpg = dot(β, output)
     push!(scenario_results, predicted_mpg)
 
@@ -271,24 +293,45 @@ compiled = compile_formula(model, data)
 Analyze survival outcomes under different patient profiles:
 
 ```julia
-# Clinical analysis using direct data modification
-n_rows = length(data.age)
-output = Vector{Float64}(undef, length(compiled))
-β = coef(model)
+# Create clinical analysis with CounterfactualVector
+data_cf, cf_vecs = build_counterfactual_data(data, [:age, :sex, :ph_ecog], 1)
+age_cf, sex_cf, ecog_cf = cf_vecs
 
 # Define clinical scenarios
-clinical_scenarios = [
-    ("young_male", merge(data, (age = fill(50, n_rows), sex = fill(1, n_rows)))),
-    ("old_male", merge(data, (age = fill(70, n_rows), sex = fill(1, n_rows)))),
-    ("young_female", merge(data, (age = fill(50, n_rows), sex = fill(2, n_rows)))),
-    ("old_female", merge(data, (age = fill(70, n_rows), sex = fill(2, n_rows)))),
-    ("high_performance", merge(data, (ph_ecog = fill(0, n_rows),))),
-    ("poor_performance", merge(data, (ph_ecog = fill(2, n_rows),)))
+clinical_profiles = [
+    ("young_male", 50, 1, nothing),          # Young male, keep original ph_ecog
+    ("old_male", 70, 1, nothing),            # Elderly male, keep original ph_ecog
+    ("young_female", 50, 2, nothing),        # Young female, keep original ph_ecog
+    ("old_female", 70, 2, nothing),          # Elderly female, keep original ph_ecog
+    ("high_performance", nothing, nothing, 0), # Best performance, keep original age/sex
+    ("poor_performance", nothing, nothing, 2)  # Poor performance, keep original age/sex
 ]
 
 # Clinical outcome analysis
-for (profile_name, scenario_data) in clinical_scenarios
-    compiled(output, scenario_data, 1)
+output = Vector{Float64}(undef, length(compiled))
+β = coef(model)
+
+for (profile_name, age_val, sex_val, ecog_val) in clinical_profiles
+    # Set counterfactual values (nothing means keep original value for that patient)
+    if age_val !== nothing
+        update_counterfactual_replacement!(age_cf, age_val)
+    else
+        update_counterfactual_replacement!(age_cf, getproperty(data, :age)[1])  # Use original
+    end
+
+    if sex_val !== nothing
+        update_counterfactual_replacement!(sex_cf, sex_val)
+    else
+        update_counterfactual_replacement!(sex_cf, getproperty(data, :sex)[1])  # Use original
+    end
+
+    if ecog_val !== nothing
+        update_counterfactual_replacement!(ecog_cf, ecog_val)
+    else
+        update_counterfactual_replacement!(ecog_cf, getproperty(data, :ph_ecog)[1])  # Use original
+    end
+
+    compiled(output, data_cf, 1)
     predicted_log_survival = dot(β, output)
     predicted_days = exp(predicted_log_survival) - 1
 
@@ -357,32 +400,49 @@ compiled = compile_formula(model, data)
 Analyze admission scenarios across departments:
 
 ```julia
-# Policy analysis using direct data modification
-n_rows = length(data.Male)
-output = Vector{Float64}(undef, length(compiled))
-β = coef(model)
+# Create policy analysis with CounterfactualVector
+data_cf, cf_vecs = build_counterfactual_data(data, [:Male, :Department], 1)
+male_cf, dept_cf = cf_vecs
 
 # Define policy scenarios
-policy_scenarios = [
-    ("gender_blind", merge(data, (Male = fill(true, n_rows),))),
-    ("gender_blind_female", merge(data, (Male = fill(false, n_rows),))),
-    ("dept_a_focus", merge(data, (Department = fill("A", n_rows),))),
-    ("dept_f_focus", merge(data, (Department = fill("F", n_rows),)))
+policy_configs = [
+    ("gender_blind", true, nothing),        # Assume all male, original departments
+    ("gender_blind_female", false, nothing), # Assume all female, original departments
+    ("dept_a_focus", nothing, "A"),         # Original genders, focus on Dept A
+    ("dept_f_focus", nothing, "F")          # Original genders, focus on Dept F
 ]
 
 # Policy impact analysis
-for (policy_name, scenario_data) in policy_scenarios
+output = Vector{Float64}(undef, length(compiled))
+β = coef(model)
+
+for (policy_name, male_val, dept_val) in policy_configs
     admission_probs = Float64[]
 
+    # Set counterfactual values
+    if male_val !== nothing
+        update_counterfactual_replacement!(male_cf, male_val)
+    else
+        update_counterfactual_replacement!(male_cf, getproperty(data, :Male)[1])  # Use original
+    end
+
+    if dept_val !== nothing
+        update_counterfactual_replacement!(dept_cf, dept_val)
+    else
+        update_counterfactual_replacement!(dept_cf, getproperty(data, :Department)[1])  # Use original
+    end
+
     # Sample 100 cases for analysis
-    sample_size = min(100, n_rows)
+    sample_size = min(100, length(getproperty(data, :Male)))
     for i in 1:sample_size
-        compiled(output, scenario_data, i)
+        update_counterfactual_row!(male_cf, i)
+        update_counterfactual_row!(dept_cf, i)
+        compiled(output, data_cf, i)
         linear_pred = dot(β, output)
         prob = 1 / (1 + exp(-linear_pred))  # Logistic transformation
         push!(admission_probs, prob)
     end
-
+    
     mean_prob = mean(admission_probs)
     println("$(policy_name): Mean admission probability = $(round(mean_prob*100, digits=1))%")
 end
@@ -419,10 +479,13 @@ function bootstrap_policy_effect(n_bootstrap=1000)
     for b in 1:n_bootstrap
         # Bootstrap sample
         boot_indices = rand(1:n_obs, n_obs)
+        
+        # Create counterfactual scenario for bootstrap
+        base_data_cf, cf_vecs = build_counterfactual_data(base_data, [:Educ], 1)
+        educ_cf = cf_vecs[1]
 
-        # Create policy scenario
-        n_rows = length(base_data.Educ)
-        policy_data = merge(base_data, (Educ = fill(mean(wages.Educ), n_rows),))
+        # Set policy value
+        update_counterfactual_replacement!(educ_cf, mean(wages.Educ))
 
         # Compute policy effect for bootstrap sample
         status_quo_wages = Float64[]
@@ -434,10 +497,11 @@ function bootstrap_policy_effect(n_bootstrap=1000)
             push!(status_quo_wages, exp(dot(coef(base_model), output)))
 
             # Policy scenario
-            compiled(output, policy_data, idx)
+            update_counterfactual_row!(educ_cf, idx)
+            compiled(output, base_data_cf, idx)
             push!(policy_wages, exp(dot(coef(base_model), output)))
         end
-
+        
         # Policy effect (proportional change)
         effect = mean(policy_wages) / mean(status_quo_wages) - 1
         push!(policy_effects, effect)
@@ -534,14 +598,17 @@ function parallel_policy_analysis()
     model = lm(@formula(log(Wage) ~ Educ * Male + Exper), wages)
     compiled = compile_formula(model, data)
     
+    # Create comprehensive policy analysis with CounterfactualVector
+    data_cf, cf_vecs = build_counterfactual_data(data, [:Educ, :Exper, :Male], 1)
+    educ_cf, exper_cf, male_cf = cf_vecs
+
     # Define policy grid parameters
     educ_levels = [10, 12, 14, 16, 18, 20]        # Education levels
     exper_levels = [0, 5, 10, 15, 20, 25]         # Experience levels
     male_levels = [false, true]                    # Gender
 
-    n_rows = length(data.Educ)
     n_scenarios = length(educ_levels) * length(exper_levels) * length(male_levels)  # 6×6×2 = 72
-    n_workers = min(100, n_rows)  # Sample size for analysis
+    n_workers = min(100, length(getproperty(data, :Educ)))  # Sample size for analysis
 
     # Results storage
     results = SharedArray{Float64}(n_scenarios)
@@ -550,49 +617,43 @@ function parallel_policy_analysis()
     # @distributed for scenario_idx in 1:n_scenarios
     scenario_idx = 1
     for educ_val in educ_levels, exper_val in exper_levels, male_val in male_levels
-        # Create scenario data
-        scenario_data = merge(data, (
-            Educ = fill(educ_val, n_rows),
-            Exper = fill(exper_val, n_rows),
-            Male = fill(male_val, n_rows)
-        ))
+        # Set scenario parameters
+        update_counterfactual_replacement!(educ_cf, educ_val)
+        update_counterfactual_replacement!(exper_cf, exper_val)
+        update_counterfactual_replacement!(male_cf, male_val)
 
         output = Vector{Float64}(undef, length(compiled))
         β = coef(model)
-
+        
         wage_predictions = Float64[]
         for worker in 1:n_workers
-            compiled(output, scenario_data, worker)
+            update_counterfactual_row!(educ_cf, worker)
+            update_counterfactual_row!(exper_cf, worker)
+            update_counterfactual_row!(male_cf, worker)
+            compiled(output, data_cf, worker)
             wage_pred = exp(dot(β, output))
             push!(wage_predictions, wage_pred)
         end
-
+        
         results[scenario_idx] = mean(wage_predictions)
         scenario_idx += 1
     end
 
-    return results, educ_levels, exper_levels, male_levels  # Return results and grid parameters
+    return results  # Return results array with mean wages for each scenario combination
 end
 
 # Run parallel analysis
 println("Running comprehensive policy analysis...")
-results, educ_levels, exper_levels, male_levels = parallel_policy_analysis()
+results, policy_grid = parallel_policy_analysis()
 
 # Find optimal policy
 best_idx = argmax(results)
+best_scenario = policy_grid[best_idx]
 best_wage = results[best_idx]
 
-# Decode scenario index to parameters
-n_exper = length(exper_levels)
-n_male = length(male_levels)
-educ_idx = div(best_idx - 1, n_exper * n_male) + 1
-exper_idx = div(mod(best_idx - 1, n_exper * n_male), n_male) + 1
-male_idx = mod(best_idx - 1, n_male) + 1
-
 println("Optimal policy scenario:")
-println("  Education: $(educ_levels[educ_idx]) years")
-println("  Experience: $(exper_levels[exper_idx]) years")
-println("  Gender: $(male_levels[male_idx] ? "Male" : "Female")")
+println("  Education: $(best_scenario.overrides[:Educ]) years")
+println("  Experience: $(best_scenario.overrides[:Exper]) years") 
 println("  Mean predicted wage: \$$(round(best_wage, digits=2))")
 ```
 

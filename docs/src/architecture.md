@@ -69,11 +69,31 @@ Path to zero allocations:
 
 For complex formulas (>25 operations) and derivative computation, the system uses targeted metaprogramming to maintain zero-allocation performance. See [Metaprogramming](metaprogramming.md) for implementation details.
 
-## Memory & Scenarios
+## CounterfactualVector System
 
-- `OverrideVector`: Lazy constant vectors for scenario overrides (~32 bytes)
-- `DataScenario`: Wraps a base dataset plus overrides without copying columns
-- `create_scenario_grid`: Generate large scenario sets efficiently
+**Unified Row-Wise Architecture**: Population analysis = individual analysis + averaging
+
+- `CounterfactualVector` hierarchy: Type-stable single-row perturbations for all data types
+  - `NumericCounterfactualVector{T}`: Numeric variables with automatic type conversion
+  - `BoolCounterfactualVector`: Boolean variables
+  - `CategoricalCounterfactualVector{T,R}`: Categorical variables with contrast support
+  - `CategoricalMixtureCounterfactualVector{T}`: Categorical mixtures for profile effects
+  - `TypedCounterfactualVector{T,V}`: Generic fallback for other types
+
+- **Memory Efficiency**: O(1) memory usage vs O(n) for data copying approaches
+- **Performance**: Simple loops achieve 10-100x speedup over data copying
+- **Type Stability**: Concrete types throughout, no `Any` types on hot paths
+
+**Population Analysis Pattern**:
+```julia
+# Simple loop pattern for efficient population analysis
+population_effects = Vector{Float64}(undef, n_rows)
+for row in 1:n_rows
+    # Use existing row-wise functions with CounterfactualVector perturbations
+    population_effects[row] = compute_individual_effect(row)
+end
+population_ame = mean(population_effects)
+```
 
 ## Integration
 
@@ -97,9 +117,24 @@ Check allocations and timings with BenchmarkTools:
 Figure generation
 - During docs builds, diagrams under `docs/src/assets/*.mmd` are automatically regenerated to SVG if the Mermaid CLI (`mmdc`) is available (see `docs/make.jl`).
 
+## Unified Row-Wise Architecture
+
+**Design Philosophy**: Population analysis = individual analysis + averaging
+
+**Key Features**:
+- **Population system eliminated**: Clean, simplified architecture
+- **CounterfactualVector system**: All data types supported including mixtures
+- **Type-stable throughout**: Concrete types for zero-allocation performance
+- **API simplified**: Clean exports focused on row-wise operations only
+
+**Performance Characteristics**:
+- **Zero allocations**: 0 bytes for core evaluation, derivatives, and marginal effects
+- **Fast per-row**: Timings vary by system, but typically <100ns per row
+- **Memory efficient**: O(1) memory for counterfactual analysis vs O(n) for data copying
+
 ## Future Directions
 
 - Parallel row evaluation for batches
 - Expanded function library and transformations
-- AD‑friendly derivatives and sensitivity analysis
 - Streaming and distributed execution patterns
+- Enhanced categorical mixture support

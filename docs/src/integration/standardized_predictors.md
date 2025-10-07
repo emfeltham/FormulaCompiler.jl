@@ -187,33 +187,36 @@ income_std = std(data.income)
 raw_income = 75000  # Raw income value
 standardized_income = (raw_income - income_mean) / income_std
 
-scenario = create_scenario("high_income", data; 
-                          income = standardized_income)
+# Population analysis with standardized income override
+n_rows = length(first(data))
+data_high_income = merge(data, (income = fill(standardized_income, n_rows),))
 ```
 
 #### Helper Function for Raw Values
 ```julia
-function create_standardized_scenario(name, data, model_data; overrides...)
-    # Create scenario with automatic standardization of override values
+function create_standardized_data(data, original_data, standardized_vars; overrides...)
+    # Create data with automatic standardization of override values
     standardized_overrides = Dict{Symbol, Any}()
-    
+    n_rows = length(first(data))
+
     for (var, raw_value) in overrides
-        if var in standardized_vars  # You'd need to track which vars are standardized
-            var_mean = mean(model_data[var])
-            var_std = std(model_data[var])
-            standardized_overrides[var] = (raw_value - var_mean) / var_std
+        if var in standardized_vars  # Track which vars are standardized
+            var_mean = mean(original_data[var])
+            var_std = std(original_data[var])
+            standardized_value = (raw_value - var_mean) / var_std
+            standardized_overrides[var] = fill(standardized_value, n_rows)
         else
-            standardized_overrides[var] = raw_value
+            standardized_overrides[var] = fill(raw_value, n_rows)
         end
     end
-    
-    return create_scenario(name, data; standardized_overrides...)
+
+    return merge(data, standardized_overrides)
 end
 
 # Usage
-scenario = create_standardized_scenario("analysis", data, original_data;
-                                       income = 75000,    # Raw value  
-                                       age = 45)          # Raw value
+data_analysis = create_standardized_data(data, original_data, [:income, :age];
+                                        income = 75000,    # Raw value
+                                        age = 45)          # Raw value
 ```
 
 ### Derivative Analysis
@@ -223,11 +226,11 @@ Derivatives work seamlessly with standardized variables:
 ```julia
 # Build derivative evaluator
 compiled = compile_formula(model, data)
-de = build_derivative_evaluator(compiled, data; vars=[:income, :age])
+de_fd = derivativeevaluator_fd(compiled, data, [:income, :age])
 
 # Compute marginal effects (on standardized scale)
 g = Vector{Float64}(undef, 2)
-marginal_effects_eta!(g, de, coef(model), row; backend=:fd)
+marginal_effects_eta!(g, de_fd, coef(model), row)
 
 # g[1] = marginal effect of income (per standardized unit)
 # g[2] = marginal effect of age (per standardized unit)
@@ -339,9 +342,10 @@ function standardized_policy_analysis(model, data, original_data)
             standardized_policy[var] = (value - var_mean) / var_std
         end
         
-        # Create and evaluate scenario
-        scenario = create_scenario(name, data; standardized_policy...)
-        scenario_results = evaluate_scenario(compiled, scenario, coef(model))
+        # Create modified data and evaluate
+        n_rows = length(first(data))
+        policy_data = merge(data, Dict(k => fill(v, n_rows) for (k, v) in standardized_policy))
+        scenario_results = evaluate_scenario(compiled, policy_data, coef(model))
         results[name] = scenario_results
     end
     
@@ -353,21 +357,21 @@ end
 
 ```julia
 function batch_marginal_effects_standardized(model, data, variables, rows)
-    compiled = compile_formula(model, data)  
-    de = build_derivative_evaluator(compiled, data; vars=variables)
-    
+    compiled = compile_formula(model, data)
+    de_fd = derivativeevaluator_fd(compiled, data, variables)
+
     n_vars = length(variables)
     n_rows = length(rows)
-    
+
     # Pre-allocate results
     marginal_effects = Matrix{Float64}(undef, n_rows, n_vars)
     g = Vector{Float64}(undef, n_vars)
-    
+
     for (i, row) in enumerate(rows)
-        marginal_effects_eta!(g, de, coef(model), row; backend=:fd)
+        marginal_effects_eta!(g, de_fd, coef(model), row)
         marginal_effects[i, :] .= g
     end
-    
+
     return marginal_effects
 end
 ```
@@ -440,8 +444,9 @@ The override system provides massive memory savings for policy analysis:
 scenario_data_copy = deepcopy(large_dataset)  # Expensive!
 scenario_data_copy.income .= 75000
 
-# Use override system (efficient):
-scenario = create_scenario("policy", data; income = standardized_value)  # ~48 bytes
+# Use simple data modification (straightforward):
+n_rows = length(first(data))
+data_policy = merge(data, (income = fill(standardized_value, n_rows),))  # Direct approach
 ```
 
 **Memory comparison for 1M rows**:
@@ -456,17 +461,19 @@ scenario = create_scenario("policy", data; income = standardized_value)  # ~48 b
 #### Issue 1: Unexpected Results in Scenarios
 ```julia
 # Incorrect - using raw values with standardized model
-scenario = create_scenario("test", standardized_data; income = 75000)
+n_rows = length(first(standardized_data))
+data_incorrect = merge(standardized_data, (income = fill(75000, n_rows),))
 
-# Correct - convert to standardized scale first  
+# Correct - convert to standardized scale first
 income_std = (75000 - mean(original_data.income)) / std(original_data.income)
-scenario = create_scenario("test", standardized_data; income = income_std)
+data_correct = merge(standardized_data, (income = fill(income_std, n_rows),))
 ```
 
 #### Issue 2: Marginal Effects Interpretation
 ```julia
 # Marginal effects are in standardized scale
-marginal_effects_eta!(g, de, coef(model), row)
+de_fd = derivativeevaluator_fd(compiled, data, vars)
+marginal_effects_eta!(g, de_fd, coef(model), row)
 
 # Convert to original scale for interpretation
 income_effect_per_dollar = g[1] / std(original_data.income)
@@ -508,9 +515,9 @@ end
 
 #### Check Override Scales
 ```julia
-function check_override_scale(scenario, compiled, expected_range)
+function check_override_scale(data, compiled, expected_range)
     output = Vector{Float64}(undef, length(compiled))
-    compiled(output, scenario.data, 1)
+    compiled(output, data, 1)
     
     # Values should be in reasonable range for standardized data
     if any(abs.(output) .> 10)

@@ -161,15 +161,23 @@ compiled = compile_formula(model, Tables.columntable(df))
 # This matches StatsModels exactly
 ```
 
-**For counterfactual analysis**, use boolean or numeric overrides:
+**For counterfactual analysis**, use CounterfactualVector with boolean or numeric overrides:
 
 ```julia
-# Boolean scenarios - individual counterfactuals
-treated_scenario = create_scenario("treated", data; treated = true)
-control_scenario = create_scenario("control", data; treated = false)
+# Create counterfactual data structure
+data_cf, cf_vecs = build_counterfactual_data(data, [:treated], 1)
+treated_cf = cf_vecs[1]
 
-# Numeric scenarios - population analysis  
-partial_scenario = create_scenario("partial", data; treated = 0.7)  # 70% treated
+# Boolean scenarios - individual counterfactuals
+update_counterfactual_replacement!(treated_cf, true)   # All treated
+compiled(output, data_cf, 1)  # Evaluate treated scenario
+
+update_counterfactual_replacement!(treated_cf, false)  # All control
+compiled(output, data_cf, 1)  # Evaluate control scenario
+
+# Numeric scenarios - population analysis
+update_counterfactual_replacement!(treated_cf, 0.7)   # 70% treated
+compiled(output, data_cf, 1)  # Evaluate partial treatment scenario
 ```
 
 **Key Points**:

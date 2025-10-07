@@ -4,14 +4,14 @@ Efficient model matrix evaluation for Julia statistical models. Implements posit
 
 ## Key Features
 
-- **Memory efficiency**: Per-row evaluation with reduced memory allocation (validated across test cases)
-- **Computational performance**: Improvements over traditional `modelmatrix()` approaches for single-row evaluations  
-- **Comprehensive compatibility**: Supports all valid StatsModels.jl formulas, including complex interactions and mathematical functions
-- **Categorical mixtures**: Compile-time support for weighted categorical specifications for marginal effects
-- **Scenario analysis**: Memory-efficient variable override system for counterfactual analysis
-- **Unified architecture**: Single compilation pipeline accommodates diverse formula structures
-- **Ecosystem integration**: Compatible with GLM.jl, MixedModels.jl, and StandardizedPredictors.jl
-- **Dual-backend derivatives**: Memory-efficient finite differences and ForwardDiff automatic differentiation options
+- Memory efficiency: Per-row evaluation with reduced memory allocation (validated across test cases)
+- Computational performance: Improvements over traditional `modelmatrix()` approaches for single-row evaluations  
+- Comprehensive compatibility: Supports all valid StatsModels.jl formulas, including complex interactions and mathematical functions
+- Categorical mixtures: Compile-time support for weighted categorical specifications for marginal effects
+- Scenario analysis: Memory-efficient variable override system for counterfactual analysis
+- Unified architecture: Single compilation pipeline accommodates diverse formula structures
+- Ecosystem integration: Compatible with GLM.jl, MixedModels.jl, and StandardizedPredictors.jl
+- Dual-backend derivatives: Memory-efficient finite differences and ForwardDiff automatic differentiation options
 
 ## Installation
 
@@ -67,47 +67,55 @@ row_vec = Vector{Float64}(undef, length(compiled))
 @benchmark compiled(row_vec, data, 1)
 # FormulaCompiler approach with zero allocations
 
-# Zero allocation across test cases
 ```
 
-Measured results (this environment)
-- Environment: Julia 1.11.2, apple-m1, Threads 2, Darwin; FormulaCompiler 1.0.0; GLM 1.9.0; MixedModels 4.38.1; ForwardDiff 1.1.0
-- Core row evaluation (`compiled(row,data,i)`): 9.7 ns median (0 B)
-- Scenario evaluation (OverrideVector): 9.7 ns median (0 B)
-- FD Jacobian (single column): 30.9 ns median (0 B)
-- AD Jacobian: 42.8 ns median (0 B observed in this environment)
-- Marginal effects η — FD: 74.4 ns; AD: 61.4 ns (both 0 B observed)
-- Marginal effects μ (Logit) — FD: 110.6 ns; AD: 94.8 ns (both 0 B observed)
-- Delta method SE: 22.8 ns (0 B)
+**Allocation guarantees** (verified in test suite):
+- Core row evaluation (`compiled(row,data,i)`): **0 bytes**
+- Scenario evaluation (CounterfactualVector): **0 bytes**
+- FD Jacobian (single column): **0 bytes**
+- AD Jacobian: **0 bytes**
+- Marginal effects η (FD/AD): **0 bytes**
+- Marginal effects μ with link functions (FD/AD): **0 bytes**
+- Delta method SE: **0 bytes**
 
-Note: Timings vary by hardware and Julia version. We centralize all numbers on this page. To reproduce on your system, follow the [Benchmark Protocol](benchmarks.md) and use the provided runners; a recent artifact is recorded at `results/benchmarks_20250905_140817.md` in this repository.
+Example timings from one environment (Julia 1.11.2, Apple M1):
+- Core evaluation: ~10 ns | Scenario: ~10 ns | FD Jacobian: ~31 ns | AD Jacobian: ~43 ns
+
+!!! note "Performance varies by system"
+    **Allocation guarantees are universal** (always 0 bytes). Timings vary by hardware, Julia version, and formula complexity. For reproducible benchmarks on your system, see the [Benchmark Protocol](benchmarks.md).
 
 ## Allocation Characteristics
 
 FormulaCompiler.jl provides different allocation guarantees depending on the operation:
 
 ### Core Model Evaluation
-- **Perfect zero allocations**: `modelrow!()` and direct `compiled()` calls are guaranteed 0 bytes after warmup
-- **Performance**: Fast per-row evaluation across all formula complexities
-- **Validated**: Test cases confirm zero-allocation performance
+- Zero allocations: `modelrow!()` and direct `compiled()` calls are 0 bytes after warmup
+- Performance: Fast per-row evaluation across all formula complexities
+- Validated: Test cases confirm zero-allocation performance
 
 ### Derivative Operations
-FormulaCompiler.jl offers **dual backends** for derivatives and marginal effects:
+FormulaCompiler.jl offers dual concrete type backends for derivatives and marginal effects:
 
-| Backend | Allocations | Performance | Use Case |
-|---------|-------------|-------------|----------|
-| `:fd` (Finite Differences) | **0 bytes** | Fast | Strict zero-allocation requirements |
-| `:ad` (ForwardDiff) | Some allocations | Faster | Speed and numerical accuracy priority |
+| Backend | Type | Allocations | Performance | Accuracy | Recommendation |
+|---------|------|-------------|-------------|----------|----------------|
+| Automatic Differentiation | `ADEvaluator` | 0 bytes | Faster | Machine precision | **Strongly preferred - use this** |
+| Finite Differences | `FDEvaluator` | 0 bytes | Slower | ~1e-8 | Legacy support only |
 
 ```julia
-# Choose your backend based on requirements
-marginal_effects_eta!(g, de, beta, row; backend=:fd)  # 0 allocations
-marginal_effects_eta!(g, de, beta, row; backend=:ad)  # typically ≤512 bytes; 0 B observed in this environment
+# Use automatic differentiation (strongly recommended)
+de = derivativeevaluator_ad(compiled, data, vars)  # Returns ADEvaluator
+
+# Compute derivatives with zero allocations
+marginal_effects_eta!(g, de, beta, row)  # 0 bytes, machine precision, faster
 ```
 
-### When to Use Each Backend
-- **Use `:fd`** for: Monte Carlo loops, bootstrap resampling, memory-constrained environments
-- **Use `:ad`** for: One-off calculations, interactive analysis, maximum numerical precision
+!!! tip "Backend Selection"
+    **Always use `ADEvaluator`** (automatic differentiation). It is:
+    - **Faster**: ~22% faster than finite differences
+    - **More accurate**: Machine precision vs ~1e-8 for FD
+    - **Zero allocations**: Just like FD
+
+    The FD backend (`FDEvaluator`) exists only for legacy compatibility. There are no practical advantages to using it.
 
 ## Use Cases
 

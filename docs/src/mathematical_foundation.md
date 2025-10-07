@@ -384,7 +384,7 @@ O(p) \text{ with compile-time } O(\text{complexity}(\text{formula}))
 
 - **Traditional**: $O(np)$ for full model matrix
 - **FormulaCompiler**: $O(p)$ per row evaluation
-- **Scenarios**: $O(1)$ via `OverrideVector` regardless of $n$
+- **Scenarios**: $O(1)$ via `CounterfactualVector` regardless of $n$
 
 ### Derivative Efficiency
 
@@ -392,14 +392,22 @@ O(p) \text{ with compile-time } O(\text{complexity}(\text{formula}))
 - **Single column**: $O(p)$ computation and storage  
 - **AME accumulation**: $O(np)$ time, $O(p)$ space
 
-### Backend Selection Trade-offs
+### Backend Selection
 
-| Backend | Speed | Memory | Accuracy | Use Case |
-|---------|-------|--------|----------|----------|
-| `:fd` | Medium | 0 bytes | Good (≈1e-8) | Production AME, large samples |
-| `:ad` | Fast | Small, bounded (typically ≤512 bytes) | Excellent (machine precision) | High accuracy, interactive workflows |
+| Backend | Speed | Memory | Accuracy | Recommendation |
+|---------|-------|--------|----------|----------------|
+| `:ad` (Automatic Differentiation) | Faster | 0 bytes | Machine precision | **Strongly preferred - always use this** |
+| `:fd` (Finite Differences) | Slower (~22% slower) | 0 bytes | ≈1e-8 | Legacy support only |
 
-**Recommendation**: Choose the backend per workload: use `:fd` for strict zero‑allocation guarantees or large batch AME; use `:ad` for accuracy and speed when small, bounded allocations are acceptable.
+!!! warning "Use Automatic Differentiation"
+    **Always use `:ad` backend** (`derivativeevaluator_ad()` or `backend=:ad`).
+
+    Advantages of `:ad`:
+    - **Faster**: ~22% faster than finite differences
+    - **More accurate**: Machine precision vs ~1e-8 for FD
+    - **Zero allocations**: Same as FD
+
+    The `:fd` backend exists only for legacy compatibility. **There are no practical advantages to using it.**
 
 ## Implementation Notes
 

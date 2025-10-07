@@ -84,13 +84,17 @@ function population_predictions(mixed_model, data, scenarios)
     return results
 end
 
-# Example usage
-scenarios = Dict(
-    "baseline" => create_scenario("baseline", data),
-    "treatment" => create_scenario("treatment", data; treatment = true)
-)
+# Example usage with CounterfactualVector
+data_cf, cf_vecs = build_counterfactual_data(data, [:treatment], 1)
+treatment_cf = cf_vecs[1]
 
-pop_predictions = population_predictions(mixed_model, data, scenarios)
+# Baseline scenario
+update_counterfactual_replacement!(treatment_cf, false)  # No treatment
+baseline_predictions = population_predictions_single(mixed_model, data, "baseline")
+
+# Treatment scenario
+update_counterfactual_replacement!(treatment_cf, true)   # Treatment
+treatment_predictions = population_predictions_single(mixed_model, data_cf, "treatment")
 ```
 
 ### Marginal Effects for Fixed Effects
@@ -217,30 +221,49 @@ function analyze_policy_scenarios(mixed_model, base_data)
     compiled = compile_formula(mixed_model, base_data)
     fixed_coefs = fixef(mixed_model)
     
-    # Define policy scenarios
-    scenarios = [
-        ("baseline", create_scenario("baseline", base_data)),
-        ("universal_treatment", create_scenario("treatment_all", base_data; treatment = true)),
-        ("targeted_treatment", create_scenario("treatment_targeted", base_data; 
-            treatment = true, 
-            x = quantile(base_data.x, 0.75)  # Top 25% of x values
-        )),
-        ("enhanced_policy", create_scenario("enhanced", base_data;
-            treatment = true,
-            x = mean(base_data.x),
-            additional_support = 1.0  # New policy variable
-        ))
+    # Create counterfactual data for policy analysis
+    data_cf, cf_vecs = build_counterfactual_data(base_data, [:treatment, :x, :additional_support], 1)
+    treatment_cf, x_cf, support_cf = cf_vecs
+
+    # Define policy scenarios with CounterfactualVector
+    policy_configs = [
+        ("baseline", false, nothing, nothing),          # No treatment, original x and support
+        ("universal_treatment", true, nothing, nothing), # Treatment, original x and support
+        ("targeted_treatment", true, quantile(base_data.x, 0.75), nothing), # Treatment + top 25% x
+        ("enhanced_policy", true, mean(base_data.x), 1.0)  # Treatment + mean x + support
     ]
-    
+
     results = Dict{String, NamedTuple}()
     row_vec = Vector{Float64}(undef, length(compiled))
-    
-    for (name, scenario) in scenarios
-        n_obs = Tables.rowcount(scenario.data)
+
+    for (name, treatment_val, x_val, support_val) in policy_configs
+        # Set counterfactual values
+        update_counterfactual_replacement!(treatment_cf, treatment_val)
+
+        if x_val !== nothing
+            update_counterfactual_replacement!(x_cf, x_val)
+        else
+            update_counterfactual_replacement!(x_cf, getproperty(base_data, :x)[1])  # Use original
+        end
+
+        if support_val !== nothing
+            update_counterfactual_replacement!(support_cf, support_val)
+        else
+            update_counterfactual_replacement!(support_cf, getproperty(base_data, :additional_support)[1])  # Use original
+        end
+
+        # Choose appropriate data source
+        current_data = (name == "baseline") ? base_data : data_cf
+        n_obs = Tables.rowcount(current_data)
         predictions = Vector{Float64}(undef, n_obs)
         
         for i in 1:n_obs
-            compiled(row_vec, scenario.data, i)
+            if name != "baseline"
+                update_counterfactual_row!(treatment_cf, i)
+                update_counterfactual_row!(x_cf, i)
+                update_counterfactual_row!(support_cf, i)
+            end
+            compiled(row_vec, current_data, i)
             predictions[i] = dot(fixed_coefs, row_vec)
         end
         
@@ -346,12 +369,12 @@ large_mixed_model = fit(MixedModel, complex_formula, large_df)
 base_data = Tables.columntable(large_df)
 
 # Instead of creating many copies of large_df
-# Use scenarios to override just the variables of interest
-policy_scenario = create_scenario("policy", base_data; 
-    key_variable = new_value
-)
+# Use CounterfactualVector to override just the variables of interest
+data_cf, cf_vecs = build_counterfactual_data(base_data, [:key_variable], 1)
+key_cf = cf_vecs[1]
+update_counterfactual_replacement!(key_cf, new_value)
 
 # Evaluate with minimal memory overhead
 compiled = compile_formula(large_mixed_model, base_data)
-# ... use compiled with policy_scenario.data
+# ... use compiled with data_cf
 ```
