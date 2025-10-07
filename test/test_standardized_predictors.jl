@@ -286,22 +286,133 @@ using FormulaCompiler: derivativeevaluator_fd, derivativeevaluator_ad, NumericCo
         # Build derivative evaluators for standardized variables
         de_fd = derivativeevaluator_fd(compiled, data, [:x, :z])
         de_ad = derivativeevaluator_ad(compiled, data, [:x, :z])
-        g_fd = Vector{Float64}(undef, 2)
-        g_ad = Vector{Float64}(undef, 2)
 
-        # Test both backends
-        FormulaCompiler.marginal_effects_eta!(g_fd, de_fd, coef(model), 1)
-        FormulaCompiler.marginal_effects_eta!(g_ad, de_ad, coef(model), 1)
+        J_fd = Matrix{Float64}(undef, length(compiled), 2)
+        J_ad = Matrix{Float64}(undef, length(compiled), 2)
+
+        # Test both backends - compute Jacobian
+        FormulaCompiler.derivative_modelrow!(J_fd, de_fd, 1)
+        FormulaCompiler.derivative_modelrow!(J_ad, de_ad, 1)
 
         # Both should give finite, reasonable results
-        @test all(isfinite.(g_fd))
-        @test all(isfinite.(g_ad))
+        @test all(isfinite.(J_fd))
+        @test all(isfinite.(J_ad))
 
         # AD and FD should agree (within tolerance)
-        @test isapprox(g_fd, g_ad, rtol=1e-6)
+        @test isapprox(J_fd, J_ad, rtol=1e-6)
 
         # Derivatives should be non-zero (assuming non-zero coefficients)
-        @test any(abs.(g_fd) .> 1e-6)
+        @test any(abs.(J_fd) .> 1e-6)
+    end
+
+    @testset "Derivative Scale Validation" begin
+        # Critical test: Verify derivatives are on ORIGINAL (raw) scale, not standardized scale
+        # This validates the automatic back-transformation via chain rule
+
+        # Simple linear model: y = β₀ + β₁·x
+        model_raw = lm(@formula(y ~ x), df)
+        model_std = lm(@formula(y ~ x), df, contrasts=Dict(:x => ZScore()))
+
+        data = Tables.columntable(df)
+        compiled_raw = compile_formula(model_raw, data)
+        compiled_std = compile_formula(model_std, data)
+
+        # Get standardization parameters
+        x_mean = mean(df.x)
+        x_std_dev = std(df.x)
+
+        # Coefficients
+        β₁_raw = coef(model_raw)[2]  # Raw model coefficient
+        β₁_std = coef(model_std)[2]  # Standardized model coefficient
+
+        # For a linear model:
+        # - Raw model: ∂η/∂x_raw = β₁_raw
+        # - Standardized model: ∂η/∂x_std = β₁_std, but ∂η/∂x_raw = β₁_std / σ
+        # Both should give the same derivative w.r.t. raw x
+
+        # Test FD backend
+        de_raw_fd = derivativeevaluator_fd(compiled_raw, data, [:x])
+        de_std_fd = derivativeevaluator_fd(compiled_std, data, [:x])
+
+        J_raw_fd = Matrix{Float64}(undef, length(compiled_raw), 1)
+        J_std_fd = Matrix{Float64}(undef, length(compiled_std), 1)
+
+        FormulaCompiler.derivative_modelrow!(J_raw_fd, de_raw_fd, 1)
+        FormulaCompiler.derivative_modelrow!(J_std_fd, de_std_fd, 1)
+
+        # Compute marginal effects: g = J' * β
+        g_raw_fd = (J_raw_fd' * coef(model_raw))[1]
+        g_std_fd = (J_std_fd' * coef(model_std))[1]
+
+        # Theoretical derivatives on raw scale
+        theoretical_raw = β₁_raw               # ∂η/∂x_raw for raw model
+        theoretical_std = β₁_std / x_std_dev   # ∂η/∂x_raw for standardized model
+
+        # Validate computed derivatives match theoretical values
+        @test g_raw_fd ≈ theoretical_raw rtol=1e-10
+        @test g_std_fd ≈ theoretical_std rtol=1e-10
+
+        # CRITICAL TEST: Both should give same derivative (both on raw scale)
+        @test g_raw_fd ≈ g_std_fd rtol=1e-10
+
+        # Test AD backend
+        de_raw_ad = derivativeevaluator_ad(compiled_raw, data, [:x])
+        de_std_ad = derivativeevaluator_ad(compiled_std, data, [:x])
+
+        J_raw_ad = Matrix{Float64}(undef, length(compiled_raw), 1)
+        J_std_ad = Matrix{Float64}(undef, length(compiled_std), 1)
+
+        FormulaCompiler.derivative_modelrow!(J_raw_ad, de_raw_ad, 1)
+        FormulaCompiler.derivative_modelrow!(J_std_ad, de_std_ad, 1)
+
+        g_raw_ad = (J_raw_ad' * coef(model_raw))[1]
+        g_std_ad = (J_std_ad' * coef(model_std))[1]
+
+        # AD should also produce raw-scale derivatives
+        @test g_raw_ad ≈ theoretical_raw rtol=1e-10
+        @test g_std_ad ≈ theoretical_std rtol=1e-10
+        @test g_raw_ad ≈ g_std_ad rtol=1e-10
+
+        # FD and AD should agree for both models
+        @test g_raw_fd ≈ g_raw_ad rtol=1e-10
+        @test g_std_fd ≈ g_std_ad rtol=1e-10
+
+        # Multi-variable test
+        model_multi_raw = lm(@formula(y ~ x + z), df)
+        model_multi_std = lm(@formula(y ~ x + z), df, contrasts=Dict(:x => ZScore(), :z => ZScore()))
+
+        compiled_multi_raw = compile_formula(model_multi_raw, data)
+        compiled_multi_std = compile_formula(model_multi_std, data)
+
+        de_multi_raw = derivativeevaluator_fd(compiled_multi_raw, data, [:x, :z])
+        de_multi_std = derivativeevaluator_fd(compiled_multi_std, data, [:x, :z])
+
+        J_multi_raw = Matrix{Float64}(undef, length(compiled_multi_raw), 2)
+        J_multi_std = Matrix{Float64}(undef, length(compiled_multi_std), 2)
+
+        FormulaCompiler.derivative_modelrow!(J_multi_raw, de_multi_raw, 1)
+        FormulaCompiler.derivative_modelrow!(J_multi_std, de_multi_std, 1)
+
+        g_multi_raw = J_multi_raw' * coef(model_multi_raw)
+        g_multi_std = J_multi_std' * coef(model_multi_std)
+
+        # Coefficients for multi-variable model
+        β_x_raw = coef(model_multi_raw)[2]
+        β_z_raw = coef(model_multi_raw)[3]
+        β_x_std = coef(model_multi_std)[2]
+        β_z_std = coef(model_multi_std)[3]
+
+        z_std_dev = std(df.z)
+
+        # Each derivative should be on raw scale
+        @test g_multi_raw[1] ≈ β_x_raw rtol=1e-10
+        @test g_multi_raw[2] ≈ β_z_raw rtol=1e-10
+        @test g_multi_std[1] ≈ β_x_std / x_std_dev rtol=1e-10
+        @test g_multi_std[2] ≈ β_z_std / z_std_dev rtol=1e-10
+
+        # Raw and standardized models should give same derivatives
+        @test g_multi_raw[1] ≈ g_multi_std[1] rtol=1e-10
+        @test g_multi_raw[2] ≈ g_multi_std[2] rtol=1e-10
     end
 
 end
