@@ -11,20 +11,95 @@ Cache for compiled formulas using model+data structure as key.
 const COMPILED_MODEL_CACHE = Dict{Any, Any}()
 
 """
+    _column_type_category(col) -> Symbol or Type
+
+Classify column by compilation behavior for cache key construction.
+
+Returns semantic category symbols for types that compile identically,
+concrete types for unknown/custom types that may have type-specific compilation.
+
+# Semantic Categories
+- `:numeric` - All numeric types (Int, Float64, etc.) compile to LoadOp
+- `:bool` - Boolean vectors compile to LoadOp with special handling
+- `:categorical` - CategoricalArray compiles to ContrastOp
+- `:mixture` - CategoricalMixture compiles to MixtureContrastOp
+
+# Cache Behavior
+- Same category → cache HIT (e.g., Vector{Int} and Vector{Float64} both → :numeric)
+- Different category → cache MISS (e.g., :categorical vs :mixture)
+
+# Examples
+```jldoctest
+julia> _column_type_category(Vector{Float64}([1.0, 2.0]))
+:numeric
+
+julia> _column_type_category(Vector{Int}([1, 2]))
+:numeric  # Same as Float64 - both compile to LoadOp
+
+julia> _column_type_category(categorical(["A", "B"]))
+:categorical
+
+julia> _column_type_category(mix("A" => 0.5, "B" => 0.5))
+:mixture  # Different from :categorical - compiles to MixtureContrastOp
+```
+"""
+function _column_type_category(col)
+    # Categorical mixtures MUST be distinguished from regular categoricals
+    # (mixture → MixtureContrastOp, categorical → ContrastOp)
+    col isa AbstractVector{<:CategoricalMixture} && return :mixture
+
+    # Regular categorical variables
+    col isa CategoricalVector && return :categorical
+
+    # Boolean vectors (special handling in some contexts)
+    col isa AbstractVector{Bool} && return :bool
+
+    # All numeric types compile identically to LoadOp
+    # (Int, Float64, Float32, etc. all behave the same)
+    col isa AbstractVector{<:Real} && return :numeric
+
+    # Unknown/custom types - use concrete type to be safe
+    # (may have type-specific compilation behavior we don't know about)
+    return typeof(col)
+end
+
+"""
     get_or_compile_formula(model, data)
 
-Get cached compiled formula or compile new one.
+Get cached compiled formula or compile new one with semantic type-aware caching.
+
+# Cache Key Strategy
+Creates cache key based on:
+1. Model object (coefficients, structure)
+2. Column names (formula structure)
+3. Semantic type categories (compilation behavior)
+
+# Type Category Benefits
+- **Better cache hits**: Vector{Int} and Vector{Float64} share cache entry
+- **Correct mixture handling**: CategoricalArray vs CategoricalMixture distinguished
+- **Future-proof**: New types can be added to category system
+
+# Examples
+```julia
+# These share a cache entry (both :numeric):
+data1 = (x = Float64[1.0, 2.0], y = ...)
+data2 = (x = Int[1, 2], y = ...)  # Cache HIT ✓
+
+# These get separate entries (different compilation):
+data3 = (edu = categorical(["HS"]), ...)      # :categorical
+data4 = (edu = mix("HS" => 0.5, "C" => 0.5), ...)  # :mixture - Cache MISS ✓
+```
 """
 function get_or_compile_formula(model, data)
-    # Simple cache key based on model and data structure
-    cache_key = (model, hash(keys(data)))
-    
-    if haskey(COMPILED_MODEL_CACHE, cache_key)
-        return COMPILED_MODEL_CACHE[cache_key]
-    else
-        compiled = compile_formula(model, data)
-        COMPILED_MODEL_CACHE[cache_key] = compiled
-        return compiled
+    # Semantic type signature based on compilation behavior
+    type_sig = Tuple(_column_type_category(v) for (k, v) in pairs(data))
+
+    # Comprehensive cache key: model + column names + semantic types
+    cache_key = (model, hash((keys(data), type_sig)))
+
+    # Get from cache or compile and store
+    return get!(COMPILED_MODEL_CACHE, cache_key) do
+        compile_formula(model, data)
     end
 end
 
