@@ -29,18 +29,18 @@ concrete types for unknown/custom types that may have type-specific compilation.
 - Different category → cache MISS (e.g., :categorical vs :mixture)
 
 # Examples
-```jldoctest
-julia> _column_type_category(Vector{Float64}([1.0, 2.0]))
-:numeric
+```julia
+_column_type_category(Vector{Float64}([1.0, 2.0]))
+# :numeric
 
-julia> _column_type_category(Vector{Int}([1, 2]))
-:numeric  # Same as Float64 - both compile to LoadOp
+_column_type_category(Vector{Int}([1, 2]))
+# :numeric  # Same as Float64 - both compile to LoadOp
 
-julia> _column_type_category(categorical(["A", "B"]))
-:categorical
+_column_type_category(categorical(["A", "B"]))
+# :categorical
 
-julia> _column_type_category(mix("A" => 0.5, "B" => 0.5))
-:mixture  # Different from :categorical - compiles to MixtureContrastOp
+_column_type_category(mix("A" => 0.5, "B" => 0.5))
+# :mixture  # Different from :categorical - compiles to MixtureContrastOp
 ```
 """
 function _column_type_category(col)
