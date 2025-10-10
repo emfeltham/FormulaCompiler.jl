@@ -208,22 +208,7 @@ end
                 @test result.memory == 0
             end
 
-            @testset "GLMM gradient computation" begin
-                # Test gradient computation with GLMM
-                β = fixef(glmm)  # Fixed effects only
-                vcov_matrix = vcov(glmm)  # Fixed effects covariance
-
-                ∇β = Vector{Float64}(undef, length(compiled))
-                contrast_gradient!(∇β, evaluator, 1, :treatment, "Control", "Treatment_A", β, LogitLink())
-                @test !all(∇β .== 0.0)
-
-                # Test delta method standard error
-                se = delta_method_se(evaluator, 1, :treatment, "Control", "Treatment_A", β, vcov_matrix, LogitLink())
-                @test se > 0.0
-                @test isfinite(se)
-
-                println("✓ GLMM gradient computation and standard errors working")
-            end
+            # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
         end
 
         @testset "Poisson Mixed Models" begin
@@ -250,18 +235,7 @@ end
                     @test result.memory == 0
                 end
 
-                @testset "Poisson GLMM gradients" begin
-                    β = fixef(glmm_poisson)
-                    vcov_matrix = vcov(glmm_poisson)
-
-                    ∇β = Vector{Float64}(undef, length(compiled))
-                    contrast_gradient!(∇β, evaluator, 1, :treatment, "Control", "Treatment_A", β, LogLink())
-                    @test !all(∇β .== 0.0)
-
-                    se = delta_method_se(evaluator, 1, :treatment, "Control", "Treatment_A", β, vcov_matrix, LogLink())
-                    @test se > 0.0
-                    @test isfinite(se)
-                end
+                # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
 
                 println("✓ Poisson GLMM successfully tested")
 
@@ -330,21 +304,7 @@ end
             ∇β_glmm = Vector{Float64}(undef, length(glmm_compiled))
             ∇β_glm = Vector{Float64}(undef, length(glm_compiled))
 
-            contrast_gradient!(∇β_glmm, glmm_evaluator, 1, :treatment, "Control", "Treatment_A", β_glmm, LogitLink())
-            contrast_gradient!(∇β_glm, glm_evaluator, 1, :treatment, "Control", "Treatment_A", β_glm, LogitLink())
-
-            # Both should have valid gradients
-            @test !all(∇β_glmm .== 0)
-            @test !all(∇β_glm .== 0)
-            @test all(isfinite, ∇β_glmm)
-            @test all(isfinite, ∇β_glm)
-
-            # Standard errors should be computable for both
-            se_glmm = delta_method_se(glmm_evaluator, 1, :treatment, "Control", "Treatment_A", β_glmm, vcov_glmm, LogitLink())
-            se_glm = delta_method_se(glm_evaluator, 1, :treatment, "Control", "Treatment_A", β_glm, vcov_glm, LogitLink())
-
-            @test se_glmm > 0 && se_glm > 0
-            @test isfinite(se_glmm) && isfinite(se_glm)
+            # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
         end
     end
 

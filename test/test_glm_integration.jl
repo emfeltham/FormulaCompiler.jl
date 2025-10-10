@@ -170,20 +170,7 @@ end
                 @test result.memory == 0
             end
 
-            @testset "Logistic gradient computation" begin
-                # Test gradient computation with logistic link
-                β = coef(model)
-                vcov_matrix = GLM.vcov(model)
-
-                ∇β = Vector{Float64}(undef, length(compiled))
-                contrast_gradient!(∇β, evaluator, 1, :treatment, "Control", "Treatment_A", β, LogitLink())
-                @test !all(∇β .== 0.0)
-
-                # Test delta method standard error
-                se = delta_method_se(evaluator, 1, :treatment, "Control", "Treatment_A", β, vcov_matrix, LogitLink())
-                @test se > 0.0
-                @test isfinite(se)
-            end
+            # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
         end
 
         @testset "Logistic Models with Interactions" begin
@@ -226,27 +213,7 @@ end
                 @test result.memory == 0
             end
 
-            @testset "Poisson gradient computation" begin
-                # Test gradient computation with log link
-                β = coef(model)
-                vcov_matrix = GLM.vcov(model)
-
-                ∇β = Vector{Float64}(undef, length(compiled))
-                contrast_gradient!(∇β, evaluator, 1, :treatment, "Control", "Treatment_A", β, LogLink())
-                @test !all(∇β .== 0.0)
-
-                # Test delta method with log link
-                se = delta_method_se(evaluator, 1, :treatment, "Control", "Treatment_A", β, vcov_matrix, LogLink())
-                @test se > 0.0
-                @test isfinite(se)
-
-                # Compare with identity link (linear scale)
-                ∇β_linear = Vector{Float64}(undef, length(compiled))
-                contrast_gradient!(∇β_linear, evaluator, 1, :treatment, "Control", "Treatment_A", β)
-
-                # Should be different due to link function
-                @test !(∇β ≈ ∇β_linear)
-            end
+            # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
         end
 
         @testset "Poisson Models with Offset" begin
@@ -291,19 +258,7 @@ end
                     @test result.memory == 0
                 end
 
-                @testset "NB gradient computation" begin
-                    β = coef(model)
-                    vcov_matrix = GLM.vcov(model)
-
-                    ∇β = Vector{Float64}(undef, length(compiled))
-                    contrast_gradient!(∇β, evaluator, 1, :treatment, "Control", "Treatment_A", β, LogLink())
-                    @test !all(∇β .== 0.0)
-
-                    # Test delta method
-                    se = delta_method_se(evaluator, 1, :treatment, "Control", "Treatment_A", β, vcov_matrix, LogLink())
-                    @test se > 0.0
-                    @test isfinite(se)
-                end
+                # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
 
                 println("✓ Negative Binomial models supported and working")
 
@@ -349,39 +304,7 @@ end
             end
         end
 
-        @testset "Link Function Differentiation" begin
-            # Test that different link functions give different results
-            logit_model = glm(@formula(y_binary ~ x1 + treatment), df, Binomial(), LogitLink())
-            probit_model = glm(@formula(y_binary ~ x1 + treatment), df, Binomial(), ProbitLink())
-
-            logit_compiled = compile_formula(logit_model, data)
-            probit_compiled = compile_formula(probit_model, data)
-
-            logit_evaluator = contrastevaluator(logit_compiled, data, [:treatment])
-            probit_evaluator = contrastevaluator(probit_compiled, data, [:treatment])
-
-            # Gradients should be different due to different link functions
-            β_logit = coef(logit_model)
-            β_probit = coef(probit_model)
-            vcov_logit = GLM.vcov(logit_model)
-            vcov_probit = GLM.vcov(probit_model)
-
-            ∇β_logit = Vector{Float64}(undef, length(logit_compiled))
-            ∇β_probit = Vector{Float64}(undef, length(probit_compiled))
-
-            contrast_gradient!(∇β_logit, logit_evaluator, 1, :treatment, "Control", "Treatment_A", β_logit, LogitLink())
-            contrast_gradient!(∇β_probit, probit_evaluator, 1, :treatment, "Control", "Treatment_A", β_probit, ProbitLink())
-
-            # Should be different due to different link derivatives
-            @test !(∇β_logit ≈ ∇β_probit)
-
-            # Standard errors should also be different
-            se_logit = delta_method_se(logit_evaluator, 1, :treatment, "Control", "Treatment_A", β_logit, vcov_logit, LogitLink())
-            se_probit = delta_method_se(probit_evaluator, 1, :treatment, "Control", "Treatment_A", β_probit, vcov_probit, ProbitLink())
-
-            @test se_logit != se_probit
-            @test se_logit > 0.0 && se_probit > 0.0
-        end
+        # Link function inference tests migrated to Margins.jl (2025-10-09)
     end
 
     @testset "Performance Validation Across Models" begin

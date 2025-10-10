@@ -1,7 +1,7 @@
 # test/runtests.jl
 # Main test runner for FormulaCompiler.jl
 # julia --project="test" test/runtests.jl > test/tests.txt 2>&1
-# julia --project="." -e "import Pkg; Pkg.test()" > test/runtests.txt 2>&1
+# julia --project="." -e "import Pkg; Pkg.test()" > test/runtests_2.txt 2>&1
 
 using Test
 using Random
@@ -31,22 +31,22 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
     include("test_compressed_categoricals.jl") # Compressed categorical arrays (UInt8, UInt16, UInt32)
 
     # Categorical mixtures (Phase 5 complete implementation)
-    include("test_categorical_mixtures.jl") # Comprehensive mixture test suite
+    include("test_mixture_evaluation.jl") # Comprehensive mixture evaluation primitives
     include("test_mixture_modelrows.jl") # Modelrow correctness with mixtures
 
-    # Derivatives
-    include("test_derivatives.jl") # PRIMARY: Correctness of compiled formula derivatives
-    include("test_links.jl")
-    include("test_derivative_allocations.jl") # PRIMARY: Comprehensive derivative allocations (single-row, multi-row, loops)
+    # Derivatives (primitives only - statistical interface migrated to Margins.jl)
+    # MIGRATED: test_links.jl → Margins/test/primitives/test_links.jl
+    # SPLIT: test_derivative_allocations.jl → test_derivative_primitive_allocations.jl (FormulaCompiler) + test_marginal_effects_allocations.jl (Margins)
+    include("test_derivative_primitive_allocations.jl") # PRIMARY: derivative_modelrow! allocation tests (primitives only)
     include("test_contrast_evaluator.jl") # Zero-allocation contrast evaluator correctness and performance
-    include("test_documentation_examples.jl") # Documentation example validation
+    # DELETED: test_documentation_examples.jl → Caused circular dependency with Margins (2025-10-09)
 
     # AD allocation validation - Complex formula and batch scaling tests
     include("test_ad_alloc_formula_variants.jl") # Formula pattern allocation profiling
     include("test_formulacompiler_primitives_allocations.jl") # Batch scaling + NamedTuple regression guards
 
     # Regression tests
-    include("test_derivatives_log_profile_regression.jl")
+    # MIGRATED: test_derivatives_log_profile_regression.jl → Margins/test/primitives/test_derivatives_log_profile_regression.jl
     # Edge-case regression and stability tests
     include("test_derivatives_domain_edge_cases.jl")
     

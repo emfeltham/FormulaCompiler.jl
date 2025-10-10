@@ -121,40 +121,11 @@ function run_allocation_tests()
     println("   Per call: $allocs_model_per_call bytes")
     println("   Cache overhead: $(allocs_model_per_call - allocs_modelrow_per_call) bytes/call")
     println()
-    
-    # Test 5: Derivative functions if available
-    if isdefined(FormulaCompiler, :marginal_effects_eta!) && isdefined(FormulaCompiler, :derivativeevaluator)
-        println("Test 5: marginal_effects_eta! loop ($N_TEST_CALLS iterations)")
-        try
-            vars = [:x, :age]
-            de_fd = derivativeevaluator(:fd, compiled, data, vars)
-            g = Vector{Float64}(undef, length(vars))
-            coefs = coef(model)
 
-            function test_me_loop(g, de_fd, coefs, n_calls)
-                for i in 1:n_calls
-                    row = ((i-1) % N_ROWS) + 1
-                    marginal_effects_eta!(g, de_fd, coefs, row)
-                end
-            end
-            
-            allocs_me_loop = @allocated test_me_loop(g, de_fd, coefs, N_TEST_CALLS)
-            allocs_me_per_call = allocs_me_loop / N_TEST_CALLS
-            results["loop_marginal_effects"] = allocs_me_per_call
-            status_me = allocs_me_per_call == EXPECTED_ALLOCATION_PER_CALL ? "PASS" : "FAIL"
-            println("   Total allocation: $allocs_me_loop bytes")
-            println("   Per call: $allocs_me_per_call bytes $status_me")
-        catch e
-            println("   Error testing marginal_effects_eta!: $e")
-            results["loop_marginal_effects"] = NaN
-        end
-        println()
-    else
-        println("Test 5: marginal_effects_eta! not available in this version")
-        results["loop_marginal_effects"] = NaN
-        println()
-    end
-    
+    # Note: Test 5 (marginal_effects_eta!) removed 2025-10-09
+    # marginal_effects_eta! migrated to Margins.jl
+    # For marginal effects allocation testing, see Margins.jl test suite
+
     return results
 end
 
@@ -170,7 +141,7 @@ function summarize_results(results)
     
     println("Zero-Allocation Status:")
     for (test, allocation) in results
-        if test in ["loop_compiled", "loop_modelrow_precompiled", "loop_marginal_effects"]
+        if test in ["loop_compiled", "loop_modelrow_precompiled"]
             status = isnan(allocation) ? "N/A" : (allocation == 0.0 ? "ZERO" : "ALLOCATES")
             println("   $test: $(isnan(allocation) ? "N/A" : string(allocation)) bytes/call $status")
             if !isnan(allocation) && allocation > 0
