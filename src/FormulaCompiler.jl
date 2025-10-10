@@ -14,7 +14,7 @@ and position mapping.
 - **Zero allocations**: Evaluates model matrices without any runtime allocations
 - **Universal compatibility**: Works with any StatsModels.jl formula
 - **Ecosystem integration**: Supports GLM.jl, MixedModels.jl, StandardizedPredictors.jl
-- **Scenario analysis**: Memory-efficient variable overrides for counterfactuals
+- **CounterfactualVector system**: Type-stable single-row perturbations for counterfactuals
 - **Type specialization**: All operations resolved at compile time
 
 ## Architecture
@@ -59,9 +59,8 @@ row_vec = Vector{Float64}(undef, length(compiled))
 compiled(row_vec, data, 1)     # First row
 compiled(row_vec, data, 500)   # 500th row
 
-# Scenario analysis with overrides
-scenario = create_scenario("policy", data; x = 2.0, group = "A")
-compiled(row_vec, scenario.data, 1)  # Evaluate with overrides
+# CounterfactualVector functions for single-row perturbations
+# Population analysis: use simple loops with existing row-wise functions
 ```
 
 ## Supported Formulas
@@ -72,11 +71,6 @@ compiled(row_vec, scenario.data, 1)  # Evaluate with overrides
 - Functions: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`
 - Complex formulas: `x * log(z) * group + sqrt(abs(y))`
 
-## Performance
-
-- Single row: ~50ns, 0 allocations
-- 10-100x faster than `modelmatrix()[row, :]`
-- Memory efficient: O(1) for scenarios vs O(n) for data copies
 """
 module FormulaCompiler
 
@@ -88,6 +82,7 @@ module FormulaCompiler
 using Dates: now
 using Statistics
 using StatsModels, GLM, CategoricalArrays, Tables, DataFrames
+using CategoricalArrays: CategoricalValue
 using LinearAlgebra: dot, I, mul!
 using ForwardDiff
 using Base.Iterators: product # -> compute_kronecker_pattern
@@ -101,7 +96,7 @@ using StandardizedPredictors: ZScoredTerm
 
 # Core utilities and types
 include("core/utilities.jl")
-export not, OverrideVector
+export not
 
 # Mixture system
 include("mixtures/types.jl")
@@ -109,7 +104,8 @@ include("mixtures/constructors.jl")
 include("mixtures/validation.jl")
 export CategoricalMixture, MixtureWithLevels
 export mix
-export validate_mixture_against_data, create_balanced_mixture, mixture_to_scenario_value
+export validate_mixture_against_data, mixture_to_scenario_value
+# REMOVED (2025-10-07): create_balanced_mixture migrated to Margins.jl v2.0
 
 ################################# Integration #################################
 
@@ -120,14 +116,17 @@ include("integration/mixed_models.jl")
 
 # Compilation system (unified)
 include("compilation/compilation.jl")
-export compile_formula
+include("compilation/counterfactual_vectors.jl")
+export compile_formula, get_or_compile_formula
+export CategoricalCounterfactualVector  # Needed by Margins.continuous_variables
+
+include("utilities.jl")
+export continuous_variables
 
 ################################## Scenarios ##################################
 
-# Override and scenario system (needed by modelrow)
-include("scenarios/overrides.jl")
-export create_categorical_override, create_scenario_grid
-export DataScenario, create_scenario, create_override_data, create_override_vector
+# Row-wise counterfactual system only (population system removed)
+# Note: Population analysis should use row-wise CounterfactualVector functions in loops
 
 ################################# Evaluation #################################
 
@@ -139,25 +138,17 @@ export ModelRowEvaluator, modelrow!, modelrow
 
 # ForwardDiff-based derivative evaluation (zero-alloc after warmup)
 include("evaluation/derivatives.jl")
-export build_derivative_evaluator, derivative_modelrow!, derivative_modelrow
-export derivative_modelrow_fd!, derivative_modelrow_fd
-export derivative_modelrow_fd_pos!
-export contrast_modelrow!, contrast_modelrow
-export continuous_variables
-export marginal_effects_eta!, marginal_effects_eta
-export marginal_effects_eta_grad!, marginal_effects_eta_grad
-export marginal_effects_mu!, marginal_effects_mu
-export fd_jacobian_column!, me_eta_grad_beta!, me_mu_grad_beta!
-export delta_method_se, accumulate_ame_gradient!
+export derivativeevaluator, derivativeevaluator_fd, derivativeevaluator_ad
+export derivative_modelrow!, derivative_modelrow
+export contrast_modelrow!
+export _dmu_deta, _d2mu_deta2  # Link function derivatives (computational primitives)
+# REMOVED (2025-10-07): marginal_effects_eta!, marginal_effects_mu!, continuous_variables, delta_method_se migrated to Margins.jl v2.0
 
-############################## Development Tools ##############################
-# (No dev utilities included in production module.)
+# Zero-allocation contrast evaluator for categorical and binary variables
+include("compilation/contrast_evaluator.jl")
+export ContrastEvaluator, contrastevaluator, CategoricalLevelMap
+export contrast_gradient!, contrast_gradient
+export supported_link_functions
 
-############################## Future Features ##############################
-
-# Derivative system (under development)
-# include("derivatives/step1_foundation.jl")
-# include("derivatives/step2_functions.jl")
-# export compile_derivative_formula
 
 end # end module

@@ -1,5 +1,5 @@
 # test_overrides.jl
-# Comprehensive override and scenario system testing
+# Comprehensive CounterfactualVector system testing
 
 using Test, Random
 using FormulaCompiler
@@ -8,271 +8,316 @@ using BenchmarkTools
 
 Random.seed!(06515)
 
-@testset "Override System Tests" begin
+@testset "CounterfactualVector System Tests" begin
 
-    @testset "OverrideVector Basic Functionality" begin
-        # Test numeric override
-        override_vec = OverrideVector(2.5, 1000)
-        @test override_vec[1] == 2.5
-        @test override_vec[500] == 2.5 
-        @test override_vec[1000] == 2.5
-        @test length(override_vec) == 1000
-        
-        # Test memory efficiency
-        regular_size = sizeof(fill(2.5, 10000))
-        override_size = sizeof(override_vec) + sizeof(2.5) + sizeof(1000)
-        @test override_size < regular_size / 1000  # Massive reduction
-        
+    @testset "NumericCounterfactualVector Basic Functionality" begin
+        # Test numeric counterfactual
+        base_vec = [1.0, 2.0, 3.0, 4.0, 5.0]
+        cf_vec = FormulaCompiler.NumericCounterfactualVector{Float64}(base_vec, 3, 99.0)
+
+        @test cf_vec[1] == 1.0     # Original value
+        @test cf_vec[2] == 2.0     # Original value
+        @test cf_vec[3] == 99.0    # Counterfactual value
+        @test cf_vec[4] == 4.0     # Original value
+        @test cf_vec[5] == 5.0     # Original value
+        @test length(cf_vec) == 5
+
+        # Test memory efficiency (much smaller than copying entire array)
+        regular_size = sizeof(copy(base_vec))
+        cf_size = sizeof(cf_vec)
+        @test cf_size < regular_size  # Should be smaller
+
         # Test iteration
-        count = 0
-        for val in OverrideVector(1.0, 5)
-            @test val == 1.0
-            count += 1
+        expected = [1.0, 2.0, 99.0, 4.0, 5.0]
+        for (i, val) in enumerate(cf_vec)
+            @test val == expected[i]
         end
-        @test count == 5
-        
-        # Test that access is fast and functional (allocation test removed due to test environment overhead)
+
+        # Test fast access
         access_time = @elapsed begin
             for i in 1:1000
-                val = override_vec[i]
-                @test val == 2.5  # Verify correctness
+                val = cf_vec[mod1(i, 5)]
             end
         end
         @test access_time < 0.01  # Should be very fast
     end
 
-    @testset "Basic Scenario Creation" begin
+    @testset "CounterfactualVector Construction" begin
         test_data = (
             x = [1.0, 2.0, 3.0, 4.0, 5.0],
             y = [10.0, 20.0, 30.0, 40.0, 50.0],
             z = [100, 200, 300, 400, 500]
         )
-        
-        # Test scenario with no overrides
-        scenario_original = create_scenario("original", test_data)
-        @test scenario_original.data === test_data
-        @test isempty(scenario_original.overrides)
-        
-        # Test scenario with single override
-        scenario_x = create_scenario("x_override", test_data; x = 99.0)
-        @test scenario_x.data.x isa OverrideVector
-        @test scenario_x.data.x[1] == 99.0
-        @test scenario_x.data.x[3] == 99.0
-        @test scenario_x.data.y === test_data.y
-        @test scenario_x.data.z === test_data.z
-        
-        # Test scenario with multiple overrides
-        scenario_multi = create_scenario("multi_override", test_data; x = 88.0, y = 77.0)
-        @test scenario_multi.data.x isa OverrideVector
-        @test scenario_multi.data.y isa OverrideVector
-        @test scenario_multi.data.x[1] == 88.0
-        @test scenario_multi.data.y[1] == 77.0
-        @test scenario_multi.data.z === test_data.z
+
+        # Test basic CounterfactualVector creation from dispatch
+        cf_x = FormulaCompiler.counterfactualvector(test_data.x, 2)
+        @test cf_x isa FormulaCompiler.NumericCounterfactualVector{Float64}
+        @test cf_x[1] == 1.0
+        @test cf_x[2] == 0.0  # Default replacement
+        @test cf_x[3] == 3.0
+
+        # Test with specific replacement
+        cf_x_specific = FormulaCompiler.NumericCounterfactualVector{Float64}(test_data.x, 3, 99.0)
+        @test cf_x_specific[3] == 99.0
+
+        # Test integer counterfactual
+        cf_z = FormulaCompiler.counterfactualvector(test_data.z, 2)
+        @test cf_z isa FormulaCompiler.NumericCounterfactualVector{Int64}
+        @test cf_z[1] == 100
+        @test cf_z[2] == 0    # Default replacement
+        @test cf_z[3] == 300
     end
 
-    @testset "Categorical Override Creation" begin
+    @testset "CategoricalCounterfactualVector Creation" begin
         # Create test categorical data
         original_data = categorical(["A", "B", "A", "C", "B"], levels=["A", "B", "C"])
-        
-        # Test string override
-        override_str = create_categorical_override("B", original_data)
-        @test override_str isa OverrideVector
-        @test length(override_str) == 5
-        @test string(override_str[1]) == "B"
-        @test string(override_str[3]) == "B"
-        
-        # Test symbol override  
-        override_sym = create_categorical_override(:C, original_data)
-        @test string(override_sym[1]) == "C"
-        
-        # Test invalid level
-        @test_throws Exception create_categorical_override("D", original_data)
-        
-        # Test invalid level index
-        @test_throws Exception create_categorical_override(4, original_data)
+
+        # Test categorical counterfactual creation - now returns reference indices (UInt32)
+        cf_cat = FormulaCompiler.counterfactualvector(original_data, 2)
+        @test cf_cat isa FormulaCompiler.CategoricalCounterfactualVector
+        @test length(cf_cat) == 5
+        @test cf_cat[1] == UInt32(1)  # Original ref index for "A"
+        @test cf_cat[2] == UInt32(1)  # Default replacement (first ref index)
+        @test cf_cat[3] == UInt32(1)  # Original ref index for "A"
+
+        # Test with specific categorical replacement
+        cf_cat_b = FormulaCompiler.CategoricalCounterfactualVector{String, UInt32}(
+            original_data, 2, original_data[1]  # Using first element as template
+        )
+        @test cf_cat_b[1] == original_data.refs[1]  # Compare ref indices
+        @test cf_cat_b[3] == original_data.refs[3]  # Compare ref indices
+
+        # Test type dispatch
+        @test FormulaCompiler.counterfactualvector(original_data, 1) isa FormulaCompiler.CategoricalCounterfactualVector
     end
 
-    @testset "Categorical Scenario Creation" begin
+    @testset "BoolCounterfactualVector Creation" begin
         test_data = (
             x = [1.0, 2.0, 3.0, 4.0, 5.0],
             group = categorical(["A", "B", "A", "C", "B"], levels=["A", "B", "C"]),
-            treatment = categorical([true, false, true, true, false])
+            treatment = [true, false, true, true, false]
         )
-        
-        # Test scenario with categorical string override
-        scenario_str = create_scenario("group_all_B", test_data; group = "B")
-        @test scenario_str.data.group isa OverrideVector
-        @test string(scenario_str.data.group[1]) == "B"
-        @test string(scenario_str.data.group[3]) == "B"
-        @test scenario_str.data.x === test_data.x
-        
-        # Test scenario with categorical symbol override
-        scenario_sym = create_scenario("group_all_C", test_data; group = :C)
-        @test string(scenario_sym.data.group[1]) == "C"
-        
-        # Test scenario with boolean categorical override
-        scenario_bool = create_scenario("all_treatment", test_data; treatment = true)
-        @test scenario_bool.data.treatment[1] == true
-        @test scenario_bool.data.treatment[2] == true
-        
-        # Test mixed overrides (categorical + continuous)
-        scenario_mixed = create_scenario("mixed", test_data; x = 99.0, group = "A")
-        @test scenario_mixed.data.x isa OverrideVector
-        @test scenario_mixed.data.group isa OverrideVector
-        @test scenario_mixed.data.x[1] == 99.0
-        @test string(scenario_mixed.data.group[1]) == "A"
-        @test scenario_mixed.data.treatment === test_data.treatment
+
+        # Test boolean counterfactual creation
+        cf_bool = FormulaCompiler.counterfactualvector(test_data.treatment, 2)
+        @test cf_bool isa FormulaCompiler.BoolCounterfactualVector
+        @test cf_bool[1] == true   # Original
+        @test cf_bool[2] == false  # Default replacement
+        @test cf_bool[3] == true   # Original
+
+        # Test with specific boolean replacement
+        cf_bool_true = FormulaCompiler.BoolCounterfactualVector(test_data.treatment, 2, true)
+        @test cf_bool_true[1] == true  # Original
+        @test cf_bool_true[2] == true  # Replacement
+        @test cf_bool_true[3] == true  # Original
+
+        # Test type dispatch for boolean vectors
+        @test FormulaCompiler.counterfactualvector(test_data.treatment, 1) isa FormulaCompiler.BoolCounterfactualVector
     end
 
-    @testset "Formula Integration with Overrides" begin
+    @testset "Formula Integration with CounterfactualVectors" begin
         # Create realistic test data
         n = 100
         df = DataFrame(
             x = randn(n),
             y = randn(n),
             group = categorical(rand(["A", "B", "C"], n), levels=["A", "B", "C"]),
-            treatment = categorical(rand([true, false], n))
+            treatment = rand([true, false], n)
         )
-        
+
         data = Tables.columntable(df)
-        
+
         # Test with simple continuous formula
         model_continuous = lm(@formula(y ~ x), df)
-        scenario_x = create_scenario("x_override", data; x = 5.0)
-        
-        # Should be able to compile with scenario data
-        compiled = compile_formula(model_continuous, scenario_x.data)
-        output = Vector{Float64}(undef, length(compiled))
-        
-        # Test that it executes
-        @test_nowarn compiled(output, scenario_x.data, 1)
-        @test length(output) == 2  # Intercept + x coefficient
-        
+        compiled = compile_formula(model_continuous, data)
+
+        # Create counterfactual data with modified x values
+        cf_data = merge(data, (
+            x = FormulaCompiler.NumericCounterfactualVector{Float64}(data.x, 1, 5.0),
+        ))
+
+        output_orig = Vector{Float64}(undef, length(compiled))
+        output_cf = Vector{Float64}(undef, length(compiled))
+
+        # Test that it executes with both original and counterfactual data
+        @test_nowarn compiled(output_orig, data, 1)
+        @test_nowarn compiled(output_cf, cf_data, 1)
+        @test length(output_orig) == 2  # Intercept + x coefficient
+        @test length(output_cf) == 2
+
+        # Results should differ due to different x value
+        @test output_orig != output_cf
+
         # Test with categorical formula
         model_cat = lm(@formula(y ~ x + group), df)
-        scenario_group = create_scenario("group_override", data; group = "A")
-        
-        compiled_cat = compile_formula(model_cat, scenario_group.data)
-        output_cat = Vector{Float64}(undef, length(compiled_cat))
-        
-        @test_nowarn compiled_cat(output_cat, scenario_group.data, 1)
-        @test length(output_cat) == 4  # Intercept + x + 2 group dummies
-        
-        # Test that overrides work correctly by comparing different scenarios
-        scenario_a = create_scenario("group_A", data; group = "A")
-        scenario_b = create_scenario("group_B", data; group = "B")
-        
-        output_a = Vector{Float64}(undef, length(compiled_cat))
-        output_b = Vector{Float64}(undef, length(compiled_cat))
-        
-        compiled_cat(output_a, scenario_a.data, 1)
-        compiled_cat(output_b, scenario_b.data, 1)
-        
+        compiled_cat = compile_formula(model_cat, data)
+
+        # Create counterfactual data with modified group
+        # Find a different group value for the counterfactual
+        different_group = nothing
+        for val in data.group
+            if val != data.group[1]
+                different_group = val
+                break
+            end
+        end
+
+        # If all groups are the same, create a different categorical value
+        if different_group === nothing
+            # Create a categorical value from the existing pool but different level
+            pool_levels = levels(data.group)
+            different_level = pool_levels[findfirst(x -> x != string(data.group[1]), pool_levels)]
+            different_group = categorical([different_level], levels=pool_levels)[1]
+        end
+
+        cf_cat_data = merge(data, (
+            group = FormulaCompiler.CategoricalCounterfactualVector{String, UInt32}(
+                data.group, 1, different_group
+            ),
+        ))
+
+        output_cat_orig = Vector{Float64}(undef, length(compiled_cat))
+        output_cat_cf = Vector{Float64}(undef, length(compiled_cat))
+
+        @test_nowarn compiled_cat(output_cat_orig, data, 1)
+        @test_nowarn compiled_cat(output_cat_cf, cf_cat_data, 1)
+        @test length(output_cat_orig) == 4  # Intercept + x + 2 group dummies
+
         # The outputs should differ in the categorical parts
-        @test output_a != output_b
+        @test output_cat_orig != output_cat_cf
     end
 
-    @testset "Scenario Grid and Collections" begin
+    @testset "CounterfactualVector Loop Patterns" begin
         test_data = (
             x = [1.0, 2.0, 3.0, 4.0, 5.0],
             y = [10.0, 20.0, 30.0, 40.0, 50.0],
             group = categorical(["A", "B", "A", "C", "B"], levels=["A", "B", "C"])
         )
-        
-        # Test scenario grid creation
-        grid = create_scenario_grid("test_grid", test_data, Dict(
-            :x => [1.0, 2.0, 3.0],
-            :group => ["A", "B"]
-        ))
-        
-        @test length(grid) == 6  # 3 × 2 combinations
-        @test grid[1] isa DataScenario
-        @test length(collect(grid)) == 6
-        
-        # Test all scenarios have proper overrides
-        for scenario in grid
-            @test haskey(scenario.overrides, :x)
-            @test haskey(scenario.overrides, :group)
-            @test scenario.overrides[:x] in [1.0, 2.0, 3.0]
-            @test scenario.overrides[:group] in ["A", "B"]
+
+        # Test loop pattern for population analysis (replacement for scenario grids)
+        x_values = [1.0, 2.0, 3.0]
+        group_values = ["A", "B"]
+
+        # Create a simple compiled formula for testing
+        df = DataFrame(y = randn(5), x = test_data.x, group = test_data.group)
+        model = lm(@formula(y ~ x + group), df)
+        compiled = compile_formula(model, test_data)
+
+        results = []
+
+        # Population analysis using loops (replacement for scenario grid)
+        for x_val in x_values
+            for group_val in group_values
+                # Create counterfactual data for this combination
+                cf_data = merge(test_data, (
+                    x = FormulaCompiler.NumericCounterfactualVector{Float64}(test_data.x, 1, x_val),
+                    group = FormulaCompiler.CategoricalCounterfactualVector{String, UInt32}(
+                        test_data.group, 1, categorical([group_val], levels=["A", "B", "C"])[1]
+                    ),
+                ))
+
+                # Evaluate for this combination
+                output = Vector{Float64}(undef, length(compiled))
+                compiled(output, cf_data, 1)
+                push!(results, (x = x_val, group = group_val, result = copy(output)))
+            end
         end
+
+        @test length(results) == 6  # 3 × 2 combinations
+
+        # Test all combinations were evaluated
+        x_vals_found = [r.x for r in results]
+        group_vals_found = [r.group for r in results]
+        @test sort(unique(x_vals_found)) == sort(x_values)
+        @test sort(unique(group_vals_found)) == sort(group_values)
+
+        # Results should vary across combinations
+        result_vectors = [r.result for r in results]
+        @test length(unique(result_vectors)) > 1  # Should have different results
     end
 
-    @testset "Performance Validation" begin
+    @testset "CounterfactualVector Performance" begin
         # Create large test data
         n = 10000
         large_data = (
             x = randn(n),
             y = randn(n),
             group = categorical(rand(["A", "B", "C"], n)),
-            treatment = categorical(rand([true, false], n))
+            treatment = rand([true, false], n)
         )
-        
-        # Test that scenario creation is fast
+
+        # Test that counterfactual creation is fast
         creation_time = @elapsed begin
-            scenario = create_scenario("test", large_data; x = 5.0, group = "A")
+            cf_x = FormulaCompiler.NumericCounterfactualVector{Float64}(large_data.x, 1000, 5.0)
+            cf_group = FormulaCompiler.CategoricalCounterfactualVector{String, UInt32}(
+                large_data.group, 500, large_data.group[1]
+            )
         end
-        @test creation_time < 0.1  # Should be very fast
-        
-        # Test memory efficiency
-        scenarios = [
-            create_scenario("test_$i", large_data; 
-                x = Float64(i), 
-                group = rand(["A", "B", "C"])
-            ) for i in 1:10
+        @test creation_time < 0.01  # Should be very fast
+
+        # Test memory efficiency - CounterfactualVectors should be much smaller than copies
+        cf_vectors = [
+            FormulaCompiler.NumericCounterfactualVector{Float64}(large_data.x, i, Float64(i))
+            for i in 1:10
         ]
-        
+
         # Calculate memory usage
-        original_size = sizeof(large_data.x) + sizeof(large_data.y) + 
-                       sizeof(large_data.group.refs) + sizeof(large_data.group.pool) +
-                       sizeof(large_data.treatment.refs) + sizeof(large_data.treatment.pool)
-        
-        scenario_overhead = sum(sizeof(s.data.x) + sizeof(s.data.group) for s in scenarios)
-        naive_size = original_size * length(scenarios)
-        
-        savings = (naive_size - scenario_overhead) / naive_size
-        @test savings > 0.99  # Should save >99% of memory
-        
+        original_size = sizeof(large_data.x)
+        cf_overhead = sum(sizeof(cf) for cf in cf_vectors)
+        naive_copy_size = original_size * length(cf_vectors)
+
+        savings = (naive_copy_size - cf_overhead) / naive_copy_size
+        @test savings > 0.90  # Should save >90% of memory
+
         # Test data access performance
-        scenario = scenarios[1]
+        cf_x = cf_vectors[1]
         access_time = @elapsed begin
             for i in 1:1000
-                val_x = scenario.data.x[rand(1:n)]
-                val_group = scenario.data.group[rand(1:n)]
+                val = cf_x[rand(1:n)]
             end
         end
         @test access_time < 0.01  # Should be very fast
     end
 
-    @testset "Edge Cases and Error Handling" begin
+    @testset "CounterfactualVector Edge Cases" begin
         # Test with single-level categorical
         single_level = categorical(["A", "A", "A"], levels=["A"])
-        test_data_single = (group = single_level,)
-        
-        scenario_single = create_scenario("single", test_data_single; group = "A")
-        @test string(scenario_single.data.group[1]) == "A"
-        
+        cf_single = FormulaCompiler.CategoricalCounterfactualVector{String, UInt32}(
+            single_level, 2, single_level[1]
+        )
+        # CategoricalCounterfactualVector returns reference indices (UInt32) for zero allocations
+        # These convert to Int for use in extract_level_code
+        @test cf_single[1] == UInt32(1)  # Returns ref index, not CategoricalValue
+        @test cf_single[2] == UInt32(1)  # Override position also returns ref index
+
         # Test with empty data (edge case)
-        empty_data = (x = Float64[], group = categorical(String[], levels=["A", "B"]))
-        scenario_empty = create_scenario("empty", empty_data)
-        @test length(scenario_empty.data.x) == 0
-        @test length(scenario_empty.data.group) == 0
-        
-        # Test error on invalid override type
-        test_data = (x = [1.0, 2.0], group = categorical(["A", "B"]))
-        @test_throws Exception create_scenario("invalid", test_data; group = "InvalidLevel")
-        
-        # Test different value types for categorical override
-        scenario_string = create_scenario("string", test_data; group = "B")
-        scenario_symbol = create_scenario("symbol", test_data; group = :B)
-        
-        # Both should work and produce same result
-        @test string(scenario_string.data.group[1]) == "B"
-        @test string(scenario_symbol.data.group[1]) == "B"
+        empty_x = Float64[]
+        empty_group = categorical(String[], levels=["A", "B"])
+
+        # These should work but have length 0
+        @test length(empty_x) == 0
+        @test length(empty_group) == 0
+
+        # Test boundary conditions
+        test_data = [1.0, 2.0, 3.0]
+
+        # Test first position
+        cf_first = FormulaCompiler.NumericCounterfactualVector{Float64}(test_data, 1, 99.0)
+        @test cf_first[1] == 99.0
+        @test cf_first[2] == 2.0
+
+        # Test last position
+        cf_last = FormulaCompiler.NumericCounterfactualVector{Float64}(test_data, 3, 99.0)
+        @test cf_last[1] == 1.0
+        @test cf_last[3] == 99.0
+
+        # Test that bounds checking works
+        @test_throws BoundsError cf_first[0]
+        @test_throws BoundsError cf_first[4]
     end
 
-    @testset "Integer Continuous Variable Overrides" begin
-        # Test override system with integer continuous variables
+    @testset "Integer CounterfactualVector Support" begin
+        # Test CounterfactualVector system with integer continuous variables
         n = 100
         df = DataFrame(
             y = randn(n),
@@ -285,91 +330,108 @@ Random.seed!(06515)
         model = lm(@formula(y ~ int_age + int_score + float_x + group), df)
         compiled = compile_formula(model, data)
 
-        @testset "Basic integer overrides" begin
-            # Test integer-to-integer override
-            scenario1 = create_scenario("int_to_int", data;
-                int_age = 25,
-                int_score = 500
-            )
-            
-            output_orig = Vector{Float64}(undef, length(compiled))
-            output_override = Vector{Float64}(undef, length(compiled))
-            
-            compiled(output_orig, data, 1)
-            compiled(output_override, scenario1.data, 1)
-            
-            @test scenario1.data.int_age[1] == 25
-            @test scenario1.data.int_score[1] == 500
-            @test output_orig != output_override  # Should be different
-        end
+        @testset "Basic integer counterfactuals" begin
+            # Test integer-to-integer counterfactual
+            cf_age = FormulaCompiler.NumericCounterfactualVector{Int64}(data.int_age, 1, 25)
+            cf_score = FormulaCompiler.NumericCounterfactualVector{Int64}(data.int_score, 1, 500)
 
-        @testset "Type-flexible overrides" begin
-            # Test integer column with float override (non-integer)
-            scenario_float = create_scenario("int_with_float", data;
-                int_age = 25.5  # Non-integer float for integer column
-            )
-            
-            @test scenario_float.data.int_age[1] == 25.5
-            @test typeof(scenario_float.data.int_age[1]) == Float64
-            
-            # Test integer column with integer float override
-            scenario_int_float = create_scenario("int_with_int_float", data;
-                int_age = 30.0  # Integer float for integer column
-            )
-            
-            @test scenario_int_float.data.int_age[1] == 30
-            @test typeof(scenario_int_float.data.int_age[1]) == Int64
-            
-            # Test float column with integer override
-            scenario_float_int = create_scenario("float_with_int", data;
-                float_x = 42  # Integer for float column
-            )
-            
-            @test scenario_float_int.data.float_x[1] == 42.0
-            @test typeof(scenario_float_int.data.float_x[1]) == Float64
-        end
-
-        @testset "Integer scenario grids" begin
-            # Test scenario grid creation with integer variables
-            grid = create_scenario_grid("int_grid", data, Dict(
-                :int_age => [25, 45, 65],           # Integer values
-                :int_score => [200, 500, 800],      # Integer values
-                :group => ["A", "B"]                # Categorical
+            cf_data = merge(data, (
+                int_age = cf_age,
+                int_score = cf_score
             ))
-            
-            @test length(grid) == 18  # 3 × 3 × 2 = 18 scenarios
-            
-            # Test all scenarios evaluate correctly
-            test_row = 5
-            results = Matrix{Float64}(undef, length(grid), length(compiled))
-            
-            for (i, scenario) in enumerate(grid)
-                compiled(view(results, i, :), scenario.data, test_row)
-                # Verify override values are set correctly in each scenario
-                @test scenario.data.int_age[test_row] in [25, 45, 65]
-                @test scenario.data.int_score[test_row] in [200, 500, 800]
-                @test string(scenario.data.group[test_row]) in ["A", "B"]
-            end
-            
-            # Results should vary across scenarios
-            @test maximum(results) > minimum(results)
+
+            output_orig = Vector{Float64}(undef, length(compiled))
+            output_cf = Vector{Float64}(undef, length(compiled))
+
+            compiled(output_orig, data, 1)
+            compiled(output_cf, cf_data, 1)
+
+            @test cf_data.int_age[1] == 25
+            @test cf_data.int_score[1] == 500
+            @test output_orig != output_cf  # Should be different
         end
 
-        @testset "Integer overrides with derivatives" begin
-            # Test that derivative evaluator works with data that has integer overrides
-            vars = [:int_age, :float_x]
-            de = build_derivative_evaluator(compiled, data; vars=vars)
-            
-            # Create scenario with integer overrides
-            scenario = create_scenario("deriv_int", data;
-                int_age = 35,
-                int_score = 750
+        @testset "Type-flexible counterfactuals" begin
+            # Test integer column with float counterfactual (non-integer)
+            cf_age_float = FormulaCompiler.NumericCounterfactualVector{Float64}(
+                convert(Vector{Float64}, data.int_age), 1, 25.5
             )
-            
+
+            @test cf_age_float[1] == 25.5
+            @test typeof(cf_age_float[1]) == Float64
+
+            # Test integer column with integer float counterfactual
+            cf_age_int_float = FormulaCompiler.NumericCounterfactualVector{Int64}(data.int_age, 1, 30)
+
+            @test cf_age_int_float[1] == 30
+            @test typeof(cf_age_int_float[1]) == Int64
+
+            # Test float column with counterfactual
+            cf_x_int = FormulaCompiler.NumericCounterfactualVector{Float64}(data.float_x, 1, 42.0)
+
+            @test cf_x_int[1] == 42.0
+            @test typeof(cf_x_int[1]) == Float64
+        end
+
+        @testset "Integer loop patterns" begin
+            # Test loop pattern for integer variables (replacement for scenario grids)
+            age_values = [25, 45, 65]
+            score_values = [200, 500, 800]
+            group_values = ["A", "B"]
+
+            results = []
+            test_row = 5
+
+            for age_val in age_values
+                for score_val in score_values
+                    for group_val in group_values
+                        # Create counterfactual data for this combination
+                        cf_data = merge(data, (
+                            int_age = FormulaCompiler.NumericCounterfactualVector{Int64}(data.int_age, test_row, age_val),
+                            int_score = FormulaCompiler.NumericCounterfactualVector{Int64}(data.int_score, test_row, score_val),
+                            group = FormulaCompiler.CategoricalCounterfactualVector{String, UInt32}(
+                                data.group, test_row, categorical([group_val], levels=["A", "B", "C"])[1]
+                            ),
+                        ))
+
+                        # Evaluate for this combination
+                        output = Vector{Float64}(undef, length(compiled))
+                        compiled(output, cf_data, test_row)
+                        push!(results, (age = age_val, score = score_val, group = group_val, result = copy(output)))
+                    end
+                end
+            end
+
+            @test length(results) == 18  # 3 × 3 × 2 = 18 combinations
+
+            # Test all combinations were evaluated
+            age_vals_found = [r.age for r in results]
+            score_vals_found = [r.score for r in results]
+            group_vals_found = [r.group for r in results]
+            @test sort(unique(age_vals_found)) == sort(age_values)
+            @test sort(unique(score_vals_found)) == sort(score_values)
+            @test sort(unique(group_vals_found)) == sort(group_values)
+
+            # Results should vary across combinations
+            result_vectors = [r.result for r in results]
+            @test length(unique(result_vectors)) > 1  # Should have different results
+        end
+
+        @testset "Integer counterfactuals with derivatives" begin
+            # Test that derivative evaluator works with data that has integer counterfactuals
+            vars = [:int_age, :float_x]
+            de_fd = derivativeevaluator_fd(compiled, data, vars)
+
+            # Create counterfactual data with integer modifications
+            cf_data = merge(data, (
+                int_age = FormulaCompiler.NumericCounterfactualVector{Int64}(data.int_age, 1, 35),
+                int_score = FormulaCompiler.NumericCounterfactualVector{Int64}(data.int_score, 1, 750)
+            ))
+
             # This should not error - testing basic compatibility
             J = Matrix{Float64}(undef, length(compiled), length(vars))
-            derivative_modelrow_fd!(J, de, 1)
-            
+            derivative_modelrow!(J, de_fd, 1)
+
             @test size(J) == (length(compiled), length(vars))
             @test all(isfinite.(J))
         end

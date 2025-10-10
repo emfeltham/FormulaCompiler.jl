@@ -1,49 +1,11 @@
-# types.jl - Core derivative types and data structures
+# types.jl - Separate concrete derivative evaluator types
 
 """
-Dual cache entry for a specific dual type
+Abstract base type for all derivative evaluators
 """
-mutable struct DualCache{DualT, NTMerged, OverrideVecT}
-    compiled_dual::Any  # UnifiedCompiled{DualT, Ops, S, O} - keeping Any for now due to type complexity
-    rowvec_dual::Vector{DualT}
-    data_over_dual::NTMerged
-    overrides_dual::OverrideVecT
-    x_dual::Vector{DualT}
-    last_row::Int
-end
+abstract type AbstractDerivativeEvaluator end
 
-"""
-Cache container for dual types keyed by (Type, row)
-"""
-struct DualCacheDict
-    caches::Dict{DataType, DualCache}
-end
-
-DualCacheDict() = DualCacheDict(Dict{DataType, DualCache}())
-
-function get_or_create_cache!(cache_dict::DualCacheDict, ::Type{DualT}, de, row::Int) where {DualT}
-    if haskey(cache_dict.caches, DualT)
-        cache = cache_dict.caches[DualT]
-        # Update row without rebuilding
-        cache.last_row = row
-        return cache
-    else
-        # Build new cache entry
-        UB = typeof(de.compiled_base)
-        OpsT = UB.parameters[2]
-        ST = UB.parameters[3]
-        OT = UB.parameters[4]
-        
-        compiled_dual = UnifiedCompiled{DualT, OpsT, ST, OT}(de.compiled_base.ops)
-        rowvec_dual = Vector{DualT}(undef, length(de))
-        data_over_dual, overrides_dual = build_row_override_data_typed(de.base_data, de.vars, row, DualT)
-        x_dual = Vector{DualT}(undef, length(de.vars))
-        
-        cache = DualCache(compiled_dual, rowvec_dual, data_over_dual, overrides_dual, x_dual, row)
-        cache_dict.caches[DualT] = cache
-        return cache
-    end
-end
+const FC_AD_TAG = ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}
 
 """
 Callable closure for ForwardDiff that writes into a reusable buffer
@@ -58,6 +20,28 @@ Base.length(g::DerivClosure) = length(g.de_ref[])
 DerivClosure(de::DE) where {DE} = DerivClosure{DE}(Base.RefValue{DE}(de))
 
 """
+    JacobianContext{G, JC}
+
+Container for ForwardDiff Jacobian computation infrastructure.
+Breaks circular type dependency by isolating closure/config from main evaluator.
+
+# Type Parameters
+- `G`: Concrete DerivClosure type
+- `JC`: Concrete JacobianConfig type
+
+# Fields
+- `g`: Callable closure for ForwardDiff.jacobian!
+- `cfg`: Cached JacobianConfig for zero-allocation AD
+- `input_vec`: Preallocated input buffer for row values
+"""
+struct JacobianContext{G, JC, VC}
+    g::G
+    cfg::JC
+    input_vec::Vector{Float64}
+    var_columns::VC
+end
+
+"""
 Scalar gradient closure for η = Xβ that reuses the vector closure
 """
 struct GradClosure{GV}
@@ -70,113 +54,153 @@ end
     return dot(gc.beta_ref[], v)
 end
 
-function (g::DerivClosure)(x::AbstractVector)
-    de = g.de_ref[]
-    Tx = eltype(x)
-    
-    # Select compiled + buffer based on element type
-    if Tx === Float64
-        compiled_T = de.compiled_base
-        row_vec = de.rowvec_float
-        ov_vec = de.overrides
-        data_over = de.data_over
-    else
-        # Use cached dual structures - no rebuilding per call
-        cache = get_or_create_cache!(de.dual_cache, Tx, de, de.row)
-        compiled_T = cache.compiled_dual
-        row_vec = cache.rowvec_dual
-        ov_vec = cache.overrides_dual
-        data_over = cache.data_over_dual
-    end
-    
-    # Update overrides for current row and x (in-place, no allocation)
-    for i in eachindex(de.vars)
-        ov = ov_vec[i]
-        ov.row = de.row
-        ov.replacement = x[i]
-    end
-    
-    # Evaluate using appropriate merged data
-    compiled_T(row_vec, data_over, de.row)
-    return row_vec
-end
 
 """
-    DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC, JR, GR, NTDual, OVDualVecT}
+    FDEvaluator{T, Ops, S, O, NTBase, NTMerged} <: AbstractDerivativeEvaluator
 
-Core derivative evaluator that maintains all state needed for zero-allocation 
-derivative computations using both ForwardDiff and finite differences.
+Finite differences derivative evaluator with only essential type parameters (6 total).
+
+Provides efficient finite difference computation for derivatives without carrying
+any AD infrastructure. Uses NumericCounterfactualVector{Float64} for type-stable
+counterfactual operations.
+
+# Type Parameters
+- `T, Ops, S, O`: Required by FormulaCompiler's position mapping system
+- `NTBase, NTMerged`: Ensure concrete NamedTuple types for type-stable data access
 
 # Fields
 - `compiled_base`: Base compiled formula evaluator
-- `base_data`: Original column-table data  
+- `base_data`: Original column-table data
 - `vars`: Variables to differentiate with respect to
-- `xbuf`: Buffer for variable values
-- `overrides`: Concrete Float64 override vectors for FD
-- `data_over`: Merged data with Float64 overrides
-- `dual_cache`: Cache for all dual-typed structures (zero-allocation)
-- `rowvec_float`: Buffer for Float64 results
-- `g`: Concrete ForwardDiff closure
-- `cfg`: Concrete ForwardDiff Jacobian configuration
-- `gscalar`: Scalar gradient closure for η marginal effects
-- `gradcfg`: Gradient configuration
-- `beta_ref`: Reference to coefficient vector
-- `row`: Current row being processed
+- `counterfactuals`: Tuple of NumericCounterfactualVector{Float64} only
+- `data_counterfactual`: Merged data with Float64 counterfactuals
+- `y_plus`, `yminus`, `xbase`: FD computation buffers
+- `dual_output`: Scratch Dual vector for ForwardDiff.jacobian! primals
 - `jacobian_buffer`: Preallocated Jacobian matrix
-- `eta_gradient_buffer`: Buffer for η gradients
 - `xrow_buffer`: Buffer for model row evaluation
-- `fd_yplus`, `fd_yminus`, `fd_xbase`: FD computation buffers
-- `fd_columns`: Pre-cached column references for FD
+- `row`: Current row being processed
+
+# Performance
+- **Zero field pollution**: No unused AD fields
+- **Memory efficient**: Only carries FD infrastructure
+- **Type stable**: Concrete Float64 counterfactuals throughout
 """
-mutable struct DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC, JR, GR, NTDual, OVDualVecT}
+mutable struct FDEvaluator{T, Ops, S, O, NTBase, NTMerged, CF} <: AbstractDerivativeEvaluator
+    # Common fields
     compiled_base::UnifiedCompiled{T, Ops, S, O}
     base_data::NTBase
     vars::Vector{Symbol}
-    xbuf::Vector{Float64}
-    # Prebuilt row-local overrides and merged data (Float64 path)
-    overrides::Vector{FDOverrideVector}
-    data_over::NTMerged
-    # Dual cache system (replaces all Any dual fields)
-    dual_cache::DualCacheDict
-    # Typed single-cache for manual dual path (uses Tag=Nothing)
-    compiled_dual_vec::UnifiedCompiled{ForwardDiff.Dual{Nothing, Float64, NV}, Ops, S, O}
-    rowvec_dual_vec::Vector{ForwardDiff.Dual{Nothing, Float64, NV}}
-    overrides_dual_vec::OVDualVecT
-    data_over_dual_vec::NTDual
-    x_dual_vec::Vector{ForwardDiff.Dual{Nothing, Float64, NV}}
-    partials_unit_vec::Vector{ForwardDiff.Partials{NV, Float64}}
-    # Row buffers
-    rowvec_float::Vector{Float64}
-    # AD vector closure and Jacobian config (concrete types)
-    g::G
-    cfg::JC
-    # Scalar gradient closure and config for η (concrete types)
-    gscalar::GS
-    gradcfg::GC
-    # Beta reference for scalar gradient path
-    beta_ref::Base.RefValue{Vector{Float64}}
-    # Internal beta buffer to avoid allocations when β is not Vector{Float64}
-    beta_buf::Vector{Float64}
-    # DiffResult containers for zero-allocation AD
-    jac_result::JR
-    grad_result::GR
-    row::Int
-    # Preallocated Jacobian matrix for marginal effects
+
+    # FD-specific counterfactual system
+    counterfactuals::CF  # Tuple of NumericCounterfactualVector{Float64} only
+    data_counterfactual::NTMerged
+
+    # FD-only fields (no AD pollution)
+    y_plus::Vector{Float64}
+    yminus::Vector{Float64}
+    xbase::Vector{Float64}
     jacobian_buffer::Matrix{Float64}
-    # Preallocated buffers for marginal effects mu
-    eta_gradient_buffer::Vector{Float64}
     xrow_buffer::Vector{Float64}
-    # Zero-allocation finite differences buffers
-    fd_yplus::Vector{Float64}
-    fd_yminus::Vector{Float64}
-    fd_xbase::Vector{Float64}
-    # Pre-cached column references for FD as NTuple (fully concrete, unrolled access)
-    fd_columns::ColsT
+    row::Int
 end
 
-Base.length(de::DerivativeEvaluator) = de.compiled_base |> length
+"""
+    ADEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, CF} <: AbstractDerivativeEvaluator
+
+Automatic differentiation evaluator with essential + AD-specific type parameters (8 total).
+
+Provides ForwardDiff-based automatic differentiation without carrying any FD infrastructure.
+Uses NumericCounterfactualVector{Dual{...}} for type-stable dual number operations.
+
+# Type Parameters
+- `T, Ops, S, O`: Required by FormulaCompiler's position mapping system
+- `NTBase, NTMerged`: Ensure concrete NamedTuple types for type-stable data access
+- `NV`: ForwardDiff dual dimensionality (ForwardDiff.Dual{...})
+- `CF`: Counterfactual tuple type
+
+# Fields
+- `compiled_base`: Base compiled formula evaluator (Float64)
+- `compiled_dual`: Dual-specialized compiled evaluator (T = Dual type)
+- `base_data`: Original column-table data
+- `vars`: Variables to differentiate with respect to
+- `counterfactuals`: Tuple of NumericCounterfactualVector{Dual{...}} only
+- `data_counterfactual`: Merged data with Dual counterfactuals
+- `jacobian_buffer`: Preallocated Jacobian matrix
+- `xrow_buffer`: Buffer for model row evaluation
+- `row`: Current row being processed
+
+# Performance
+- **Zero field pollution**: No unused FD fields
+- **Memory efficient**: Only carries AD infrastructure
+- **Type stable**: Concrete Dual counterfactuals throughout
+- **Zero allocation**: After warmup, all AD operations are allocation-free
+"""
+mutable struct ADEvaluatorCore{T, Ops, S, O, NTBase, NTMerged, NV, CF}
+    # Common fields
+    compiled_base::UnifiedCompiled{Float64, Ops, S, O}  # Base always Float64
+    compiled_dual::UnifiedCompiled{T, Ops, S, O}        # T = Dual type
+    base_data::NTBase
+    vars::Vector{Symbol}
+
+    # AD-specific counterfactual system
+    counterfactuals::CF  # Tuple of NumericCounterfactualVector{Dual{...}} only
+    data_counterfactual::NTMerged
+
+    dual_output::Vector{T}
+    jacobian_buffer::Matrix{Float64}
+    xrow_buffer::Vector{Float64}
+    row::Int
+
+    # Beta handling infrastructure for marginal_effects_eta!
+    beta_ref::Ref{Vector{Float64}}
+    beta_buf::Vector{Float64}
+end
+
+# Wrapper that couples an ADEvaluatorCore with its ForwardDiff context
+struct ADEvaluator{Core<:ADEvaluatorCore, CTX} <: AbstractDerivativeEvaluator
+    core::Core
+    ctx::CTX
+end
+
+Base.getproperty(bundle::ADEvaluator, s::Symbol) = s === :ctx ? getfield(bundle, :ctx) : s === :core ? getfield(bundle, :core) : getproperty(getfield(bundle, :core), s)
+Base.length(bundle::ADEvaluator) = length(getfield(bundle, :core))
+Base.length(core::ADEvaluatorCore) = length(core.compiled_base)
+
+@inline set_row!(core::ADEvaluatorCore, row::Int) = (core.row = row)
+@inline current_row(core::ADEvaluatorCore) = core.row
+
+# Union type for method dispatch compatibility
+const derivativeevaluator = Union{FDEvaluator, ADEvaluator}
+
+Base.length(de::AbstractDerivativeEvaluator) = length(de.compiled_base)
 
 # Note: For scenario compatibility with derivative evaluators, use the standalone
 # derivative functions (e.g., derivative_modelrow_fd!) which accept arbitrary data
 # rather than the cached evaluator versions that depend on specific base_data
 
+# Closure implementation for ADEvaluator (defined after type definitions to avoid forward reference)
+# Legacy closure - returns Vector{Dual} (allocating)
+# Phase 2: In-place closure for ForwardDiff.jacobian! (zero-allocation)
+# Note: ForwardDiff.jacobian! expects f!(y, x) where it controls the types of y and x
+# It will pass in Dual-typed x and expect Dual-typed y to be written
+function (g::DerivClosure{<:ADEvaluatorCore})(y::AbstractVector, x::AbstractVector)
+    de = g.de_ref[]
+
+    # Update counterfactuals with values from x (ForwardDiff provides Dual values)
+    row = current_row(de)
+    @inbounds for i in eachindex(de.vars)
+        cf = de.counterfactuals[i]
+        update_counterfactual_row!(cf, row)
+        update_counterfactual_replacement!(cf, x[i])
+    end
+
+    # Evaluate using dual-specialized compiled evaluator (writes to y, which ForwardDiff expects as Dual-typed)
+    de.compiled_dual(y, de.data_counterfactual, row)
+    return nothing  # ForwardDiff doesn't use return value for f! form
+end
+function (g::DerivClosure{<:ADEvaluatorCore})(x::AbstractVector)
+    de = g.de_ref[]
+    y = de.dual_output
+    g(y, x)
+    return y
+end

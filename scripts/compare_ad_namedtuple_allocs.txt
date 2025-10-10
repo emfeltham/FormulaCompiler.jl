@@ -1,0 +1,31 @@
+== Small dataset ==
+rows: 30
+columns: 53
+alloc derivative_modelrow!: 0
+alloc ForwardDiff.jacobian!: 0
+BenchmarkTools.Trial: 10000 samples with 10 evaluations per sample.
+ Range (min … max):  1.021 μs …  3.946 μs  ┊ GC (min … max): 0.00% … 0.00%
+ Time  (median):     1.150 μs            Precompiling FormulaCompiler...
+   3174.2 ms  ✓ FormulaCompiler
+  1 dependency successfully precompiled in 3 seconds. 151 already precompiled.
+Wrote results to scripts/compare_ad_namedtuple_allocs.txt
+�█████▇▇▇▇▆▇▇▆▇█▇█████▇▆▅▃▃▅▅▃▄▆▄▃▄▄▃▄▃▂▅▄▃▄▄▂▄▃▄▄▄▃▄▄▂▄▄ █
+  1.02 μs      Histogram: log(frequency) by time     1.42 μs <
+
+ Memory estimate: 0 bytes, allocs estimate: 0.
+
+== Large dataset ==
+rows: 200
+columns: 53
+alloc derivative_modelrow!: 0
+alloc ForwardDiff.jacobian!: 0
+BenchmarkTools.Trial: 10000 samples with 10 evaluations per sample.
+ Range (min … max):  1.337 μs …   4.525 μs  ┊ GC (min … max): 0.00% … 0.00%
+ Time  (median):     1.500 μs               ┊ GC (median):    0.00%
+ Time  (mean ± σ):   1.451 μs ± 110.138 ns  ┊ GC (mean ± σ):  0.00% ± 0.00%
+
+  ▆█▇▅▂▂▁ ▁▁   ▁  ▅██▆▂ ▁                                     ▂
+  ███████████████████████▆▆▆▆▇▆▅▆▆▆▆▅▆▅▅▆▇▅▅▅▆▆▅▄▅▅▆▅▅▆▃▆▅▁▅▇ █
+  1.34 μs      Histogram: log(frequency) by time       1.9 μs <
+
+ Memory estimate: 0 bytes, allocs estimate: 0.

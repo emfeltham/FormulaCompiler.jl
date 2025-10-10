@@ -1,0 +1,999 @@
+The latest version of Julia in the `release` channel is 1.11.7+0.aarch64.apple.darwin14. You currently have `1.11.2+0.aarch64.apple.darwin14` installed. Run:
+
+  juliaup update
+
+in your terminal shell to install Julia 1.11.7+0.aarch64.apple.darwin14 and update the `release` channel to that version.
+Variable type coverage - zero allocations: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:434
+  Expression: result.memory == 0
+   Evaluated: 64 == 0
+
+Stacktrace:
+ [1] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+ [2] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:434 [inlined]
+ [3] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [4] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:407 [inlined]
+ [5] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [6] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:307 [inlined]
+ [7] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [8] top-level scope
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Variable type coverage - zero allocations: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:434
+  Expression: result.memory == 0
+   Evaluated: 64 == 0
+
+Stacktrace:
+ [1] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+ [2] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:434 [inlined]
+ [3] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [4] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:407 [inlined]
+ [5] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [6] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:307 [inlined]
+ [7] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [8] top-level scope
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+String binary (No/Yes): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1521
+  Expression: result.memory == 0
+   Evaluated: 896 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1521 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1515 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1493 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1417 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1415 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Invalid binary contrasts: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1587
+  Expression: contrast_modelrow!(contrast_buf, evaluator, 1, :bin_int, 0.5, 1)
+    Expected: ErrorException
+  No exception thrown
+
+Stacktrace:
+ [1] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1587 [inlined]
+ [2] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [3] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1579 [inlined]
+ [4] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [5] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1566 [inlined]
+ [6] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [7] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1415 [inlined]
+ [8] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [9] top-level scope
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Type conversion edge cases: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1620
+  Expression: contrast_modelrow!(contrast_buf, evaluator, 1, :bin_string, "A", "C")
+    Expected: ErrorException
+  No exception thrown
+
+Stacktrace:
+ [1] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1620 [inlined]
+ [2] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [3] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1611 [inlined]
+ [4] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [5] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1566 [inlined]
+ [6] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [7] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1415 [inlined]
+ [8] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [9] top-level scope
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Type conversion edge cases: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1621
+  Expression: contrast_modelrow!(contrast_buf, evaluator, 1, :bin_string, "D", "B")
+    Expected: ErrorException
+  No exception thrown
+
+Stacktrace:
+ [1] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1621 [inlined]
+ [2] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [3] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1611 [inlined]
+ [4] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [5] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1566 [inlined]
+ [6] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [7] macro expansion
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1415 [inlined]
+ [8] macro expansion
+   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [9] top-level scope
+   @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Binary × Continuous interactions: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1649
+  Expression: non_zero_count >= 2
+   Evaluated: 1 >= 2
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1649 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1639 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1627 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1415 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Binary × Continuous interactions: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1658
+  Expression: non_zero_count >= 2
+   Evaluated: 1 >= 2
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1658 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1639 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1627 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1415 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Binary × Binary interactions: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1673
+  Expression: non_zero_count >= 2
+   Evaluated: 1 >= 2
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1673 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1665 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1627 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1415 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Binary × Binary interactions: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1678
+  Expression: non_zero_count >= 2
+   Evaluated: 1 >= 2
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1678 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1665 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1627 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1415 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Binary × Categorical interactions: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1696
+  Expression: non_zero_count >= 2
+   Evaluated: 1 >= 2
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1696 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1688 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1627 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1415 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Binary × Categorical interactions: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1701
+  Expression: non_zero_count >= 2
+   Evaluated: 1 >= 2
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1701 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1688 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1627 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1415 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+4 variables: cat_small, cat_med, cat_large, bin_int: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1951
+  Expression: max_memory < limit_bytes
+   Evaluated: 42272 < 40000
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1951 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1945 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1929 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_small (A → B): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996
+  Expression: minimum(result_row.memory) == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_small (A → B): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997
+  Expression: maximum(result_row.memory) == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_small (A → B): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996
+  Expression: minimum(result_row.memory) == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_small (A → B): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997
+  Expression: maximum(result_row.memory) == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_med (X → Z): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1990
+  Expression: min_memory == 0
+   Evaluated: 64 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1990 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_med (X → Z): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1991
+  Expression: max_memory == 0
+   Evaluated: 64 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1991 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_med (X → Z): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996
+  Expression: minimum(result_row.memory) == 0
+   Evaluated: 64 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_med (X → Z): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997
+  Expression: maximum(result_row.memory) == 0
+   Evaluated: 64 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_med (X → Z): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996
+  Expression: minimum(result_row.memory) == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/ERROR: LoadError: Some tests did not pass: 401 passed, 33 failed, 1 errored, 0 broken.
+in expression starting at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:10
+test_contrast_evaluator.jl:13
+Zero alloc: cat_med (X → Z): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997
+  Expression: maximum(result_row.memory) == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_med (X → Z): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996
+  Expression: minimum(result_row.memory) == 0
+   Evaluated: 64 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: cat_med (X → Z): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997
+  Expression: maximum(result_row.memory) == 0
+   Evaluated: 64 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: ordered_cat (Low → High): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1990
+  Expression: min_memory == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1990 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: ordered_cat (Low → High): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1991
+  Expression: max_memory == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1991 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: ordered_cat (Low → High): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996
+  Expression: minimum(result_row.memory) == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: ordered_cat (Low → High): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997
+  Expression: maximum(result_row.memory) == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: ordered_cat (Low → High): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996
+  Expression: minimum(result_row.memory) == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1996 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Zero alloc: ordered_cat (Low → High): Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997
+  Expression: maximum(result_row.memory) == 0
+   Evaluated: 128 == 0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1997 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1981 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1959 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1906 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Data size: 10000 rows: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2156
+  Expression: construction_memory < 20000
+   Evaluated: 86224 < 20000
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2156 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2127 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2122 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2049 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+ [11] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [12] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Memory Scaling Validation: Test Failed at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2172
+  Expression: memory_ratio < 5.0
+   Evaluated: 12.002227171492205 < 5.0
+
+Stacktrace:
+  [1] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:679 [inlined]
+  [2] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2172 [inlined]
+  [3] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [4] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2122 [inlined]
+  [5] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [6] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2049 [inlined]
+  [7] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+  [8] macro expansion
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+  [9] macro expansion
+    @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+ [10] top-level scope
+    @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+Comprehensive Allocation Audit: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2176
+  Got exception outside of a @test
+  ArgumentError: CategoricalArray no longer supports Symbol as element type as that forces recompiling too many Julia Base methods: use strings instead, e.g. via categorical(string.(x))
+  Stacktrace:
+    [1] check_supported_eltype(::Type{Symbol}, ::Type{Symbol})
+      @ CategoricalArrays ~/.julia/packages/CategoricalArrays/0yLZN/src/array.jl:25
+    [2] fixtype(A::Vector{Symbol})
+      @ CategoricalArrays ~/.julia/packages/CategoricalArrays/0yLZN/src/array.jl:45
+    [3] #categorical#65
+      @ ~/.julia/packages/CategoricalArrays/0yLZN/src/array.jl:1028 [inlined]
+    [4] categorical(A::Vector{Symbol})
+      @ CategoricalArrays ~/.julia/packages/CategoricalArrays/0yLZN/src/array.jl:1022
+    [5] macro expansion
+      @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2180 [inlined]
+    [6] macro expansion
+      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+    [7] macro expansion
+      @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:2178 [inlined]
+    [8] macro expansion
+      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+    [9] macro expansion
+      @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:1904 [inlined]
+   [10] macro expansion
+      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
+   [11] top-level scope
+      @ ~/.julia/dev/FormulaCompiler/test/test_contrast_evaluator.jl:13
+   [12] include(fname::String)
+      @ Main ./sysimg.jl:38
+   [13] top-level scope
+      @ none:1
+   [14] eval
+      @ ./boot.jl:430 [inlined]
+   [15] exec_options(opts::Base.JLOptions)
+      @ Base ./client.jl:296
+   [16] _start()
+      @ Base ./client.jl:531
+Test Summary:                                                    | Pass  Fail  Error  Total     Time
+ContrastEvaluator Tests                                          |  401    33      1    435  2m21.7s
+  ContrastEvaluator Construction                                 |   16                  16     3.0s
+  ContrastEvaluator Functionality                                |    7                   7     0.7s
+  Performance and Allocation Tests                               |    3                   3     3.8s
+  Error Handling                                                 |    4                   4     0.4s
+  Correctness Verification                                       |    9                   9     0.1s
+  Complex Model Integration                                      |    2                   2     3.0s
+  Edge Cases                                                     |    3                   3     2.2s
+  Comprehensive Allocation Validation                            |   38     2            40    40.7s
+    Integer categorical contrasts - zero allocations             |    9                   9     8.0s
+    Mixed integer and string categoricals - zero allocations     |    2                   2     2.8s
+    String categorical contrasts - zero allocations (regression) |    1                   1     1.4s
+    Variable type coverage - zero allocations                    |   14     2            16    19.2s
+    Performance metrics validation                               |   10                  10     4.3s
+    Evaluator construction efficiency                            |    2                   2     5.0s
+  Binary Variable Optimization Tests                             |   53                  53     7.7s
+  Contrast Gradient Computation                                  |   37                  37     7.9s
+  Comprehensive Link Function Support                            |   89                  89     0.8s
+  Enhanced Categorical Coverage (Phase 6.1.1)                    |   44                  44    25.9s
+  Enhanced Binary Variable Coverage                              |   46    10            56    24.3s
+    Binary Variable Types Comprehensive                          |   16     1            17     9.7s
+      Standard Binary Types                                      |    7                   7     3.0s
+      Non-Standard Binary Types                                  |    3     1             4     3.7s
+        Alternative integer binary (10/20)                       |    2                   2     1.0s
+        String binary (No/Yes)                                   |    1     1             2     2.3s
+      Categorical Binary Types                                   |    6                   6     3.0s
+    Binary Variable Error Handling                               |    9     3            12     0.8s
+      Invalid binary contrasts                                   |    6     1             7     0.5s
+      Wrong variable types                                       |    2                   2     0.2s
+      Type conversion edge cases                                 |    1     2             3     0.1s
+    Binary Variable Interactions                                 |    6     6            12     7.1s
+      Binary × Continuous interactions                           |    2     2             4     2.3s
+      Binary × Binary interactions                               |    2     2             4     2.1s
+      Binary × Categorical interactions                          |    2     2             4     2.7s
+    Binary Variable Mathematical Properties                      |   10                  10     0.6s
+    Binary Variable Performance Optimization                     |    5                   5     5.9s
+  Performance Regression Tests (Phase 6.1.3)                     |   50    21      1     72    20.9s
+    Zero Allocation Regression Detection                         |   30    19            49    10.1s
+      ContrastEvaluator Construction Limits                      |    3     1             4     1.9s
+        1 variables: cat_small                                   |    1                   1     0.4s
+        2 variables: cat_small, bin_int                          |    1                   1     0.3s
+        3 variables: cat_small, cat_med, bin_int                 |    1                   1     0.3s
+        4 variables: cat_small, cat_med, cat_large, bin_int      |          1             1     0.3s
+      Zero Allocation Hot Path Validation                        |   22    18            40     7.3s
+        Zero alloc: cat_small (A → B)                            |    4     4             8     1.4s
+        Zero alloc: cat_med (X → Z)                              |          8             8     1.4s
+        Zero alloc: bin_int (0 → 1)                              |    8                   8     1.4s
+        Zero alloc: bin_bool (false → true)                      |    8                   8     1.4s
+        Zero alloc: ordered_cat (Low → High)                     |    2     6             8     1.4s
+      Large Category Performance Regression                      |    5                   5     0.9s
+    Performance Threshold Monitoring                             |   20     2            22    10.6s
+      Performance Baseline Validation                            |   12                  12     8.1s
+      Memory Scaling Validation                                  |    8     2            10     2.4s
+        Data size: 100 rows                                      |    2                   2     1.0s
+        Data size: 1000 rows                                     |    2                   2     0.7s
+        Data size: 10000 rows                                    |    1     1             2     0.7s
+    Comprehensive Allocation Audit                               |                 1      1     0.3s

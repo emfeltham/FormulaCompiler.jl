@@ -2,6 +2,7 @@
 using Test
 using FormulaCompiler, GLM, DataFrames, Tables, CategoricalArrays
 using BenchmarkTools
+using FormulaCompiler: derivativeevaluator_fd, derivativeevaluator_ad, mix
 
 # Use native FormulaCompiler mixtures instead of duck-typed test mixtures
 
@@ -146,58 +147,12 @@ using BenchmarkTools
         
         @test !isempty(continuous_vars)  # Should have x and z
         
-        de = build_derivative_evaluator(compiled, Tables.columntable(test_df); vars=continuous_vars)
-        
-        @testset "Marginal Effects with Mixtures" begin
-            gradient_fd = Vector{Float64}(undef, length(continuous_vars))
-            gradient_ad = Vector{Float64}(undef, length(continuous_vars))
-            
-            for row_idx in 1:2
-                # Test both FD and AD backends
-                marginal_effects_eta!(gradient_fd, de, coef(model), row_idx; backend=:fd)
-                marginal_effects_eta!(gradient_ad, de, coef(model), row_idx; backend=:ad)
-                
-                # Should have derivatives for both x and z
-                @test length(gradient_fd) == length(continuous_vars)
-                @test all(isfinite, gradient_fd)
-                @test length(gradient_ad) == length(continuous_vars)
-                @test all(isfinite, gradient_ad)
-                
-                # Both backends should produce non-zero results for this interaction model
-                @test !all(iszero, gradient_fd)
-                @test !all(iszero, gradient_ad)
-            end
-            
-            # Test that backends agree on simpler cases by testing with a simpler model
-            simple_model = lm(@formula(y ~ x + z), train_df[1:20, :])  # Simpler model
-            simple_test_df = DataFrame(x = [1.0], z = [1.0], 
-                                     group = [mix("A" => 0.5, "B" => 0.5)])
-            simple_compiled = compile_formula(simple_model, Tables.columntable(simple_test_df))
-            simple_vars = continuous_variables(simple_compiled, Tables.columntable(simple_test_df))
-            
-            if !isempty(simple_vars)
-                simple_de = build_derivative_evaluator(simple_compiled, Tables.columntable(simple_test_df); vars=simple_vars)
-                simple_grad_fd = Vector{Float64}(undef, length(simple_vars))
-                simple_grad_ad = Vector{Float64}(undef, length(simple_vars))
-                
-                marginal_effects_eta!(simple_grad_fd, simple_de, coef(simple_model), 1; backend=:fd)
-                marginal_effects_eta!(simple_grad_ad, simple_de, coef(simple_model), 1; backend=:ad)
-                
-                # Simple models should have good FD vs AD agreement
-                @test simple_grad_fd ≈ simple_grad_ad rtol=1e-6
-            end
-        end
-        
-        @testset "Zero Allocation Derivatives (FD)" begin
-            gradient = Vector{Float64}(undef, length(continuous_vars))
-            coeffs = coef(model)
-            
-            # Benchmark FD derivatives
-            bench_fd = @benchmark marginal_effects_eta!($gradient, $de, $coeffs, 1; backend=:fd) samples=1000 evals=1
-            
-            # Test zero allocation for FD backend
-            @test bench_fd.allocs == 0
-        end
+        de_fd = derivativeevaluator_fd(compiled, Tables.columntable(test_df), continuous_vars)
+        de_ad = derivativeevaluator_ad(compiled, Tables.columntable(test_df), continuous_vars)
+
+        # REMOVED (2025-10-09): marginal_effects_eta! tests migrated to Margins.jl
+        # Tests for marginal_effects_eta! with mixtures moved to Margins/test/primitives/
+        # FormulaCompiler now only tests derivative_modelrow! (computational primitive)
     end
     
     @testset "Multi-level Mixtures" begin

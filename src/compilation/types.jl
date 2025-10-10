@@ -290,18 +290,82 @@ struct MixtureContrastOp{Column, OutPositions, LevelIndices, Weights} <: Abstrac
 end
 
 """
+    CategoricalLevelMap{Var, LevelTuple}
+
+Stores pre-computed level mappings for a categorical variable in contrast evaluators.
+
+Similar to `ContrastOp`, this struct uses type parameters for compile-time specialization
+while storing runtime level data as a field.
+
+## Type Parameters
+- `Var::Symbol`: Variable name (e.g., `:group`, `:treatment`)
+- `LevelTuple`: Type of the levels tuple (e.g., `NTuple{3, Tuple{String, CategoricalValue{UInt32}}}`)
+
+## Fields
+- `levels`: Tuple of (level, CategoricalValue) pairs preserving natural level types
+
+## Example
+```julia
+# String categorical with 3 levels
+CategoricalLevelMap{:group, NTuple{3, Tuple{String, CategoricalValue{UInt32}}}}(
+    (("Control", catval1), ("Treatment", catval2), ("Placebo", catval3))
+)
+
+# Integer categorical with 5 levels
+CategoricalLevelMap{:age_group, NTuple{5, Tuple{Int64, CategoricalValue{UInt32}}}}(
+    ((1, catval1), (2, catval2), (3, catval3), (4, catval4), (5, catval5))
+)
+```
+
+## Performance
+- **Zero allocations**: All types concrete, fully specialized
+- **Natural types**: No String conversion needed for Int/Symbol levels
+- **Fast lookup**: Linear search through small tuple (2-10 levels typical)
+"""
+struct CategoricalLevelMap{Var, LevelTuple}
+    levels::LevelTuple
+end
+
+"""
+    StandardizeOp{InPos, OutPos, Center, Scale} <: AbstractOp
+
+**Standardization Operation**: Applies z-score transformation (x - center) / scale.
+
+## Position Mapping Role
+- **Input**: Raw value at scratch position InPos
+- **Output**: Standardized value at scratch position OutPos
+- **Transformation**: `(raw_value - center) / scale`
+
+## Type Parameter Embedding
+- **InPos**: Scratch position containing raw value
+- **OutPos**: Scratch position for standardized result
+- **Center**: Centering constant (typically mean)
+- **Scale**: Scaling constant (typically standard deviation)
+
+## Usage
+Implements StandardizedPredictors.jl ZScoredTerm transformations:
+```julia
+StandardizeOp{3, 5, 2.1, 0.8}()  # (scratch[3] - 2.1) / 0.8 → scratch[5]
+```
+
+## Zero-Allocation Execution
+All parameters embedded at compile time enable fast, type-specialized execution.
+"""
+struct StandardizeOp{InPos, OutPos, Center, Scale} <: AbstractOp end
+
+"""
     CopyOp{InPos, OutIdx} <: AbstractOp
 
 **Output Copy Operation**: Transfers scratch values to final output vector.
 
 ## Position Mapping Role
-- **Input**: Scratch position (intermediate result)  
+- **Input**: Scratch position (intermediate result)
 - **Output**: Output vector index (final model matrix column)
 - **Purpose**: Maps internal scratch space to user-visible output
 
 ## Examples
 ```julia
-CopyOp{1, 1}()  # scratch[1] → output[1] (intercept)  
+CopyOp{1, 1}()  # scratch[1] → output[1] (intercept)
 CopyOp{3, 2}()  # scratch[3] → output[2] (transformed variable)
 CopyOp{7, 5}()  # scratch[7] → output[5] (interaction term)
 ```
@@ -310,10 +374,10 @@ CopyOp{7, 5}()  # scratch[7] → output[5] (interaction term)
 CopyOp operations execute after all computational operations complete.
 This separates internal computation from output formatting.
 
-## Model Matrix Correspondence  
+## Model Matrix Correspondence
 Output indices directly correspond to `modelmatrix(model)` columns:
 - `output[1]` = first model matrix column
-- `output[2]` = second model matrix column  
+- `output[2]` = second model matrix column
 - etc.
 """
 struct CopyOp{InPos, OutIdx} <: AbstractOp end

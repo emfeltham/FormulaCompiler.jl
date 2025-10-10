@@ -1,512 +1,485 @@
-# Scenario Analysis
+# Counterfactual Analysis
 
-FormulaCompiler.jl's scenario system enables efficient "what-if" analysis and counterfactual modeling with minimal memory overhead.
+FormulaCompiler.jl provides efficient counterfactual analysis through simple, direct data manipulation and loop patterns.
 
 ## Overview
 
-The scenario system allows you to:
-- Override specific variables while keeping others unchanged
-- Create policy scenarios for analysis
-- Generate scenario grids for comprehensive analysis
-- Perform efficient counterfactual analysis
-- Handle missing data patterns
+FormulaCompiler enables counterfactual analysis through three straightforward approaches:
 
-All with minimal memory allocation using the `OverrideVector` system.
+1. **Direct data modification** - Use `merge()` for simple scenarios (1-10 comparisons)
+2. **Batch contrast evaluation** - Use `contrastevaluator()` for categorical contrasts (100+ comparisons)
+3. **Population analysis** - Use simple loops over rows for aggregated effects
 
-For derivative computation with scenarios and advanced applications, see [Advanced Features](advanced_features.md).
+All approaches maintain zero-allocation performance and scale efficiently with dataset size.
 
-## Scenario Workflow
+## Approach 1: Direct Data Modification
 
-![Diagram](../assets/src_guide_scenarios_diagram_5.svg)
+### Basic Treatment Effect Analysis
 
-## Basic Scenario Creation
-
-### Simple Overrides
+The simplest approach for counterfactual analysis is to create modified versions of your data and compare outcomes:
 
 ```julia
-using FormulaCompiler, DataFrames, Tables, GLM
+using FormulaCompiler, GLM, DataFrames, Tables, Statistics
 
-# Setup data
+# Setup data and model
 df = DataFrame(
     y = randn(1000),
     x = randn(1000),
     treatment = rand(Bool, 1000),
-    age = rand(18:80, 1000),
-    income = rand(20000:100000, 1000)
+    age = rand(18:80, 1000)
 )
 
+model = lm(@formula(y ~ x * treatment + age), df)
 data = Tables.columntable(df)
-model = lm(@formula(y ~ x * treatment + age + log(income)), df)
 compiled = compile_formula(model, data)
+β = coef(model)
 
-# Create scenarios
-baseline = create_scenario("baseline", data)
+# Create counterfactual scenarios
+n_rows = length(data.treatment)
+data_treated = merge(data, (treatment = fill(true, n_rows),))
+data_control = merge(data, (treatment = fill(false, n_rows),))
 
-# Treatment effect scenario
-treatment_scenario = create_scenario("treatment_on", data;
-    treatment = true
-)
-
-# Policy scenario: everyone gets average income
-policy_scenario = create_scenario("income_equality", data;
-    income = mean(df.income)
-)
-
-# Complex scenario with multiple overrides
-intervention = create_scenario("intervention", data;
-    treatment = true,
-    age = 30,           # Set everyone to age 30
-    income = 50000      # Set everyone to $50k income
-)
-```
-
-### Evaluating Scenarios
-
-```julia
+# Compare individual outcomes under different treatments
 row_vec = Vector{Float64}(undef, length(compiled))
 
-# Compare scenarios for individual 100
-individual = 100
+# Individual 1: treated vs control
+compiled(row_vec, data_treated, 1)
+effect_treated = dot(β, row_vec)
 
-compiled(row_vec, baseline.data, individual)
-baseline_prediction = copy(row_vec)
+compiled(row_vec, data_control, 1)
+effect_control = dot(β, row_vec)
 
-compiled(row_vec, treatment_scenario.data, individual)  
-treatment_prediction = copy(row_vec)
-
-compiled(row_vec, intervention.data, individual)
-intervention_prediction = copy(row_vec)
-
-# Calculate treatment effects
-treatment_effect = treatment_prediction .- baseline_prediction
-intervention_effect = intervention_prediction .- baseline_prediction
+individual_effect = effect_treated - effect_control
+println("Individual 1 treatment effect: $(round(individual_effect, digits=3))")
 ```
 
-## Scenario Collections
+### Population Average Treatment Effects
 
-### Creating Scenario Grids
-
-Generate all combinations of scenario parameters:
+Calculate average treatment effects across the population:
 
 ```julia
-# Create a 2×3×2 grid of scenarios
-policy_grid = create_scenario_grid("policy_analysis", data, Dict(
-    :treatment => [false, true],
-    :income => [30000, 50000, 80000],
-    :region => ["urban", "rural"]
+# Population analysis: loop over all individuals
+n_individuals = nrow(df)
+treatment_effects = Vector{Float64}(undef, n_individuals)
+
+for i in 1:n_individuals
+    # Effect if treated
+    compiled(row_vec, data_treated, i)
+    outcome_treated = dot(β, row_vec)
+
+    # Effect if control
+    compiled(row_vec, data_control, i)
+    outcome_control = dot(β, row_vec)
+
+    treatment_effects[i] = outcome_treated - outcome_control
+end
+
+# Summary statistics
+avg_effect = mean(treatment_effects)
+std_effect = std(treatment_effects)
+println("Average treatment effect: $(round(avg_effect, digits=3)) ± $(round(std_effect, digits=3))")
+```
+
+### Multi-Variable Counterfactuals
+
+Modify multiple variables simultaneously:
+
+```julia
+# Policy scenario: everyone gets treatment + standardized age
+standard_age = 40
+data_policy = merge(data, (
+    treatment = fill(true, n_rows),
+    age = fill(standard_age, n_rows)
 ))
 
-println("Created $(length(policy_grid)) scenarios")  # 12 scenarios
+# Compare baseline vs policy for each individual
+policy_effects = Vector{Float64}(undef, n_individuals)
 
-# Evaluate all scenarios for a specific individual
-individual = 1
-results = Matrix{Float64}(undef, length(policy_grid), length(compiled))
+for i in 1:n_individuals
+    # Baseline outcome
+    compiled(row_vec, data, i)
+    baseline = dot(β, row_vec)
 
-for (i, scenario) in enumerate(policy_grid)
-    compiled(view(results, i, :), scenario.data, individual)
+    # Policy outcome
+    compiled(row_vec, data_policy, i)
+    policy = dot(β, row_vec)
+
+    policy_effects[i] = policy - baseline
 end
 
-# Results matrix: each row is one scenario combination
+avg_policy_effect = mean(policy_effects)
+println("Average policy effect: $(round(avg_policy_effect, digits=3))")
 ```
 
-### Named Scenario Collections
+### Multiple Scenario Comparison
+
+Compare several policy scenarios:
 
 ```julia
-# Create multiple related scenarios
-scenarios = ScenarioCollection("treatment_analysis")
-
-add_scenario!(scenarios, "control", data; treatment = false)
-add_scenario!(scenarios, "low_dose", data; treatment = true, dose = 50)  
-add_scenario!(scenarios, "high_dose", data; treatment = true, dose = 100)
-add_scenario!(scenarios, "placebo", data; treatment = false, placebo = true)
+# Define scenarios to compare
+scenarios = [
+    ("baseline", data),
+    ("universal_treatment", merge(data, (treatment = fill(true, n_rows),))),
+    ("universal_control", merge(data, (treatment = fill(false, n_rows),))),
+    ("young_treated", merge(data, (treatment = fill(true, n_rows), age = fill(30, n_rows)))),
+    ("old_treated", merge(data, (treatment = fill(true, n_rows), age = fill(60, n_rows))))
+]
 
 # Evaluate all scenarios
-results = evaluate_scenarios(compiled, scenarios, individual)
+results = Dict{String, Vector{Float64}}()
 
-# Access by name
-control_result = results["control"]
-treatment_result = results["high_dose"]
-```
+for (name, scenario_data) in scenarios
+    outcomes = Vector{Float64}(undef, n_individuals)
 
-## Advanced Scenario Patterns
-
-### Dynamic Scenario Modification
-
-```julia
-scenario = create_scenario("dynamic", data; x = 1.0)
-
-# Modify scenarios iteratively
-for new_treatment_value in [false, true]
-    set_override!(scenario, :treatment, new_treatment_value)
-    
-    for new_age in [25, 35, 45, 55, 65]
-        set_override!(scenario, :age, new_age)
-        
-        # Evaluate current scenario
-        compiled(row_vec, scenario.data, individual)
-        println("Treatment: $new_treatment_value, Age: $new_age, Prediction: $(row_vec[1])")
+    for i in 1:n_individuals
+        compiled(row_vec, scenario_data, i)
+        outcomes[i] = dot(β, row_vec)
     end
+
+    results[name] = outcomes
 end
 
-# Bulk updates
-update_scenario!(scenario; 
-    treatment = true,
-    age = 40,
-    income = 60000,
-    new_policy = true
-)
-
-# Remove specific overrides
-remove_override!(scenario, :new_policy)
+# Compare scenario means
+println("\nScenario comparison:")
+for (name, outcomes) in results
+    println("  $(name): mean = $(round(mean(outcomes), digits=3))")
+end
 ```
 
-### Categorical Variable Overrides
+## Approach 2: Categorical Contrasts with ContrastEvaluator
 
-Working with categorical variables requires attention to level compatibility:
+For repeated categorical variable comparisons, use the zero-allocation contrast evaluator:
+
+### Basic Contrast Evaluation
 
 ```julia
 using CategoricalArrays
 
-# Setup data with categorical variables
-df = DataFrame(
-    outcome = randn(1000),
-    age = rand(25:65, 1000),
-    education = categorical(rand(["High School", "College", "Graduate"], 1000)),
-    region = categorical(rand(["Urban", "Suburban", "Rural"], 1000)),
-    treatment = rand(Bool, 1000)
+# Data with categorical variable
+df_cat = DataFrame(
+    y = randn(1000),
+    x = randn(1000),
+    region = categorical(rand(["North", "South", "East", "West"], 1000))
 )
 
-data = Tables.columntable(df)
-model = lm(@formula(outcome ~ age + education * region + treatment), df)
-compiled = compile_formula(model, data)
+model_cat = lm(@formula(y ~ x * region), df_cat)
+data_cat = Tables.columntable(df_cat)
+compiled_cat = compile_formula(model_cat, data_cat)
 
-# Method 1: Use existing categorical values from data (recommended)
-college_val = df.education[findfirst(x -> x == "College", df.education)]
-urban_val = df.region[findfirst(x -> x == "Urban", df.region)]
+# Create contrast evaluator for zero-allocation batch processing
+evaluator = contrastevaluator(compiled_cat, data_cat, [:region])
+contrast_buf = Vector{Float64}(undef, length(compiled_cat))
 
-education_scenario = create_scenario("college_urban", data;
-    education = college_val,
-    region = urban_val
-)
-
-# Method 2: Create new categorical values with matching levels
-education_pool = df.education.pool
-region_pool = df.region.pool
-
-# Find level indices and create values
-grad_idx = findfirst(==("Graduate"), levels(df.education))
-rural_idx = findfirst(==("Rural"), levels(df.region))
-
-new_education = CategoricalValue(education_pool, grad_idx)
-new_region = CategoricalValue(region_pool, rural_idx)
-
-policy_scenario = create_scenario("graduate_rural", data;
-    education = new_education,
-    region = new_region,
-    age = 35,
-    treatment = true
-)
-
-# Method 3: String overrides (automatic conversion)
-# FormulaCompiler automatically converts strings to categorical values
-# when the target column is categorical with matching levels
-simple_scenario = create_scenario("simple", data;
-    education = "College",  # Must be valid level
-    region = "Urban"        # Must be valid level
-)
+# Single contrast: North vs South for individual 1
+contrast_modelrow!(contrast_buf, evaluator, 1, :region, "North", "South")
+regional_difference = dot(coef(model_cat), contrast_buf)
+println("North vs South effect: $(round(regional_difference, digits=3))")
 ```
 
-#### Categorical Override Best Practices
+### Batch Contrast Processing
+
+Process many contrasts with zero allocations:
 
 ```julia
-# Recommended: Use existing values
-existing_val = df.category[findfirst(x -> x == "Target", df.category)]
-scenario = create_scenario("test", data; category = existing_val)
+# Compare all individuals: North vs South
+n_rows = nrow(df_cat)
+regional_effects = Vector{Float64}(undef, n_rows)
 
-# Good: Create with matching levels  
-target_idx = findfirst(==("Target"), levels(df.category))
-target_val = CategoricalValue(df.category.pool, target_idx)
-scenario = create_scenario("test", data; category = target_val)
+for i in 1:n_rows
+    contrast_modelrow!(contrast_buf, evaluator, i, :region, "North", "South")
+    regional_effects[i] = dot(coef(model_cat), contrast_buf)
+end
 
-# Convenient: String with valid level
-scenario = create_scenario("test", data; category = "Target")  # If "Target" ∈ levels
-
-# Error: Mismatched levels
-wrong_val = categorical(["Target"])[1]  # Different level pool
-scenario = create_scenario("test", data; category = wrong_val)  # CategoricalValue error!
-
-# Error: Invalid level
-scenario = create_scenario("test", data; category = "Invalid")  # Level not found!
+println("Average North vs South effect: $(round(mean(regional_effects), digits=3))")
 ```
 
-#### Troubleshooting Categorical Overrides
+### Gradient Computation for Uncertainty
 
-**Error**: "CategoricalValue has different levels than target column"
+Compute parameter gradients for standard errors:
+
 ```julia
-# Check levels compatibility
-println("Original levels: ", levels(df.category))
-println("Override levels: ", levels(override_value))
+# Parameter gradient for delta method
+∇β = Vector{Float64}(undef, length(compiled_cat))
+contrast_gradient!(∇β, evaluator, 1, :region, "North", "South", coef(model_cat))
 
-# Fix: Use existing value or create with matching levels
-target_idx = findfirst(==("Target"), levels(df.category))
-correct_val = CategoricalValue(df.category.pool, target_idx)
+# Standard error using delta method
+vcov_matrix = vcov(model_cat)
+se = delta_method_se(evaluator, 1, :region, "North", "South", coef(model_cat), vcov_matrix)
+println("Standard error: $(round(se, digits=3))")
 ```
 
-**Error**: "Cannot extract level code from InlineStrings.StringX"
-```julia
-# This occurs with certain string types in RDatasets
-# Solution: Convert to standard categorical values
-original_val = df.string_column[1]  # Get existing value
-level_idx = findfirst(==(string(original_val)), levels(df.string_column))
-override_val = CategoricalValue(df.string_column.pool, level_idx)
-```
+## Approach 3: Grid Analysis Patterns
 
-### Conditional Scenarios
+### Systematic Parameter Exploration
 
-Create scenarios with conditional logic:
+Explore multiple parameter combinations:
 
 ```julia
-function create_conditional_scenario(name, data, condition_func)
-    scenario = create_scenario(name, data)
-    
-    # Apply conditions based on original data
-    if condition_func === :high_earners
-        # Override high earners (top 25%) to maximum income
-        high_income_threshold = quantile(df.income, 0.75)
-        max_income = maximum(df.income)
-        
-        # This would need custom implementation to be truly conditional
-        # For now, we can approximate with population statistics
-        set_override!(scenario, :income, max_income)
+# Define parameter grid
+treatment_values = [false, true]
+age_values = [30, 40, 50, 60]
+x_values = [-1.0, 0.0, 1.0]
+
+# Create all combinations
+n_scenarios = length(treatment_values) * length(age_values) * length(x_values)
+scenario_results = Matrix{Float64}(undef, n_scenarios, n_individuals)
+
+scenario_idx = 1
+for treat in treatment_values
+    for age_val in age_values
+        for x_val in x_values
+            # Create scenario data
+            scenario_data = merge(data, (
+                treatment = fill(treat, n_rows),
+                age = fill(age_val, n_rows),
+                x = fill(x_val, n_rows)
+            ))
+
+            # Evaluate for all individuals
+            for i in 1:n_individuals
+                compiled(row_vec, scenario_data, i)
+                scenario_results[scenario_idx, i] = dot(β, row_vec)
+            end
+
+            scenario_idx += 1
+        end
     end
-    
-    return scenario
+end
+
+# Analyze results
+scenario_means = [mean(scenario_results[i, :]) for i in 1:n_scenarios]
+best_scenario = argmax(scenario_means)
+println("Best scenario index: $best_scenario with mean outcome: $(round(scenario_means[best_scenario], digits=3))")
+```
+
+### Efficient Batched Evaluation
+
+For very large grids, batch the evaluation:
+
+```julia
+function evaluate_scenario_grid(compiled, base_data, param_values, β)
+    """Efficiently evaluate parameter grid"""
+    n_rows = length(first(base_data))
+    row_vec = Vector{Float64}(undef, length(compiled))
+
+    results = Dict()
+
+    for (name, values) in param_values
+        # Create scenario
+        scenario_data = merge(base_data, Dict(name => fill(values, n_rows)))
+
+        # Evaluate population
+        outcomes = Vector{Float64}(undef, n_rows)
+        for i in 1:n_rows
+            compiled(row_vec, scenario_data, i)
+            outcomes[i] = dot(β, row_vec)
+        end
+
+        results[name => values] = mean(outcomes)
+    end
+
+    return results
+end
+
+# Usage
+param_grid = Dict(
+    :treatment => [true, false],
+    :age => [30, 40, 50, 60]
+)
+
+grid_results = evaluate_scenario_grid(compiled, data, param_grid, β)
+```
+
+## Advanced Patterns
+
+### Sensitivity Analysis
+
+Test model sensitivity to parameter changes:
+
+```julia
+# Vary age systematically
+age_range = 20:10:70
+sensitivity_results = Vector{Float64}(undef, length(age_range))
+
+for (idx, age_val) in enumerate(age_range)
+    scenario_data = merge(data, (age = fill(age_val, n_rows),))
+
+    outcomes = Vector{Float64}(undef, n_individuals)
+    for i in 1:n_individuals
+        compiled(row_vec, scenario_data, i)
+        outcomes[i] = dot(β, row_vec)
+    end
+
+    sensitivity_results[idx] = mean(outcomes)
+end
+
+# Plot or analyze sensitivity
+println("Age sensitivity:")
+for (age_val, result) in zip(age_range, sensitivity_results)
+    println("  Age $age_val: $(round(result, digits=3))")
 end
 ```
 
-### Stochastic Scenarios
+### Bootstrap Confidence Intervals
 
-Generate random scenario variations:
+Compute uncertainty via bootstrap:
 
 ```julia
 using Random
 
-function create_random_scenarios(base_data, n_scenarios, seed=123)
-    Random.seed!(seed)
-    scenarios = ScenarioCollection("random_scenarios")
-    
-    for i in 1:n_scenarios
-        scenario_name = "random_$i"
-        
-        # Random treatment assignment
-        treatment = rand(Bool)
-        
-        # Random age from realistic distribution
-        age = rand(25:65)
-        
-        # Random income with some correlation to age
-        base_income = 30000 + age * 800 + rand(Normal(0, 10000))
-        income = max(20000, base_income)
-        
-        add_scenario!(scenarios, scenario_name, base_data;
-            treatment = treatment,
-            age = age, 
-            income = income
-        )
-    end
-    
-    return scenarios
-end
+function bootstrap_treatment_effect(df, model_formula, n_boot=1000)
+    Random.seed!(123)
+    n_obs = nrow(df)
 
-# Generate 100 random scenarios
-random_scenarios = create_random_scenarios(data, 100)
+    boot_effects = Vector{Float64}(undef, n_boot)
 
-# Evaluate all random scenarios
-random_results = evaluate_scenarios(compiled, random_scenarios, individual)
-```
+    for b in 1:n_boot
+        # Bootstrap sample
+        boot_indices = rand(1:n_obs, n_obs)
+        boot_df = df[boot_indices, :]
 
-## Policy Analysis Applications
+        # Fit model
+        boot_model = lm(model_formula, boot_df)
+        boot_data = Tables.columntable(boot_df)
+        boot_compiled = compile_formula(boot_model, boot_data)
+        boot_β = coef(boot_model)
 
-### Treatment Effect Analysis
+        # Create treatment scenarios
+        n_boot_rows = nrow(boot_df)
+        treated_data = merge(boot_data, (treatment = fill(true, n_boot_rows),))
+        control_data = merge(boot_data, (treatment = fill(false, n_boot_rows),))
 
-```julia
-# Create treatment vs. control scenarios
-control = create_scenario("control", data; treatment = false)
-treated = create_scenario("treated", data; treatment = true)
+        # Compute average effect
+        row_vec = Vector{Float64}(undef, length(boot_compiled))
+        effects = Vector{Float64}(undef, n_boot_rows)
 
-# Calculate individual treatment effects
-n_individuals = 100
-treatment_effects = Vector{Float64}(n_individuals)
+        for i in 1:n_boot_rows
+            boot_compiled(row_vec, treated_data, i)
+            treated = dot(boot_β, row_vec)
 
-for i in 1:n_individuals
-    compiled(row_vec, control.data, i)
-    control_pred = row_vec[1]  # Assuming outcome is first term
-    
-    compiled(row_vec, treated.data, i)
-    treated_pred = row_vec[1]
-    
-    treatment_effects[i] = treated_pred - control_pred
-end
+            boot_compiled(row_vec, control_data, i)
+            control = dot(boot_β, row_vec)
 
-# Analyze distribution of treatment effects
-using Statistics
-println("Mean treatment effect: $(mean(treatment_effects))")
-println("Std treatment effect: $(std(treatment_effects))")
-```
-
-### Income Redistribution Analysis
-
-```julia
-# Create scenarios with different income distributions
-income_scenarios = Dict(
-    "current" => create_scenario("current", data),
-    "universal_basic" => create_scenario("ubi", data; income = 40000),
-    "progressive" => create_scenario("progressive", data; 
-        income = quantile(df.income, 0.5)  # Everyone gets median income
-    ),
-    "equality" => create_scenario("equality", data; 
-        income = mean(df.income)  # Everyone gets mean income
-    )
-)
-
-# Evaluate welfare outcomes under different policies
-welfare_results = Dict{String, Vector{Float64}}()
-
-for (policy_name, scenario) in income_scenarios
-    policy_outcomes = Vector{Float64}(nrow(df))
-    
-    for i in 1:nrow(df)
-        compiled(row_vec, scenario.data, i)
-        policy_outcomes[i] = row_vec[1]  # Or some welfare function
-    end
-    
-    welfare_results[policy_name] = policy_outcomes
-end
-
-# Compare distributions
-for (policy, outcomes) in welfare_results
-    println("Policy: $policy")
-    println("  Mean outcome: $(mean(outcomes))")
-    println("  Std outcome: $(std(outcomes))")  
-    println("  Gini coefficient: $(gini_coefficient(outcomes))")
-end
-```
-
-### Sensitivity Analysis
-
-```julia
-# Analyze sensitivity to key parameters
-function sensitivity_analysis(compiled, data, base_individual, param_ranges)
-    base_scenario = create_scenario("base", data)
-    results = Dict{Symbol, Vector{Tuple{Float64, Float64}}}()
-    
-    for (param, range) in param_ranges
-        param_results = Vector{Tuple{Float64, Float64}}()
-        
-        for value in range
-            # Create scenario with this parameter value
-            set_override!(base_scenario, param, value)
-            
-            # Evaluate
-            row_vec = Vector{Float64}(undef, length(compiled))
-            compiled(row_vec, base_scenario.data, base_individual)
-            
-            push!(param_results, (value, row_vec[1]))
+            effects[i] = treated - control
         end
-        
-        results[param] = param_results
-        remove_override!(base_scenario, param)  # Reset for next parameter
+
+        boot_effects[b] = mean(effects)
     end
-    
-    return results
+
+    return boot_effects
 end
 
-# Run sensitivity analysis
-sensitivity_ranges = Dict(
-    :age => 20:5:80,
-    :income => 20000:10000:100000,
-    :x => -3:0.5:3
-)
-
-sensitivity_results = sensitivity_analysis(compiled, data, 1, sensitivity_ranges)
-
-# Plot or analyze results
-for (param, results) in sensitivity_results
-    values = [r[1] for r in results]
-    outcomes = [r[2] for r in results]
-    
-    println("Parameter: $param")
-    println("  Range: $(minimum(values)) to $(maximum(values))")
-    println("  Outcome range: $(minimum(outcomes)) to $(maximum(outcomes))")
-end
-```
-
-## Memory Efficiency
-
-### Understanding OverrideVector
-
-```julia
-# Compare memory usage
-n_obs = 1_000_000
-
-# Traditional approach: full vector
-full_vector = fill(42.0, n_obs)
-println("Full vector size: $(sizeof(full_vector)) bytes")
-
-# OverrideVector approach  
-override_vector = OverrideVector(42.0, n_obs)
-println("Override vector size: $(sizeof(override_vector)) bytes")
-
-# Memory savings
-savings_ratio = sizeof(full_vector) / sizeof(override_vector)
-println("Memory savings: $(round(savings_ratio))x")
-
-# Both provide same interface
-@assert full_vector[500_000] == override_vector[500_000]
-@assert length(full_vector) == length(override_vector)
-```
-
-### Efficient Scenario Storage
-
-```julia
-# Multiple scenarios with shared base data
-shared_data = Tables.columntable(df)
-
-# Each scenario only stores its overrides
-scenario1 = create_scenario("s1", shared_data; treatment = true)
-scenario2 = create_scenario("s2", shared_data; income = 50000)  
-scenario3 = create_scenario("s3", shared_data; age = 30, treatment = false)
-
-# Total memory is much less than 3 full copies of data
-total_scenario_memory = sizeof(scenario1) + sizeof(scenario2) + sizeof(scenario3)
-full_data_memory = 3 * sum(sizeof(col) for col in shared_data)
-
-println("Scenario memory: $total_scenario_memory bytes")
-println("Full copy memory: $full_data_memory bytes")
-println("Savings: $(round(full_data_memory / total_scenario_memory))x")
+# Compute bootstrap CI
+boot_results = bootstrap_treatment_effect(df, @formula(y ~ x * treatment + age), 500)
+ci_lower = quantile(boot_results, 0.025)
+ci_upper = quantile(boot_results, 0.975)
+println("95% CI: [$(round(ci_lower, digits=3)), $(round(ci_upper, digits=3))]")
 ```
 
 ## Best Practices
 
-### Scenario Design
-- Use descriptive names for scenarios
-- Group related scenarios in collections
-- Cache compiled formulas when evaluating many scenarios
-- Pre-allocate output vectors for repeated evaluations
+### When to Use Each Approach
+
+**Direct data modification** (`merge()`):
+- Simple scenarios (1-10 comparisons)
+- Exploratory analysis
+- Quick prototyping
+- Small to medium datasets
+
+**Contrast evaluator** (`contrastevaluator()`):
+- Categorical variable comparisons
+- Batch processing (100+ contrasts)
+- Need for uncertainty quantification
+- Production pipelines
+
+**Simple loops**:
+- Population-level analysis
+- Any scenario type
+- Maximum flexibility
+- Large-scale analysis
 
 ### Performance Tips
-- Create scenarios once and reuse them
-- Use batch evaluation for multiple individuals
-- Consider using views for large result matrices
-- Profile memory usage in complex scenario analyses
 
-### Statistical Considerations
-- Always compare to appropriate baselines
-- Account for uncertainty in treatment effect estimates
-- Consider interaction effects in scenario design
+1. **Pre-allocate buffers**: Reuse `row_vec` and result vectors
+2. **Compile once**: Cache compiled formulas across scenarios
+3. **Batch operations**: Group related evaluations
+4. **Use views**: Avoid unnecessary copies with `view()`
+
+### Memory Efficiency
+
+```julia
+# Good: Pre-allocate and reuse
+row_vec = Vector{Float64}(undef, length(compiled))
+results = Vector{Float64}(undef, n_individuals)
+
+for i in 1:n_individuals
+    compiled(row_vec, scenario_data, i)
+    results[i] = dot(β, row_vec)
+end
+
+# Avoid: Allocating each iteration
+for i in 1:n_individuals
+    row_vec = modelrow(compiled, scenario_data, i)  # Allocates!
+    results[i] = dot(β, row_vec)
+end
+```
+
+## Statistical Considerations
+
+### Causal Interpretation
+
+Remember that counterfactual estimates depend on modeling assumptions:
+- **Unconfoundedness**: No unmeasured confounders
+- **Positivity**: All individuals have positive probability of each treatment
+- **Consistency**: Treatment definition is well-specified
+- **Model specification**: Correct functional form
+
+### Uncertainty Quantification
+
+Account for parameter uncertainty:
+- Use bootstrap for confidence intervals
+- Apply delta method for analytic standard errors
+- Consider robust/clustered standard errors when appropriate
+
+### Sensitivity Analysis
+
+Test robustness:
+- Vary model specifications
+- Check sensitivity to parameter ranges
+- Examine heterogeneous effects across subgroups
+
+## Integration with Statistical Workflows
+
+### Model Comparison
+
+```julia
+# Compare models under fixed counterfactual
+models = [
+    lm(@formula(y ~ x + treatment), df),
+    lm(@formula(y ~ x * treatment), df),
+    lm(@formula(y ~ x * treatment + age), df)
+]
+
+scenario_data = merge(data, (treatment = fill(true, n_rows),))
+
+for (i, model) in enumerate(models)
+    compiled = compile_formula(model, data)
+    β = coef(model)
+    row_vec = Vector{Float64}(undef, length(compiled))
+
+    predictions = Vector{Float64}(undef, n_individuals)
+    for j in 1:n_individuals
+        compiled(row_vec, scenario_data, j)
+        predictions[j] = dot(β, row_vec)
+    end
+
+    println("Model $i mean prediction: $(round(mean(predictions), digits=3))")
+end
+```
 
 ## Further Reading
 
-- [Advanced Features](advanced_features.md) - Derivative computation and high-performance patterns
-- [Mathematical Foundation](../mathematical_foundation.md) - Theoretical background for scenario analysis
-- [API Reference](../api.md) - Complete documentation for scenario functions
+- [Advanced Features](advanced_features.md) - Additional computational patterns
+- [Categorical Mixtures](categorical_mixtures.md) - Profile-based marginal effects
+- [Examples](../examples.md) - Real-world applications
+- [API Reference](../api.md) - Complete function documentation

@@ -1,5 +1,7 @@
 # Metaprogramming in FormulaCompiler.jl
 
+**NOT UP TO CURRENT SPEC**
+
 ## Overview
 
 FormulaCompiler.jl uses targeted metaprogramming to achieve zero-allocation evaluation for statistical formulas of arbitrary complexity. This document explains when, why, and how metaprogramming is employed to bypass Julia's inherent limitations while maintaining type stability and performance.
@@ -76,16 +78,16 @@ end
 ```julia
 @generated function _derivative_modelrow_fd_auto!(
     J::AbstractMatrix{Float64},
-    de::DerivativeEvaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC},
+    de::derivativeevaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC},
     row::Int,
 ) where {T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC}
     N = NV  # Extract number of variables from type parameter
     stmts = Expr[]
     
     # Initialize buffers
-    push!(stmts, :(yplus = de.fd_yplus))
-    push!(stmts, :(yminus = de.fd_yminus)) 
-    push!(stmts, :(xbase = de.fd_xbase))
+    push!(stmts, :(yplus = de.y_plus))
+    push!(stmts, :(yminus = de.yminus)) 
+    push!(stmts, :(xbase = de.xbase))
     push!(stmts, :(nterms = length(de)))
     
     # Unroll variable extraction loop

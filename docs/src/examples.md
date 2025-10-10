@@ -32,30 +32,40 @@ result = @benchmark $compiled($output, $data, 1)
 @assert result.memory == 0 "Expected zero allocations"
 ```
 
-### Scenario Creation
+### Counterfactual Analysis
 ```julia
-# Policy scenario
-scenario = create_scenario("policy", data; x = 2.0, group = "A")
-compiled(output, scenario.data, 1)  # Evaluate with overrides
+# Single policy scenario using direct data modification
+n_rows = length(data.x)
+data_policy = merge(data, (x = fill(2.0, n_rows), group = fill("A", n_rows)))
+compiled(output, data_policy, 1)  # Evaluate with modified data
 
-# Scenario grid
-grid = create_scenario_grid("sensitivity", data, Dict(
-    :x => [-1.0, 0.0, 1.0],
-    :group => ["A", "B"]
-))  # Creates 6 scenarios
+# Multi-scenario analysis
+x_values = [-1.0, 0.0, 1.0]
+group_values = ["A", "B"]
+results = Matrix{Float64}(undef, 6, length(compiled))  # 3×2 = 6 scenarios
+
+scenario_idx = 1
+for x_val in x_values
+    for group_val in group_values
+        data_scenario = merge(data, (x = fill(x_val, n_rows), group = fill(group_val, n_rows)))
+        compiled(view(results, scenario_idx, :), data_scenario, 1)
+        scenario_idx += 1
+    end
+end
 ```
 
 ### Marginal Effects
 ```julia
-# Identify continuous variables and build evaluator
+# Identify continuous variables and build evaluators
 vars = continuous_variables(compiled, data)  # [:x]
-de = build_derivative_evaluator(compiled, data; vars=vars)
+de_ad = derivativeevaluator_ad(compiled, data, vars)  # Returns ADEvaluator, zero allocations, higher accuracy (preferred)
+de_fd = derivativeevaluator_fd(compiled, data, vars)  # Returns FDEvaluator, zero allocations, alternative
 β = coef(model)
 
 # Compute marginal effects
 g = Vector{Float64}(undef, length(vars))
-marginal_effects_eta!(g, de, β, 1; backend=:fd)  # Zero allocations
-marginal_effects_eta!(g, de, β, 1; backend=:ad)  # Small allocations, higher accuracy
+marginal_effects_eta!(g, de_ad, β, 1)  # Zero allocations, higher accuracy
+marginal_effects_eta!(g, de_fd, β, 1)  # Zero allocations, explicit step control
 ```
 
 ### Batch Processing
@@ -95,29 +105,33 @@ compiled = compile_formula(model, data)
 Analyze gender pay gap under different policy scenarios:
 
 ```julia
-# Create policy scenarios
-policy_scenarios = [
-    create_scenario("status_quo", data),
-    create_scenario("equal_education", data; Educ = mean(wages.Educ)),
-    create_scenario("equal_experience", data; Exper = mean(wages.Exper)),
-    create_scenario("standardized_worker", data; 
-                   Educ = mean(wages.Educ), Exper = mean(wages.Exper))
-]
+# Define policy scenarios using direct data modification
+mean_educ = mean(wages.Educ)
+mean_exper = mean(wages.Exper)
+n_rows = length(data.Educ)
 
-# Analyze wage predictions across scenarios
 output = Vector{Float64}(undef, length(compiled))
 β = coef(model)
 
-for scenario in policy_scenarios
+# Create scenario data
+scenarios = [
+    ("status_quo", data),
+    ("equal_education", merge(data, (Educ = fill(mean_educ, n_rows),))),
+    ("equal_experience", merge(data, (Exper = fill(mean_exper, n_rows),))),
+    ("standardized_worker", merge(data, (Educ = fill(mean_educ, n_rows), Exper = fill(mean_exper, n_rows))))
+]
+
+# Policy scenario analysis
+for (scenario_name, scenario_data) in scenarios
     # Sample analysis for first 100 workers
     wages_predicted = Float64[]
-    for i in 1:100
-        compiled(output, scenario.data, i)
+    for worker in 1:100
+        compiled(output, scenario_data, worker)
         push!(wages_predicted, exp(dot(β, output)))  # Convert from log scale
     end
-    
+
     mean_wage = mean(wages_predicted)
-    println("$(scenario.name): Mean predicted wage = \$$(round(mean_wage, digits=2))")
+    println("$(scenario_name): Mean predicted wage = \$$(round(mean_wage, digits=2))")
 end
 ```
 
@@ -128,15 +142,15 @@ Compute returns to education and experience:
 ```julia
 # Build derivative evaluator for continuous variables
 continuous_vars = [:Educ, :Exper]  # Education and experience are continuous
-de = build_derivative_evaluator(compiled, data; vars=continuous_vars)
+de_fd = derivativeevaluator_fd(compiled, data, continuous_vars)
 
 # Compute marginal effects for representative workers
 g_eta = Vector{Float64}(undef, length(continuous_vars))
 
 # Male worker with median characteristics
 male_median_idx = findfirst(row -> row.Male && row.Educ ≈ median(wages.Educ), eachrow(wages))
-if male_median_idx !== nothing
-    marginal_effects_eta!(g_eta, de, β, male_median_idx; backend=:fd)
+if !isnothing(male_median_idx)
+    marginal_effects_eta!(g_eta, de_fd, β, male_median_idx)
     println("Male median worker - Returns to education: $(round(g_eta[1]*100, digits=2))%")
     println("Male median worker - Returns to experience: $(round(g_eta[2]*100, digits=2))%")
 end
@@ -165,30 +179,44 @@ compiled = compile_formula(model, data)
 Analyze fuel efficiency under different design specifications:
 
 ```julia
-# Create engineering scenarios
+# Engineering design analysis using direct data modification
 base_hp = mean(mtcars.HP)
 base_wt = mean(mtcars.WT)
+n_rows = length(data.HP)
 
-design_scenarios = create_scenario_grid("design_analysis", data, Dict(
-    :HP => [base_hp * 0.8, base_hp, base_hp * 1.2],      # -20%, baseline, +20% power
-    :WT => [base_wt * 0.9, base_wt, base_wt * 1.1],      # -10%, baseline, +10% weight
-    :Cyl => [4, 6, 8]                                     # Engine configurations
-))
+# Define design parameter combinations
+hp_values = [base_hp * 0.8, base_hp, base_hp * 1.2]      # -20%, baseline, +20% power
+wt_values = [base_wt * 0.9, base_wt, base_wt * 1.1]      # -10%, baseline, +10% weight
+cyl_values = [4, 6, 8]                                    # Engine configurations
 
-# Performance analysis across scenarios
+# Performance analysis across design space (3×3×3 = 27 scenarios)
 output = Vector{Float64}(undef, length(compiled))
 β = coef(model)
 
 scenario_results = Float64[]
-for scenario in design_scenarios
-    compiled(output, scenario.data, 1)  # Evaluate reference car design
+scenario_descriptions = String[]
+for hp_val in hp_values, wt_val in wt_values, cyl_val in cyl_values
+    # Create scenario data
+    data_scenario = merge(data, (
+        HP = fill(hp_val, n_rows),
+        WT = fill(wt_val, n_rows),
+        Cyl = fill(cyl_val, n_rows)
+    ))
+
+    # Evaluate reference car design with these parameters
+    compiled(output, data_scenario, 1)
     predicted_mpg = dot(β, output)
     push!(scenario_results, predicted_mpg)
+
+    # Track scenario description
+    hp_change = round((hp_val / base_hp - 1) * 100, digits=1)
+    wt_change = round((wt_val / base_wt - 1) * 100, digits=1)
+    push!(scenario_descriptions, "HP: $(hp_change)%, WT: $(wt_change)%, Cyl: $(cyl_val)")
 end
 
 best_scenario_idx = argmax(scenario_results)
 best_mpg = scenario_results[best_scenario_idx]
-println("Best design scenario: $(design_scenarios[best_scenario_idx].name)")
+println("Best design scenario: $(scenario_descriptions[best_scenario_idx])")
 println("Predicted MPG: $(round(best_mpg, digits=2))")
 ```
 
@@ -199,7 +227,7 @@ Compute sensitivity to design parameters:
 ```julia
 # Marginal effects on fuel efficiency
 engineering_vars = [:HP, :WT]  # Continuous engineering parameters
-de = build_derivative_evaluator(compiled, data; vars=engineering_vars)
+de_fd = derivativeevaluator_fd(compiled, data, engineering_vars)
 
 g = Vector{Float64}(undef, length(engineering_vars))
 
@@ -208,8 +236,8 @@ for (car_type, indices) in [("Sports cars", findall(x -> x > 200, mtcars.HP)),
                             ("Economy cars", findall(x -> x < 100, mtcars.HP))]
     if !isempty(indices)
         representative_idx = indices[1]
-        marginal_effects_eta!(g, de, β, representative_idx; backend=:fd)
-        
+        marginal_effects_eta!(g, de_fd, β, representative_idx)
+
         println("$car_type sensitivity:")
         println("  MPG change per HP unit: $(round(g[1], digits=3))")
         println("  MPG change per 1000lb weight: $(round(g[2]*1000, digits=3))")
@@ -243,28 +271,28 @@ compiled = compile_formula(model, data)
 Analyze survival outcomes under different patient profiles:
 
 ```julia
-# Create clinical scenarios based on patient characteristics
-median_age = median(lung_complete.age)
-
-clinical_scenarios = [
-    create_scenario("young_male", data; age = 50, sex = 1),      # Young male
-    create_scenario("old_male", data; age = 70, sex = 1),        # Elderly male  
-    create_scenario("young_female", data; age = 50, sex = 2),    # Young female
-    create_scenario("old_female", data; age = 70, sex = 2),      # Elderly female
-    create_scenario("high_performance", data; ph_ecog = 0),       # Best performance score
-    create_scenario("poor_performance", data; ph_ecog = 2)        # Poor performance score
-]
-
-# Clinical outcome analysis
+# Clinical analysis using direct data modification
+n_rows = length(data.age)
 output = Vector{Float64}(undef, length(compiled))
 β = coef(model)
 
-for scenario in clinical_scenarios
-    compiled(output, scenario.data, 1)
+# Define clinical scenarios
+clinical_scenarios = [
+    ("young_male", merge(data, (age = fill(50, n_rows), sex = fill(1, n_rows)))),
+    ("old_male", merge(data, (age = fill(70, n_rows), sex = fill(1, n_rows)))),
+    ("young_female", merge(data, (age = fill(50, n_rows), sex = fill(2, n_rows)))),
+    ("old_female", merge(data, (age = fill(70, n_rows), sex = fill(2, n_rows)))),
+    ("high_performance", merge(data, (ph_ecog = fill(0, n_rows),))),
+    ("poor_performance", merge(data, (ph_ecog = fill(2, n_rows),)))
+]
+
+# Clinical outcome analysis
+for (profile_name, scenario_data) in clinical_scenarios
+    compiled(output, scenario_data, 1)
     predicted_log_survival = dot(β, output)
     predicted_days = exp(predicted_log_survival) - 1
-    
-    println("$(scenario.name): Predicted survival = $(round(predicted_days, digits=0)) days")
+
+    println("$(profile_name): Predicted survival = $(round(predicted_days, digits=0)) days")
 end
 ```
 
@@ -275,7 +303,7 @@ Quantify impact of patient characteristics on outcomes:
 ```julia
 # Marginal effects for continuous clinical variables
 clinical_vars = [:age]  # Age is the main continuous predictor
-de = build_derivative_evaluator(compiled, data; vars=clinical_vars)
+de_fd = derivativeevaluator_fd(compiled, data, clinical_vars)
 
 g = Vector{Float64}(undef, length(clinical_vars))
 
@@ -284,11 +312,11 @@ for (group, sex_val) in [("Male patients", 1), ("Female patients", 2)]
     group_indices = findall(x -> x == sex_val, lung_complete.sex)
     if !isempty(group_indices)
         representative_idx = group_indices[div(length(group_indices), 2)]  # Median patient
-        marginal_effects_eta!(g, de, β, representative_idx; backend=:fd)
-        
+        marginal_effects_eta!(g, de_fd, β, representative_idx)
+
         daily_age_effect = g[1]  # Effect per year of age
         yearly_effect = exp(daily_age_effect) - 1  # Convert from log scale
-        
+
         println("$group - Age effect: $(round(yearly_effect*100, digits=2))% per year")
     end
 end
@@ -329,32 +357,34 @@ compiled = compile_formula(model, data)
 Analyze admission scenarios across departments:
 
 ```julia
-# Create policy scenarios
-policy_scenarios = [
-    create_scenario("gender_blind", data; Male = true),    # Assume all male
-    create_scenario("gender_blind_female", data; Male = false), # Assume all female
-    create_scenario("dept_a_focus", data; Department = "A"),     # Focus on Dept A
-    create_scenario("dept_f_focus", data; Department = "F")      # Focus on Dept F
-]
-
-# Policy impact analysis
+# Policy analysis using direct data modification
+n_rows = length(data.Male)
 output = Vector{Float64}(undef, length(compiled))
 β = coef(model)
 
-for scenario in policy_scenarios
+# Define policy scenarios
+policy_scenarios = [
+    ("gender_blind", merge(data, (Male = fill(true, n_rows),))),
+    ("gender_blind_female", merge(data, (Male = fill(false, n_rows),))),
+    ("dept_a_focus", merge(data, (Department = fill("A", n_rows),))),
+    ("dept_f_focus", merge(data, (Department = fill("F", n_rows),)))
+]
+
+# Policy impact analysis
+for (policy_name, scenario_data) in policy_scenarios
     admission_probs = Float64[]
-    
+
     # Sample 100 cases for analysis
-    sample_size = min(100, nrow(individual_data))
+    sample_size = min(100, n_rows)
     for i in 1:sample_size
-        compiled(output, scenario.data, i)
+        compiled(output, scenario_data, i)
         linear_pred = dot(β, output)
         prob = 1 / (1 + exp(-linear_pred))  # Logistic transformation
         push!(admission_probs, prob)
     end
-    
+
     mean_prob = mean(admission_probs)
-    println("$(scenario.name): Mean admission probability = $(round(mean_prob*100, digits=1))%")
+    println("$(policy_name): Mean admission probability = $(round(mean_prob*100, digits=1))%")
 end
 ```
 
@@ -389,26 +419,25 @@ function bootstrap_policy_effect(n_bootstrap=1000)
     for b in 1:n_bootstrap
         # Bootstrap sample
         boot_indices = rand(1:n_obs, n_obs)
-        
-        # Create scenarios
-        status_quo = base_data
-        policy_scenario = create_scenario("equal_education", base_data; 
-                                        Educ = mean(wages.Educ))
-        
+
+        # Create policy scenario
+        n_rows = length(base_data.Educ)
+        policy_data = merge(base_data, (Educ = fill(mean(wages.Educ), n_rows),))
+
         # Compute policy effect for bootstrap sample
         status_quo_wages = Float64[]
         policy_wages = Float64[]
-        
+
         for idx in boot_indices[1:100]  # Sample subset for speed
             # Status quo
-            compiled(output, status_quo, idx)
+            compiled(output, base_data, idx)
             push!(status_quo_wages, exp(dot(coef(base_model), output)))
-            
+
             # Policy scenario
-            compiled(output, policy_scenario.data, idx)
+            compiled(output, policy_data, idx)
             push!(policy_wages, exp(dot(coef(base_model), output)))
         end
-        
+
         # Policy effect (proportional change)
         effect = mean(policy_wages) / mean(status_quo_wages) - 1
         push!(policy_effects, effect)
@@ -505,51 +534,65 @@ function parallel_policy_analysis()
     model = lm(@formula(log(Wage) ~ Educ * Male + Exper), wages)
     compiled = compile_formula(model, data)
     
-    # Create comprehensive policy grid
-    policy_grid = create_scenario_grid("comprehensive_policy", data, Dict(
-        :Educ => [10, 12, 14, 16, 18, 20],    # Education levels
-        :Exper => [0, 5, 10, 15, 20, 25],     # Experience levels  
-        :Male => [false, true]                 # Gender
-    ))
-    
-    n_scenarios = length(policy_grid)
-    n_workers = min(100, nrow(wages))  # Sample size for analysis
-    
+    # Define policy grid parameters
+    educ_levels = [10, 12, 14, 16, 18, 20]        # Education levels
+    exper_levels = [0, 5, 10, 15, 20, 25]         # Experience levels
+    male_levels = [false, true]                    # Gender
+
+    n_rows = length(data.Educ)
+    n_scenarios = length(educ_levels) * length(exper_levels) * length(male_levels)  # 6×6×2 = 72
+    n_workers = min(100, n_rows)  # Sample size for analysis
+
     # Results storage
     results = SharedArray{Float64}(n_scenarios)
-    
+
     # Parallel computation would go here
     # @distributed for scenario_idx in 1:n_scenarios
-    for scenario_idx in 1:n_scenarios
-        scenario = policy_grid[scenario_idx]
+    scenario_idx = 1
+    for educ_val in educ_levels, exper_val in exper_levels, male_val in male_levels
+        # Create scenario data
+        scenario_data = merge(data, (
+            Educ = fill(educ_val, n_rows),
+            Exper = fill(exper_val, n_rows),
+            Male = fill(male_val, n_rows)
+        ))
+
         output = Vector{Float64}(undef, length(compiled))
         β = coef(model)
-        
+
         wage_predictions = Float64[]
         for worker in 1:n_workers
-            compiled(output, scenario.data, worker)
+            compiled(output, scenario_data, worker)
             wage_pred = exp(dot(β, output))
             push!(wage_predictions, wage_pred)
         end
-        
+
         results[scenario_idx] = mean(wage_predictions)
+        scenario_idx += 1
     end
-    
-    return results, policy_grid
+
+    return results, educ_levels, exper_levels, male_levels  # Return results and grid parameters
 end
 
 # Run parallel analysis
 println("Running comprehensive policy analysis...")
-results, policy_grid = parallel_policy_analysis()
+results, educ_levels, exper_levels, male_levels = parallel_policy_analysis()
 
 # Find optimal policy
 best_idx = argmax(results)
-best_scenario = policy_grid[best_idx]
 best_wage = results[best_idx]
 
+# Decode scenario index to parameters
+n_exper = length(exper_levels)
+n_male = length(male_levels)
+educ_idx = div(best_idx - 1, n_exper * n_male) + 1
+exper_idx = div(mod(best_idx - 1, n_exper * n_male), n_male) + 1
+male_idx = mod(best_idx - 1, n_male) + 1
+
 println("Optimal policy scenario:")
-println("  Education: $(best_scenario.overrides[:Educ]) years")
-println("  Experience: $(best_scenario.overrides[:Exper]) years") 
+println("  Education: $(educ_levels[educ_idx]) years")
+println("  Experience: $(exper_levels[exper_idx]) years")
+println("  Gender: $(male_levels[male_idx] ? "Male" : "Female")")
 println("  Mean predicted wage: \$$(round(best_wage, digits=2))")
 ```
 
@@ -559,7 +602,7 @@ All examples demonstrate FormulaCompiler.jl's key performance characteristics:
 
 - **Zero-allocation core evaluation**: `compiled(output, data, row)` calls allocate zero bytes
 - **Memory-efficient scenarios**: Override system uses constant memory regardless of data size
-- **Backend selection**: Choose between zero-allocation finite differences (`:fd`) and small-allocation automatic differentiation (`:ad`)
+- **Backend selection**: Choose between zero-allocation finite differences (`derivativeevaluator_fd(...)`) and small-allocation automatic differentiation (`derivativeevaluator_ad(...)`)
 - **Scalable patterns**: Performance remains constant regardless of dataset size
 
 For detailed performance optimization techniques, see the [Performance Guide](guide/performance.md).

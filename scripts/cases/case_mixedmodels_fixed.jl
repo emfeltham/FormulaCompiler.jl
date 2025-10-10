@@ -30,16 +30,16 @@ let
 
     # Derivatives and marginal effects for fixed effects
     vars = continuous_variables(compiled, data)
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de_fd = derivativeevaluator(:fd, compiled, data, vars)
     β = collect(fixef(m))
     i = 50
     g = Vector{Float64}(undef, length(vars))
-    marginal_effects_eta!(g, de, β, i; backend=:fd)
+    marginal_effects_eta!(g, de_fd, β, i)
     println("η-scale ME (FD) @row ", i, ": ", g)
 
     # Parameter-gradient for single-row ME and SE
     gβ_row = zeros(Float64, length(β))
-    me_eta_grad_beta!(gβ_row, de, i)
+    me_eta_grad_beta!(gβ_row, de_fd, i)
     se_row = delta_method_se(gβ_row, Matrix{Float64}(vcov(m)))
     println("Single-row ME SE (eta): ", se_row)
 

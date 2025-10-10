@@ -2,132 +2,232 @@
 
 FormulaCompiler.jl provides sophisticated capabilities for advanced statistical computing, high-performance applications, and complex analytical workflows. This guide covers memory-efficient scenario analysis, derivative computation, and integration patterns for demanding computational environments.
 
-## Memory-Efficient Override System
+## Counterfactual Analysis
 
-The override system allows you to create "what-if" scenarios without duplicating data in memory. For comprehensive coverage of this system, see the [Scenario Analysis](scenarios.md) guide.
+FormulaCompiler provides efficient counterfactual analysis through **high-level APIs** designed for user applications. For most use cases, you should use one of the recommended approaches below rather than internal implementation details.
 
-### OverrideVector
+!!! warning "Internal vs. Public API"
+    **CounterfactualVector types** (`NumericCounterfactualVector`, `BoolCounterfactualVector`, etc.) and their constructors are **internal implementation details** NOT exported from FormulaCompiler. They power the high-level APIs but should not be used directly in application code.
 
-The foundation of the scenario system is `OverrideVector`, which provides a memory-efficient constant vector:
+    **Use these high-level APIs instead**:
+    - **Simple contrasts**: Direct data modification with `merge()`
+    - **Batch contrasts**: `contrastevaluator()` + `contrast_modelrow!()`
+    - **Population analysis**: Simple loops over rows
+
+### Recommended Approach #1: Direct Data Modification
+
+For simple one-off counterfactual analysis, modify data directly:
 
 ```julia
-using FormulaCompiler
+using FormulaCompiler, GLM, DataFrames, Tables
 
-# Traditional approach: allocates 8MB for 1M rows
-traditional = fill(42.0, 1_000_000)
+# Fit model
+df = DataFrame(
+    y = randn(1000),
+    x = randn(1000),
+    treatment = rand([true, false], 1000)
+)
+model = lm(@formula(y ~ x * treatment), df)
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
 
-# FormulaCompiler: allocates ~32 bytes
-efficient = OverrideVector(42.0, 1_000_000)
+# Create counterfactual data scenarios
+n_rows = length(data.treatment)
+data_treated = merge(data, (treatment = fill(true, n_rows),))
+data_control = merge(data, (treatment = fill(false, n_rows),))
 
-# Both provide identical interface
-traditional[500_000] == efficient[500_000]  # true
-length(efficient) == 1_000_000              # true
+# Compare outcomes for same individual under different treatments
+row_vec = Vector{Float64}(undef, length(compiled))
+β = coef(model)
 
-# Massive memory savings
-# OverrideVector uses constant memory regardless of length
+compiled(row_vec, data_treated, 1)  # Individual 1 if treated
+effect_treated = dot(β, row_vec)
+
+compiled(row_vec, data_control, 1)  # Individual 1 if control
+effect_control = dot(β, row_vec)
+
+treatment_effect = effect_treated - effect_control
 ```
 
-### Data Scenarios
+### Recommended Approach #2: ContrastEvaluator (Batch Processing)
 
-Create scenarios with variable overrides:
+For batch categorical contrasts with zero allocations, use `contrastevaluator()`:
+
+```julia
+# Create zero-allocation evaluator for categorical contrasts
+evaluator = contrastevaluator(compiled, data, [:treatment])
+contrast_buf = Vector{Float64}(undef, length(compiled))
+
+# Batch contrasts (zero allocations)
+for row in 1:100
+    contrast_modelrow!(contrast_buf, evaluator, row, :treatment, false, true)
+    # Process contrast_buf...
+end
+```
+
+See "Categorical Contrasts" section below for comprehensive examples.
+
+### Population Analysis with Loop Patterns
+
+FormulaCompiler uses simple loops for population analysis instead of special infrastructure:
 
 ```julia
 using DataFrames, Tables
 
 df = DataFrame(
     x = randn(1000),
-    y = randn(1000), 
+    y = randn(1000),
     treatment = rand(Bool, 1000),
     group = rand(["A", "B", "C"], 1000)
 )
 
 data = Tables.columntable(df)
+compiled = compile_formula(model, data)
 
-# Create baseline scenario
-baseline = create_scenario("baseline", data)
+# Population average marginal effects (simple loop)
+function compute_population_ame(compiled, data, β, vars)
+    de_fd = derivativeevaluator_fd(compiled, data, vars)
+    n_rows = length(first(data))
+    ame_sum = zeros(length(vars))
+    g_temp = Vector{Float64}(undef, length(vars))
 
-# Create treatment scenarios
-treatment_on = create_scenario("treatment_on", data; 
-    treatment = true,
-    dose = 100.0  # Add new variable
-)
+    for row in 1:n_rows
+        marginal_effects_eta!(g_temp, de_fd, β, row)  # Zero allocations
+        ame_sum .+= g_temp
+    end
 
-treatment_off = create_scenario("treatment_off", data;
-    treatment = false,
-    dose = 0.0
-)
+    return ame_sum ./ n_rows  # Average marginal effects
+end
 
-# Policy scenarios
-policy_scenario = create_scenario("policy", data;
-    x = mean(df.x),           # Set to population mean
-    group = "A",              # Override categorical
-    regulatory_flag = true    # Add policy variable
-)
+# Treatment effect analysis (loop over scenarios)
+function treatment_effects(compiled, data, β, treatment_var)
+    n_rows = length(first(data))
+    effects = Vector{Float64}(undef, n_rows)
+    row_vec = Vector{Float64}(undef, length(compiled))
+
+    for row in 1:n_rows
+        # Treatment on
+        data_on = merge(data, (treatment = fill(true, n_rows),))
+        compiled(row_vec, data_on, row)
+        effect_on = dot(β, row_vec)
+
+        # Treatment off
+        data_off = merge(data, (treatment = fill(false, n_rows),))
+        compiled(row_vec, data_off, row)
+        effect_off = dot(β, row_vec)
+
+        effects[row] = effect_on - effect_off
+    end
+
+    return effects
+end
 ```
 
-### Scenario Evaluation
+### Example: Treatment Effect Analysis
 
-Use scenarios with compiled formulas:
+Compare the same individual under different treatment assignments:
 
 ```julia
 model = lm(@formula(y ~ x * treatment + group), df)
-compiled = compile_formula(model, data)  # Compile with original data
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+β = coef(model)
+
+# Option 1: Simple data modification (recommended for 1-10 contrasts)
+n_rows = length(first(data))
+data_treated = merge(data, (treatment = fill(true, n_rows),))
+data_untreated = merge(data, (treatment = fill(false, n_rows),))
+
 row_vec = Vector{Float64}(undef, length(compiled))
 
-# Evaluate different scenarios for the same individual
-compiled(row_vec, baseline.data, 1)      # Original data
-compiled(row_vec, treatment_on.data, 1)  # With treatment
-compiled(row_vec, treatment_off.data, 1) # Without treatment
-compiled(row_vec, policy_scenario.data, 1) # Policy scenario
+# Evaluate individual 1 under both scenarios
+compiled(row_vec, data_treated, 1)
+effect_treated = dot(β, row_vec)
+
+compiled(row_vec, data_untreated, 1)
+effect_untreated = dot(β, row_vec)
+
+individual_treatment_effect = effect_treated - effect_untreated
+
+# Option 2: Zero-allocation batch processing (for 100+ contrasts)
+evaluator = contrastevaluator(compiled, data, [:treatment])
+contrast_buf = Vector{Float64}(undef, length(compiled))
+
+contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, false, true)
+individual_treatment_effect = dot(β, contrast_buf)  # Same result, 0 bytes
 ```
 
-### Scenario Grids
+### Grid Analysis with Loops
 
-Generate all combinations of scenario parameters:
+Use simple loops for comprehensive parameter analysis:
 
 ```julia
-# Create comprehensive policy analysis
-policy_grid = create_scenario_grid("policy_analysis", data, Dict(
-    :treatment => [false, true],
-    :dose => [50.0, 100.0, 150.0],
-    :region => ["North", "South", "East", "West"]
-))
+# Create comprehensive policy analysis using loops
+function evaluate_policy_grid(compiled, data, grid_params, row_idx)
+    treatment_values = [false, true]
+    dose_values = [50.0, 100.0, 150.0]
+    region_values = ["North", "South", "East", "West"]
 
-# This creates 2×3×4 = 24 scenarios
-length(policy_grid)  # 24
+    # Pre-allocate results: 2×3×4 = 24 scenarios
+    n_scenarios = length(treatment_values) * length(dose_values) * length(region_values)
+    results = Matrix{Float64}(undef, n_scenarios, length(compiled))
+    row_vec = Vector{Float64}(undef, length(compiled))
 
-# Evaluate all scenarios for a specific individual
-results = Matrix{Float64}(undef, length(policy_grid), length(compiled))
-for (i, scenario) in enumerate(policy_grid)
-    compiled(view(results, i, :), scenario.data, 1)
+    scenario_idx = 1
+    for treatment in treatment_values
+        for dose in dose_values
+            for region in region_values
+                # Create modified data for this scenario
+                n_rows = length(first(data))
+                scenario_data = merge(data, (
+                    treatment = fill(treatment, n_rows),
+                    dose = fill(dose, n_rows),
+                    region = fill(region, n_rows)
+                ))
+
+                # Evaluate scenario
+                compiled(row_vec, scenario_data, row_idx)
+                results[scenario_idx, :] .= row_vec
+                scenario_idx += 1
+            end
+        end
+    end
+
+    return results
 end
 
-# Each row represents one scenario combination
+# Usage
+results = evaluate_policy_grid(compiled, data, grid_params, 1)
 ```
 
-### Dynamic Scenario Modification
+### Multi-Variable Counterfactual Analysis
 
-Modify scenarios after creation:
+Analyze multiple counterfactual variables simultaneously:
 
 ```julia
-scenario = create_scenario("dynamic", data; x = 1.0)
+# Option 1: Simple approach with data modification
+n_rows = length(first(data))
 
-# Add new overrides
-set_override!(scenario, :y, 100.0)
-set_override!(scenario, :new_var, 42.0)
+# Create scenarios with multiple variables modified
+baseline = data
+scenario_1 = merge(data, (x = fill(2.0, n_rows), treatment = fill(true, n_rows)))
+scenario_2 = merge(data, (x = fill(0.5, n_rows), treatment = fill(false, n_rows)))
 
-# Bulk updates
-update_scenario!(scenario; 
-    x = 2.0, 
-    z = 0.5,
-    treatment = true
-)
+# Evaluate same individual under different scenarios
+row = 5
+row_vec = Vector{Float64}(undef, length(compiled))
+β = coef(model)
 
-# Remove overrides
-remove_override!(scenario, :y)
+compiled(row_vec, baseline, row)
+effect_baseline = dot(β, row_vec)
 
-# Check current overrides
-get_overrides(scenario)  # Dict of current overrides
+compiled(row_vec, scenario_1, row)
+effect_scenario_1 = dot(β, row_vec)
+
+compiled(row_vec, scenario_2, row)
+effect_scenario_2 = dot(β, row_vec)
+
+println("Scenario effects: ", effect_scenario_1 - effect_baseline, ", ", effect_scenario_2 - effect_baseline)
 ```
 
 ## Advanced Compilation Features
@@ -150,13 +250,13 @@ FormulaCompiler provides comprehensive automatic differentiation capabilities fo
 ### Performance Characteristics
 
 - **Core evaluation**: Zero allocations (modelrow!, compiled functions)
-- **Finite differences (FD)**: Zero allocations (optimized implementation)
-- **ForwardDiff derivatives**: Small allocations per call (ForwardDiff internals)
-- **Marginal effects**: Backend-dependent allocation behavior
-- **Validation**: Cross-validated against finite differences for robustness
+- **Both derivative backends**: Zero allocations (ForwardDiff and finite differences)
+- **AD backend preferred**: Higher accuracy (machine precision) and faster performance
+- **FD backend alternative**: Explicit step size control
+- **Validation**: Cross-validated between backends for robustness
 
 !!! note "Backend Selection"
-    FormulaCompiler provides dual backends for derivative computation: ForwardDiff (accurate with small allocations) and finite differences (zero allocations). Choose based on your performance requirements.
+    FormulaCompiler provides dual backends for derivative computation, both achieving zero allocations. Use `:ad` (ForwardDiff) as the default for higher accuracy and performance. Use `:fd` (finite differences) only when you need explicit control over step sizes.
 
 ### Derivative Evaluator Construction
 
@@ -185,8 +285,10 @@ compiled = compile_formula(model, data)
 # Identify continuous variables automatically
 continuous_vars = continuous_variables(compiled, data)  # [:price, :quantity]
 
-# Build derivative evaluator
-de = build_derivative_evaluator(compiled, data; vars=continuous_vars)
+# Build derivative evaluator (AD backend preferred: zero allocations, higher accuracy)
+de_ad = derivativeevaluator_ad(compiled, data, continuous_vars)
+# OR build FD evaluator (alternative: zero allocations, explicit step control)
+de_fd = derivativeevaluator_fd(compiled, data, continuous_vars)
 ```
 
 ### Jacobian Computation
@@ -194,16 +296,15 @@ de = build_derivative_evaluator(compiled, data; vars=continuous_vars)
 Compute partial derivatives of model matrix rows:
 
 ```julia
-# Method 1: Automatic differentiation (accurate, small allocations)
+# Method 1: Automatic differentiation (zero allocations, higher accuracy - preferred)
+de_ad = derivativeevaluator_ad(compiled, data, continuous_vars)
 J_ad = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
-derivative_modelrow!(J_ad, de, 1; backend=:ad)
+derivative_modelrow!(J_ad, de_ad, 1)
 
-# Method 2: Finite differences (zero allocations)  
+# Method 2: Finite differences (zero allocations, explicit step control - alternative)
+de_fd = derivativeevaluator_fd(compiled, data, continuous_vars)
 J_fd = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
-derivative_modelrow_fd_pos!(J_fd, de, 1)
-
-# Method 3: Standalone finite differences (for validation)
-J_standalone = derivative_modelrow_fd(compiled, data, 1; vars=continuous_vars)
+derivative_modelrow!(J_fd, de_fd, 1)
 
 # All methods produce equivalent results
 @assert isapprox(J_ad, J_fd; rtol=1e-6) "AD and FD should match"
@@ -218,15 +319,23 @@ Compute effects on linear predictor and response scales:
 
 # Effects on linear predictor η = Xβ
 g_eta = Vector{Float64}(undef, length(continuous_vars))
-marginal_effects_eta!(g_eta, de, β, 1; backend=:ad)  # Small allocations, accurate
-marginal_effects_eta!(g_eta, de, β, 1; backend=:fd)  # Zero allocations
+
+# AD backend: Zero allocations, higher accuracy (preferred)
+de_ad = derivativeevaluator_ad(compiled, data, continuous_vars)
+marginal_effects_eta!(g_eta, de_ad, β, 1)
+
+# FD backend: Zero allocations, explicit step control (alternative)
+de_fd = derivativeevaluator_fd(compiled, data, continuous_vars)
+marginal_effects_eta!(g_eta, de_fd, β, 1)
 
 # Effects on response scale μ (for GLM models)
 if model isa GLM.GeneralizedLinearModel
     link_function = GLM.Link(model)
     g_mu = Vector{Float64}(undef, length(continuous_vars))
-    marginal_effects_mu!(g_mu, de, β, 1; link=link_function, backend=:ad)
-    
+
+    # Using AD evaluator for response scale effects
+    marginal_effects_mu!(g_mu, de_ad, β, 1, link_function)
+
     println("Marginal effects on linear predictor: $g_eta")
     println("Marginal effects on response scale: $g_mu")
 end
@@ -234,22 +343,80 @@ end
 
 ### Categorical Contrasts
 
-Analyze discrete differences for categorical variables:
+FormulaCompiler provides two approaches for computing **counterfactual discrete differences**: comparing the same observation under different categorical levels, holding all other covariates constant.
+
+!!! note "Counterfactual vs Cross-Sectional"
+    These methods compute counterfactual effects (same person, different treatment), NOT cross-sectional comparisons (different people with different treatments). This ensures we isolate the treatment effect without confounding from other variables.
+
+#### Simple Approach: Direct Data Modification
+
+For exploratory analysis or one-off contrasts, modify data directly:
 
 ```julia
-# Compare categorical levels for specific row
-contrast_north_south = contrast_modelrow(compiled, data, 1; 
-                                       var=:region, from="North", to="South")
+# Create data with different categorical levels
+# (keeps all other variables at their original values)
+n_rows = length(data.region)
+data_north = merge(data, (region = fill("North", n_rows),))
+data_south = merge(data, (region = fill("South", n_rows),))
 
-# Batch contrasts across multiple rows
+# Evaluate SAME row with different region assignments
+row = 1  # Same person/observation
+X_north = modelrow(compiled, data_north, row)  # If they were in North
+X_south = modelrow(compiled, data_south, row)  # If they were in South
+Δ = X_south .- X_north  # Counterfactual difference
+
+# Scalar effect with uncertainty quantification
+β = coef(model)
+effect = dot(β, Δ)  # Effect of South vs North for person at row 1
+
+# Standard error via delta method
+∇β = Δ  # Parameter gradient (for linear scale)
+vcov_matrix = vcov(model)
+se = sqrt(dot(∇β, vcov_matrix, ∇β))
+ci_lower = effect - 1.96 * se
+ci_upper = effect + 1.96 * se
+
+println("Effect: $effect ± $se, 95% CI: [$ci_lower, $ci_upper]")
+```
+
+**When to use**: Quick checks, 1-10 contrasts, exploratory analysis.
+
+#### Zero-Allocation Approach: ContrastEvaluator
+
+For batch processing or performance-critical code, use the zero-allocation evaluator:
+
+```julia
+# Create zero-allocation contrast evaluator
+evaluator = contrastevaluator(compiled, data, [:region])
+contrast_buf = Vector{Float64}(undef, length(compiled))
+
+# Compare categorical levels for specific row
+contrast_modelrow!(contrast_buf, evaluator, 1, :region, "North", "South")
+contrast_north_south = copy(contrast_buf)  # Save result if needed
+
+# Batch contrasts across multiple rows (zero allocations)
 rows_to_analyze = [1, 50, 100, 500]
 contrasts = Matrix{Float64}(undef, length(rows_to_analyze), length(compiled))
 
 for (i, row) in enumerate(rows_to_analyze)
-    contrast = contrast_modelrow(compiled, data, row; var=:region, from="North", to="South")
-    contrasts[i, :] .= contrast
+    contrast_modelrow!(contrast_buf, evaluator, row, :region, "North", "South")
+    contrasts[i, :] .= contrast_buf
 end
+
+# Parameter gradients for uncertainty quantification
+β = coef(model)
+∇β = Vector{Float64}(undef, length(compiled))
+contrast_gradient!(∇β, evaluator, 1, :region, "North", "South", β)
+
+# Delta method standard error
+vcov_matrix = vcov(model)
+se = delta_method_se(evaluator, 1, :region, "North", "South", β, vcov_matrix)
 ```
+
+**When to use**: 100+ contrasts, production pipelines, memory-constrained environments.
+
+!!! note "How Categorical Contrasts Work"
+    For a detailed explanation of both approaches, including the internal mechanism of `ContrastEvaluator` and `CounterfactualVectors`, see [How Categorical Contrasts Work](../internals/contrast_mechanism.md).
 
 ### Advanced Configuration
 
@@ -261,17 +428,15 @@ all_continuous = continuous_variables(compiled, data)
 economic_vars = [:price, :quantity]  # Domain-specific subset
 interaction_vars = [:price]          # Focus on key interactions
 
-# Chunking for large variable sets  
-large_var_set = [:var1, :var2, :var3, :var4, :var5, :var6, :var7, :var8]
-de_chunked = build_derivative_evaluator(compiled, data; 
-                                       vars=large_var_set, 
-                                       chunk=ForwardDiff.Chunk{4}())  # Process in chunks of 4
-
 # Backend selection based on requirements
-function compute_derivatives_with_backend_choice(de, β, row, require_zero_alloc=false)
-    backend = require_zero_alloc ? :fd : :ad
-    g = Vector{Float64}(undef, length(de.vars))
-    marginal_effects_eta!(g, de, β, row; backend=backend)
+function compute_derivatives_with_backend_choice(compiled, data, vars, β, row, require_zero_alloc=false)
+    if require_zero_alloc
+        de = derivativeevaluator_fd(compiled, data, vars)
+    else
+        de = derivativeevaluator_ad(compiled, data, vars)
+    end
+    g = Vector{Float64}(undef, length(vars))
+    marginal_effects_eta!(g, de, β, row)
     return g
 end
 ```
@@ -290,17 +455,17 @@ mm = fit(MixedModel, @formula(y ~ 1 + x + z + (1|group)), df; progress=false)
 data = Tables.columntable(df)
 compiled = compile_formula(mm, data)  # fixed-effects only
 vars = [:x, :z]
-de = build_derivative_evaluator(compiled, data; vars=vars)
+de_fd = derivativeevaluator_fd(compiled, data, vars)
 
 J = Matrix{Float64}(undef, length(compiled), length(vars))
-derivative_modelrow!(J, de, 1)
+derivative_modelrow!(J, de_fd, 1)
 ```
 
 ### Architecture and Optimization
 
 The derivative system achieves near-zero allocations through:
 
-- **Preallocated buffers**: Jacobian matrices, gradient vectors, and temporary arrays stored in `DerivativeEvaluator`
+- **Preallocated buffers**: Jacobian matrices, gradient vectors, and temporary arrays stored in `derivativeevaluator`
 - **Typed closures**: Compile-time specialization eliminates runtime dispatch
 - **Prebuilt data structures**: Override vectors and merged data reused across calls
 - **Optimized memory layout**: All allocations front-loaded during evaluator construction
@@ -310,18 +475,20 @@ The derivative system achieves near-zero allocations through:
 ```julia
 using BenchmarkTools
 
-# Build evaluator once (one-time cost)
-de = build_derivative_evaluator(compiled, data; vars=[:x, :z])
-J = Matrix{Float64}(undef, length(compiled), length(de.vars))
+# Build evaluators once (one-time cost)
+de_ad = derivativeevaluator_ad(compiled, data, [:x, :z])  # Zero allocations, higher accuracy (preferred)
+de_fd = derivativeevaluator_fd(compiled, data, [:x, :z])  # Zero allocations, explicit step control (alternative)
+J = Matrix{Float64}(undef, length(compiled), length(de_ad.vars))
 
 # Benchmark derivatives
-@benchmark derivative_modelrow!($J, $de, 25)
+@benchmark derivative_modelrow!($J, $de_ad, 25)  # AD (faster)
+@benchmark derivative_modelrow!($J, $de_fd, 25)  # FD
 
 # Benchmark marginal effects
 β = coef(model)
-g = Vector{Float64}(undef, length(de.vars))
-@benchmark marginal_effects_eta!($g, $de, $β, 25; backend=:ad)  # Small allocations
-@benchmark marginal_effects_eta!($g, $de, $β, 25; backend=:fd)  # Zero allocations
+g = Vector{Float64}(undef, length(de_ad.vars))
+@benchmark marginal_effects_eta!($g, $de_ad, $β, 25)  # AD (faster, more accurate)
+@benchmark marginal_effects_eta!($g, $de_fd, $β, 25)  # FD
 ```
 
 ## Complex Formula Support
@@ -618,39 +785,39 @@ function policy_impact_analysis(baseline_model, policy_data, policy_parameters)
     
     # Identify continuous policy levers
     policy_vars = intersect(keys(policy_parameters), continuous_variables(compiled, policy_data))
-    de = build_derivative_evaluator(compiled, policy_data; vars=collect(policy_vars))
+    de_fd = derivativeevaluator_fd(compiled, policy_data, collect(policy_vars))
     
-    # Create policy scenarios
+    # Create policy scenarios using data modification
     scenarios = [
-        create_scenario("status_quo", policy_data),
-        create_scenario("moderate_policy", policy_data; policy_parameters...),
-        create_scenario("aggressive_policy", policy_data; 
-                       [k => v * 1.5 for (k, v) in policy_parameters]...)
+        ("status_quo", policy_data),
+        ("moderate_policy", merge(policy_data, policy_parameters)),
+        ("aggressive_policy", merge(policy_data,
+                       [k => fill(v * 1.5, length(first(policy_data))) for (k, v) in policy_parameters]))
     ]
     
     # Evaluate policy impacts
     n_individuals = min(1000, length(first(policy_data)))  # Sample for analysis
     
     results = Dict()
-    for scenario in scenarios
+    for (scenario_name, scenario_data) in scenarios
         scenario_predictions = Vector{Float64}(undef, n_individuals)
         scenario_marginals = Matrix{Float64}(undef, n_individuals, length(policy_vars))
-        
+
         # Evaluate predictions and marginal effects for each individual
         row_vec = Vector{Float64}(undef, length(compiled))
         marginal_vec = Vector{Float64}(undef, length(policy_vars))
-        
+
         for i in 1:n_individuals
             # Prediction
-            compiled(row_vec, scenario.data, i)
+            compiled(row_vec, scenario_data, i)
             scenario_predictions[i] = dot(β, row_vec)
-            
+
             # Marginal effects
-            marginal_effects_eta!(marginal_vec, de, β, i; backend=:fd)  # Zero allocations
+            marginal_effects_eta!(marginal_vec, de_fd, β, i)  # Zero allocations
             scenario_marginals[i, :] .= marginal_vec
         end
-        
-        results[scenario.name] = (
+
+        results[scenario_name] = (
             predictions = scenario_predictions,
             marginal_effects = scenario_marginals,
             mean_prediction = mean(scenario_predictions),
@@ -687,11 +854,14 @@ function biomarker_analysis(survival_model, patient_data, biomarker_ranges)
     continuous_biomarkers = intersect(biomarker_vars, continuous_variables(compiled, patient_data))
     
     if !isempty(continuous_biomarkers)
-        de = build_derivative_evaluator(compiled, patient_data; vars=continuous_biomarkers)
+        de_fd = derivativeevaluator_fd(compiled, patient_data, continuous_biomarkers)
     end
     
-    # Create biomarker scenarios
-    biomarker_scenarios = create_scenario_grid("biomarker_analysis", patient_data, biomarker_ranges)
+    # Create biomarker scenarios using loops
+    biomarker_combinations = Iterators.product(values(biomarker_ranges)...)
+    biomarker_scenarios = [("scenario_$i", merge(patient_data,
+        Dict(zip(keys(biomarker_ranges), [fill(val, length(first(patient_data))) for val in combo])))
+    ) for (i, combo) in enumerate(biomarker_combinations)]
     
     # Patient risk stratification
     n_patients = length(first(patient_data))
@@ -701,9 +871,9 @@ function biomarker_analysis(survival_model, patient_data, biomarker_ranges)
     row_vec = Vector{Float64}(undef, length(compiled))
     
     # Evaluate all scenario-patient combinations
-    for (scenario_idx, scenario) in enumerate(biomarker_scenarios)
+    for (scenario_idx, (scenario_name, scenario_data)) in enumerate(biomarker_scenarios)
         for patient_idx in 1:n_patients
-            compiled(row_vec, scenario.data, patient_idx)
+            compiled(row_vec, scenario_data, patient_idx)
             
             # Compute risk score (example: linear predictor)
             risk_score = dot(β, row_vec)
@@ -717,14 +887,14 @@ function biomarker_analysis(survival_model, patient_data, biomarker_ranges)
         marginal_vec = Vector{Float64}(undef, length(continuous_biomarkers))
         
         for patient_idx in 1:n_patients
-            marginal_effects_eta!(marginal_vec, de, β, patient_idx; backend=:fd)
+            marginal_effects_eta!(marginal_vec, de_fd, β, patient_idx)
             marginal_matrix[patient_idx, :] .= marginal_vec
         end
         
         return (
             risk_scores = risk_matrix,
             marginal_effects = marginal_matrix,
-            scenarios = biomarker_scenarios,
+            scenarios = [name for (name, _) in biomarker_scenarios],
             biomarker_vars = continuous_biomarkers
         )
     else
@@ -757,12 +927,13 @@ function portfolio_risk_analysis(risk_model, market_data, stress_scenarios)
     # Risk factor sensitivity
     risk_factors = continuous_variables(compiled, market_data)
     if !isempty(risk_factors)
-        de = build_derivative_evaluator(compiled, market_data; vars=risk_factors)
+        de_fd = derivativeevaluator_fd(compiled, market_data, risk_factors)
     end
     
-    # Create market stress scenarios
+    # Create market stress scenarios using data modification
     stress_scenario_objects = [
-        create_scenario(name, market_data; parameters...)
+        (name, merge(market_data,
+            Dict(k => fill(v, length(first(market_data))) for (k, v) in parameters)))
         for (name, parameters) in stress_scenarios
     ]
     
@@ -772,16 +943,16 @@ function portfolio_risk_analysis(risk_model, market_data, stress_scenarios)
     
     row_vec = Vector{Float64}(undef, length(compiled))
     
-    for scenario in stress_scenario_objects
+    for (scenario_name, scenario_data) in stress_scenario_objects
         asset_valuations = Vector{Float64}(undef, n_assets)
-        
+
         for asset_idx in 1:n_assets
-            compiled(row_vec, scenario.data, asset_idx)
+            compiled(row_vec, scenario_data, asset_idx)
             # Risk-adjusted valuation
             asset_valuations[asset_idx] = dot(β, row_vec)
         end
-        
-        scenario_valuations[scenario.name] = asset_valuations
+
+        scenario_valuations[scenario_name] = asset_valuations
     end
     
     # Risk sensitivity analysis
@@ -790,7 +961,7 @@ function portfolio_risk_analysis(risk_model, market_data, stress_scenarios)
         sensitivity_vec = Vector{Float64}(undef, length(risk_factors))
         
         for asset_idx in 1:n_assets
-            marginal_effects_eta!(sensitivity_vec, de, β, asset_idx; backend=:fd)
+            marginal_effects_eta!(sensitivity_vec, de_fd, β, asset_idx)
             sensitivity_matrix[asset_idx, :] .= sensitivity_vec
         end
         
@@ -823,7 +994,8 @@ println("Portfolio stress loss: $(round(portfolio_risk * 100, digits=2))%")
 
 ## Further Reading
 
-- [Scenario Analysis Guide](scenarios.md) - Comprehensive coverage of the override system
+- [Categorical Contrasts Guide](categorical_mixtures.md) - Detailed coverage of categorical contrasts and mixtures
 - [Performance Guide](performance.md) - Detailed optimization strategies and benchmarking
 - [Examples](../examples.md) - Additional domain-specific applications
 - [API Reference](../api.md) - Complete function documentation
+- [Contrast Internals](../internals/contrast_mechanism.md) - How CounterfactualVector system works internally

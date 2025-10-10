@@ -38,7 +38,7 @@ Complex formula support: Successfully handles challenging formulas like `x * y *
 
 Row-wise operations: Native support for efficient single-row evaluation addresses the row-wise operation needs identified in the StatsModels.jl roadmap[^3].
 
-Scenario analysis: Memory-efficient `OverrideVector` system enables policy analysis and counterfactual scenarios without full matrix reconstruction.
+Scenario analysis: Memory-efficient `CounterfactualVector` system enables policy analysis and counterfactual scenarios without full matrix reconstruction.
 
 Streaming-friendly: Zero-allocation single-row evaluation enables out-of-core processing for large datasets[^4].
 

@@ -8,6 +8,7 @@ using DataFrames, GLM, Tables, CategoricalArrays, MixedModels
 using StatsModels, BenchmarkTools
 # Test helpers are included from test/support/testing_utilities.jl via runtests.jl
 using Random
+using FormulaCompiler: NumericCounterfactualVector, CategoricalCounterfactualVector
 
 @testset "Model Correctness Tests" begin
     Random.seed!(08540)
@@ -211,25 +212,29 @@ using Random
         expected_matrix = modelmatrix(model)
         
         @testset "Original data scenario" begin
-            scenario_original = create_scenario("original", data)
-            
+            # Test with original data (no counterfactuals)
             for test_row in [1, 25, 100]
-                result = modelrow(compiled, scenario_original, test_row)
+                result = modelrow(compiled, data, test_row)
                 expected = expected_matrix[test_row, :]
                 @test isapprox(result, expected, rtol=1e-12)
             end
         end
         
         @testset "Modified data scenario" begin
-            scenario_modified = create_scenario("modified", data; x = 5.0, group3 = "A")
-            
+            # Create counterfactual vectors
+            cf_x = NumericCounterfactualVector{Float64}(data.x, 1, 5.0)
+            # Use CategoricalValue constructor - it extracts ref index internally
+            group3_a = CategoricalValue("A", data.group3)
+            cf_group3 = CategoricalCounterfactualVector(data.group3, 1, group3_a)
+            cf_data = merge(data, (x = cf_x, group3 = cf_group3))
+
             # Test that modified scenario produces different results
             original_result = modelrow(compiled, data, 1)
-            modified_result = modelrow(compiled, scenario_modified, 1)
-            
+            modified_result = modelrow(compiled, cf_data, 1)
+
             # Results should be different (x and group3 were modified)
             @test !isapprox(original_result, modified_result, rtol=1e-6)
-            
+
             # But should still be valid model matrix row
             @test length(modified_result) == length(compiled)
             @test all(isfinite.(modified_result))

@@ -15,6 +15,7 @@ using ForwardDiff
 using Random
 using LinearAlgebra
 import TOML
+using FormulaCompiler: NumericCounterfactualVector, CategoricalCounterfactualVector, derivativeevaluator_fd, derivativeevaluator_ad, mix
 
 # -----------------------------
 # Utilities
@@ -59,7 +60,7 @@ function env_summary(io::IO=stdout)
             try
                 parsed = TOML.parsefile(toml)
                 v = get(parsed, "version", nothing)
-                v === nothing ? "unknown" : string(v)
+                isnothing(v) ? "unknown" : string(v)
             catch
                 "unknown"
             end
@@ -105,7 +106,7 @@ function emit_markdown(path::AbstractString, results::Vector{BenchResult}; tag::
                 try
                     parsed = TOML.parsefile(toml)
                     v = get(parsed, "version", nothing)
-                    v === nothing ? "unknown" : string(v)
+                    isnothing(v) ? "unknown" : string(v)
                 catch
                     "unknown"
                 end
@@ -205,20 +206,24 @@ function bench_alloc_vs_inplace(; n=10_000)
     )
 end
 
-function bench_scenario_overhead(; n=50_000)
+function bench_counterfactual_overhead(; n=50_000)
     df = make_data(n)
     model = fit_glm(df)
     ctx = build_compiled(model, df)
     compiled, data, row = ctx.compiled, ctx.data, ctx.row
     lvl = first(levels(df.group))
-    scen = create_scenario("policy", data; x = 2.0, group = lvl)
+    # Create counterfactual vectors
+    cf_x = NumericCounterfactualVector{Float64}(data.x, 1, 2.0)
+    group_val = CategoricalValue(string(lvl), data.group)
+    cf_group = CategoricalCounterfactualVector(data.group, 1, group_val)
+    cf_data = merge(data, (x = cf_x, group = cf_group))
     compiled(row, data, 1) # warmup
-    compiled(row, scen.data, 1)
+    compiled(row, cf_data, 1)
     t_base = @benchmark $compiled($row, $data, 25)
-    t_scen = @benchmark $compiled($row, $(scen.data), 25)
+    t_cf = @benchmark $compiled($row, $cf_data, 25)
     return (
-        summarize_trial("scenario: baseline", t_base),
-        summarize_trial("scenario: OverrideVector data", t_scen),
+        summarize_trial("counterfactual: baseline", t_base),
+        summarize_trial("counterfactual: CounterfactualVector data", t_cf),
     )
 end
 
@@ -228,17 +233,18 @@ function bench_derivatives(; n=20_000)
     data = Tables.columntable(df)
     compiled = compile_formula(model, data)
     vars = continuous_variables(compiled, data)
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de_ad = derivativeevaluator_ad(compiled, data, vars)
+    de_fd = derivativeevaluator_fd(compiled, data, vars)
     i = 25
     # AD full Jacobian
     J = Matrix{Float64}(undef, length(compiled), length(vars))
-    derivative_modelrow!(J, de, i) # warmup
-    t_ad = @benchmark derivative_modelrow!($J, $de, $i)
-    # FD single column (first variable as Symbol)
+    derivative_modelrow!(J, de_ad, i) # warmup
+    t_ad = @benchmark derivative_modelrow!($J, $de_ad, $i)
+    # FD single column (first variable by index)
     col = Vector{Float64}(undef, length(compiled))
-    var_sym = vars[1]
-    fd_jacobian_column!(col, de, i, var_sym) # warmup
-    t_fd = @benchmark fd_jacobian_column!($col, $de, $i, $var_sym)
+    var_idx = 1
+    fd_jacobian_column!(col, de_fd, i, var_idx) # warmup
+    t_fd = @benchmark fd_jacobian_column!($col, $de_fd, $i, $var_idx)
     return (
         summarize_trial("deriv: AD full J", t_ad),
         summarize_trial("deriv: FD single col", t_fd),
@@ -251,19 +257,20 @@ function bench_marginal_effects(; n=20_000)
     data = Tables.columntable(df)
     compiled = compile_formula(model, data)
     vars = continuous_variables(compiled, data)
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de_fd = derivativeevaluator_fd(compiled, data, vars)
+    de_ad = derivativeevaluator_ad(compiled, data, vars)
     β = collect(coef(model))
     i = 25
     g = Vector{Float64}(undef, length(vars))
     # FD (η)
-    marginal_effects_eta!(g, de, β, i; backend=:fd) # warmup
-    t_eta_fd = @benchmark marginal_effects_eta!($g, $de, $β, $i; backend=:fd)
+    marginal_effects_eta!(g, de_fd, β, i) # warmup
+    t_eta_fd = @benchmark marginal_effects_eta!($g, $de_fd, $β, $i)
     # AD (η)
-    marginal_effects_eta!(g, de, β, i; backend=:ad) # warmup
-    t_eta_ad = @benchmark marginal_effects_eta!($g, $de, $β, $i; backend=:ad)
+    marginal_effects_eta!(g, de_ad, β, i) # warmup
+    t_eta_ad = @benchmark marginal_effects_eta!($g, $de_ad, $β, $i)
     # μ (Logit as example link)
-    t_mu_fd = @benchmark marginal_effects_mu!($g, $de, $β, $i; link=LogitLink(), backend=:fd)
-    t_mu_ad = @benchmark marginal_effects_mu!($g, $de, $β, $i; link=LogitLink(), backend=:ad)
+    t_mu_fd = @benchmark marginal_effects_mu!($g, $de_fd, $β, $i, LogitLink())
+    t_mu_ad = @benchmark marginal_effects_mu!($g, $de_ad, $β, $i, LogitLink())
     return (
         summarize_trial("ME η: FD", t_eta_fd),
         summarize_trial("ME η: AD", t_eta_ad),
@@ -278,12 +285,12 @@ function bench_delta_se(; n=5_000)
     data = Tables.columntable(df)
     compiled = compile_formula(model, data)
     vars = continuous_variables(compiled, data)
-    de = build_derivative_evaluator(compiled, data; vars=vars)
+    de_fd = derivativeevaluator_fd(compiled, data, vars)
     β = collect(coef(model))
     i = 25
     # Use η-scale gradient w.r.t β as example: gβ = J[:, var1]
     J = Matrix{Float64}(undef, length(compiled), length(vars))
-    derivative_modelrow!(J, de, i)
+    derivative_modelrow!(J, de_fd, i)
     gβ = view(J, :, 1)
     Σ = Matrix{Float64}(vcov(model))
     # Warm and bench
@@ -341,14 +348,19 @@ end
 function bench_mixtures(; n=20_000)
     df = make_data(n)
     model = fit_glm(df)
-    ctx = build_compiled(model, df)
-    compiled, data, row = ctx.compiled, ctx.data, ctx.row
-    # Scenario with categorical mixture on group
-    mixspec = mix("A" => 0.4, "B" => 0.4, "C" => 0.2)
-    scen = create_scenario("mixture", data; group = mixspec)
-    compiled(row, scen.data, 1) # warmup
-    t = @benchmark $compiled($row, $(scen.data), 25)
-    return summarize_trial("mixture: compiled(row,scenario.data,i)", t)
+    # Create test data with mixture column instead of scenario
+    test_df = DataFrame(
+        y = randn(3),
+        x = randn(3),
+        z = abs.(randn(3)) .+ 0.1,
+        group = [mix("A" => 0.4, "B" => 0.4, "C" => 0.2) for _ in 1:3]
+    )
+    test_data = Tables.columntable(test_df)
+    compiled = compile_formula(model, test_data)
+    row = Vector{Float64}(undef, length(compiled))
+    compiled(row, test_data, 1) # warmup
+    t = @benchmark $compiled($row, $test_data, 1)
+    return summarize_trial("mixture: compiled(row,mixture_data,i)", t)
 end
 
 # -----------------------------
@@ -378,7 +390,7 @@ function run_selected(selected::Vector{Symbol}; fast::Bool=false)
             r1, r2 = fast ? bench_alloc_vs_inplace(n=3_000) : bench_alloc_vs_inplace()
             append!(results, [r1, r2])
         elseif b == :scenario
-            r1, r2 = fast ? bench_scenario_overhead(n=5_000) : bench_scenario_overhead()
+            r1, r2 = fast ? bench_counterfactual_overhead(n=5_000) : bench_counterfactual_overhead()
             append!(results, [r1, r2])
         elseif b == :deriv
             r1, r2 = fast ? bench_derivatives(n=5_000) : bench_derivatives()
@@ -450,10 +462,10 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
     args = parse_args()
     results = run_selected(args.bench_syms; fast=args.fast)
-    if args.out !== nothing
+    if !isnothing(args.out)
         ts = Dates.format(now(), dateformat"yyyymmdd_HHMMSS")
         out_file = args.file
-        if out_file === nothing
+        if isnothing(out_file)
             mkpath("results")
             ext = args.out === :md ? ".md" : ".csv"
             tagpart = isempty(args.tag) ? "" : "_" * args.tag

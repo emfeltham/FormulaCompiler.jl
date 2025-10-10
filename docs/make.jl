@@ -4,7 +4,7 @@ using Glob
 # Attempt to regenerate Mermaid diagrams from .mmd sources if the CLI is available.
 function _regen_mermaid_assets()
     mmdc = Sys.which("mmdc")
-    if mmdc === nothing
+    if isnothing(mmdc)
         @info "Mermaid CLI (mmdc) not found; skipping diagram regeneration"
         return
     end

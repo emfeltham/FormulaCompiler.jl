@@ -51,22 +51,24 @@ Benchmarks
 - `modelrow(model, data, i)` vs `modelrow!` with preallocated buffer
 - Targets: In-place 0 bytes; allocating shows expected vector/matrix allocations
 
-3) Scenario Overhead
-- Build `scenario = create_scenario("policy", data; x=2.0, group = first(levels(df.group)))`
-- Compare compiled(row,data,i) vs compiled(row,scenario.data,i)
+3) Counterfactual Overhead
+- Build counterfactual data: `data_cf, cf_vecs = build_counterfactual_data(data, [:x, :group], 1)`
+- Update replacements: `update_counterfactual_replacement!(cf_vecs[1], 2.0)`
+- Compare compiled(row,data,i) vs compiled(row,data_cf,i)
 - Target: identical times within noise; 0 allocations
 
 4) Derivative Jacobian (AD and FD)
-- Build evaluator: `vars = continuous_variables(compiled, data)`; `de = build_derivative_evaluator(compiled, data; vars=vars)`
-- AD Jacobian: `J = similar(rand(length(compiled), length(vars))); @benchmark derivative_modelrow!($J, $de, 25)`
-- FD single-column: `col = similar(rand(length(compiled))); @benchmark fd_jacobian_column!($col, $de, 1, 25)`
+- Build evaluators: `vars = continuous_variables(compiled, data)`; `de_ad = derivativeevaluator_ad(compiled, data, vars)`; `de_fd = derivativeevaluator_fd(compiled, data, vars)`
+- AD Jacobian: `J = similar(rand(length(compiled), length(vars))); @benchmark derivative_modelrow!($J, $de_ad, 25)`
+- FD Jacobian: `@benchmark derivative_modelrow!($J, $de_fd, 25)`
+- FD single-column: `col = similar(rand(length(compiled))); @benchmark fd_jacobian_column!($col, $de_fd, 1, 1)`
 - Targets: AD ≤512 bytes; FD 0 bytes
 
 5) Marginal Effects (η and μ)
 - `β = coef(model)`; `g = similar(rand(length(vars)))`
-- η-scale AD: `@benchmark marginal_effects_eta!($g, $de, $β, 25; backend=:ad)`
-- η-scale FD: `@benchmark marginal_effects_eta!($g, $de, $β, 25; backend=:fd)`
-- μ-scale with link (e.g., Logit): `@benchmark marginal_effects_mu!($g, $de, $β, 25; link=LogitLink(), backend=:ad)` and `backend=:fd`
+- η-scale AD: `@benchmark marginal_effects_eta!($g, $de_ad, $β, 25)`
+- η-scale FD: `@benchmark marginal_effects_eta!($g, $de_fd, $β, 25)`
+- μ-scale with link (e.g., Logit): `@benchmark marginal_effects_mu!($g, $de_ad, $β, 25, LogitLink())` and `@benchmark marginal_effects_mu!($g, $de_fd, $β, 25, LogitLink())`
 - Targets: FD 0 bytes; AD ≤512 bytes
 
 6) Delta Method SE

@@ -2,18 +2,20 @@
 # Zero-allocation execution through compile-time dispatch
 
 """
-    RECURSION_LIMIT = 25
+    RECURSION_LIMIT = 10
 
 Threshold for switching between recursive and @generated execution strategies.
 
-Julia's tuple specialization is heuristic-based with no guaranteed cutoff. This value
-was empirically determined by lowering from 35 until zero-allocation was achieved
-across all test cases.
+Julia's tuple specialization is heuristic-based with no guaranteed cutoff. Lowered from 25
+to 10 to reduce compilation overhead for complex models with many parameters.
 
-- **≤25 ops**: Recursive execution (empirically reliable)
-- **>25 ops**: @generated execution (forced specialization)
+- **≤10 ops**: Recursive execution (reduced compilation)
+- **>10 ops**: @generated execution (forced specialization)
+
+Note: The original value of 25 was optimal for zero-allocation with simple models, but
+causes excessive compilation (90M+ allocations) for complex models with 100+ parameters.
 """
-const RECURSION_LIMIT = 25
+const RECURSION_LIMIT = 10
 
 """
     (compiled::UnifiedCompiled)(output, data, row_idx) -> nothing
@@ -314,6 +316,11 @@ end
     scratch[Out] = scratch[In1] ^ scratch[In2]
 end
 
+# Standardization operation
+@inline function execute_op(::StandardizeOp{InPos, OutPos, Center, Scale}, scratch, data, row_idx) where {InPos, OutPos, Center, Scale}
+    scratch[OutPos] = (scratch[InPos] - Center) / Scale
+end
+
 # Comparison operations
 @inline function execute_op(::ComparisonOp{:(<=), InPos, Constant, OutPos}, scratch, data, row_idx) where {InPos, Constant, OutPos}
     scratch[OutPos] = Float64(scratch[InPos] <= Constant)
@@ -377,16 +384,12 @@ end
     extract_level_code(column_data, row_idx::Int) -> Int
 
 Extract level code with zero allocations using type-stable dispatch.
-Handles both regular CategoricalVector and OverrideVector for scenarios.
+Handles CategoricalVector and CounterfactualVector types for zero-allocation extraction.
 """
 @inline function extract_level_code(column_data::CategoricalVector, row_idx::Int)
     return Int(levelcode(column_data[row_idx]))
 end
 
-@inline function extract_level_code(column_data::OverrideVector{<:CategoricalValue}, row_idx::Int)
-    # For OverrideVector, all rows have the same value - extract once, no allocation
-    return Int(levelcode(column_data.override_value))
-end
 
 @inline function extract_level_code(column_data::AbstractVector, row_idx::Int)
     # Fallback for other vector types that contain categorical values
@@ -396,20 +399,23 @@ end
     elseif isa(cat_value, Integer)
         return Int(cat_value)
     elseif isa(cat_value, String)
-        # Handle String values that may come from ForwardDiff conversion
-        # This can happen when categorical values get processed through dual number contexts
-        # We need to look up the level index in the original categorical structure
-        if isa(column_data, OverrideVector) && isa(column_data.override_value, CategoricalValue)
-            # For override vectors, find the level code from the override value's pool
-            override_val = column_data.override_value
-            pool = override_val.pool
-            level_idx = findfirst(==(cat_value), pool.levels)
-            if level_idx === nothing
-                error("String value '$cat_value' not found in categorical levels $(pool.levels)")
+        # Handle String values in Vector{String} columns (common with GLM/DataFrames)
+        # For normal String categorical data, we need to map to level codes
+        # This requires knowing the unique levels in the column to assign consistent codes
+
+        # Try to find unique levels in the parent column to assign consistent level codes
+        if column_data isa AbstractVector{String}
+            # Get unique levels from the column and sort for consistent indexing
+            unique_levels = sort!(unique(column_data))
+            level_idx = findfirst(==(cat_value), unique_levels)
+            if level_idx !== nothing
+                return level_idx
+            else
+                error("String value '$cat_value' not found in column levels")
             end
-            return level_idx
         else
-            error("Cannot extract level code from String '$cat_value' without categorical context")
+            # This case should be handled by CounterfactualVector types for complex scenarios
+            error("String categorical value '$cat_value' found in non-String column type $(typeof(column_data)). Use CounterfactualVector types for override scenarios.")
         end
     elseif isa(cat_value, Bool)
         # Handle boolean values: false = level 1, true = level 2
@@ -447,24 +453,24 @@ end
     # Get categorical column data
     column_data = getproperty(data, Col)
     
-    # Check if this is a categorical mixture override
-    if column_data isa CategoricalMixtureOverride
+    # Check if this is a categorical mixture counterfactual vector
+    if column_data isa CategoricalMixtureCounterfactualVector
         # Handle categorical mixture: weighted combination of contrast rows
-        mixture_obj = column_data.mixture_obj
-        
+        mixture_obj = column_data[row_idx]  # Get mixture for current row (could be original or replacement)
+
         # Initialize positions to zero
         for (i, pos) in enumerate(Positions)
             scratch[pos] = 0.0
         end
-        
+
         # Map mixture level names to contrast matrix row indices
         original_levels = mixture_obj.original_levels
-        
+
         # Compute weighted combination
         for (level_name, weight) in zip(mixture_obj.levels, mixture_obj.weights)
             level_name_str = string(level_name)
             level_idx = findfirst(==(level_name_str), original_levels)
-            if level_idx !== nothing
+            if !isnothing(level_idx)
                 for (i, pos) in enumerate(Positions)
                     scratch[pos] += weight * op.contrast_matrix[level_idx, i]
                 end

@@ -8,6 +8,7 @@ using FormulaCompiler
 using GLM, DataFrames, Tables
 using BenchmarkTools
 using CategoricalArrays
+using FormulaCompiler: NumericCounterfactualVector, BoolCounterfactualVector, CategoricalCounterfactualVector, modelrow!
 
 @testset "Zero Allocation Override Performance" begin
     
@@ -28,14 +29,16 @@ using CategoricalArrays
     compiled = compile_formula(model, data_nt)
     
     @testset "Continuous Variable Overrides" begin
-        scenario = create_scenario("cont_test", data_nt; x1 = 2.0, x2 = -1.5)
+        cf_x1 = NumericCounterfactualVector{Float64}(data_nt.x1, 1, 2.0)
+        cf_x2 = NumericCounterfactualVector{Float64}(data_nt.x2, 1, -1.5)
+        cf_data = merge(data_nt, (x1 = cf_x1, x2 = cf_x2))
         output = Vector{Float64}(undef, length(compiled))
-        
+
         # Warmup
-        modelrow!(output, compiled, scenario.data, 1)
-        
+        modelrow!(output, compiled, cf_data, 1)
+
         # Benchmark
-        result = @benchmark modelrow!($output, $compiled, $(scenario.data), 1) samples=200 seconds=2
+        result = @benchmark modelrow!($output, $compiled, $cf_data, 1) samples=200 seconds=2
         
         println("Continuous override benchmark:")
         println("  Memory: $(result.memory) bytes")
@@ -47,14 +50,15 @@ using CategoricalArrays
     end
     
     @testset "Boolean Variable Overrides" begin
-        scenario = create_scenario("bool_test", data_nt; treated = true)
+        cf_treated = BoolCounterfactualVector(data_nt.treated, 1, true)
+        cf_data = merge(data_nt, (treated = cf_treated,))
         output = Vector{Float64}(undef, length(compiled))
-        
-        # Warmup  
-        modelrow!(output, compiled, scenario.data, 1)
-        
+
+        # Warmup
+        modelrow!(output, compiled, cf_data, 1)
+
         # Benchmark
-        result = @benchmark modelrow!($output, $compiled, $(scenario.data), 1) samples=200 seconds=2
+        result = @benchmark modelrow!($output, $compiled, $cf_data, 1) samples=200 seconds=2
         
         println("Boolean override benchmark:")
         println("  Memory: $(result.memory) bytes")
@@ -66,14 +70,19 @@ using CategoricalArrays
     end
     
     @testset "Categorical Variable Overrides" begin
-        scenario = create_scenario("cat_test", data_nt; group = "B", region = "South")
+        # Get appropriate categorical values
+        group_b = CategoricalValue("B", data_nt.group)
+        region_south = CategoricalValue("South", data_nt.region)
+        cf_group = CategoricalCounterfactualVector(data_nt.group, 1, group_b)
+        cf_region = CategoricalCounterfactualVector(data_nt.region, 1, region_south)
+        cf_data = merge(data_nt, (group = cf_group, region = cf_region))
         output = Vector{Float64}(undef, length(compiled))
-        
+
         # Warmup
-        modelrow!(output, compiled, scenario.data, 1)
-        
-        # Benchmark  
-        result = @benchmark modelrow!($output, $compiled, $(scenario.data), 1) samples=200 seconds=2
+        modelrow!(output, compiled, cf_data, 1)
+
+        # Benchmark
+        result = @benchmark modelrow!($output, $compiled, $cf_data, 1) samples=200 seconds=2
         
         println("Categorical override benchmark:")
         println("  Memory: $(result.memory) bytes")
@@ -85,15 +94,22 @@ using CategoricalArrays
     end
     
     @testset "Mixed Variable Overrides" begin
-        scenario = create_scenario("mixed_test", data_nt; 
-            x1 = 1.5, x2 = -0.8, age = 40, treated = false, group = "C", region = "North")
+        cf_x1 = NumericCounterfactualVector{Float64}(data_nt.x1, 1, 1.5)
+        cf_x2 = NumericCounterfactualVector{Float64}(data_nt.x2, 1, -0.8)
+        cf_age = NumericCounterfactualVector{Int64}(data_nt.age, 1, 40)
+        cf_treated = BoolCounterfactualVector(data_nt.treated, 1, false)
+        group_c = CategoricalValue("C", data_nt.group)
+        region_north = CategoricalValue("North", data_nt.region)
+        cf_group = CategoricalCounterfactualVector(data_nt.group, 1, group_c)
+        cf_region = CategoricalCounterfactualVector(data_nt.region, 1, region_north)
+        cf_data = merge(data_nt, (x1 = cf_x1, x2 = cf_x2, age = cf_age, treated = cf_treated, group = cf_group, region = cf_region))
         output = Vector{Float64}(undef, length(compiled))
-        
+
         # Warmup
-        modelrow!(output, compiled, scenario.data, 1)
-        
+        modelrow!(output, compiled, cf_data, 1)
+
         # Benchmark
-        result = @benchmark modelrow!($output, $compiled, $(scenario.data), 1) samples=200 seconds=2
+        result = @benchmark modelrow!($output, $compiled, $cf_data, 1) samples=200 seconds=2
         
         println("Mixed override benchmark:")
         println("  Memory: $(result.memory) bytes")
@@ -105,18 +121,27 @@ using CategoricalArrays
     end
     
     @testset "Multiple Rows Zero Allocation" begin
-        scenario = create_scenario("multi_row", data_nt; x1 = 2.5, treated = true, group = "A")
+        cf_x1 = NumericCounterfactualVector{Float64}(data_nt.x1, 1, 2.5)
+        cf_treated = BoolCounterfactualVector(data_nt.treated, 1, true)
+        group_a = CategoricalValue("A", data_nt.group)
+        cf_group = CategoricalCounterfactualVector(data_nt.group, 1, group_a)
+        cf_data = merge(data_nt, (x1 = cf_x1, treated = cf_treated, group = cf_group))
         output = Vector{Float64}(undef, length(compiled))
-        
+
         # Test different rows
         test_rows = [1, 10, 25, 50, 75, 100]
-        
+
         for row_idx in test_rows
+            # Update counterfactual to apply to this row
+            FormulaCompiler.update_counterfactual_row!(cf_x1, row_idx)
+            FormulaCompiler.update_counterfactual_row!(cf_treated, row_idx)
+            FormulaCompiler.update_counterfactual_row!(cf_group, row_idx)
+
             # Warmup
-            modelrow!(output, compiled, scenario.data, row_idx)
-            
+            modelrow!(output, compiled, cf_data, row_idx)
+
             # Benchmark
-            result = @benchmark modelrow!($output, $compiled, $(scenario.data), $row_idx) samples=50 seconds=1
+            result = @benchmark modelrow!($output, $compiled, $cf_data, $row_idx) samples=50 seconds=1
             
             @test result.memory == 0
             @test result.allocs == 0
@@ -136,10 +161,12 @@ using CategoricalArrays
         normal_result = @benchmark modelrow!($output, $compiled, $data_nt, 1) samples=200 seconds=2
         
         # Benchmark with override
-        scenario = create_scenario("comparison", data_nt; x1 = 2.0, treated = true)
-        modelrow!(output, compiled, scenario.data, 1)  # Warmup
-        
-        override_result = @benchmark modelrow!($output, $compiled, $(scenario.data), 1) samples=200 seconds=2
+        cf_x1 = NumericCounterfactualVector{Float64}(data_nt.x1, 1, 2.0)
+        cf_treated = BoolCounterfactualVector(data_nt.treated, 1, true)
+        cf_data = merge(data_nt, (x1 = cf_x1, treated = cf_treated))
+        modelrow!(output, compiled, cf_data, 1)  # Warmup
+
+        override_result = @benchmark modelrow!($output, $compiled, $cf_data, 1) samples=200 seconds=2
         
         println("Performance comparison:")
         println("  Normal - Memory: $(normal_result.memory) bytes, Allocs: $(normal_result.allocs)")
@@ -178,15 +205,20 @@ using CategoricalArrays
         complex_model = lm(@formula(y ~ x1 + log(age) + treated * x2 + group + x1^2), complex_df)
         complex_compiled = compile_formula(complex_model, complex_data)
         
-        scenario = create_scenario("complex", complex_data; 
-            x1 = 1.5, age = 35, treated = true, x2 = -0.5, group = "B")
+        cf_x1 = NumericCounterfactualVector{Float64}(complex_data.x1, 1, 1.5)
+        cf_age = NumericCounterfactualVector{Int64}(complex_data.age, 1, 35)
+        cf_treated = BoolCounterfactualVector(complex_data.treated, 1, true)
+        cf_x2 = NumericCounterfactualVector{Float64}(complex_data.x2, 1, -0.5)
+        group_b = CategoricalValue("B", complex_data.group)
+        cf_group = CategoricalCounterfactualVector(complex_data.group, 1, group_b)
+        cf_data = merge(complex_data, (x1 = cf_x1, age = cf_age, treated = cf_treated, x2 = cf_x2, group = cf_group))
         output = Vector{Float64}(undef, length(complex_compiled))
-        
+
         # Warmup
-        modelrow!(output, complex_compiled, scenario.data, 1)
-        
+        modelrow!(output, complex_compiled, cf_data, 1)
+
         # Benchmark
-        result = @benchmark modelrow!($output, $complex_compiled, $(scenario.data), 1) samples=200 seconds=2
+        result = @benchmark modelrow!($output, $complex_compiled, $cf_data, 1) samples=200 seconds=2
         
         println("Complex model override benchmark:")
         println("  Memory: $(result.memory) bytes")

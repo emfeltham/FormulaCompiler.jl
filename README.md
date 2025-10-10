@@ -95,62 +95,103 @@ result = evaluator(1)           # Row 1
 evaluator(row_vec, 1)          # In-place evaluation
 ```
 
-## Advanced Scenario Analysis
+## Advanced Analysis: Population and Counterfactual Patterns
 
-Create data scenarios with variable overrides for policy analysis and counterfactuals:
+FormulaCompiler uses a unified row-wise architecture where population analysis is achieved through simple loops over individual observations:
 
 ```julia
 data = Tables.columntable(df)
-
-# Create policy scenarios
-baseline = create_scenario("baseline", data)
-treatment = create_scenario("treatment", data; 
-    treatment = true,
-    dose = 100.0
-)
-policy_change = create_scenario("policy", data;
-    x = mean(df.x),           # Set to population mean
-    group = "A",              # Override categorical
-    regulatory = true         # Add policy variable
-)
-
-# Evaluate scenarios
 compiled = compile_formula(model, data)
-row_vec = Vector{Float64}(undef, length(compiled))
 
-compiled(row_vec, baseline.data, 1)      # Original data
-compiled(row_vec, treatment.data, 1)     # With treatment
-compiled(row_vec, policy_change.data, 1) # Policy scenario
+# Population analysis pattern: individual + averaging
+function compute_population_effects(compiled, data, var_overrides)
+    n_rows = length(first(data))
+    effects = Vector{Float64}(undef, n_rows)
+    row_vec = Vector{Float64}(undef, length(compiled))
+
+    # Build counterfactual data for the variable we want to override
+    data_cf, cf_vecs = build_counterfactual_data(data, [:treatment], 1)
+    treatment_cf = cf_vecs[1]
+
+    for row in 1:n_rows
+        # Set up counterfactual for this row
+        update_counterfactual_row!(treatment_cf, row)
+        update_counterfactual_replacement!(treatment_cf, true)  # Apply treatment
+
+        # Evaluate with override
+        compiled(row_vec, data_cf, row)
+        effects[row] = sum(row_vec)  # or whatever summary you need
+    end
+
+    return mean(effects)  # Population average
+end
+
+# Policy analysis using counterfactual vectors
+population_effect = compute_population_effects(compiled, data, [:treatment])
 ```
 
-### Scenario Grids
+### Multi-Variable Sensitivity Analysis
 
-Generate comprehensive scenario combinations:
+Analyze multiple variables systematically using counterfactual vectors:
 
 ```julia
-# Create all combinations
-policy_grid = create_scenario_grid("policy_analysis", data, Dict(
-    :treatment => [false, true],
-    :dose => [50.0, 100.0, 150.0],
-    :region => ["North", "South"]
-))
+# Define analysis grid manually
+treatment_values = [false, true]
+dose_values = [50.0, 100.0, 150.0]
+region_values = ["North", "South"]
 
-# Evaluates 2×3×2 = 12 scenarios
-results = Matrix{Float64}(undef, length(policy_grid), length(compiled))
-for (i, scenario) in enumerate(policy_grid)
-    compiled(view(results, i, :), scenario.data, 1)
+# Create counterfactual data structure
+data_cf, cf_vecs = build_counterfactual_data(data, [:treatment, :dose, :region], 1)
+treatment_cf, dose_cf, region_cf = cf_vecs
+
+# Evaluate all combinations (2×3×2 = 12 scenarios)
+results = Matrix{Float64}(undef, 12, length(compiled))
+row_vec = Vector{Float64}(undef, length(compiled))
+scenario_idx = 1
+
+for treatment in treatment_values
+    for dose in dose_values
+        for region in region_values
+            # Set up counterfactual values
+            update_counterfactual_replacement!(treatment_cf, treatment)
+            update_counterfactual_replacement!(dose_cf, dose)
+            update_counterfactual_replacement!(region_cf, region)
+
+            # Evaluate for representative row (e.g., row 1)
+            compiled(row_vec, data_cf, 1)
+            results[scenario_idx, :] .= row_vec
+            scenario_idx += 1
+        end
+    end
 end
 ```
 
-### Dynamic Scenario Modification
+### Dynamic Counterfactual Modification
 
 ```julia
-scenario = create_scenario("dynamic", data; x = 1.0)
+# Build counterfactual vectors for dynamic analysis
+data_cf, cf_vecs = build_counterfactual_data(data, [:x, :y, :z], 1)
+x_cf, y_cf, z_cf = cf_vecs
 
-# Modify scenarios iteratively
-set_override!(scenario, :y, 100.0)           # Add override
-update_scenario!(scenario; x = 2.0, z = 0.5) # Bulk update  
-remove_override!(scenario, :y)               # Remove override
+# Modify counterfactuals iteratively
+row_vec = Vector{Float64}(undef, length(compiled))
+
+# Initial state
+update_counterfactual_replacement!(x_cf, 1.0)
+compiled(row_vec, data_cf, 1)  # Baseline with x=1.0
+
+# Add y override
+update_counterfactual_replacement!(y_cf, 100.0)
+compiled(row_vec, data_cf, 1)  # With x=1.0, y=100.0
+
+# Bulk update multiple variables
+update_counterfactual_replacement!(x_cf, 2.0)
+update_counterfactual_replacement!(z_cf, 0.5)
+compiled(row_vec, data_cf, 1)  # With x=2.0, y=100.0, z=0.5
+
+# Reset individual variables by using original data values
+original_y = getproperty(data, :y)[1]
+update_counterfactual_replacement!(y_cf, original_y)  # Remove y override
 ```
 
 ## Ecosystem Integration
@@ -208,30 +249,32 @@ compiled = compile_formula(model, Tables.columntable(df))  # Standardization bui
 FormulaCompiler provides memory-efficient computation of derivatives and marginal effects with standard errors:
 
 ```julia
-# Build derivative evaluator
+# Build derivative evaluators with concrete types
 vars = [:x, :z]
-de = build_derivative_evaluator(compiled, data; vars=vars)
+de_ad = derivativeevaluator_ad(compiled, data, vars)  # Returns ADEvaluator, zero allocations, higher accuracy (preferred)
+de_fd = derivativeevaluator_fd(compiled, data, vars)  # Returns FDEvaluator, zero allocations, alternative
 β = coef(model)
 
 # Single-row marginal effect gradient (η case)
 gβ = Vector{Float64}(undef, length(compiled))
-me_eta_grad_beta!(gβ, de, β, 1, :x)  # Minimal memory allocation
+me_eta_grad_beta!(gβ, de_fd, β, 1, :x)  # Zero allocations
 
 # Standard error via delta method
 Σ = vcov(model)
 se = delta_method_se(gβ, Σ)  # Efficient computation
 
-# Average marginal effects with backend selection
+# Average marginal effects with FD backend
 rows = 1:100
 gβ_ame = Vector{Float64}(undef, length(compiled))
-accumulate_ame_gradient!(gβ_ame, de, β, rows, :x; backend=:fd)  # Memory-efficient computation
+accumulate_ame_gradient!(gβ_ame, de_fd, β, rows, :x)  # Zero allocations per row
 se_ame = delta_method_se(gβ_ame, Σ)
 
 println("AME standard error for x: ", se_ame)
 ```
 
 **Key capabilities:**
-- **Dual backends**: `:fd` (memory-efficient) and `:ad` (higher numerical accuracy)  
+- **Dual backends**: Both achieve zero allocations. `derivativeevaluator_ad(...)` (ADEvaluator) preferred for higher accuracy and performance. `derivativeevaluator_fd(...)` (FDEvaluator) alternative with explicit step control.
+- **Type dispatch**: Method selection based on concrete evaluator types, no keywords needed
 - **η and μ cases**: Linear predictors and link function transformations
 - **Delta method**: Standard error computation for marginal effects
 - **Validated implementation**: Cross-validated against reference implementations
@@ -240,17 +283,19 @@ println("AME standard error for x: ", se_ame)
 
 ### Memory Efficiency
 
-The scenario system employs `OverrideVector` for efficient data representation:
+Counterfactual analysis uses type-stable CounterfactualVector for single-row perturbations:
 
 ```julia
-# Traditional approach: memory allocation for large datasets
-traditional = fill(42.0, 1_000_000)  # ~8MB allocation
+# Traditional approach: copy entire columns for changes
+traditional = copy(data.x)  # Full column copy
+traditional[500_000] = 42.0  # Change one value
 
-# FormulaCompiler approach: reduced memory overhead
-efficient = OverrideVector(42.0, 1_000_000)  # ~32 bytes allocation
+# FormulaCompiler approach: CounterfactualVector with O(1) memory overhead
+cf_vec = counterfactualvector(data.x, 500_000)  # ~32 bytes
+update_counterfactual_replacement!(cf_vec, 42.0)
 
-# Identical computational interface
-traditional[500_000] == efficient[500_000]  # true
+# Identical interface, but minimal memory usage
+traditional[500_000] == cf_vec[500_000]  # true, but cf_vec uses ~99.999% less memory
 ```
 
 ## Supported Formula Features
@@ -313,12 +358,11 @@ row_vec = Vector{Float64}(undef, length(compiled))
 # Performance improvement with reduced memory allocation
 ```
 
-**Derivative computation**: 
-- ForwardDiff-based operations involve some per-call allocations due to automatic differentiation requirements
-- Finite difference backend provides alternative with validation against automatic differentiation results
-- Marginal effects computations utilize preallocated buffers
-
-The automatic differentiation backend for batch gradient operations (`accumulate_ame_gradient!`) involves allocations. Users with strict memory constraints should utilize the `:fd` backend, which provides mathematically equivalent results with reduced memory overhead.
+**Derivative computation**:
+- Both ForwardDiff (`:ad`) and finite differences (`:fd`) backends achieve zero allocations
+- `:ad` backend preferred: Higher accuracy (machine precision) and faster performance
+- `:fd` backend alternative: Explicit step size control
+- All marginal effects computations utilize preallocated buffers
 
 ## Architecture
 

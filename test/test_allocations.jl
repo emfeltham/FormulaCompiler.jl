@@ -1,6 +1,10 @@
 # test_allocations.jl
-# Formal test suite for zero-allocation verification
-# "allocation_survey.jl" prints allocations to a table.
+# SMOKE TEST: Quick zero-allocation verification for model compilation
+#
+# Purpose: Fast sanity check that basic model compilation completes without errors
+# Scope: Tests compile_formula() for LM, GLM, LMM, GLMM models
+# Note: For comprehensive allocation testing, see test_derivative_allocations.jl
+#
 # julia --project="test" test/test_allocations.jl > test/test_allocations.txt 2>&1
 
 using Test
