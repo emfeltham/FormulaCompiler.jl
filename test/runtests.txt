@@ -1,8 +1,8 @@
-The latest version of Julia in the `release` channel is 1.11.7+0.aarch64.apple.darwin14. You currently have `1.11.2+0.aarch64.apple.darwin14` installed. Run:
+The latest version of Julia in the `release` channel is 1.12.0+0.aarch64.apple.darwin14. You currently have `1.11.2+0.aarch64.apple.darwin14` installed. Run:
 
   juliaup update
 
-in your terminal shell to install Julia 1.11.7+0.aarch64.apple.darwin14 and update the `release` channel to that version.
+in your terminal shell to install Julia 1.12.0+0.aarch64.apple.darwin14 and update the `release` channel to that version.
      Testing FormulaCompiler
 ┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "Adapt" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
 └ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
@@ -28,7 +28,7 @@ in your terminal shell to install Julia 1.11.7+0.aarch64.apple.darwin14 and upda
 └ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
 ┌ Warning: Entry in manifest at "/Users/emf/.julia/dev/FormulaCompiler/test" for package "Compat" differs from that in "/Users/emf/.julia/dev/FormulaCompiler/Manifest.toml"
 └ @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1871
-      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_JIHgUK/Project.toml`
+      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_CvsKsn/Project.toml`
   [6e4b80f9] BenchmarkTools v1.6.0
   [336ed68f] CSV v0.10.15
 ⌅ [324d7699] CategoricalArrays v0.10.8
@@ -45,7 +45,7 @@ in your terminal shell to install Julia 1.11.7+0.aarch64.apple.darwin14 and upda
   [37e2e46d] LinearAlgebra v1.11.0
   [9a3f8284] Random v1.11.0
   [8dfed614] Test v1.11.0
-      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_JIHgUK/Manifest.toml`
+      Status `/private/var/folders/td/5b_qj7x16jlfbrt5dgq_y34m0000gp/T/jl_CvsKsn/Manifest.toml`
 ⌃ [79e6a3ab] Adapt v4.3.0
   [66dad0bd] AliasTables v1.1.3
 ⌃ [4c555306] ArrayLayouts v1.11.2
@@ -78,7 +78,7 @@ in your terminal shell to install Julia 1.11.7+0.aarch64.apple.darwin14 and upda
   [4e289a0a] EnumX v1.0.5
   [e2ba6199] ExprTools v0.1.10
   [442a2c76] FastGaussQuadrature v1.0.2
-  [5789e2e9] FileIO v1.17.0
+⌃ [5789e2e9] FileIO v1.17.0
   [48062228] FilePathsBase v0.9.24
 ⌃ [1a297f60] FillArrays v1.13.0
   [72341345] FormulaCompiler v1.0.0 `~/.julia/dev/FormulaCompiler`
@@ -197,742 +197,98 @@ in your terminal shell to install Julia 1.11.7+0.aarch64.apple.darwin14 and upda
   [8e850ede] nghttp2_jll v1.59.0+0
   [3f19e933] p7zip_jll v17.4.0+2
         Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading.
-Precompiling project for configuration --code-coverage=none --color=auto --check-bounds=yes --warn-overwrite=yes --depwarn=yes --inline=yes --startup-file=no --track-allocation=none...
-   3812.4 ms  ✓ FormulaCompiler
-  1 dependency successfully precompiled in 5 seconds. 162 already precompiled.
      Testing Running tests...
+WARNING: could not import FormulaCompiler.validate_mixture_weights into Main
+WARNING: could not import FormulaCompiler.validate_mixture_levels into Main
+[ Info: Creating 100K observation dataset...
+[ Info: Dataset created: 100000 rows, 12 columns
+[ Info: Fitting complex model...
+[ Info: Testing compilation performance...
+[ Info: Compilation time: 0.53s
+[ Info: Testing ContrastEvaluator construction...
+[ Info: ContrastEvaluator construction time: 0.113s
+[ Info: Testing evaluation performance...
+[ Info: Mean evaluation time: 309.0ns
+[ Info: Max evaluation time: 332.1ns
+[ Info: Testing allocation performance...
+[ Info: Allocation results: min=0, max=0, mean=0.0
+[ Info: ✓ Perfect zero allocations confirmed
+[ Info: Testing memory usage scaling...
+[ Info: ContrastEvaluator memory usage: 864 bytes
+[ Info: Testing correctness on random samples...
+[ Info: ✓ All correctness tests passed
+[ Info: Creating dataset with 50+ categorical levels...
+[ Info: High cardinality variable: 60 levels
+[ Info: Testing high-cardinality ContrastEvaluator...
+[ Info: Testing contrast between Level_12 and Level_15...
+[ Info: High-cardinality contrast time: 821.4ns
+[ Info: Testing performance scaling with categorical levels...
+[ Info: Performance ratio (60 vs 5 levels): 0.86x
+[ Info: Testing multiple variables performance...
+[ Info: Model compiled with 38 terms
+[ Info: Creating ContrastEvaluator with 12 variables...
+[ Info: Testing performance across variable types...
+[ Info: Variable cat1: 256.1ns
+[ Info: Variable cat2: 256.6ns
+[ Info: Variable cat3: 261.4ns
+[ Info: Variable cat4: 258.9ns
+[ Info: Variable cat5: 264.9ns
+[ Info: Variable cat6: 271.0ns
+[ Info: Testing batch performance...
+[ Info: Mean batch time: 229.2ns
+[ Info: ContrastEvaluator memory with 12 vars: 968 bytes
+[ Info: Testing memory scaling properties...
+[ Info: Memory usage by dataset size:
+[ Info:   1000 rows: 192 bytes
+[ Info:   10000 rows: 192 bytes
+[ Info:   50000 rows: 192 bytes
+[ Info: Memory scaling ratio (50K vs 1K): 1.0x
 Continuous override benchmark:
   Memory: 0 bytes
   Allocations: 0
-  Min time: 0.013263263263263264 μs
+  Min time: 0.01598997995991984 μs
 Boolean override benchmark:
   Memory: 0 bytes
   Allocations: 0
-  Min time: 0.013513513513513514 μs
+  Min time: 0.014486973947895792 μs
 Categorical override benchmark:
   Memory: 0 bytes
   Allocations: 0
-  Min time: 0.013513513513513514 μs
+  Min time: 0.015947895791583167 μs
 Mixed override benchmark:
   Memory: 0 bytes
   Allocations: 0
-  Min time: 0.012595595595595595 μs
+  Min time: 0.014264264264264264 μs
 ✓ All 6 test rows achieved zero allocation
 Performance comparison:
   Normal - Memory: 0 bytes, Allocs: 0
   Override - Memory: 0 bytes, Allocs: 0
-  Normal - Min time: 0.013763763763763764 μs
-  Override - Min time: 0.013304304304304305 μs
-✓ Override performance ratio: 0.97x
+  Normal - Min time: 0.01544689378757515 μs
+  Override - Min time: 0.015723723723723725 μs
+✓ Override performance ratio: 1.02x
 Complex model override benchmark:
   Memory: 0 bytes
   Allocations: 0
-  Min time: 0.023427710843373493 μs
+  Min time: 0.0245140562248996 μs
 ✓ All compressed categorical tests passed
-create_mixture_column Integration: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:355
-  Got exception outside of a @test
-  UndefVarError: `create_mixture_column` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:358 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:357 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:355 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:18
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:34 [inlined]
-   [10] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [11] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [12] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [13] top-level scope
-      @ none:6
-   [14] eval
-      @ ./boot.jl:430 [inlined]
-   [15] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [16] _start()
-      @ Base ./client.jl:531
-expand_mixture_grid Integration: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:375
-  Got exception outside of a @test
-  UndefVarError: `expand_mixture_grid` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:379 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:376 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:355 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:18
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:34 [inlined]
-   [10] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [11] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [12] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [13] top-level scope
-      @ none:6
-   [14] eval
-      @ ./boot.jl:430 [inlined]
-   [15] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [16] _start()
-      @ Base ./client.jl:531
-create_balanced_mixture Integration: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:400
-  Test threw exception
-  Expression: all((w ≈ 1 / 3 for w = values(balanced_dict)))
-  MethodError: no method matching isapprox(::Tuple{String, Float64}, ::Float64)
-  The function `isapprox` exists, but no method is defined for this combination of argument types.
-  
-  Closest candidates are:
-    isapprox(!Matched::Missing, ::Any; kwargs...)
-     @ Base missing.jl:90
-    isapprox(::Any, !Matched::Missing; kwargs...)
-     @ Base missing.jl:91
-    isapprox(!Matched::Union{StatsBase.PValue, StatsBase.TestStat}, ::Real; kwargs...)
-     @ StatsBase ~/.julia/packages/StatsBase/yZS2U/src/statmodels.jl:104
-    ...
-  
-  Stacktrace:
-    [1] (::var"#91#113")(w::Tuple{String, Float64})
-      @ Main ./none:0
-    [2] iterate
-      @ ./generator.jl:48 [inlined]
-    [3] _all
-      @ ./reduce.jl:1309 [inlined]
-    [4] all
-      @ ./reduce.jl:1301 [inlined]
-    [5] all(itr::Base.Generator{CategoricalMixture{String}, var"#91#113"})
-      @ Base ./reduce.jl:1193
-    [6] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:400 [inlined]
-    [7] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:676 [inlined]
-    [8] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:400 [inlined]
-    [9] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [10] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:396 [inlined]
-   [11] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [12] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:355 [inlined]
-   [13] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [14] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:18
-create_balanced_mixture Integration: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:395
-  Got exception outside of a @test
-  UndefVarError: `validate_mixture_weights` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:403 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:396 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:355 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:18
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:34 [inlined]
-   [10] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [11] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [12] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [13] top-level scope
-      @ none:6
-   [14] eval
-      @ ./boot.jl:430 [inlined]
-   [15] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [16] _start()
-      @ Base ./client.jl:531
-Large Dataset Memory Usage: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:411
-  Got exception outside of a @test
-  UndefVarError: `create_mixture_column` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:416 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:413 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:411 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_categorical_mixtures.jl:18
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:34 [inlined]
-   [10] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [11] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [12] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [13] top-level scope
-      @ none:6
-   [14] eval
-      @ ./boot.jl:430 [inlined]
-   [15] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [16] _start()
-      @ Base ./client.jl:531
-Marginal Effects with Mixtures: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_mixture_modelrows.jl:153
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixture_modelrows.jl:161 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixture_modelrows.jl:154 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixture_modelrows.jl:136 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixture_modelrows.jl:12
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:35 [inlined]
-   [10] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [11] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [12] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [13] top-level scope
-      @ none:6
-   [14] eval
-      @ ./boot.jl:430 [inlined]
-   [15] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [16] _start()
-      @ Base ./client.jl:531
-Zero Allocation Derivatives (FD): Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_mixture_modelrows.jl:198
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] var"##core#322"(gradient#318::Vector{Float64}, Gβ#319::Matrix{Float64}, de_fd#320::FormulaCompiler.FDEvaluator{Float64, Tuple{FormulaCompiler.ConstantOp{1.0, 1}, FormulaCompiler.LoadOp{:x, 2}, FormulaCompiler.LoadOp{:z, 3}, MixtureContrastOp{:group, (4, 5), (1, 2), (0.4, 0.6)}, FormulaCompiler.BinaryOp{:*, 2, 3, 6}, FormulaCompiler.BinaryOp{:*, 2, 4, 7}, FormulaCompiler.BinaryOp{:*, 2, 5, 8}, FormulaCompiler.BinaryOp{:*, 3, 4, 9}, FormulaCompiler.BinaryOp{:*, 3, 5, 10}, FormulaCompiler.BinaryOp{:*, 2, 3, 11}, FormulaCompiler.BinaryOp{:*, 11, 4, 12}, FormulaCompiler.BinaryOp{:*, 2, 3, 13}, FormulaCompiler.BinaryOp{:*, 13, 5, 14}, FormulaCompiler.CopyOp{1, 1}, FormulaCompiler.CopyOp{2, 2}, FormulaCompiler.CopyOp{3, 3}, FormulaCompiler.CopyOp{4, 4}, FormulaCompiler.CopyOp{5, 5}, FormulaCompiler.CopyOp{6, 6}, FormulaCompiler.CopyOp{7, 7}, FormulaCompiler.CopyOp{8, 8}, FormulaCompiler.CopyOp{9, 9}, FormulaCompiler.CopyOp{10, 10}, FormulaCompiler.CopyOp{12, 11}, FormulaCompiler.CopyOp{14, 12}}, 14, 12, @NamedTuple{x::Vector{Float64}, z::Vector{Float64}, group::Vector{CategoricalMixture{String}}}, @NamedTuple{x::NumericCounterfactualVector{Float64}, z::NumericCounterfactualVector{Float64}, group::Vector{CategoricalMixture{String}}}, Tuple{NumericCounterfactualVector{Float64}, NumericCounterfactualVector{Float64}}}, coeffs#321::Vector{Float64})
-      @ Main ~/.julia/packages/BenchmarkTools/1i1mY/src/execution.jl:598
-    [2] var"##sample#323"(::Tuple{Vector{Float64}, Matrix{Float64}, FormulaCompiler.FDEvaluator{Float64, Tuple{FormulaCompiler.ConstantOp{1.0, 1}, FormulaCompiler.LoadOp{:x, 2}, FormulaCompiler.LoadOp{:z, 3}, MixtureContrastOp{:group, (4, 5), (1, 2), (0.4, 0.6)}, FormulaCompiler.BinaryOp{:*, 2, 3, 6}, FormulaCompiler.BinaryOp{:*, 2, 4, 7}, FormulaCompiler.BinaryOp{:*, 2, 5, 8}, FormulaCompiler.BinaryOp{:*, 3, 4, 9}, FormulaCompiler.BinaryOp{:*, 3, 5, 10}, FormulaCompiler.BinaryOp{:*, 2, 3, 11}, FormulaCompiler.BinaryOp{:*, 11, 4, 12}, FormulaCompiler.BinaryOp{:*, 2, 3, 13}, FormulaCompiler.BinaryOp{:*, 13, 5, 14}, FormulaCompiler.CopyOp{1, 1}, FormulaCompiler.CopyOp{2, 2}, FormulaCompiler.CopyOp{3, 3}, FormulaCompiler.CopyOp{4, 4}, FormulaCompiler.CopyOp{5, 5}, FormulaCompiler.CopyOp{6, 6}, FormulaCompiler.CopyOp{7, 7}, FormulaCompiler.CopyOp{8, 8}, FormulaCompiler.CopyOp{9, 9}, FormulaCompiler.CopyOp{10, 10}, FormulaCompiler.CopyOp{12, 11}, FormulaCompiler.CopyOp{14, 12}}, 14, 12, @NamedTuple{x::Vector{Float64}, z::Vector{Float64}, group::Vector{CategoricalMixture{String}}}, @NamedTuple{x::NumericCounterfactualVector{Float64}, z::NumericCounterfactualVector{Float64}, group::Vector{CategoricalMixture{String}}}, Tuple{NumericCounterfactualVector{Float64}, NumericCounterfactualVector{Float64}}}, Vector{Float64}}, __params::BenchmarkTools.Parameters)
-      @ Main ~/.julia/packages/BenchmarkTools/1i1mY/src/execution.jl:607
-    [3] _run(b::BenchmarkTools.Benchmark, p::BenchmarkTools.Parameters; verbose::Bool, pad::String, warmup::Bool, kwargs::@Kwargs{})
-      @ BenchmarkTools ~/.julia/packages/BenchmarkTools/1i1mY/src/execution.jl:113
-    [4] #invokelatest#2
-      @ ./essentials.jl:1057 [inlined]
-    [5] invokelatest
-      @ ./essentials.jl:1052 [inlined]
-    [6] #run_result#45
-      @ ~/.julia/packages/BenchmarkTools/1i1mY/src/execution.jl:48 [inlined]
-    [7] run_result
-      @ ~/.julia/packages/BenchmarkTools/1i1mY/src/execution.jl:47 [inlined]
-    [8] run(b::BenchmarkTools.Benchmark, p::BenchmarkTools.Parameters; progressid::Nothing, nleaves::Float64, ndone::Float64, kwargs::@Kwargs{warmup::Bool})
-      @ BenchmarkTools ~/.julia/packages/BenchmarkTools/1i1mY/src/execution.jl:143
-    [9] run
-      @ ~/.julia/packages/BenchmarkTools/1i1mY/src/execution.jl:135 [inlined]
-   [10] macro expansion
-      @ ~/.julia/packages/BenchmarkTools/1i1mY/src/execution.jl:462 [inlined]
-   [11] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixture_modelrows.jl:204 [inlined]
-   [12] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [13] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixture_modelrows.jl:199 [inlined]
-   [14] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [15] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixture_modelrows.jl:136 [inlined]
-   [16] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [17] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixture_modelrows.jl:12
-   [18] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [19] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:35 [inlined]
-   [20] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [21] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [22] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [23] top-level scope
-      @ none:6
-   [24] eval
-      @ ./boot.jl:430 [inlined]
-   [25] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [26] _start()
-      @ Base ./client.jl:531
-ForwardDiff and FD fallback: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives.jl:67
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:145 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:69 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:63
-    [6] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:38 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] top-level scope
-      @ none:6
-   [12] eval
-      @ ./boot.jl:430 [inlined]
-   [13] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [14] _start()
-      @ Base ./client.jl:531
-FD marginal effects consistency across rows: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives.jl:366
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:378 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:368 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:279 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:63
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:38 [inlined]
-   [10] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [11] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [12] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [13] top-level scope
-      @ none:6
-   [14] eval
-      @ ./boot.jl:430 [inlined]
-   [15] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [16] _start()
-      @ Base ./client.jl:531
-Many variables FD scaling: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives.jl:389
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:419 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:391 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:279 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:63
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:38 [inlined]
-   [10] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [11] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [12] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [13] top-level scope
-      @ none:6
-   [14] eval
-      @ ./boot.jl:430 [inlined]
-   [15] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [16] _start()
-      @ Base ./client.jl:531
-delta_method_se: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives.jl:457
-  Got exception outside of a @test
-  UndefVarError: `delta_method_se` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:463 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:459 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:428
-    [6] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:38 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] top-level scope
-      @ none:6
-   [12] eval
-      @ ./boot.jl:430 [inlined]
-   [13] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [14] _start()
-      @ Base ./client.jl:531
-Integrated workflow: Parameter gradients from marginal_effects: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives.jl:478
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:484 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:480 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:428
-    [6] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:38 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] top-level scope
-      @ none:6
-   [12] eval
-      @ ./boot.jl:430 [inlined]
-   [13] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [14] _start()
-      @ Base ./client.jl:531
-Integer marginal effects: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives.jl:605
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:620 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:606 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:514 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives.jl:428
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:38 [inlined]
-   [10] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [11] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [12] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [13] top-level scope
-      @ none:6
-   [14] eval
-      @ ./boot.jl:430 [inlined]
-   [15] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [16] _start()
-      @ Base ./client.jl:531
-Link functions: marginal effects μ: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_links.jl:9
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_links.jl:22 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_links.jl:10
-    [4] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:39 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] top-level scope
-      @ none:6
-   [10] eval
-      @ ./boot.jl:430 [inlined]
-   [11] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [12] _start()
-      @ Base ./client.jl:531
-Parameter Gradient Matrix Allocation Checks: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:45
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:78 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivative_allocations.jl:46
-    [4] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:40 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] top-level scope
-      @ none:6
-   [10] eval
-      @ ./boot.jl:430 [inlined]
-   [11] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [12] _start()
-      @ Base ./client.jl:531
-Quick Reference Examples: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:9
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:31 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:11 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:9
-    [6] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:42 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] top-level scope
-      @ none:6
-   [12] eval
-      @ ./boot.jl:430 [inlined]
-   [13] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [14] _start()
-      @ Base ./client.jl:531
-Economics Examples - Ecdat/Bwages: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:35
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:57 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:37 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:9
-    [6] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:42 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] top-level scope
-      @ none:6
-   [12] eval
-      @ ./boot.jl:430 [inlined]
-   [13] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [14] _start()
-      @ Base ./client.jl:531
-Engineering Examples - datasets/mtcars: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:61
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:85 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:63 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:9
-    [6] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:42 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] top-level scope
-      @ none:6
-   [12] eval
-      @ ./boot.jl:430 [inlined]
-   [13] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [14] _start()
-      @ Base ./client.jl:531
-Biostatistics Examples - survival/lung: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:89
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:116 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:91 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_documentation_examples.jl:9
-    [6] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:42 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] top-level scope
-      @ none:6
-   [12] eval
-      @ ./boot.jl:430 [inlined]
-   [13] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [14] _start()
-      @ Base ./client.jl:531
 
 === modelrow() Allocations ===
   Allocations: 0
   Memory: 0 bytes
-  Median time: 708.0 ns
+  Median time: 584.0 ns
 
 === derivative_modelrow!() Allocations (AD backend) ===
   Variables: [:age_h, :dists_p_inv, :are_related_dists_a_inv, :schoolyears_h]
   Allocations: 0
   Memory: 0 bytes
-  Median time: 2000.0 ns
+  Median time: 2167.0 ns
   NOTE: Uses 53-column NamedTuple; cached columns keep allocations at zero
 
 === derivative_modelrow!() Allocations (FD backend) ===
   Variables: [:age_h, :dists_p_inv, :are_related_dists_a_inv, :schoolyears_h]
   Allocations: 0
   Memory: 0 bytes
-  Median time: 5000.0 ns
+  Median time: 5291.0 ns
 
 === Batch modelrow() n=100 ===
   Total allocations: 0
@@ -974,247 +330,11 @@ Biostatistics Examples - survival/lung: Error During Test at /Users/emf/.julia/d
   Allocations: 0
   Memory: 0 bytes
   Dataset columns: 53
-FD log profile regression: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_derivatives_log_profile_regression.jl:5
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] (::var"#143#149"{Vector{Float64}, Vector{Float64}, Int64, FormulaCompiler.ADEvaluator{FormulaCompiler.ADEvaluatorCore{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}, Tuple{FormulaCompiler.ConstantOp{1.0, 1}, FormulaCompiler.LoadOp{:x, 2}, FormulaCompiler.UnaryOp{:log, 2, 3}, FormulaCompiler.CopyOp{1, 1}, FormulaCompiler.CopyOp{3, 2}}, 3, 2, @NamedTuple{x::Vector{Float64}, z::Vector{Float64}, y::Vector{Float64}}, @NamedTuple{x::NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}, z::Vector{Float64}, y::Vector{Float64}}, 1, Tuple{NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}}}, FormulaCompiler.JacobianContext{FormulaCompiler.DerivClosure{FormulaCompiler.ADEvaluatorCore{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}, Tuple{FormulaCompiler.ConstantOp{1.0, 1}, FormulaCompiler.LoadOp{:x, 2}, FormulaCompiler.UnaryOp{:log, 2, 3}, FormulaCompiler.CopyOp{1, 1}, FormulaCompiler.CopyOp{3, 2}}, 3, 2, @NamedTuple{x::Vector{Float64}, z::Vector{Float64}, y::Vector{Float64}}, @NamedTuple{x::NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}, z::Vector{Float64}, y::Vector{Float64}}, 1, Tuple{NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}}}}, ForwardDiff.JacobianConfig{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1, Vector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}}, Tuple{Vector{Float64}}}}})()
-      @ Main ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:924
-    [2] (::Base.RedirectStdStream)(thunk::var"#143#149"{Vector{Float64}, Vector{Float64}, Int64, FormulaCompiler.ADEvaluator{FormulaCompiler.ADEvaluatorCore{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}, Tuple{FormulaCompiler.ConstantOp{1.0, 1}, FormulaCompiler.LoadOp{:x, 2}, FormulaCompiler.UnaryOp{:log, 2, 3}, FormulaCompiler.CopyOp{1, 1}, FormulaCompiler.CopyOp{3, 2}}, 3, 2, @NamedTuple{x::Vector{Float64}, z::Vector{Float64}, y::Vector{Float64}}, @NamedTuple{x::NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}, z::Vector{Float64}, y::Vector{Float64}}, 1, Tuple{NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}}}, FormulaCompiler.JacobianContext{FormulaCompiler.DerivClosure{FormulaCompiler.ADEvaluatorCore{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}, Tuple{FormulaCompiler.ConstantOp{1.0, 1}, FormulaCompiler.LoadOp{:x, 2}, FormulaCompiler.UnaryOp{:log, 2, 3}, FormulaCompiler.CopyOp{1, 1}, FormulaCompiler.CopyOp{3, 2}}, 3, 2, @NamedTuple{x::Vector{Float64}, z::Vector{Float64}, y::Vector{Float64}}, @NamedTuple{x::NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}, z::Vector{Float64}, y::Vector{Float64}}, 1, Tuple{NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}}}}, ForwardDiff.JacobianConfig{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1, Vector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}}, Tuple{Vector{Float64}}}}}, stream::IOStream)
-      @ Base ./stream.jl:1464
-    [3] #142
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:923 [inlined]
-    [4] open(::var"#142#148"{Vector{Float64}, Vector{Float64}, Int64, FormulaCompiler.ADEvaluator{FormulaCompiler.ADEvaluatorCore{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}, Tuple{FormulaCompiler.ConstantOp{1.0, 1}, FormulaCompiler.LoadOp{:x, 2}, FormulaCompiler.UnaryOp{:log, 2, 3}, FormulaCompiler.CopyOp{1, 1}, FormulaCompiler.CopyOp{3, 2}}, 3, 2, @NamedTuple{x::Vector{Float64}, z::Vector{Float64}, y::Vector{Float64}}, @NamedTuple{x::NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}, z::Vector{Float64}, y::Vector{Float64}}, 1, Tuple{NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}}}, FormulaCompiler.JacobianContext{FormulaCompiler.DerivClosure{FormulaCompiler.ADEvaluatorCore{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}, Tuple{FormulaCompiler.ConstantOp{1.0, 1}, FormulaCompiler.LoadOp{:x, 2}, FormulaCompiler.UnaryOp{:log, 2, 3}, FormulaCompiler.CopyOp{1, 1}, FormulaCompiler.CopyOp{3, 2}}, 3, 2, @NamedTuple{x::Vector{Float64}, z::Vector{Float64}, y::Vector{Float64}}, @NamedTuple{x::NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}, z::Vector{Float64}, y::Vector{Float64}}, 1, Tuple{NumericCounterfactualVector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}}}}, ForwardDiff.JacobianConfig{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1, Vector{ForwardDiff.Dual{ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}, Float64, 1}}}, Tuple{Vector{Float64}}}}}, ::String, ::Vararg{String}; kwargs::@Kwargs{})
-      @ Base ./io.jl:410
-    [5] open(::Function, ::String, ::String)
-      @ Base ./io.jl:407
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:922 [inlined]
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives_log_profile_regression.jl:44 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_derivatives_log_profile_regression.jl:7
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:49 [inlined]
-   [12] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [13] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [14] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [15] top-level scope
-      @ none:6
-   [16] eval
-      @ ./boot.jl:430 [inlined]
-   [17] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [18] _start()
-      @ Base ./client.jl:531
-Derivative Integration: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_standardized_predictors.jl:280
-  Got exception outside of a @test
-  UndefVarError: `marginal_effects_eta!` not defined in `FormulaCompiler`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] getproperty(x::Module, f::Symbol)
-      @ Base ./Base.jl:42
-    [2] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_standardized_predictors.jl:293 [inlined]
-    [3] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [4] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_standardized_predictors.jl:282 [inlined]
-    [5] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [6] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_standardized_predictors.jl:19
-    [7] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [8] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:54 [inlined]
-    [9] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [10] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [11] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [12] top-level scope
-      @ none:6
-   [13] eval
-      @ ./boot.jl:430 [inlined]
-   [14] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [15] _start()
-      @ Base ./client.jl:531
-Logistic gradient computation: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:173
-  Got exception outside of a @test
-  UndefVarError: `delta_method_se` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:183 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:175 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:140 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:139 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:18
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:55 [inlined]
-   [12] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [13] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [14] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [15] top-level scope
-      @ none:6
-   [16] eval
-      @ ./boot.jl:430 [inlined]
-   [17] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [18] _start()
-      @ Base ./client.jl:531
-Poisson gradient computation: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:229
-  Got exception outside of a @test
-  UndefVarError: `delta_method_se` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:239 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:231 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:214 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:213 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:18
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:55 [inlined]
-   [12] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [13] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [14] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [15] top-level scope
-      @ none:6
-   [16] eval
-      @ ./boot.jl:430 [inlined]
-   [17] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [18] _start()
-      @ Base ./client.jl:531
-NB gradient computation: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:294
-  Got exception outside of a @test
-  UndefVarError: `delta_method_se` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:303 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:295 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:278 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:277 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:18
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:55 [inlined]
-   [12] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [13] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [14] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [15] top-level scope
-      @ none:6
-   [16] eval
-      @ ./boot.jl:430 [inlined]
-   [17] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [18] _start()
-      @ Base ./client.jl:531
 ✓ Negative Binomial models supported and working
-Link Function Differentiation: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:352
-  Got exception outside of a @test
-  UndefVarError: `delta_method_se` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:379 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:354 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:321 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_glm_integration.jl:18
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:55 [inlined]
-   [10] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [11] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [12] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [13] top-level scope
-      @ none:6
-   [14] eval
-      @ ./boot.jl:430 [inlined]
-   [15] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [16] _start()
-      @ Base ./client.jl:531
-Linear: Treatment=45.3ns, Binary=43.2ns
-Logistic: Treatment=41.5ns, Binary=42.0ns
-Poisson: Treatment=42.6ns, Binary=44.9ns
-Large dataset (2000 rows): 66.7ns
+Linear: Treatment=44.5ns, Binary=47.8ns
+Logistic: Treatment=43.9ns, Binary=44.2ns
+Poisson: Treatment=41.8ns, Binary=44.7ns
+Large dataset (2000 rows): 66.6ns
 GLM Integration Tests (Phase 6.2.1) completed successfully!
 ✓ Linear, Logistic, and Poisson models fully supported
 ✓ All link functions working correctly with gradient computation
@@ -1222,127 +342,8 @@ GLM Integration Tests (Phase 6.2.1) completed successfully!
 ✓ Mathematical consistency validated across model types
 ✓ Fixed effects extraction and contrast computation validated
 ✓ Multiple random effects grouping handled correctly
-GLMM gradient computation: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:211
-  Got exception outside of a @test
-  UndefVarError: `delta_method_se` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:221 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:213 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:187 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:185 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:18
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:56 [inlined]
-   [12] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [13] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [14] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [15] top-level scope
-      @ none:6
-   [16] eval
-      @ ./boot.jl:430 [inlined]
-   [17] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [18] _start()
-      @ Base ./client.jl:531
-Poisson GLMM gradients: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:253
-  Got exception outside of a @test
-  UndefVarError: `delta_method_se` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:261 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:254 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:231 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:185 [inlined]
-    [8] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [9] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:18
-   [10] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [11] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:56 [inlined]
-   [12] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [13] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [14] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [15] top-level scope
-      @ none:6
-   [16] eval
-      @ ./boot.jl:430 [inlined]
-   [17] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [18] _start()
-      @ Base ./client.jl:531
 ✓ Poisson GLMM successfully tested
-GLMM vs GLM consistency: Error During Test at /Users/emf/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:313
-  Got exception outside of a @test
-  UndefVarError: `delta_method_se` not defined in `Main`
-  Suggestion: check for spelling errors or missing imports.
-  Stacktrace:
-    [1] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:343 [inlined]
-    [2] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [3] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:315 [inlined]
-    [4] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [5] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:281 [inlined]
-    [6] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-    [7] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/test_mixedmodels_integration.jl:18
-    [8] include(fname::String)
-      @ Main ./sysimg.jl:38
-    [9] macro expansion
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:56 [inlined]
-   [10] macro expansion
-      @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Test/src/Test.jl:1704 [inlined]
-   [11] top-level scope
-      @ ~/.julia/dev/FormulaCompiler/test/runtests.jl:19
-   [12] include(fname::String)
-      @ Main ./sysimg.jl:38
-   [13] top-level scope
-      @ none:6
-   [14] eval
-      @ ./boot.jl:430 [inlined]
-   [15] exec_options(opts::Base.JLOptions)
-      @ Base ./client.jl:296
-   [16] _start()
-      @ Base ./client.jl:531
-Large mixed model (1000 obs): Treatment=61.0ns, Condition=62.1ns, Binary=65.5ns
+Large mixed model (1000 obs): Treatment=64.8ns, Condition=64.1ns, Binary=65.7ns
 MixedModels Integration Tests (Phase 6.2.2) completed successfully!
 ✓ Linear and Generalized Linear Mixed Models fully supported
 ✓ Fixed effects extraction and contrast computation validated
@@ -1350,187 +351,6 @@ MixedModels Integration Tests (Phase 6.2.2) completed successfully!
 ✓ Zero allocations maintained across all mixed model types
 ✓ Performance scaling confirmed with large hierarchical datasets
 ✓ Gradient computation and standard errors working for GLMMs
-Test Summary:                                                      | Pass  Error  Total      Time
-FormulaCompiler.jl Tests                                           | 1752     28   1780  12m37.8s
-  Position Mapping Tests                                           |  103           103     40.9s
-  Zero Allocation Survey                                           |  105           105     43.3s
-  Model Correctness Tests                                          |  545           545      8.7s
-  Formula Logic Tests                                              |   41            41      4.7s
-  Tough Formula Direct Compilation                                 |    7             7     24.1s
-  CounterfactualVector System Tests                                |   80            80      2.2s
-  Zero Allocation Override Performance                             |   28            28     12.0s
-  Check variable differentiation                                   |    6             6      0.4s
-  Categorical Override Tests                                       |   77            77      2.2s
-  Baseline Level Extraction                                        |   17            17      1.0s
-  Compressed categorical arrays                                    |   37            37      8.5s
-  Categorical Mixtures - Comprehensive Test Suite                  |   58      5     63      2.2s
-    Basic Mixture Compilation                                      |   16            16      0.3s
-    Zero-Allocation Execution Performance                          |    2             2      0.1s
-    Correctness vs Manual Weighted Combinations                    |    8             8      0.1s
-    Edge Cases and Robustness                                      |    7             7      0.1s
-    Integration with Helper Functions                              |    1      4      5      1.0s
-      create_mixture_column Integration                            |           1      1      0.6s
-      expand_mixture_grid Integration                              |           1      1      0.1s
-      create_balanced_mixture Integration                          |    1      2      3      0.4s
-    Memory Usage and Scalability                                   |   10      1     11      0.0s
-      Large Dataset Memory Usage                                   |           1      1      0.0s
-      Mixture Operation Scalability                                |   10            10      0.0s
-    Boolean Mixture Support                                        |   14            14      0.6s
-  Modelrow Functions with Categorical Mixtures                     |   17      2     19      2.9s
-    Basic Modelrow Functions                                       |   11            11      1.2s
-    Mathematical Correctness                                       |    2             2      0.2s
-    Derivative Modelrow Functions                                  |    1      2      3      1.2s
-      Marginal Effects with Mixtures                               |           1      1      0.0s
-      Zero Allocation Derivatives (FD)                             |           1      1      0.1s
-    Multi-level Mixtures                                           |    3             3      0.3s
-  Derivative correctness                                           |   22      3     25      6.1s
-    ForwardDiff and FD fallback                                    |    4      1      5      2.2s
-    Single-column FD and parameter gradients                       |    4             4      0.0s
-    GLM(Logit) and MixedModels                                     |    2             2      1.7s
-    FD backend robustness and edge cases                           |   12      2     14      2.2s
-      Different step sizes                                         |    2             2      0.1s
-      All categorical combinations                                 |    6             6      0.1s
-      Extreme variable scales with FD                              |    3             3      0.1s
-      FD marginal effects consistency across rows                  |           1      1      0.0s
-      Many variables FD scaling                                    |    1      1      2      1.0s
-  Variance Computation Primitives                                  |   10      3     13      4.9s
-    delta_method_se                                                |           1      1      0.0s
-    Integrated workflow: Parameter gradients from marginal_effects |           1      1      0.0s
-WARNING: could not import FormulaCompiler.create_mixture_column into Main
-WARNING: could not import FormulaCompiler.expand_mixture_grid into Main
-WARNING: could not import FormulaCompiler.validate_mixture_weights into Main
-WARNING: could not import FormulaCompiler.validate_mixture_levels into Main
-[ Info: Creating 100K observation dataset...
-[ Info: Dataset created: 100000 rows, 12 columns
-[ Info: Fitting complex model...
-[ Info: Testing compilation performance...
-[ Info: Compilation time: 0.516s
-[ Info: Testing ContrastEvaluator construction...
-[ Info: ContrastEvaluator construction time: 0.122s
-[ Info: Testing evaluation performance...
-[ Info: Mean evaluation time: 303.8ns
-[ Info: Max evaluation time: 328.6ns
-[ Info: Testing allocation performance...
-[ Info: Allocation results: min=0, max=0, mean=0.0
-[ Info: ✓ Perfect zero allocations confirmed
-[ Info: Testing memory usage scaling...
-[ Info: ContrastEvaluator memory usage: 864 bytes
-[ Info: Testing correctness on random samples...
-[ Info: ✓ All correctness tests passed
-[ Info: Creating dataset with 50+ categorical levels...
-[ Info: High cardinality variable: 60 levels
-[ Info: Testing high-cardinality ContrastEvaluator...
-[ Info: Testing contrast between Level_12 and Level_15...
-[ Info: High-cardinality contrast time: 818.9ns
-[ Info: Testing performance scaling with categorical levels...
-[ Info: Performance ratio (60 vs 5 levels): 0.87x
-[ Info: Testing multiple variables performance...
-[ Info: Model compiled with 38 terms
-[ Info: Creating ContrastEvaluator with 12 variables...
-[ Info: Testing performance across variable types...
-[ Info: Variable cat1: 258.9ns
-[ Info: Variable cat2: 262.3ns
-[ Info: Variable cat3: 267.3ns
-[ Info: Variable cat4: 268.9ns
-[ Info: Variable cat5: 274.7ns
-[ Info: Variable cat6: 276.6ns
-[ Info: Testing batch performance...
-[ Info: Mean batch time: 225.7ns
-[ Info: ContrastEvaluator memory with 12 vars: 968 bytes
-[ Info: Testing memory scaling properties...
-[ Info: Memory usage by dataset size:
-[ Info:   1000 rows: 192 bytes
-[ Info:   10000 rows: 192 bytes
-[ Info:   50000 rows: 192 bytes
-[ Info: Memory scaling ratio (50K vs 1K): 1.0x
-ERROR: LoadError: Some tests did not pass: 1752 passed, 0 failed, 28 errored, 0 broken.
-in expression starting at /Users/emf/.julia/dev/FormulaCompiler/test/runtests.jl:17
-    Integer Continuous Variables Derivatives                       |   10      1     11      3.8s
-      Integer variable derivatives - basic                         |    2             2      1.0s
-      Integer with interactions                                    |    1             1      0.3s
-      Multiple integer variables                                   |    4             4      1.0s
-      Mixed integer and float derivatives                          |    1             1      0.4s
-      Integer marginal effects                                     |           1      1      0.4s
-      Integer transformations                                      |    2             2      0.6s
-  Link functions: marginal effects μ                               |           1      1      0.0s
-  Parameter Gradient Matrix Allocation Checks                      |           1      1      0.0s
-  ContrastEvaluator Ground Truth Validation                        |   78            78     16.3s
-  Documentation Examples Validation                                |   22      4     26     11.7s
-    Quick Reference Examples                                       |    3      1      4      0.2s
-    Economics Examples - Ecdat/Bwages                              |    3      1      4      3.5s
-    Engineering Examples - datasets/mtcars                         |    3      1      4      2.2s
-    Biostatistics Examples - survival/lung                         |    4      1      5      0.8s
-    Social Sciences Examples - UCBAdmissions                       |    5             5      3.9s
-    Advanced Computational Patterns                                |    4             4      1.0s
-  AD Allocation Formula Variants                                   |   18            18     37.5s
-  FormulaCompiler Primitives - Complex Formula Allocations         |   20            20     42.6s
-  FD log profile regression                                        |    6      1      7      0.8s
-  Derivative domain edge cases                                     |   37            37      5.1s
-  StandardizedPredictors Correctness Tests                         |  260      1    261      4.8s
-    Single Variable Standardization                                |  153           153      0.5s
-    Multiple Variable Standardization                              |   56            56      1.0s
-    Interactions with Standardization                              |   24            24      0.6s
-    Complex Formulas with Standardization                          |   12            12      1.2s
-    Edge Cases                                                     |   10            10      0.1s
-    Performance Validation                                         |    2             2      0.9s
-    Scenario Integration                                           |    3             3      0.2s
-    Derivative Integration                                         |           1      1      0.4s
-  GLM Integration Tests (Phase 6.2.1)                              |   56      4     60     49.9s
-    Linear Model Integration                                       |   12            12      9.1s
-    Logistic Model Integration                                     |   10      1     11      6.8s
-      Basic Logistic Models                                        |    7      1      8      3.8s
-        Logistic treatment contrasts                               |    3             3      1.8s
-        Logistic binary contrasts                                  |    3             3      1.8s
-        Logistic gradient computation                              |    1      1      2      0.0s
-      Logistic Models with Interactions                            |    3             3      2.9s
-    Poisson Model Integration                                      |    5      1      6      4.7s
-      Basic Poisson Models                                         |    3      1      4      2.0s
-        Poisson treatment contrasts                                |    2             2      1.8s
-        Poisson gradient computation                               |    1      1      2      0.0s
-      Poisson Models with Offset                                   |    2             2      2.7s
-    Negative Binomial Model Integration                            |    3      1      4      2.3s
-      Basic Negative Binomial Models                               |    3      1      4      2.3s
-        Negative binomial contrasts                                |    2             2      1.7s
-        NB gradient computation                                    |    1      1      2      0.1s
-    Cross-Model Consistency Tests                                  |    3      1      4      1.4s
-      Linear vs GLM Identity Consistency                           |    2             2      0.7s
-      Link Function Differentiation                                |    1      1      2      0.7s
-    Performance Validation Across Models                           |   12            12     20.3s
-    Edge Cases and Error Handling                                  |   11            11      4.8s
-  MixedModels Integration Tests (Phase 6.2.2)                      |   56      3     59     37.6s
-    Linear Mixed Models (LMM) Integration                          |   18            18     10.0s
-    Generalized Linear Mixed Models (GLMM) Integration             |    8      2     10      5.4s
-      Logistic Mixed Models                                        |    5      1      6      3.0s
-        GLMM fixed effects extraction                              |    2             2      0.0s
-        GLMM treatment contrasts                                   |    2             2      1.8s
-        GLMM gradient computation                                  |    1      1      2      0.7s
-      Poisson Mixed Models                                         |    3      1      4      2.5s
-        Poisson GLMM contrasts                                     |    2             2      1.7s
-        Poisson GLMM gradients                                     |    1      1      2      0.0s
-    Mixed vs Fixed Effects Comparison                              |    7      1      8      1.5s
-      LMM vs LM consistency                                        |    3             3      1.0s
-      GLMM vs GLM consistency                                      |    4      1      5      0.5s
-    Complex Mixed Model Structures                                 |    6             6      6.3s
-    Performance and Scalability                                    |    6             6     12.6s
-    Error Handling and Edge Cases                                  |   11            11      1.2s
-  Large Dataset Performance (Phase 6.3.2)                          |   46            46   6m22.3s
-ERROR: Package FormulaCompiler errored during testing
-Stacktrace:
- [1] pkgerror(msg::String)
-   @ Pkg.Types ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Types.jl:68
- [2] test(ctx::Pkg.Types.Context, pkgs::Vector{Pkg.Types.PackageSpec}; coverage::Bool, julia_args::Cmd, test_args::Cmd, test_fn::Nothing, force_latest_compatible_version::Bool, allow_earlier_backwards_compatible_versions::Bool, allow_reresolve::Bool)
-   @ Pkg.Operations ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:2111
- [3] test
-   @ ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/Operations.jl:1996 [inlined]
- [4] test(ctx::Pkg.Types.Context, pkgs::Vector{Pkg.Types.PackageSpec}; coverage::Bool, test_fn::Nothing, julia_args::Cmd, test_args::Cmd, force_latest_compatible_version::Bool, allow_earlier_backwards_compatible_versions::Bool, allow_reresolve::Bool, kwargs::@Kwargs{io::IOContext{IO}})
-   @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:475
- [5] test(pkgs::Vector{Pkg.Types.PackageSpec}; io::IOContext{IO}, kwargs::@Kwargs{})
-   @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:159
- [6] test(pkgs::Vector{Pkg.Types.PackageSpec})
-   @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:148
- [7] test(; name::Nothing, uuid::Nothing, version::Nothing, url::Nothing, rev::Nothing, path::Nothing, mode::Pkg.Types.PackageMode, subdir::Nothing, kwargs::@Kwargs{})
-   @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:174
- [8] test()
-   @ Pkg.API ~/.julia/juliaup/julia-1.11.2+0.aarch64.apple.darwin14/share/julia/stdlib/v1.11/Pkg/src/API.jl:165
- [9] top-level scope
-   @ none:1
+Test Summary:            | Pass  Total      Time
+FormulaCompiler.jl Tests | 1723   1723  11m45.2s
+     Testing FormulaCompiler tests passed 
