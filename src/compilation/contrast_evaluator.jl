@@ -524,67 +524,9 @@ function contrast_gradient(
     return ∇β
 end
 
-"""
-    delta_method_se(evaluator, row, var, from, to, β, vcov, [link]) -> Float64
-
-Compute standard error for discrete effects using delta method - zero allocations.
-
-Uses the mathematical formula: SE = √(∇β' Σ ∇β) where:
-- ∇β = parameter gradient from `contrast_gradient!`
-- Σ = parameter covariance matrix
-
-# Arguments
-- `evaluator::ContrastEvaluator`: Pre-configured contrast evaluator
-- `row::Int`: Row index to evaluate
-- `var::Symbol`: Variable to contrast
-- `from`, `to`: Reference and target levels
-- `β::AbstractVector{<:Real}`: Model coefficients
-- `vcov::AbstractMatrix{<:Real}`: Parameter covariance matrix
-- `link`: GLM link function (optional, defaults to linear scale)
-
-# Returns
-- `Float64`: Standard error for the discrete effect
-
-# Performance
-- **Zero allocations** - reuses evaluator's gradient buffer
-- **Type flexibility** - accepts any Real matrix/vector types
-
-# Example
-```julia
-# Standard error for treatment effect
-se = delta_method_se(evaluator, 1, :treatment, "Control", "Drug", β, vcov)
-
-# Response scale standard error
-link = GLM.LogitLink()
-se_mu = delta_method_se(evaluator, 1, :treatment, "Control", "Drug", β, vcov, link)
-```
-"""
-function delta_method_se(
-    evaluator::ContrastEvaluator,
-    row::Int,
-    var::Symbol,
-    from, to,
-    β::AbstractVector{<:Real},
-    vcov::AbstractMatrix{<:Real},
-    link=nothing
-)
-    # Hot path: let method dispatch handle unsupported links naturally
-    # Compute parameter gradient (reuses evaluator's buffer)
-    contrast_gradient!(evaluator.gradient_buffer, evaluator, row, var, from, to, β, link)
-
-    # Delta method variance: ∇β' Σ ∇β
-    variance = dot(evaluator.gradient_buffer, vcov, evaluator.gradient_buffer)
-
-    return sqrt(max(0.0, variance))  # Ensure non-negative due to numerical precision
-end
-
 # =============================================================================
-# DEPRECATION NOTICE (2025-10-07)
-# =============================================================================
-# The delta_method_se wrapper function has been migrated to Margins.jl.
-# This function will be REMOVED in FormulaCompiler v2.0
-#
-# Migration: Add `using Margins` to access delta_method_se
+# REMOVED (2025-10-07): delta_method_se migrated to Margins.jl v2.0
+# Use: `using Margins; delta_method_se(...)`
 # =============================================================================
 
 # Internal implementation functions

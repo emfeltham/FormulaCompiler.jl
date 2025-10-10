@@ -8,16 +8,17 @@ include("derivatives/types.jl")
 include("derivatives/evaluator.jl")
 include("derivatives/automatic_diff.jl")
 include("derivatives/finite_diff.jl")
-include("derivatives/marginal_effects.jl")
-include("derivatives/marginal_effects_automatic_diff.jl")
-include("derivatives/marginal_effects_finite_diff.jl")
+# REMOVED (2025-10-07): Marginal effects functions migrated to Margins.jl v2.0
+# - marginal_effects.jl (wrapper functions)
+# - marginal_effects_automatic_diff.jl (AD backend implementations)
+# - marginal_effects_finite_diff.jl (FD backend implementations)
+# - gradients.jl (delta_method_se)
 include("derivatives/contrasts.jl")
 include("derivatives/link_functions.jl")
-include("derivatives/gradients.jl")
-include("derivatives/utilities.jl")
 
 # Export public API
-export derivativeevaluator,
+export 
+       derivativeevaluator,
        derivative_modelrow!, derivative_modelrow,
        derivative_modelrow_fd,
        # High-performance direct function calls
