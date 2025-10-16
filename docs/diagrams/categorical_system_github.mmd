@@ -21,9 +21,9 @@ graph TD
         K --> L["StatsModels Compatible Ordering<br>First component varies fast"]
     end
     
-    subgraph "Scenario Integration"
+    subgraph "Counterfactual Integration"
         M["Categorical Override"] --> N["Validate Level Exists<br>Error if invalid"]
-        N --> O["Create OverrideVector<br>Constant categorical level"]
+        N --> O["Create CounterfactualVector<br>Constant categorical level"]
         O --> P["Same Performance<br>As original data"]
     end
     
