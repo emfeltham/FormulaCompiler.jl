@@ -1,17 +1,17 @@
 flowchart TD
     A["Compiled Formula<br>from basic compilation"] --> B{Analysis Type?}
-    B -->|Single Override| C["create_scenario"]
-    B -->|Parameter Grid| D["create_scenario_grid"]
-    
-    C --> E["Override Variables<br>x = 2.0, group = Treatment"]
-    D --> F["Multiple Combinations<br>x: [1,2,3] × group: [A,B]"]
-    
-    E --> G["Evaluate Scenario<br>compiled(output, scenario.data, idx)"]
-    F --> H["Batch Evaluation<br>6 scenarios (3×2)"]
-    
-    G --> I["Policy Insights<br>>99% memory savings"]
+    B -->|Simple Scenarios| C["Data Modification<br>merge(data, (var = value,))"]
+    B -->|Categorical Contrasts| D["ContrastEvaluator<br>contrastevaluator(compiled, data, vars)"]
+
+    C --> E["Modify Variables<br>x = 2.0, group = Treatment"]
+    D --> F["Define Contrasts<br>Compare categorical levels"]
+
+    E --> G["Evaluate Modified Data<br>compiled(output, modified_data, idx)"]
+    F --> H["Batch Contrast Evaluation<br>contrast_modelrow!(output, evaluator, ...)"]
+
+    G --> I["Policy Insights<br>O(1) memory overhead"]
     H --> I
-    
+
     style A fill:#e1f5fe
     style C fill:#f3e5f5
     style D fill:#f3e5f5

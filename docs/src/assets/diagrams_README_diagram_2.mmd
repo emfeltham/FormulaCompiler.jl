@@ -1,1 +1,15 @@
-<!-- Copy content from .mmd file -->
+flowchart TD
+    A["Compiled Formula"] --> B{Analysis Type?}
+    B -->|Simple Scenarios| C["Data Modification<br>merge(data, (var = fill(val, n),))"]
+    B -->|Categorical Contrasts| D["ContrastEvaluator<br>contrastevaluator(compiled, data, vars)"]
+
+    C --> E["Evaluate Scenarios<br>compiled(output, modified_data, idx)"]
+    D --> F["Batch Contrasts<br>contrast_modelrow!(output, evaluator, row, var, from, to)"]
+
+    E --> G["Compare Results<br>Treatment effects, policy analysis"]
+    F --> G
+
+    style A fill:#e1f5fe
+    style C fill:#f3e5f5
+    style D fill:#f3e5f5
+    style G fill:#fff3e0
