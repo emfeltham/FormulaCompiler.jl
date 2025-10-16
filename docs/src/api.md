@@ -6,6 +6,7 @@ API reference for FormulaCompiler.jl functions and types.
 
 ```@docs
 compile_formula
+get_or_compile_formula
 ```
 
 ## Model Row Evaluation
@@ -32,29 +33,26 @@ derivativeevaluator_ad
 
 ```@docs
 derivative_modelrow!
-fd_jacobian_column!
+derivative_modelrow
 ```
 
-### Marginal Effects
+### Link Function Derivatives
 
 ```@docs
-marginal_effects_eta!
-marginal_effects_mu!
-```
-
-### Utilities
-
-```@docs
-continuous_variables
-delta_method_se
+_dmu_deta
+_d2mu_deta2
 ```
 
 ## Categorical Contrasts
 
 ```@docs
+ContrastEvaluator
 contrastevaluator
+CategoricalLevelMap
 contrast_modelrow!
 contrast_gradient!
+contrast_gradient
+supported_link_functions
 ```
 
 ## Categorical Mixtures
@@ -66,6 +64,5 @@ mix
 CategoricalMixture
 MixtureWithLevels
 validate_mixture_against_data
-create_balanced_mixture
 mixture_to_scenario_value
 ```
