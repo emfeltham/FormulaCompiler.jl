@@ -5,34 +5,35 @@
 [![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/stable/)
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://emfeltham.github.io/FormulaCompiler.jl/dev/)
 
-Efficient per-row model matrix evaluation for Julia statistical models using position-mapped compilation and compile-time specialization.
+FormulaCompiler.jl provides efficient per-row model matrix evaluation for Julia statistical models through position-mapped compilation and compile-time specialization. The package transforms StatsModels.jl formulas into specialized evaluators that achieve zero-allocation performance for repeated row-wise operations.
 
-## Key Features
+## Overview
 
-- **Memory efficiency**: Optimized evaluation approach minimizes memory allocation during computation
-- **Performance**: Faster single-row evaluation than building full model matrices
-- **Compatibility**: Supports StatsModels.jl formulas, including interactions and transformations
-- **Scenario analysis**: Memory-efficient variable override system for counterfactual analysis
-- **Unified architecture**: Single compilation pipeline accommodates diverse formula structures
-- **Ecosystem integration**: Compatible with GLM.jl, MixedModels.jl, and StandardizedPredictors.jl
+The package resolves StatsModels.jl formula complexity at compile time, thereby enabling type-stable execution. This approach supports efficient counterfactual analysis, marginal effects computation, and scenarios requiring many model matrix evaluations.
 
-## How It Works
+Key characteristics include:
 
-Fit a model, convert data to a column table, compile once, then evaluate rows quickly without allocations.
+- Zero-allocation evaluation after initial compilation
+- O(1) memory overhead for counterfactual analysis via variable override system
+- Support for categorical mixtures in marginal effects calculations
+- Dual automatic differentiation (via [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl)) and finite difference backends for derivatives
+- Built on the StatsModels.jl ecosystem (GLM.jl, MixedModels.jl, StandardizedPredictors.jl) allowing users to work with the existing and flexible domain-specific language.
 
 ## Installation
+
+The package is registered, and the current version is available via
 
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/emfeltham/FormulaCompiler.jl")
 ```
 
-## Quick Start
+## Basic Usage
 
 ```julia
 using FormulaCompiler, GLM, DataFrames, Tables
 
-# Fit your model normally
+# Fit model
 df = DataFrame(
     y = randn(1000),
     x = randn(1000),
@@ -42,18 +43,20 @@ df = DataFrame(
 
 model = lm(@formula(y ~ x * group + log(z)), df)
 
-# Compile once for efficient repeated evaluation  
+# Compile formula once
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
-# Memory-efficient evaluation suitable for repeated calls
+# Evaluate rows without allocation
 compiled(row_vec, data, 1)  # Zero allocations after warmup
 ```
 
 ## Core Interfaces
 
-### Optimized Interface (Recommended for Performance-Critical Applications)
+### Direct Compilation Interface
+
+The most efficient interface for performance-critical applications:
 
 ```julia
 # Pre-compile for optimal performance
@@ -70,7 +73,9 @@ matrix = Matrix{Float64}(undef, 10, length(compiled))
 modelrow!(matrix, compiled, data, 1:10)
 ```
 
-### Convenient Interface
+### Convenience Interface
+
+Alternative interface with automatic caching:
 
 ```julia
 # Single row (allocating)
@@ -81,61 +86,43 @@ matrix = modelrow(model, data, [1, 5, 10, 50])
 
 # In-place with automatic caching
 row_vec = Vector{Float64}(undef, size(modelmatrix(model), 2))
-modelrow!(row_vec, model, data, 1)  # Uses cache
+modelrow!(row_vec, model, data, 1)
 ```
 
 ### Object-Based Interface
 
-```julia
-# Create evaluator object
-evaluator = ModelRowEvaluator(model, df)
+Stateful evaluator for repeated use:
 
-# Efficient evaluation
+```julia
+evaluator = ModelRowEvaluator(model, df)
 result = evaluator(1)           # Row 1
 evaluator(row_vec, 1)          # In-place evaluation
 ```
 
-## Advanced Analysis: Population and Counterfactual Patterns
+## Counterfactual Analysis
 
-FormulaCompiler uses a unified row-wise architecture where population analysis is achieved through simple loops over individual observations:
+FormulaCompiler implements a type-stable counterfactual vector system that enables variable substitution with O(1) memory overhead, avoiding data duplication. This is particularly useful for policy analysis and treatment effect evaluation.
+
+### Basic Counterfactual Evaluation
 
 ```julia
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 
-# Population analysis pattern: individual + averaging
-function compute_population_effects(compiled, data, var_overrides)
-    n_rows = length(first(data))
-    effects = Vector{Float64}(undef, n_rows)
-    row_vec = Vector{Float64}(undef, length(compiled))
+# Build counterfactual data structure
+data_cf, cf_vecs = build_counterfactual_data(data, [:treatment], 1)
+treatment_cf = cf_vecs[1]
 
-    # Build counterfactual data for the variable we want to override
-    data_cf, cf_vecs = build_counterfactual_data(data, [:treatment], 1)
-    treatment_cf = cf_vecs[1]
-
-    for row in 1:n_rows
-        # Set up counterfactual for this row
-        update_counterfactual_row!(treatment_cf, row)
-        update_counterfactual_replacement!(treatment_cf, true)  # Apply treatment
-
-        # Evaluate with override
-        compiled(row_vec, data_cf, row)
-        effects[row] = sum(row_vec)  # or whatever summary you need
-    end
-
-    return mean(effects)  # Population average
-end
-
-# Policy analysis using counterfactual vectors
-population_effect = compute_population_effects(compiled, data, [:treatment])
+# Evaluate with counterfactual values
+row_vec = Vector{Float64}(undef, length(compiled))
+update_counterfactual_replacement!(treatment_cf, true)
+compiled(row_vec, data_cf, 1)
 ```
 
 ### Multi-Variable Sensitivity Analysis
 
-Analyze multiple variables systematically using counterfactual vectors:
-
 ```julia
-# Define analysis grid manually
+# Define analysis grid
 treatment_values = [false, true]
 dose_values = [50.0, 100.0, 150.0]
 region_values = ["North", "South"]
@@ -152,12 +139,10 @@ scenario_idx = 1
 for treatment in treatment_values
     for dose in dose_values
         for region in region_values
-            # Set up counterfactual values
             update_counterfactual_replacement!(treatment_cf, treatment)
             update_counterfactual_replacement!(dose_cf, dose)
             update_counterfactual_replacement!(region_cf, region)
 
-            # Evaluate for representative row (e.g., row 1)
             compiled(row_vec, data_cf, 1)
             results[scenario_idx, :] .= row_vec
             scenario_idx += 1
@@ -166,32 +151,21 @@ for treatment in treatment_values
 end
 ```
 
-### Dynamic Counterfactual Modification
+### Memory Efficiency
+
+The counterfactual vector system uses O(1) memory regardless of dataset size:
 
 ```julia
-# Build counterfactual vectors for dynamic analysis
-data_cf, cf_vecs = build_counterfactual_data(data, [:x, :y, :z], 1)
-x_cf, y_cf, z_cf = cf_vecs
+# Traditional approach: full column copy
+traditional = copy(data.x)
+traditional[500_000] = 42.0
 
-# Modify counterfactuals iteratively
-row_vec = Vector{Float64}(undef, length(compiled))
+# CounterfactualVector approach: ~32 bytes overhead
+cf_vec = counterfactualvector(data.x, 500_000)
+update_counterfactual_replacement!(cf_vec, 42.0)
 
-# Initial state
-update_counterfactual_replacement!(x_cf, 1.0)
-compiled(row_vec, data_cf, 1)  # Baseline with x=1.0
-
-# Add y override
-update_counterfactual_replacement!(y_cf, 100.0)
-compiled(row_vec, data_cf, 1)  # With x=1.0, y=100.0
-
-# Bulk update multiple variables
-update_counterfactual_replacement!(x_cf, 2.0)
-update_counterfactual_replacement!(z_cf, 0.5)
-compiled(row_vec, data_cf, 1)  # With x=2.0, y=100.0, z=0.5
-
-# Reset individual variables by using original data values
-original_y = getproperty(data, :y)[1]
-update_counterfactual_replacement!(y_cf, original_y)  # Remove y override
+# Identical interface, minimal memory usage
+@assert traditional[500_000] == cf_vec[500_000]
 ```
 
 ## Ecosystem Integration
@@ -203,201 +177,267 @@ using GLM
 
 # Linear models
 linear_model = lm(@formula(mpg ~ hp * cyl + log(wt)), mtcars)
-data_mtcars = Tables.columntable(mtcars)
-compiled = compile_formula(linear_model, data_mtcars)
+compiled = compile_formula(linear_model, Tables.columntable(mtcars))
 
 # Generalized linear models
 logit_model = glm(@formula(vs ~ hp + wt), mtcars, Binomial(), LogitLink())
-compiled_logit = compile_formula(logit_model, data_mtcars)
-
-# Both work identically
-row_vec = Vector{Float64}(undef, length(compiled))
-compiled(row_vec, data_mtcars, 1)
+compiled_logit = compile_formula(logit_model, Tables.columntable(mtcars))
 ```
 
 ### MixedModels.jl Integration
 
-Automatically extracts fixed effects from mixed models:
+The package automatically extracts fixed effects from mixed models:
 
 ```julia
 using MixedModels
 
-# Mixed model with random effects
 mixed_model = fit(MixedModel, @formula(y ~ x + z + (1|group) + (1+x|cluster)), df)
-
-# Compiles only the fixed effects: y ~ x + z
-compiled = compile_formula(mixed_model, Tables.columntable(df))
-
-# Random effects are automatically stripped
-fixed_form = fixed_effects_form(mixed_model)  # Returns: y ~ x + z
+compiled = compile_formula(mixed_model, Tables.columntable(df))  # Fixed effects only
 ```
 
 ### StandardizedPredictors.jl Integration
 
-Standardized predictors are integrated (currently only `ZScore()`):
+Standardized predictors (via [StandardizedPredictors.jl](https://github.com/beacon-biosignals/StandardizedPredictors.jl)) are integrated during compilation (currently limited to currently `ZScore`):
 
 ```julia
 using StandardizedPredictors
 
 contrasts = Dict(:x => ZScore(), :z => ZScore())
 model = lm(@formula(y ~ x + z + group), df, contrasts=contrasts)
-compiled = compile_formula(model, Tables.columntable(df))  # Standardization built-in
+compiled = compile_formula(model, Tables.columntable(df))
 ```
 
-### Derivatives and Marginal Effects
+## Categorical Mixtures
 
-FormulaCompiler provides memory-efficient computation of derivatives and marginal effects with standard errors:
+FormulaCompiler supports categorical mixtures—weighted combinations of categorical levels—for efficient profile-based marginal effects computation:
 
 ```julia
-# Build derivative evaluators with concrete types
+using FormulaCompiler, Margins
+
+# Create mixture specification
+reference_grid = DataFrame(
+    x = [1.0, 2.0, 3.0],
+    group = mix("Treatment" => 0.6, "Control" => 0.4)
+)
+
+# Compile and evaluate
+compiled = compile_formula(model, Tables.columntable(reference_grid))
+output = Vector{Float64}(undef, length(compiled))
+compiled(output, reference_grid, 1)
+
+# Multiple mixture variables
+grid = DataFrame(
+    age = [30, 40, 50],
+    treatment = mix("Control" => 0.3, "Drug_A" => 0.4, "Drug_B" => 0.3),
+    dose = mix("Low" => 0.25, "Medium" => 0.5, "High" => 0.25)
+)
+compiled = compile_formula(model, Tables.columntable(grid))
+```
+
+Mixture evaluation maintains zero-allocation performance through compile-time specialization. Each mixture specification generates a specialized evaluation method.
+
+## Derivatives
+
+FormulaCompiler provides computational primitives for computing derivatives of model matrix rows with respect to continuous variables. For marginal effects, standard errors, and complete statistical workflows, see [Margins.jl](https://github.com/emfeltham/Margins.jl).
+
+### Computational Primitives
+
+The package provides zero-allocation Jacobian computation using both automatic differentiation (ForwardDiff) and finite differences:
+
+```julia
+using FormulaCompiler, GLM
+
+# Build derivative evaluator
 vars = [:x, :z]
-de_ad = derivativeevaluator_ad(compiled, data, vars)  # Returns ADEvaluator, zero allocations, higher accuracy (preferred)
-de_fd = derivativeevaluator_fd(compiled, data, vars)  # Returns FDEvaluator, zero allocations, alternative
-β = coef(model)
+de = derivativeevaluator(:ad, compiled, data, vars)
 
-# Single-row marginal effect gradient (η case)
-gβ = Vector{Float64}(undef, length(compiled))
-me_eta_grad_beta!(gβ, de_fd, β, 1, :x)  # Zero allocations
-
-# Standard error via delta method
-Σ = vcov(model)
-se = delta_method_se(gβ, Σ)  # Efficient computation
-
-# Average marginal effects with FD backend
-rows = 1:100
-gβ_ame = Vector{Float64}(undef, length(compiled))
-accumulate_ame_gradient!(gβ_ame, de_fd, β, rows, :x)  # Zero allocations per row
-se_ame = delta_method_se(gβ_ame, Σ)
-
-println("AME standard error for x: ", se_ame)
+# Compute Jacobian: J[i,j] = ∂(model_matrix[i])/∂vars[j]
+J = Matrix{Float64}(undef, length(compiled), length(vars))
+derivative_modelrow!(J, de, 1)  # Zero allocations
 ```
 
-**Key capabilities:**
-- **Dual backends**: Both achieve zero allocations. `derivativeevaluator_ad(...)` (ADEvaluator) preferred for higher accuracy and performance. `derivativeevaluator_fd(...)` (FDEvaluator) alternative with explicit step control.
-- **Type dispatch**: Method selection based on concrete evaluator types, no keywords needed
-- **η and μ cases**: Linear predictors and link function transformations
-- **Delta method**: Standard error computation for marginal effects
-- **Validated implementation**: Cross-validated against reference implementations
+### Marginal Effects
 
-## Advanced Features
-
-### Memory Efficiency
-
-Counterfactual analysis uses type-stable CounterfactualVector for single-row perturbations:
+For marginal effects computation, use [Margins.jl](https://github.com/emfeltham/Margins.jl), which provides:
 
 ```julia
-# Traditional approach: copy entire columns for changes
-traditional = copy(data.x)  # Full column copy
-traditional[500_000] = 42.0  # Change one value
+using Margins
 
-# FormulaCompiler approach: CounterfactualVector with O(1) memory overhead
-cf_vec = counterfactualvector(data.x, 500_000)  # ~32 bytes
-update_counterfactual_replacement!(cf_vec, 42.0)
+# Marginal effects on linear predictor η = Xβ
+g_eta = Vector{Float64}(undef, length(vars))
+marginal_effects_eta!(g_eta, de, coef(model), 1)
 
-# Identical interface, but minimal memory usage
-traditional[500_000] == cf_vec[500_000]  # true, but cf_vec uses ~99.999% less memory
+# Marginal effects on mean response μ (with link function)
+g_mu = Vector{Float64}(undef, length(vars))
+marginal_effects_mu!(g_mu, de, coef(model), LogitLink(), 1)
+
+# Standard errors via delta method
+se = delta_method_se(g_eta, vcov(model))
 ```
+
+### Backend Selection
+
+While automatic differentiation is the strongly preferred default option, two backends are available:
+
+- `:ad` (automatic differentiation via ForwardDiff): Recommended for standard formulas. Provides machine-precision accuracy and approximately 20% faster performance than finite differences.
+- `:fd` (finite differences): Recommended for formulas containing boolean predicates. Guarantees zero allocations for all formula types.
+
+Backend selection is specified when constructing the evaluator:
+
+```julia
+# Automatic differentiation (recommended)
+de_ad = derivativeevaluator(:ad, compiled, data, [:x, :z])
+
+# Finite differences (for boolean predicates)
+de_fd = derivativeevaluator(:fd, compiled, data, [:x, :z])
+```
+
+Both backends achieve zero-allocation performance through pre-allocated buffers and in-place operations.
+
+### Link Function Derivatives
+
+FormulaCompiler provides computational primitives for the following GLM link functions (used by Margins.jl for computing marginal effects on the mean response μ):
+
+- Identity
+- Log
+- Logit
+- Probit
+- Cloglog
+- Cauchit
+- Inverse
+- Sqrt
+- InverseSquare
 
 ## Supported Formula Features
 
-- **Basic terms**: `x`, `log(z)`, `x^2`, `(x > 0)`  
-- **Boolean variables**: `Vector{Bool}` treated as continuous (false → 0.0, true → 1.0)
-- **Categorical variables**: All contrast types, ordered/unordered
-- **Interactions**: `x * group`, `x * y * z`, `log(z) * group`  
-- **Functions**: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`, boolean operators
-- **Complex formulas**: `x * log(z) * group + sqrt(abs(y)) + (x > mean(x))`
-- **Standardized predictors**: ZScore, custom transformations
-- **Mixed models**: Automatic fixed-effects extraction
+The package supports the complete StatsModels.jl formula language:
 
-## Performance Tips
+- Basic terms: `x`, `log(z)`, `x^2`, `(x > 0)`
+- Boolean variables: treated as continuous (false → 0.0, true → 1.0)
+- Categorical variables: all contrast types, ordered and unordered
+- Categorical mixtures: weighted combinations (e.g., `mix("A" => 0.6, "B" => 0.4)`)
+- Interactions: two-way and multi-way (`x * group`, `x * y * z`)
+- Mathematical functions: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`
+- Boolean predicates: `(x > 0)`, `(z >= mean(z))`
+- Complex formulas: `x * log(z) * group + sqrt(abs(y))`
+- Standardized predictors: ZScore and custom transformations
+- Mixed models: automatic fixed-effects extraction
 
-1. Pre-compile formulas for repeated evaluation:
-   ```julia
-   data = Tables.columntable(df)
-   compiled = compile_formula(model, data)  # Do once
-   # Then call compiled() millions of times
-   ```
+## Performance Considerations
 
-2. Use column-table format for best performance:
-   ```julia
-   data = Tables.columntable(df)  # Convert once, reuse many times
-   ```
+### Compilation Pattern
 
-3. Pre-allocate output vectors:
-   ```julia
-   row_vec = Vector{Float64}(undef, length(compiled))  # Reuse across calls
-   ```
-
-4. Batch operations when possible:
-   ```julia
-   # Better: batch evaluation
-   matrix = Matrix{Float64}(undef, 1000, length(compiled))
-   modelrow!(matrix, compiled, data, 1:1000)
-   
-   # Avoid: many single evaluations with allocation
-   results = [modelrow(model, data, i) for i in 1:1000]
-   ```
-
-## Performance Characteristics
-
-Comparative performance evaluation across formula types:
+The package is designed for scenarios where compilation cost is amortized over many evaluations:
 
 ```julia
-using BenchmarkTools
-
-# Traditional approach (full model matrix construction)
-@benchmark modelmatrix(model)[1, :]
-# Note: Constructs entire model matrix, computationally intensive for large datasets
-
-# FormulaCompiler optimized approach
+# Compile once
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
-@benchmark compiled(row_vec, data, 1)
-# Performance improvement with reduced memory allocation
+# Evaluate many times (zero allocations)
+for i in 1:n_rows
+    compiled(row_vec, data, i)
+end
 ```
 
-**Derivative computation**:
-- Both ForwardDiff (`:ad`) and finite differences (`:fd`) backends achieve zero allocations
-- `:ad` backend preferred: Higher accuracy (machine precision) and faster performance
-- `:fd` backend alternative: Explicit step size control
-- All marginal effects computations utilize preallocated buffers
+### Memory Layout
+
+Column-table format provides optimal performance:
+
+```julia
+data = Tables.columntable(df)  # Convert once, reuse
+```
+
+### Pre-allocation
+
+Pre-allocate output vectors for zero-allocation performance:
+
+```julia
+row_vec = Vector{Float64}(undef, length(compiled))  # Reuse across calls
+```
+
+### Batch Operations
+
+Batch evaluation is more efficient than individual allocating calls:
+
+```julia
+# Efficient: batch evaluation
+matrix = Matrix{Float64}(undef, 1000, length(compiled))
+modelrow!(matrix, compiled, data, 1:1000)
+
+# Inefficient: repeated allocation
+results = [modelrow(model, data, i) for i in 1:1000]
+```
+
+## Performance Characteristics
+
+### Evaluation Performance
+
+Typical performance for formula evaluation after compilation:
+
+```julia
+using BenchmarkTools
+
+# Traditional approach
+@benchmark modelmatrix(model)[1, :]  # Constructs entire matrix
+
+# FormulaCompiler approach
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+row_vec = Vector{Float64}(undef, length(compiled))
+@benchmark compiled(row_vec, data, 1)  # Zero allocations
+```
+
+FormulaCompiler typically achieves a significant speedup compared to full model matrix construction for single-row evaluation, with zero allocations after compilation.
+
+### Derivative Performance
+
+Both derivative backends achieve zero-allocation performance:
+
+- Automatic differentiation (`:ad`): approximately 50-60ns per row for standard formulas
+- Finite differences (`:fd`): approximately 65-85ns per row for standard formulas
+
+All operations use pre-allocated buffers, validated through comprehensive allocation tests.
 
 ## Architecture
 
-FormulaCompiler achieves efficiency through a unified compilation pipeline that transforms statistical formulas into specialized, type-stable execution paths:
+The package uses a compilation pipeline based on position mapping:
 
-- **Position mapping**: Operations utilize compile-time position specialization
-- **Adaptive dispatch**: Threshold-based approach (≤25 operations: recursive dispatch, >25 operations: generated functions) chosen based on Julia's compilation limits
-- **Unified design**: Single compilation system accommodates diverse formula structures without special-case handling
+- Position mapping: Formula terms are mapped to fixed scratch and output positions during compilation, with all position information encoded in type parameters.
+- Type specialization: Each unique formula generates a specialized evaluation method with concrete types throughout.
+- Adaptive dispatch: Small formulas (≤10 operations) use recursive dispatch; larger formulas use generated functions to respect Julia's compilation limits.
+- Zero-allocation execution: All memory layouts are determined at compile time, enabling allocation-free runtime evaluation.
 
 ## Use Cases
 
-- Monte Carlo simulations: Millions of model evaluations
-- Bootstrap resampling: Repeated matrix construction
-- Marginal effects: Numerical derivatives require many evaluations
-- Policy analysis: Evaluate many counterfactual scenarios
-- Real-time applications: Low-latency prediction serving
-- Large-scale inference: Memory-efficient batch processing
+The package is designed for applications requiring many model matrix evaluations:
 
-## Contributing
-
-Contributions are welcome!
+- Marginal effects computation requiring numerical derivatives
+- Monte Carlo simulations requiring millions of model evaluations
+- Bootstrap resampling with repeated matrix construction
+- Large-scale inference with memory constraints
 
 ## Related Packages
 
-- [Margins.jl](https://github.com/juliangehring/Margins.jl): Marginal effects (built on this package)
+- [Margins.jl](https://github.com/juliangehring/Margins.jl): Marginal effects computation (uses FormulaCompiler.jl)
 - [GLM.jl](https://github.com/JuliaStats/GLM.jl): Generalized linear models
 - [MixedModels.jl](https://github.com/JuliaStats/MixedModels.jl): Mixed-effects models
 - [StandardizedPredictors.jl](https://github.com/beacon-biosignals/StandardizedPredictors.jl): Standardized predictors
-- [StatsModels.jl](https://github.com/JuliaStats/StatsModels.jl): Formula interface
+- [StatsModels.jl](https://github.com/JuliaStats/StatsModels.jl): Statistical formula interface
+- [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl): Automatic differentiation
 
 ## Documentation
 
-- **[DIAGRAMS.md](DIAGRAMS.md)**: Complete visual guide with system architecture, technical implementation, and usage workflows
-- **[categorical_handling.md](categorical_handling.md)**: Detailed explanation of categorical variable and interaction handling
-- **[docs/diagrams/](docs/diagrams/)**: Individual diagram files for embedding in documentation
+Additional documentation is available in the repository:
+
+- [DIAGRAMS.md](DIAGRAMS.md): System architecture and usage workflows with visual guides
+- [categorical_handling.md](categorical_handling.md): Categorical variable and interaction handling
+- [docs/diagrams/](docs/diagrams/): Individual diagram files
+
+## Contributing
+
+Contributions are welcome. Please open an issue or pull request on GitHub.
 
 ## License
 
