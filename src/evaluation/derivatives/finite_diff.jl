@@ -45,7 +45,7 @@ J = Matrix{Float64}(undef, length(compiled), length(de_fd.vars))
 derivative_modelrow!(J, de_fd, 1)  # 0 bytes allocated
 ```
 
-See also: [`derivativeevaluator_fd`](@ref), [`fd_jacobian_column!`](@ref)
+See also: [`derivativeevaluator_fd`](@ref)
 """
 function derivative_modelrow!(J::AbstractMatrix{Float64}, de::FDEvaluator, row::Int)
     @assert size(J, 1) == length(de) "Expected $(length(de)) output terms, got $(size(J, 1))"

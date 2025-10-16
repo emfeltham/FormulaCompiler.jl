@@ -135,13 +135,13 @@ position mapping benefits across different formula sizes.
 The function uses **hybrid dispatch** to maintain zero-allocation execution while 
 handling both small and large operation tuples:
 
-### Small Tuples (≤ 35 operations): Recursive Execution
+### Small Tuples (≤ 10 operations): Recursive Execution
 - **Method**: `execute_ops_recursive` with compile-time tuple unrolling
 - **Benefits**: Natural Julia tuple specialization
 - **Position Handling**: All positions embedded in recursive call chain
 - **Performance**: Optimal for most statistical formulas
 
-### Large Tuples (> 35 operations): Generated Execution  
+### Large Tuples (> 10 operations): Generated Execution  
 - **Method**: `@generated execute_ops_generated` with forced unrolling
 - **Benefits**: Bypasses Julia's tuple specialization limits  
 - **Position Handling**: All positions embedded in generated code
