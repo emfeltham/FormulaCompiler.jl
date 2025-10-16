@@ -13,10 +13,10 @@ graph TB
         Utils["Core Utilities<br>CounterfactualVector, helpers"]
     end
     
-    subgraph "Performance Results"
-        Perf1["~50ns per row"]
-        Perf2["Zero allocations"] 
-        Perf3[">99% memory savings"]
+    subgraph "Performance Characteristics"
+        Perf1["Zero allocations"]
+        Perf2["O(1) memory overhead"]
+        Perf3["Type-stable execution"]
     end
     
     GLM --> Comp
@@ -29,11 +29,11 @@ graph TB
     Scen --> Exec
     
     Exec --> Perf1
-    Exec --> Perf2
-    Scen --> Perf3
-    
+    Exec --> Perf3
+    Scen --> Perf2
+
     style Comp fill:#f3e5f5
-    style Exec fill:#e8f5e8  
+    style Exec fill:#e8f5e8
     style Scen fill:#e1f5fe
     style Perf1 fill:#e8f5e8
     style Perf2 fill:#e8f5e8
