@@ -1,107 +1,293 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Advanced Features · FormulaCompiler.jl</title><meta name="title" content="Advanced Features · FormulaCompiler.jl"/><meta property="og:title" content="Advanced Features · FormulaCompiler.jl"/><meta property="twitter:title" content="Advanced Features · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/advanced_features/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/advanced_features/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/guide/advanced_features/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><script src="../../assets/mermaid.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../basic_usage/">Basic Usage</a></li><li class="is-active"><a class="tocitem" href>Advanced Features</a><ul class="internal"><li><a class="tocitem" href="#Memory-Efficient-Override-System"><span>Memory-Efficient Override System</span></a></li><li><a class="tocitem" href="#Advanced-Compilation-Features"><span>Advanced Compilation Features</span></a></li><li><a class="tocitem" href="#Derivatives-and-Contrasts"><span>Derivatives and Contrasts</span></a></li><li><a class="tocitem" href="#Complex-Formula-Support"><span>Complex Formula Support</span></a></li><li><a class="tocitem" href="#High-Performance-Patterns"><span>High-Performance Patterns</span></a></li><li><a class="tocitem" href="#Integration-with-Optimization"><span>Integration with Optimization</span></a></li><li><a class="tocitem" href="#Memory-and-Performance-Monitoring"><span>Memory and Performance Monitoring</span></a></li></ul></li><li><a class="tocitem" href="../scenarios/">Scenario Analysis</a></li><li><a class="tocitem" href="../performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../../integration/glm/">GLM.jl</a></li><li><a class="tocitem" href="../../integration/mixed_models/">MixedModels.jl</a></li><li><a class="tocitem" href="../../integration/standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../../mathematical_foundation/">Mathematical Foundation</a></li><li><a class="tocitem" href="../../architecture/">Architecture</a></li><li><a class="tocitem" href="../../api/">API Reference</a></li><li><a class="tocitem" href="../../examples/">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">User Guide</a></li><li class="is-active"><a href>Advanced Features</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Advanced Features</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/guide/advanced_features.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Advanced-Features"><a class="docs-heading-anchor" href="#Advanced-Features">Advanced Features</a><a id="Advanced-Features-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Features" title="Permalink"></a></h1><p>FormulaCompiler.jl provides sophisticated features for advanced statistical computing scenarios.</p><h2 id="Memory-Efficient-Override-System"><a class="docs-heading-anchor" href="#Memory-Efficient-Override-System">Memory-Efficient Override System</a><a id="Memory-Efficient-Override-System-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Efficient-Override-System" title="Permalink"></a></h2><p>The override system allows you to create &quot;what-if&quot; scenarios without duplicating data in memory.</p><h3 id="OverrideVector"><a class="docs-heading-anchor" href="#OverrideVector">OverrideVector</a><a id="OverrideVector-1"></a><a class="docs-heading-anchor-permalink" href="#OverrideVector" title="Permalink"></a></h3><p>The foundation of the scenario system is <code>OverrideVector</code>, which provides a memory-efficient constant vector:</p><pre><code class="language-julia hljs">using FormulaCompiler
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Advanced Features · FormulaCompiler.jl</title><meta name="title" content="Advanced Features · FormulaCompiler.jl"/><meta property="og:title" content="Advanced Features · FormulaCompiler.jl"/><meta property="twitter:title" content="Advanced Features · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/advanced_features/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/advanced_features/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/guide/advanced_features/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><script src="../../assets/mermaid.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../basic_usage/">Basic Usage</a></li><li class="is-active"><a class="tocitem" href>Advanced Features</a><ul class="internal"><li><a class="tocitem" href="#Counterfactual-Analysis"><span>Counterfactual Analysis</span></a></li><li><a class="tocitem" href="#Advanced-Compilation-Features"><span>Advanced Compilation Features</span></a></li><li><a class="tocitem" href="#Derivative-Computation-System"><span>Derivative Computation System</span></a></li><li><a class="tocitem" href="#Complex-Formula-Support"><span>Complex Formula Support</span></a></li><li><a class="tocitem" href="#High-Performance-Computing-Patterns"><span>High-Performance Computing Patterns</span></a></li><li><a class="tocitem" href="#Integration-with-Optimization"><span>Integration with Optimization</span></a></li><li><a class="tocitem" href="#Memory-and-Performance-Monitoring"><span>Memory and Performance Monitoring</span></a></li><li><a class="tocitem" href="#Real-World-Application-Patterns"><span>Real-World Application Patterns</span></a></li><li><a class="tocitem" href="#Further-Reading"><span>Further Reading</span></a></li></ul></li><li><a class="tocitem" href="../categorical_mixtures/">Categorical Mixtures</a></li><li><a class="tocitem" href="../scenarios/">Scenario Analysis</a></li><li><a class="tocitem" href="../performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../../integration/glm/">GLM.jl</a></li><li><a class="tocitem" href="../../integration/mixed_models/">MixedModels.jl</a></li><li><a class="tocitem" href="../../integration/standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../../mathematical_foundation/">Mathematical Foundation</a></li><li><a class="tocitem" href="../../architecture/">Architecture</a></li><li><a class="tocitem" href="../../metaprogramming/">Metaprogramming</a></li><li><a class="tocitem" href="../../api/">API Reference</a></li><li><a class="tocitem" href="../../examples/">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">User Guide</a></li><li class="is-active"><a href>Advanced Features</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Advanced Features</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/guide/advanced_features.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Advanced-Features"><a class="docs-heading-anchor" href="#Advanced-Features">Advanced Features</a><a id="Advanced-Features-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Features" title="Permalink"></a></h1><p>FormulaCompiler.jl provides sophisticated capabilities for advanced statistical computing, high-performance applications, and complex analytical workflows. This guide covers memory-efficient scenario analysis, derivative computation, and integration patterns for demanding computational environments.</p><h2 id="Counterfactual-Analysis"><a class="docs-heading-anchor" href="#Counterfactual-Analysis">Counterfactual Analysis</a><a id="Counterfactual-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Counterfactual-Analysis" title="Permalink"></a></h2><p>FormulaCompiler provides efficient counterfactual analysis through <strong>high-level APIs</strong> designed for user applications. For most use cases, you should use one of the recommended approaches below rather than internal implementation details.</p><div class="admonition is-warning" id="Internal-vs.-Public-API-e1111176e442bac9"><header class="admonition-header">Internal vs. Public API<a class="admonition-anchor" href="#Internal-vs.-Public-API-e1111176e442bac9" title="Permalink"></a></header><div class="admonition-body"><p><strong>CounterfactualVector types</strong> (<code>NumericCounterfactualVector</code>, <code>BoolCounterfactualVector</code>, etc.) and their constructors are <strong>internal implementation details</strong> NOT exported from FormulaCompiler. They power the high-level APIs but should not be used directly in application code.</p><p><strong>Use these high-level APIs instead</strong>:</p><ul><li><strong>Simple contrasts</strong>: Direct data modification with <code>merge()</code></li><li><strong>Batch contrasts</strong>: <code>contrastevaluator()</code> + <code>contrast_modelrow!()</code></li><li><strong>Population analysis</strong>: Simple loops over rows</li></ul></div></div><h3 id="Recommended-Approach-#1:-Direct-Data-Modification"><a class="docs-heading-anchor" href="#Recommended-Approach-#1:-Direct-Data-Modification">Recommended Approach #1: Direct Data Modification</a><a id="Recommended-Approach-#1:-Direct-Data-Modification-1"></a><a class="docs-heading-anchor-permalink" href="#Recommended-Approach-#1:-Direct-Data-Modification" title="Permalink"></a></h3><p>For simple one-off counterfactual analysis, modify data directly:</p><pre><code class="language-julia hljs">using FormulaCompiler, GLM, DataFrames, Tables
 
-# Traditional approach: allocates 8MB for 1M rows
-traditional = fill(42.0, 1_000_000)
+# Fit model
+df = DataFrame(
+    y = randn(1000),
+    x = randn(1000),
+    treatment = rand([true, false], 1000)
+)
+model = lm(@formula(y ~ x * treatment), df)
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
 
-# FormulaCompiler: allocates ~32 bytes
-efficient = OverrideVector(42.0, 1_000_000)
+# Create counterfactual data scenarios
+n_rows = length(data.treatment)
+data_treated = merge(data, (treatment = fill(true, n_rows),))
+data_control = merge(data, (treatment = fill(false, n_rows),))
 
-# Both provide identical interface
-traditional[500_000] == efficient[500_000]  # true
-length(efficient) == 1_000_000              # true
+# Compare outcomes for same individual under different treatments
+row_vec = Vector{Float64}(undef, length(compiled))
+β = coef(model)
 
-# But massive memory savings
-sizeof(traditional) ÷ sizeof(efficient)  # ~250,000x smaller!</code></pre><h3 id="Data-Scenarios"><a class="docs-heading-anchor" href="#Data-Scenarios">Data Scenarios</a><a id="Data-Scenarios-1"></a><a class="docs-heading-anchor-permalink" href="#Data-Scenarios" title="Permalink"></a></h3><p>Create scenarios with variable overrides:</p><pre><code class="language-julia hljs">using DataFrames, Tables
+compiled(row_vec, data_treated, 1)  # Individual 1 if treated
+effect_treated = dot(β, row_vec)
+
+compiled(row_vec, data_control, 1)  # Individual 1 if control
+effect_control = dot(β, row_vec)
+
+treatment_effect = effect_treated - effect_control</code></pre><h3 id="Recommended-Approach-#2:-ContrastEvaluator-(Batch-Processing)"><a class="docs-heading-anchor" href="#Recommended-Approach-#2:-ContrastEvaluator-(Batch-Processing)">Recommended Approach #2: ContrastEvaluator (Batch Processing)</a><a id="Recommended-Approach-#2:-ContrastEvaluator-(Batch-Processing)-1"></a><a class="docs-heading-anchor-permalink" href="#Recommended-Approach-#2:-ContrastEvaluator-(Batch-Processing)" title="Permalink"></a></h3><p>For batch categorical contrasts with zero allocations, use <code>contrastevaluator()</code>:</p><pre><code class="language-julia hljs"># Create zero-allocation evaluator for categorical contrasts
+evaluator = contrastevaluator(compiled, data, [:treatment])
+contrast_buf = Vector{Float64}(undef, length(compiled))
+
+# Batch contrasts (zero allocations)
+for row in 1:100
+    contrast_modelrow!(contrast_buf, evaluator, row, :treatment, false, true)
+    # Process contrast_buf...
+end</code></pre><p>See &quot;Categorical Contrasts&quot; section below for comprehensive examples.</p><h3 id="Population-Analysis-with-Loop-Patterns"><a class="docs-heading-anchor" href="#Population-Analysis-with-Loop-Patterns">Population Analysis with Loop Patterns</a><a id="Population-Analysis-with-Loop-Patterns-1"></a><a class="docs-heading-anchor-permalink" href="#Population-Analysis-with-Loop-Patterns" title="Permalink"></a></h3><p>FormulaCompiler uses simple loops for population analysis instead of special infrastructure:</p><pre><code class="language-julia hljs">using DataFrames, Tables
 
 df = DataFrame(
     x = randn(1000),
-    y = randn(1000), 
+    y = randn(1000),
     treatment = rand(Bool, 1000),
     group = rand([&quot;A&quot;, &quot;B&quot;, &quot;C&quot;], 1000)
 )
 
 data = Tables.columntable(df)
+compiled = compile_formula(model, data)
 
-# Create baseline scenario
-baseline = create_scenario(&quot;baseline&quot;, data)
+# Population average marginal effects (simple loop)
+function compute_population_ame(compiled, data, β, vars)
+    de_fd = derivativeevaluator(:fd, compiled, data, vars)
+    n_rows = length(first(data))
+    ame_sum = zeros(length(vars))
+    g_temp = Vector{Float64}(undef, length(vars))
 
-# Create treatment scenarios
-treatment_on = create_scenario(&quot;treatment_on&quot;, data; 
-    treatment = true,
-    dose = 100.0  # Add new variable
-)
+    for row in 1:n_rows
+        marginal_effects_eta!(g_temp, de_fd, β, row)  # Zero allocations
+        ame_sum .+= g_temp
+    end
 
-treatment_off = create_scenario(&quot;treatment_off&quot;, data;
-    treatment = false,
-    dose = 0.0
-)
-
-# Policy scenarios
-policy_scenario = create_scenario(&quot;policy&quot;, data;
-    x = mean(df.x),           # Set to population mean
-    group = &quot;A&quot;,              # Override categorical
-    regulatory_flag = true    # Add policy variable
-)</code></pre><h3 id="Scenario-Evaluation"><a class="docs-heading-anchor" href="#Scenario-Evaluation">Scenario Evaluation</a><a id="Scenario-Evaluation-1"></a><a class="docs-heading-anchor-permalink" href="#Scenario-Evaluation" title="Permalink"></a></h3><p>Use scenarios with compiled formulas:</p><pre><code class="language-julia hljs">model = lm(@formula(y ~ x * treatment + group), df)
-compiled = compile_formula(model, data)  # Compile with original data
-row_vec = Vector{Float64}(undef, length(compiled))
-
-# Evaluate different scenarios for the same individual
-compiled(row_vec, baseline.data, 1)      # Original data
-compiled(row_vec, treatment_on.data, 1)  # With treatment
-compiled(row_vec, treatment_off.data, 1) # Without treatment
-compiled(row_vec, policy_scenario.data, 1) # Policy scenario</code></pre><h3 id="Scenario-Grids"><a class="docs-heading-anchor" href="#Scenario-Grids">Scenario Grids</a><a id="Scenario-Grids-1"></a><a class="docs-heading-anchor-permalink" href="#Scenario-Grids" title="Permalink"></a></h3><p>Generate all combinations of scenario parameters:</p><pre><code class="language-julia hljs"># Create comprehensive policy analysis
-policy_grid = create_scenario_grid(&quot;policy_analysis&quot;, data, Dict(
-    :treatment =&gt; [false, true],
-    :dose =&gt; [50.0, 100.0, 150.0],
-    :region =&gt; [&quot;North&quot;, &quot;South&quot;, &quot;East&quot;, &quot;West&quot;]
-))
-
-# This creates 2×3×4 = 24 scenarios
-length(policy_grid)  # 24
-
-# Evaluate all scenarios for a specific individual
-results = Matrix{Float64}(undef, length(policy_grid), length(compiled))
-for (i, scenario) in enumerate(policy_grid)
-    compiled(view(results, i, :), scenario.data, 1)
+    return ame_sum ./ n_rows  # Average marginal effects
 end
 
-# Each row represents one scenario combination</code></pre><h3 id="Dynamic-Scenario-Modification"><a class="docs-heading-anchor" href="#Dynamic-Scenario-Modification">Dynamic Scenario Modification</a><a id="Dynamic-Scenario-Modification-1"></a><a class="docs-heading-anchor-permalink" href="#Dynamic-Scenario-Modification" title="Permalink"></a></h3><p>Modify scenarios after creation:</p><pre><code class="language-julia hljs">scenario = create_scenario(&quot;dynamic&quot;, data; x = 1.0)
+# Treatment effect analysis (loop over scenarios)
+function treatment_effects(compiled, data, β, treatment_var)
+    n_rows = length(first(data))
+    effects = Vector{Float64}(undef, n_rows)
+    row_vec = Vector{Float64}(undef, length(compiled))
 
-# Add new overrides
-set_override!(scenario, :y, 100.0)
-set_override!(scenario, :new_var, 42.0)
+    for row in 1:n_rows
+        # Treatment on
+        data_on = merge(data, (treatment = fill(true, n_rows),))
+        compiled(row_vec, data_on, row)
+        effect_on = dot(β, row_vec)
 
-# Bulk updates
-update_scenario!(scenario; 
-    x = 2.0, 
-    z = 0.5,
-    treatment = true
-)
+        # Treatment off
+        data_off = merge(data, (treatment = fill(false, n_rows),))
+        compiled(row_vec, data_off, row)
+        effect_off = dot(β, row_vec)
 
-# Remove overrides
-remove_override!(scenario, :y)
+        effects[row] = effect_on - effect_off
+    end
 
-# Check current overrides
-get_overrides(scenario)  # Dict of current overrides</code></pre><h2 id="Advanced-Compilation-Features"><a class="docs-heading-anchor" href="#Advanced-Compilation-Features">Advanced Compilation Features</a><a id="Advanced-Compilation-Features-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Compilation-Features" title="Permalink"></a></h2><h3 id="Introspection-and-Performance"><a class="docs-heading-anchor" href="#Introspection-and-Performance">Introspection and Performance</a><a id="Introspection-and-Performance-1"></a><a class="docs-heading-anchor-permalink" href="#Introspection-and-Performance" title="Permalink"></a></h3><p>Profile compilation performance:</p><pre><code class="language-julia hljs">using BenchmarkTools
+    return effects
+end</code></pre><h3 id="Example:-Treatment-Effect-Analysis"><a class="docs-heading-anchor" href="#Example:-Treatment-Effect-Analysis">Example: Treatment Effect Analysis</a><a id="Example:-Treatment-Effect-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Example:-Treatment-Effect-Analysis" title="Permalink"></a></h3><p>Compare the same individual under different treatment assignments:</p><pre><code class="language-julia hljs">model = lm(@formula(y ~ x * treatment + group), df)
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+β = coef(model)
+
+# Option 1: Simple data modification (recommended for 1-10 contrasts)
+n_rows = length(first(data))
+data_treated = merge(data, (treatment = fill(true, n_rows),))
+data_untreated = merge(data, (treatment = fill(false, n_rows),))
+
+row_vec = Vector{Float64}(undef, length(compiled))
+
+# Evaluate individual 1 under both scenarios
+compiled(row_vec, data_treated, 1)
+effect_treated = dot(β, row_vec)
+
+compiled(row_vec, data_untreated, 1)
+effect_untreated = dot(β, row_vec)
+
+individual_treatment_effect = effect_treated - effect_untreated
+
+# Option 2: Zero-allocation batch processing (for 100+ contrasts)
+evaluator = contrastevaluator(compiled, data, [:treatment])
+contrast_buf = Vector{Float64}(undef, length(compiled))
+
+contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, false, true)
+individual_treatment_effect = dot(β, contrast_buf)  # Same result, 0 bytes</code></pre><h3 id="Grid-Analysis-with-Loops"><a class="docs-heading-anchor" href="#Grid-Analysis-with-Loops">Grid Analysis with Loops</a><a id="Grid-Analysis-with-Loops-1"></a><a class="docs-heading-anchor-permalink" href="#Grid-Analysis-with-Loops" title="Permalink"></a></h3><p>Use simple loops for comprehensive parameter analysis:</p><pre><code class="language-julia hljs"># Create comprehensive policy analysis using loops
+function evaluate_policy_grid(compiled, data, grid_params, row_idx)
+    treatment_values = [false, true]
+    dose_values = [50.0, 100.0, 150.0]
+    region_values = [&quot;North&quot;, &quot;South&quot;, &quot;East&quot;, &quot;West&quot;]
+
+    # Pre-allocate results: 2×3×4 = 24 scenarios
+    n_scenarios = length(treatment_values) * length(dose_values) * length(region_values)
+    results = Matrix{Float64}(undef, n_scenarios, length(compiled))
+    row_vec = Vector{Float64}(undef, length(compiled))
+
+    scenario_idx = 1
+    for treatment in treatment_values
+        for dose in dose_values
+            for region in region_values
+                # Create modified data for this scenario
+                n_rows = length(first(data))
+                scenario_data = merge(data, (
+                    treatment = fill(treatment, n_rows),
+                    dose = fill(dose, n_rows),
+                    region = fill(region, n_rows)
+                ))
+
+                # Evaluate scenario
+                compiled(row_vec, scenario_data, row_idx)
+                results[scenario_idx, :] .= row_vec
+                scenario_idx += 1
+            end
+        end
+    end
+
+    return results
+end
+
+# Usage
+results = evaluate_policy_grid(compiled, data, grid_params, 1)</code></pre><h3 id="Multi-Variable-Counterfactual-Analysis"><a class="docs-heading-anchor" href="#Multi-Variable-Counterfactual-Analysis">Multi-Variable Counterfactual Analysis</a><a id="Multi-Variable-Counterfactual-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Multi-Variable-Counterfactual-Analysis" title="Permalink"></a></h3><p>Analyze multiple counterfactual variables simultaneously:</p><pre><code class="language-julia hljs"># Option 1: Simple approach with data modification
+n_rows = length(first(data))
+
+# Create scenarios with multiple variables modified
+baseline = data
+scenario_1 = merge(data, (x = fill(2.0, n_rows), treatment = fill(true, n_rows)))
+scenario_2 = merge(data, (x = fill(0.5, n_rows), treatment = fill(false, n_rows)))
+
+# Evaluate same individual under different scenarios
+row = 5
+row_vec = Vector{Float64}(undef, length(compiled))
+β = coef(model)
+
+compiled(row_vec, baseline, row)
+effect_baseline = dot(β, row_vec)
+
+compiled(row_vec, scenario_1, row)
+effect_scenario_1 = dot(β, row_vec)
+
+compiled(row_vec, scenario_2, row)
+effect_scenario_2 = dot(β, row_vec)
+
+println(&quot;Scenario effects: &quot;, effect_scenario_1 - effect_baseline, &quot;, &quot;, effect_scenario_2 - effect_baseline)</code></pre><h2 id="Advanced-Compilation-Features"><a class="docs-heading-anchor" href="#Advanced-Compilation-Features">Advanced Compilation Features</a><a id="Advanced-Compilation-Features-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Compilation-Features" title="Permalink"></a></h2><h3 id="Introspection-and-Performance"><a class="docs-heading-anchor" href="#Introspection-and-Performance">Introspection and Performance</a><a id="Introspection-and-Performance-1"></a><a class="docs-heading-anchor-permalink" href="#Introspection-and-Performance" title="Permalink"></a></h3><p>Profile compilation performance:</p><pre><code class="language-julia hljs">using BenchmarkTools
 
 # Benchmark compilation time
-@benchmark compile_formula($model, $data)</code></pre><h2 id="Derivatives-and-Contrasts"><a class="docs-heading-anchor" href="#Derivatives-and-Contrasts">Derivatives and Contrasts</a><a id="Derivatives-and-Contrasts-1"></a><a class="docs-heading-anchor-permalink" href="#Derivatives-and-Contrasts" title="Permalink"></a></h2><p><strong>Near-Zero-Allocation Automatic Differentiation</strong>: Compute per-row derivatives of the model row with respect to selected variables using optimized ForwardDiff-based system.</p><h3 id="Performance-Characteristics"><a class="docs-heading-anchor" href="#Performance-Characteristics">Performance Characteristics</a><a id="Performance-Characteristics-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Characteristics" title="Permalink"></a></h3><ul><li><strong>Core evaluation</strong>: Exactly 0 allocations (modelrow!, compiled functions)</li><li><strong>Finite differences (FD)</strong>: Exactly 0 allocations (optimized implementation)</li><li><strong>ForwardDiff derivatives</strong>: ≤512 bytes per call (ForwardDiff internals, unavoidable)</li><li><strong>Marginal effects</strong>: ≤512 bytes per call for AD backend (optimized with preallocated buffers)  </li><li><strong>Allocation efficiency</strong>: &gt;99.75% compared to naive AD approaches</li><li><strong>Validation</strong>: Cross-validated against finite differences for robustness</li></ul><div class="admonition is-info" id="Future-Improvements-26db365fd4485c95"><header class="admonition-header">Future Improvements<a class="admonition-anchor" href="#Future-Improvements-26db365fd4485c95" title="Permalink"></a></header><div class="admonition-body"><p>We are actively working on a more efficient automatic differentiation implementation  that will reduce or eliminate allocations in the AD backend. The current ForwardDiff-based  implementation provides excellent accuracy with minimal allocations (≤512 bytes), while  the finite differences backend already achieves zero allocations for users who prioritize  memory efficiency over speed.</p></div></div><h3 id="ForwardDiff-Based-Derivatives"><a class="docs-heading-anchor" href="#ForwardDiff-Based-Derivatives">ForwardDiff-Based Derivatives</a><a id="ForwardDiff-Based-Derivatives-1"></a><a class="docs-heading-anchor-permalink" href="#ForwardDiff-Based-Derivatives" title="Permalink"></a></h3><pre><code class="language-julia hljs">using ForwardDiff, GLM
+@benchmark compile_formula($model, $data)</code></pre><h2 id="Derivative-Computation-System"><a class="docs-heading-anchor" href="#Derivative-Computation-System">Derivative Computation System</a><a id="Derivative-Computation-System-1"></a><a class="docs-heading-anchor-permalink" href="#Derivative-Computation-System" title="Permalink"></a></h2><p>FormulaCompiler provides comprehensive automatic differentiation capabilities for computing Jacobians with dual backend support. For marginal effects, standard errors, and statistical inference, use <a href="https://github.com/emfeltham/Margins.jl">Margins.jl</a> which builds on these computational primitives.</p><blockquote><p><strong>Note</strong>: Examples in this section use functions from <a href="https://github.com/emfeltham/Margins.jl">Margins.jl</a> (<code>marginal_effects_eta!</code>, <code>marginal_effects_mu!</code>, <code>delta_method_se</code>). Install Margins.jl to use these examples: <code>using Pkg; Pkg.add(url=&quot;https://github.com/emfeltham/Margins.jl&quot;)</code></p></blockquote><h3 id="Performance-Characteristics"><a class="docs-heading-anchor" href="#Performance-Characteristics">Performance Characteristics</a><a id="Performance-Characteristics-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Characteristics" title="Permalink"></a></h3><ul><li><strong>Core evaluation</strong>: Zero allocations (modelrow!, compiled functions)</li><li><strong>Both derivative backends</strong>: Zero allocations (ForwardDiff and finite differences)</li><li><strong>AD backend preferred</strong>: Higher accuracy (machine precision) and faster performance</li><li><strong>FD backend alternative</strong>: Explicit step size control</li><li><strong>Validation</strong>: Cross-validated between backends for robustness</li></ul><div class="admonition is-info" id="Backend-Selection-ebe9730286f4eb8d"><header class="admonition-header">Backend Selection<a class="admonition-anchor" href="#Backend-Selection-ebe9730286f4eb8d" title="Permalink"></a></header><div class="admonition-body"><p>FormulaCompiler provides dual backends for derivative computation, both achieving zero allocations. Use <code>:ad</code> (ForwardDiff) as the default for higher accuracy and performance. Use <code>:fd</code> (finite differences) only when you need explicit control over step sizes.</p></div></div><h3 id="Derivative-Evaluator-Construction"><a class="docs-heading-anchor" href="#Derivative-Evaluator-Construction">Derivative Evaluator Construction</a><a id="Derivative-Evaluator-Construction-1"></a><a class="docs-heading-anchor-permalink" href="#Derivative-Evaluator-Construction" title="Permalink"></a></h3><p>Build reusable derivative evaluators for efficient computation:</p><pre><code class="language-julia hljs">using FormulaCompiler, GLM
 
+# Setup model with mixed variable types
+df = DataFrame(
+    y = randn(1000),
+    price = randn(1000),          # Float64 continuous
+    quantity = rand(1:100, 1000), # Int64 continuous (auto-converted)
+    available = rand(Bool, 1000), # Bool continuous (true→1.0, false→0.0)
+    region = categorical(rand([&quot;North&quot;, &quot;South&quot;], 1000))  # Categorical
+)
+
+model = lm(@formula(y ~ price * region + log(quantity + 1) + available), df)
+data = Tables.columntable(df)
 compiled = compile_formula(model, data)
-vars = [:x, :z]  # choose continuous vars
-de = build_derivative_evaluator(compiled, data; vars=vars)
 
-# Pre-allocate Jacobian matrix (reused across calls)
-J = Matrix{Float64}(undef, length(compiled), length(vars))
-derivative_modelrow!(J, de, 1)  # ≤512 bytes (AD backend)
+# Boolean variables are treated as continuous (matching StatsModels behavior)
+# available: true → 1.0, false → 0.0 in model matrix
+# This produces identical results to StatsModels
 
-# Marginal effects η = Xβ (uses preallocated buffers)
+# Identify continuous variables automatically
+continuous_vars = continuous_variables(compiled, data)  # [:price, :quantity]
+
+# Build derivative evaluator (AD backend preferred: zero allocations, higher accuracy)
+de_ad = derivativeevaluator(:ad, compiled, data, continuous_vars)
+# OR build FD evaluator (alternative: zero allocations, explicit step control)
+de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)</code></pre><h3 id="Jacobian-Computation"><a class="docs-heading-anchor" href="#Jacobian-Computation">Jacobian Computation</a><a id="Jacobian-Computation-1"></a><a class="docs-heading-anchor-permalink" href="#Jacobian-Computation" title="Permalink"></a></h3><p>Compute partial derivatives of model matrix rows:</p><pre><code class="language-julia hljs"># Method 1: Automatic differentiation (zero allocations, higher accuracy - preferred)
+de_ad = derivativeevaluator(:ad, compiled, data, continuous_vars)
+J_ad = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
+derivative_modelrow!(J_ad, de_ad, 1)
+
+# Method 2: Finite differences (zero allocations, explicit step control - alternative)
+de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
+J_fd = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
+derivative_modelrow!(J_fd, de_fd, 1)
+
+# All methods produce equivalent results
+@assert isapprox(J_ad, J_fd; rtol=1e-6) &quot;AD and FD should match&quot;</code></pre><h3 id="Marginal-Effects-Computation"><a class="docs-heading-anchor" href="#Marginal-Effects-Computation">Marginal Effects Computation</a><a id="Marginal-Effects-Computation-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects-Computation" title="Permalink"></a></h3><p>Compute effects on linear predictor and response scales:</p><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta!, marginal_effects_mu!
+
 β = coef(model)
-g_eta = marginal_effects_eta(de, β, 1)  # ≤512 bytes (AD backend)
 
-# GLM mean μ = g⁻¹(η) with link functions
-g_mu = marginal_effects_mu(de, β, 1; link=LogitLink())  # ≤512 bytes (AD backend)</code></pre><p>Finite-difference fallback (simple and robust):</p><pre><code class="language-julia hljs">J_fd = derivative_modelrow_fd(compiled, data, 1; vars=vars)</code></pre><p>Discrete contrasts for categorical variables:</p><pre><code class="language-julia hljs">Δ = contrast_modelrow(compiled, data, 1; var=:group3, from=&quot;A&quot;, to=&quot;B&quot;)</code></pre><p>Tips:</p><ul><li>Variable selection: <code>continuous_variables(compiled, data)</code> returns a convenient list of continuous symbols present in the compiled ops. Pass a subset to <code>build_derivative_evaluator</code> via <code>vars=...</code>.</li><li>Chunking: <code>build_derivative_evaluator(...; chunk=:auto)</code> uses <code>ForwardDiff.Chunk{N}</code> where <code>N = length(vars)</code>. You can pass an explicit <code>ForwardDiff.Chunk{K}()</code> if you want to tune performance for larger <code>N</code>.</li><li>Links: <code>marginal_effects_mu</code> supports common GLM links including <code>IdentityLink()</code>, <code>LogLink()</code>, <code>LogitLink()</code>, <code>ProbitLink()</code>, <code>CloglogLink()</code>, <code>CauchitLink()</code>, <code>InverseLink()</code>, and <code>SqrtLink()</code> (and <code>InverseSquareLink()</code> when available). Extendable as needed.</li></ul><h3 id="Mixed-Models-(Fixed-Effects)"><a class="docs-heading-anchor" href="#Mixed-Models-(Fixed-Effects)">Mixed Models (Fixed Effects)</a><a id="Mixed-Models-(Fixed-Effects)-1"></a><a class="docs-heading-anchor-permalink" href="#Mixed-Models-(Fixed-Effects)" title="Permalink"></a></h3><p>Derivatives target the fixed-effects design (random effects are intentionally excluded):</p><pre><code class="language-julia hljs">using MixedModels
+# Effects on linear predictor η = Xβ
+g_eta = Vector{Float64}(undef, length(continuous_vars))
+
+# AD backend: Zero allocations, higher accuracy (preferred)
+de_ad = derivativeevaluator(:ad, compiled, data, continuous_vars)
+marginal_effects_eta!(g_eta, de_ad, β, 1)
+
+# FD backend: Zero allocations, explicit step control (alternative)
+de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
+marginal_effects_eta!(g_eta, de_fd, β, 1)
+
+# Effects on response scale μ (for GLM models)
+if model isa GLM.GeneralizedLinearModel
+    link_function = GLM.Link(model)
+    g_mu = Vector{Float64}(undef, length(continuous_vars))
+
+    # Using AD evaluator for response scale effects
+    marginal_effects_mu!(g_mu, de_ad, β, 1, link_function)
+
+    println(&quot;Marginal effects on linear predictor: $g_eta&quot;)
+    println(&quot;Marginal effects on response scale: $g_mu&quot;)
+end</code></pre><h3 id="Categorical-Contrasts"><a class="docs-heading-anchor" href="#Categorical-Contrasts">Categorical Contrasts</a><a id="Categorical-Contrasts-1"></a><a class="docs-heading-anchor-permalink" href="#Categorical-Contrasts" title="Permalink"></a></h3><p>FormulaCompiler provides two approaches for computing <strong>counterfactual discrete differences</strong>: comparing the same observation under different categorical levels, holding all other covariates constant.</p><div class="admonition is-info" id="Counterfactual-vs-Cross-Sectional-395880f9af21902a"><header class="admonition-header">Counterfactual vs Cross-Sectional<a class="admonition-anchor" href="#Counterfactual-vs-Cross-Sectional-395880f9af21902a" title="Permalink"></a></header><div class="admonition-body"><p>These methods compute counterfactual effects (same person, different treatment), NOT cross-sectional comparisons (different people with different treatments). This ensures we isolate the treatment effect without confounding from other variables.</p></div></div><h4 id="Simple-Approach:-Direct-Data-Modification"><a class="docs-heading-anchor" href="#Simple-Approach:-Direct-Data-Modification">Simple Approach: Direct Data Modification</a><a id="Simple-Approach:-Direct-Data-Modification-1"></a><a class="docs-heading-anchor-permalink" href="#Simple-Approach:-Direct-Data-Modification" title="Permalink"></a></h4><p>For exploratory analysis or one-off contrasts, modify data directly:</p><pre><code class="language-julia hljs"># Create data with different categorical levels
+# (keeps all other variables at their original values)
+n_rows = length(data.region)
+data_north = merge(data, (region = fill(&quot;North&quot;, n_rows),))
+data_south = merge(data, (region = fill(&quot;South&quot;, n_rows),))
+
+# Evaluate SAME row with different region assignments
+row = 1  # Same person/observation
+X_north = modelrow(compiled, data_north, row)  # If they were in North
+X_south = modelrow(compiled, data_south, row)  # If they were in South
+Δ = X_south .- X_north  # Counterfactual difference
+
+# Scalar effect with uncertainty quantification
+β = coef(model)
+effect = dot(β, Δ)  # Effect of South vs North for person at row 1
+
+# Standard error via delta method
+∇β = Δ  # Parameter gradient (for linear scale)
+vcov_matrix = vcov(model)
+se = sqrt(dot(∇β, vcov_matrix, ∇β))
+ci_lower = effect - 1.96 * se
+ci_upper = effect + 1.96 * se
+
+println(&quot;Effect: $effect ± $se, 95% CI: [$ci_lower, $ci_upper]&quot;)</code></pre><p><strong>When to use</strong>: Quick checks, 1-10 contrasts, exploratory analysis.</p><h4 id="Zero-Allocation-Approach:-ContrastEvaluator"><a class="docs-heading-anchor" href="#Zero-Allocation-Approach:-ContrastEvaluator">Zero-Allocation Approach: ContrastEvaluator</a><a id="Zero-Allocation-Approach:-ContrastEvaluator-1"></a><a class="docs-heading-anchor-permalink" href="#Zero-Allocation-Approach:-ContrastEvaluator" title="Permalink"></a></h4><p>For batch processing or performance-critical code, use the zero-allocation evaluator:</p><pre><code class="language-julia hljs"># Create zero-allocation contrast evaluator
+evaluator = contrastevaluator(compiled, data, [:region])
+contrast_buf = Vector{Float64}(undef, length(compiled))
+
+# Compare categorical levels for specific row
+contrast_modelrow!(contrast_buf, evaluator, 1, :region, &quot;North&quot;, &quot;South&quot;)
+contrast_north_south = copy(contrast_buf)  # Save result if needed
+
+# Batch contrasts across multiple rows (zero allocations)
+rows_to_analyze = [1, 50, 100, 500]
+contrasts = Matrix{Float64}(undef, length(rows_to_analyze), length(compiled))
+
+for (i, row) in enumerate(rows_to_analyze)
+    contrast_modelrow!(contrast_buf, evaluator, row, :region, &quot;North&quot;, &quot;South&quot;)
+    contrasts[i, :] .= contrast_buf
+end
+
+# Parameter gradients for uncertainty quantification
+β = coef(model)
+∇β = Vector{Float64}(undef, length(compiled))
+contrast_gradient!(∇β, evaluator, 1, :region, &quot;North&quot;, &quot;South&quot;, β)
+
+# Delta method standard error
+vcov_matrix = vcov(model)
+se = delta_method_se(evaluator, 1, :region, &quot;North&quot;, &quot;South&quot;, β, vcov_matrix)</code></pre><p><strong>When to use</strong>: 100+ contrasts, production pipelines, memory-constrained environments.</p><div class="admonition is-info" id="How-Categorical-Contrasts-Work-c40126a41a844bd4"><header class="admonition-header">How Categorical Contrasts Work<a class="admonition-anchor" href="#How-Categorical-Contrasts-Work-c40126a41a844bd4" title="Permalink"></a></header><div class="admonition-body"><p>For a detailed explanation of both approaches, including the internal mechanism of <code>ContrastEvaluator</code> and <code>CounterfactualVectors</code>, see <a href="../../internals/contrast_mechanism/">How Categorical Contrasts Work</a>.</p></div></div><h3 id="Advanced-Configuration"><a class="docs-heading-anchor" href="#Advanced-Configuration">Advanced Configuration</a><a id="Advanced-Configuration-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Configuration" title="Permalink"></a></h3><p>Optimize derivative computation for specific use cases:</p><pre><code class="language-julia hljs"># Variable selection strategies
+all_continuous = continuous_variables(compiled, data)
+economic_vars = [:price, :quantity]  # Domain-specific subset
+interaction_vars = [:price]          # Focus on key interactions
+
+# Backend selection based on requirements
+function compute_derivatives_with_backend_choice(compiled, data, vars, β, row, backend=:ad)
+    de = derivativeevaluator(backend, compiled, data, vars)
+    g = Vector{Float64}(undef, length(vars))
+    marginal_effects_eta!(g, de, β, row)
+    return g
+end</code></pre><h3 id="Mixed-Models-(Fixed-Effects)"><a class="docs-heading-anchor" href="#Mixed-Models-(Fixed-Effects)">Mixed Models (Fixed Effects)</a><a id="Mixed-Models-(Fixed-Effects)-1"></a><a class="docs-heading-anchor-permalink" href="#Mixed-Models-(Fixed-Effects)" title="Permalink"></a></h3><p>Derivatives target the fixed-effects design (random effects are intentionally excluded):</p><pre><code class="language-julia hljs">using MixedModels
 
 df = DataFrame(y = randn(500), x = randn(500), z = abs.(randn(500)) .+ 0.1,
                group = categorical(rand(1:20, 500)))
@@ -110,40 +296,95 @@ mm = fit(MixedModel, @formula(y ~ 1 + x + z + (1|group)), df; progress=false)
 data = Tables.columntable(df)
 compiled = compile_formula(mm, data)  # fixed-effects only
 vars = [:x, :z]
-de = build_derivative_evaluator(compiled, data; vars=vars)
+de_fd = derivativeevaluator(:fd, compiled, data, vars)
 
 J = Matrix{Float64}(undef, length(compiled), length(vars))
-derivative_modelrow!(J, de, 1)</code></pre><h3 id="Architecture-and-Optimization"><a class="docs-heading-anchor" href="#Architecture-and-Optimization">Architecture and Optimization</a><a id="Architecture-and-Optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Architecture-and-Optimization" title="Permalink"></a></h3><p>The derivative system achieves near-zero allocations through:</p><ul><li><strong>Preallocated buffers</strong>: Jacobian matrices, gradient vectors, and temporary arrays stored in <code>DerivativeEvaluator</code></li><li><strong>Typed closures</strong>: Compile-time specialization eliminates runtime dispatch</li><li><strong>Prebuilt data structures</strong>: Override vectors and merged data reused across calls</li><li><strong>Optimized memory layout</strong>: All allocations front-loaded during evaluator construction</li></ul><h3 id="Performance-Benchmarking"><a class="docs-heading-anchor" href="#Performance-Benchmarking">Performance Benchmarking</a><a id="Performance-Benchmarking-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Benchmarking" title="Permalink"></a></h3><pre><code class="language-julia hljs">using BenchmarkTools
+derivative_modelrow!(J, de_fd, 1)</code></pre><h3 id="Architecture-and-Optimization"><a class="docs-heading-anchor" href="#Architecture-and-Optimization">Architecture and Optimization</a><a id="Architecture-and-Optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Architecture-and-Optimization" title="Permalink"></a></h3><p>The derivative system achieves near-zero allocations through:</p><ul><li><strong>Preallocated buffers</strong>: Jacobian matrices, gradient vectors, and temporary arrays stored in <code>derivativeevaluator</code></li><li><strong>Typed closures</strong>: Compile-time specialization eliminates runtime dispatch</li><li><strong>Prebuilt data structures</strong>: Override vectors and merged data reused across calls</li><li><strong>Optimized memory layout</strong>: All allocations front-loaded during evaluator construction</li></ul><h3 id="Performance-Benchmarking"><a class="docs-heading-anchor" href="#Performance-Benchmarking">Performance Benchmarking</a><a id="Performance-Benchmarking-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Benchmarking" title="Permalink"></a></h3><pre><code class="language-julia hljs">using BenchmarkTools
 
-# Build evaluator once (one-time cost)
-de = build_derivative_evaluator(compiled, data; vars=[:x, :z])
-J = Matrix{Float64}(undef, length(compiled), length(de.vars))
+# Build evaluators once (one-time cost)
+de_ad = derivativeevaluator(:ad, compiled, data, [:x, :z])  # Zero allocations, higher accuracy (preferred)
+de_fd = derivativeevaluator(:fd, compiled, data, [:x, :z])  # Zero allocations, explicit step control (alternative)
+J = Matrix{Float64}(undef, length(compiled), length(de_ad.vars))
 
-# Benchmark derivatives (≤512 bytes, AD backend)
-@benchmark derivative_modelrow!($J, $de, 25)
+# Benchmark derivatives
+@benchmark derivative_modelrow!($J, $de_ad, 25)  # AD (faster)
+@benchmark derivative_modelrow!($J, $de_fd, 25)  # FD
 
-# Benchmark marginal effects (≤512 bytes with preallocated buffers, AD backend)  
+# Benchmark marginal effects
 β = coef(model)
-g = Vector{Float64}(undef, length(de.vars))
-@benchmark marginal_effects_eta!($g, $de, $β, 25)</code></pre><h2 id="Complex-Formula-Support"><a class="docs-heading-anchor" href="#Complex-Formula-Support">Complex Formula Support</a><a id="Complex-Formula-Support-1"></a><a class="docs-heading-anchor-permalink" href="#Complex-Formula-Support" title="Permalink"></a></h2><h3 id="Nested-Functions"><a class="docs-heading-anchor" href="#Nested-Functions">Nested Functions</a><a id="Nested-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Nested-Functions" title="Permalink"></a></h3><p>FormulaCompiler.jl handles complex nested functions:</p><pre><code class="language-julia hljs">@formula(y ~ log(sqrt(abs(x))) + exp(sin(z)) * group)</code></pre><h3 id="Boolean-Logic"><a class="docs-heading-anchor" href="#Boolean-Logic">Boolean Logic</a><a id="Boolean-Logic-1"></a><a class="docs-heading-anchor-permalink" href="#Boolean-Logic" title="Permalink"></a></h3><p>Sophisticated boolean expressions:</p><pre><code class="language-julia hljs">@formula(y ~ (x &gt; 0) * (z &lt; mean(z)) + (group == &quot;A&quot;) * log(w))</code></pre><h3 id="Custom-Functions"><a class="docs-heading-anchor" href="#Custom-Functions">Custom Functions</a><a id="Custom-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-Functions" title="Permalink"></a></h3><p>Define custom functions for use in formulas:</p><pre><code class="language-julia hljs"># Define custom function
+g = Vector{Float64}(undef, length(de_ad.vars))
+@benchmark marginal_effects_eta!($g, $de_ad, $β, 25)  # AD (faster, more accurate)
+@benchmark marginal_effects_eta!($g, $de_fd, $β, 25)  # FD</code></pre><h2 id="Complex-Formula-Support"><a class="docs-heading-anchor" href="#Complex-Formula-Support">Complex Formula Support</a><a id="Complex-Formula-Support-1"></a><a class="docs-heading-anchor-permalink" href="#Complex-Formula-Support" title="Permalink"></a></h2><h3 id="Nested-Functions"><a class="docs-heading-anchor" href="#Nested-Functions">Nested Functions</a><a id="Nested-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Nested-Functions" title="Permalink"></a></h3><p>FormulaCompiler.jl handles complex nested functions:</p><pre><code class="language-julia hljs">@formula(y ~ log(sqrt(abs(x))) + exp(sin(z)) * group)</code></pre><h3 id="Boolean-Logic"><a class="docs-heading-anchor" href="#Boolean-Logic">Boolean Logic</a><a id="Boolean-Logic-1"></a><a class="docs-heading-anchor-permalink" href="#Boolean-Logic" title="Permalink"></a></h3><p>Sophisticated boolean expressions:</p><pre><code class="language-julia hljs">@formula(y ~ (x &gt; 0) * (z &lt; mean(z)) + (group == &quot;A&quot;) * log(w))</code></pre><h3 id="Custom-Functions"><a class="docs-heading-anchor" href="#Custom-Functions">Custom Functions</a><a id="Custom-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-Functions" title="Permalink"></a></h3><p>Define custom functions for use in formulas:</p><pre><code class="language-julia hljs"># Define custom function
 custom_transform(x) = x &gt; 0 ? log(1 + x) : -log(1 - x)
 
 # Use in formula (requires function to be defined in scope)
-@formula(y ~ custom_transform(x) + group)</code></pre><h2 id="High-Performance-Patterns"><a class="docs-heading-anchor" href="#High-Performance-Patterns">High-Performance Patterns</a><a id="High-Performance-Patterns-1"></a><a class="docs-heading-anchor-permalink" href="#High-Performance-Patterns" title="Permalink"></a></h2><h3 id="Avoiding-Allocation-in-Loops"><a class="docs-heading-anchor" href="#Avoiding-Allocation-in-Loops">Avoiding Allocation in Loops</a><a id="Avoiding-Allocation-in-Loops-1"></a><a class="docs-heading-anchor-permalink" href="#Avoiding-Allocation-in-Loops" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Pre-compile and pre-allocate
-compiled = compile_formula(model, data)
-row_vec = Vector{Float64}(undef, length(compiled))
-results = Matrix{Float64}(undef, n_simulations, length(compiled))
+@formula(y ~ custom_transform(x) + group)</code></pre><h3 id="Categorical-Mixtures"><a class="docs-heading-anchor" href="#Categorical-Mixtures">Categorical Mixtures</a><a id="Categorical-Mixtures-1"></a><a class="docs-heading-anchor-permalink" href="#Categorical-Mixtures" title="Permalink"></a></h3><p>FormulaCompiler.jl supports categorical mixtures for marginal effects computation:</p><pre><code class="language-julia hljs"># Create data with weighted categorical specifications
+df = DataFrame(
+    x = [1.0, 2.0, 3.0],
+    group = [mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7),   # 30% A, 70% B
+             mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7),
+             mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7)]
+)
 
-# Monte Carlo simulation with zero allocations
-for sim in 1:n_simulations
-    for row in 1:nrow(df)
-        compiled(row_vec, data, row)
+# Compile and evaluate with zero allocations
+compiled = compile_formula(model, Tables.columntable(df))
+compiled(output, Tables.columntable(df), 1)  # Zero allocations; time varies by hardware</code></pre><p>For comprehensive coverage of categorical mixtures including validation, helper functions, and marginal effects integration, see the <a href="../categorical_mixtures/">Categorical Mixtures</a> guide.</p><h2 id="High-Performance-Computing-Patterns"><a class="docs-heading-anchor" href="#High-Performance-Computing-Patterns">High-Performance Computing Patterns</a><a id="High-Performance-Computing-Patterns-1"></a><a class="docs-heading-anchor-permalink" href="#High-Performance-Computing-Patterns" title="Permalink"></a></h2><h3 id="Zero-Allocation-Computational-Loops"><a class="docs-heading-anchor" href="#Zero-Allocation-Computational-Loops">Zero-Allocation Computational Loops</a><a id="Zero-Allocation-Computational-Loops-1"></a><a class="docs-heading-anchor-permalink" href="#Zero-Allocation-Computational-Loops" title="Permalink"></a></h3><p>Design computational patterns that maintain zero-allocation performance:</p><pre><code class="language-julia hljs">function monte_carlo_predictions(model, data, n_simulations=10000)
+    # Pre-compile and pre-allocate all necessary buffers
+    compiled = compile_formula(model, data)
+    row_vec = Vector{Float64}(undef, length(compiled))
+    β = coef(model)
+    
+    # Pre-allocate result storage
+    predictions = Vector{Float64}(undef, n_simulations)
+    data_size = length(first(data))
+    
+    # Zero-allocation simulation loop
+    for sim in 1:n_simulations
+        # Random row selection
+        row_idx = rand(1:data_size)
         
-        # Apply some transformation to row_vec
-        results[sim, :] .= some_transformation(row_vec)
+        # Zero-allocation model matrix evaluation
+        compiled(row_vec, data, row_idx)
         
-        # Continue processing...
+        # Zero-allocation prediction computation
+        predictions[sim] = dot(β, row_vec)
     end
+    
+    return predictions
+end
+
+# Usage with performance validation
+predictions = monte_carlo_predictions(model, data, 100000)</code></pre><h3 id="Advanced-Memory-Management"><a class="docs-heading-anchor" href="#Advanced-Memory-Management">Advanced Memory Management</a><a id="Advanced-Memory-Management-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Memory-Management" title="Permalink"></a></h3><p>Optimize memory usage for large-scale applications:</p><pre><code class="language-julia hljs">function memory_efficient_batch_processing(model, large_dataset, batch_size=1000)
+    compiled = compile_formula(model, large_dataset)
+    n_total = length(first(large_dataset))
+    n_batches = cld(n_total, batch_size)
+    
+    # Pre-allocate reusable buffers
+    row_vec = Vector{Float64}(undef, length(compiled))
+    batch_results = Matrix{Float64}(undef, batch_size, length(compiled))
+    
+    all_results = Vector{Matrix{Float64}}()
+    
+    for batch in 1:n_batches
+        start_idx = (batch - 1) * batch_size + 1
+        end_idx = min(batch * batch_size, n_total)
+        actual_batch_size = end_idx - start_idx + 1
+        
+        # Resize for last batch if needed
+        if actual_batch_size != batch_size
+            batch_results = Matrix{Float64}(undef, actual_batch_size, length(compiled))
+        end
+        
+        # Zero-allocation batch evaluation
+        for (local_idx, global_idx) in enumerate(start_idx:end_idx)
+            compiled(view(batch_results, local_idx, :), large_dataset, global_idx)
+        end
+        
+        # Store results (could write to disk here for very large datasets)
+        push!(all_results, copy(batch_results))
+    end
+    
+    return all_results
 end</code></pre><h3 id="Batch-Processing-Large-Datasets"><a class="docs-heading-anchor" href="#Batch-Processing-Large-Datasets">Batch Processing Large Datasets</a><a id="Batch-Processing-Large-Datasets-1"></a><a class="docs-heading-anchor-permalink" href="#Batch-Processing-Large-Datasets" title="Permalink"></a></h3><pre><code class="language-julia hljs">function process_large_dataset(model, data, batch_size=1000)
     compiled = compile_formula(model, data)
     n_rows = Tables.rowcount(data)
@@ -154,10 +395,14 @@ end</code></pre><h3 id="Batch-Processing-Large-Datasets"><a class="docs-heading-
     for start_idx in 1:batch_size:n_rows
         end_idx = min(start_idx + batch_size - 1, n_rows)
         batch_size_actual = end_idx - start_idx + 1
-        
+
         batch_result = Matrix{Float64}(undef, batch_size_actual, n_cols)
-        modelrow!(batch_result, compiled, data, start_idx:end_idx)
-        
+
+        # Evaluate each row in the batch
+        for (batch_idx, data_idx) in enumerate(start_idx:end_idx)
+            compiled(view(batch_result, batch_idx, :), data, data_idx)
+        end
+
         push!(results, batch_result)
     end
     
@@ -246,9 +491,204 @@ function profile_memory_usage(model, data, n_evaluations=10000)
     Profile.clear_malloc_data()
     
     for i in 1:n_evaluations
-        compiled(row_vec, data, i % nrow(data) + 1)
+        compiled(row_vec, data, i % length(first(data)) + 1)
     end
     
     # Analyze results
     # (Use ProfileView.jl or similar for visualization)
-end</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../basic_usage/">« Basic Usage</a><a class="docs-footer-nextpage" href="../scenarios/">Scenario Analysis »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Saturday 30 August 2025 02:26">Saturday 30 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+end</code></pre><h2 id="Real-World-Application-Patterns"><a class="docs-heading-anchor" href="#Real-World-Application-Patterns">Real-World Application Patterns</a><a id="Real-World-Application-Patterns-1"></a><a class="docs-heading-anchor-permalink" href="#Real-World-Application-Patterns" title="Permalink"></a></h2><h3 id="Economic-Policy-Analysis"><a class="docs-heading-anchor" href="#Economic-Policy-Analysis">Economic Policy Analysis</a><a id="Economic-Policy-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Economic-Policy-Analysis" title="Permalink"></a></h3><p>Combine scenario analysis with derivative computation for comprehensive policy evaluation:</p><pre><code class="language-julia hljs">function policy_impact_analysis(baseline_model, policy_data, policy_parameters)
+    # Compile baseline model
+    compiled = compile_formula(baseline_model, policy_data)
+    β = coef(baseline_model)
+    
+    # Identify continuous policy levers
+    policy_vars = intersect(keys(policy_parameters), continuous_variables(compiled, policy_data))
+    de_fd = derivativeevaluator(:fd, compiled, policy_data, collect(policy_vars))
+    
+    # Create policy scenarios using data modification
+    scenarios = [
+        (&quot;status_quo&quot;, policy_data),
+        (&quot;moderate_policy&quot;, merge(policy_data, policy_parameters)),
+        (&quot;aggressive_policy&quot;, merge(policy_data,
+                       [k =&gt; fill(v * 1.5, length(first(policy_data))) for (k, v) in policy_parameters]))
+    ]
+    
+    # Evaluate policy impacts
+    n_individuals = min(1000, length(first(policy_data)))  # Sample for analysis
+    
+    results = Dict()
+    for (scenario_name, scenario_data) in scenarios
+        scenario_predictions = Vector{Float64}(undef, n_individuals)
+        scenario_marginals = Matrix{Float64}(undef, n_individuals, length(policy_vars))
+
+        # Evaluate predictions and marginal effects for each individual
+        row_vec = Vector{Float64}(undef, length(compiled))
+        marginal_vec = Vector{Float64}(undef, length(policy_vars))
+
+        for i in 1:n_individuals
+            # Prediction
+            compiled(row_vec, scenario_data, i)
+            scenario_predictions[i] = dot(β, row_vec)
+
+            # Marginal effects
+            marginal_effects_eta!(marginal_vec, de_fd, β, i)  # Zero allocations
+            scenario_marginals[i, :] .= marginal_vec
+        end
+
+        results[scenario_name] = (
+            predictions = scenario_predictions,
+            marginal_effects = scenario_marginals,
+            mean_prediction = mean(scenario_predictions),
+            policy_sensitivity = mean(scenario_marginals, dims=1)
+        )
+    end
+    
+    return results
+end
+
+# Example usage
+policy_params = Dict(:minimum_wage =&gt; 15.0, :tax_rate =&gt; 0.25)
+analysis_results = policy_impact_analysis(economic_model, economic_data, policy_params)
+
+# Compare scenarios
+status_quo_mean = analysis_results[&quot;status_quo&quot;].mean_prediction
+moderate_mean = analysis_results[&quot;moderate_policy&quot;].mean_prediction
+policy_effect = moderate_mean - status_quo_mean
+
+println(&quot;Policy effect: $(round(policy_effect, digits=3))&quot;)</code></pre><h3 id="Biostatistical-Applications"><a class="docs-heading-anchor" href="#Biostatistical-Applications">Biostatistical Applications</a><a id="Biostatistical-Applications-1"></a><a class="docs-heading-anchor-permalink" href="#Biostatistical-Applications" title="Permalink"></a></h3><p>High-throughput analysis for medical and biological research:</p><pre><code class="language-julia hljs">function biomarker_analysis(survival_model, patient_data, biomarker_ranges)
+    compiled = compile_formula(survival_model, patient_data)
+    β = coef(survival_model)
+    
+    # Identify biomarker variables for sensitivity analysis
+    biomarker_vars = Symbol.(keys(biomarker_ranges))
+    continuous_biomarkers = intersect(biomarker_vars, continuous_variables(compiled, patient_data))
+
+    if !isempty(continuous_biomarkers)
+        de_fd = derivativeevaluator(:fd, compiled, patient_data, continuous_biomarkers)
+    end
+    
+    # Create biomarker scenarios using loops
+    biomarker_combinations = Iterators.product(values(biomarker_ranges)...)
+    biomarker_scenarios = [(&quot;scenario_$i&quot;, merge(patient_data,
+        Dict(zip(keys(biomarker_ranges), [fill(val, length(first(patient_data))) for val in combo])))
+    ) for (i, combo) in enumerate(biomarker_combinations)]
+    
+    # Patient risk stratification
+    n_patients = length(first(patient_data))
+    risk_matrix = Matrix{Float64}(undef, length(biomarker_scenarios), n_patients)
+    
+    # Pre-allocate evaluation buffers
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    # Evaluate all scenario-patient combinations
+    for (scenario_idx, (scenario_name, scenario_data)) in enumerate(biomarker_scenarios)
+        for patient_idx in 1:n_patients
+            compiled(row_vec, scenario_data, patient_idx)
+            
+            # Compute risk score (example: linear predictor)
+            risk_score = dot(β, row_vec)
+            risk_matrix[scenario_idx, patient_idx] = risk_score
+        end
+    end
+    
+    # Compute marginal effects for sensitivity analysis
+    if !isempty(continuous_biomarkers)
+        marginal_matrix = Matrix{Float64}(undef, n_patients, length(continuous_biomarkers))
+        marginal_vec = Vector{Float64}(undef, length(continuous_biomarkers))
+        
+        for patient_idx in 1:n_patients
+            marginal_effects_eta!(marginal_vec, de_fd, β, patient_idx)
+            marginal_matrix[patient_idx, :] .= marginal_vec
+        end
+        
+        return (
+            risk_scores = risk_matrix,
+            marginal_effects = marginal_matrix,
+            scenarios = [name for (name, _) in biomarker_scenarios],
+            biomarker_vars = continuous_biomarkers
+        )
+    else
+        return (
+            risk_scores = risk_matrix,
+            scenarios = biomarker_scenarios
+        )
+    end
+end
+
+# Example usage
+biomarker_ranges = Dict(
+    :tumor_size =&gt; [1.0, 2.0, 3.0, 4.0],     # cm
+    :psa_level =&gt; [4.0, 10.0, 20.0],         # ng/mL
+    :age =&gt; [50, 65, 80]                     # years
+)
+
+bio_results = biomarker_analysis(oncology_model, patient_data, biomarker_ranges)</code></pre><h3 id="Financial-Risk-Modeling"><a class="docs-heading-anchor" href="#Financial-Risk-Modeling">Financial Risk Modeling</a><a id="Financial-Risk-Modeling-1"></a><a class="docs-heading-anchor-permalink" href="#Financial-Risk-Modeling" title="Permalink"></a></h3><p>Scenario analysis for financial applications:</p><pre><code class="language-julia hljs">function portfolio_risk_analysis(risk_model, market_data, stress_scenarios)
+    compiled = compile_formula(risk_model, market_data)
+    β = coef(risk_model)
+    
+    # Risk factor sensitivity
+    risk_factors = continuous_variables(compiled, market_data)
+    if !isempty(risk_factors)
+        de_fd = derivativeevaluator(:fd, compiled, market_data, risk_factors)
+    end
+    
+    # Create market stress scenarios using data modification
+    stress_scenario_objects = [
+        (name, merge(market_data,
+            Dict(k =&gt; fill(v, length(first(market_data))) for (k, v) in parameters)))
+        for (name, parameters) in stress_scenarios
+    ]
+    
+    # Portfolio evaluation across scenarios
+    n_assets = length(first(market_data))
+    scenario_valuations = Dict{String, Vector{Float64}}()
+    
+    row_vec = Vector{Float64}(undef, length(compiled))
+    
+    for (scenario_name, scenario_data) in stress_scenario_objects
+        asset_valuations = Vector{Float64}(undef, n_assets)
+
+        for asset_idx in 1:n_assets
+            compiled(row_vec, scenario_data, asset_idx)
+            # Risk-adjusted valuation
+            asset_valuations[asset_idx] = dot(β, row_vec)
+        end
+
+        scenario_valuations[scenario_name] = asset_valuations
+    end
+    
+    # Risk sensitivity analysis
+    if !isempty(risk_factors)
+        sensitivity_matrix = Matrix{Float64}(undef, n_assets, length(risk_factors))
+        sensitivity_vec = Vector{Float64}(undef, length(risk_factors))
+        
+        for asset_idx in 1:n_assets
+            marginal_effects_eta!(sensitivity_vec, de_fd, β, asset_idx)
+            sensitivity_matrix[asset_idx, :] .= sensitivity_vec
+        end
+        
+        return (
+            scenario_valuations = scenario_valuations,
+            risk_sensitivities = sensitivity_matrix,
+            risk_factors = risk_factors
+        )
+    else
+        return (scenario_valuations = scenario_valuations,)
+    end
+end
+
+# Example usage
+stress_scenarios = [
+    (&quot;market_crash&quot;, Dict(:market_volatility =&gt; 0.4, :interest_rate =&gt; 0.02)),
+    (&quot;inflation_shock&quot;, Dict(:inflation_rate =&gt; 0.08, :commodity_index =&gt; 1.5)),
+    (&quot;recession&quot;, Dict(:gdp_growth =&gt; -0.03, :unemployment =&gt; 0.12))
+]
+
+risk_analysis = portfolio_risk_analysis(financial_model, market_data, stress_scenarios)
+
+# Analyze results
+baseline_value = sum(risk_analysis.scenario_valuations[&quot;baseline&quot;])
+crash_value = sum(risk_analysis.scenario_valuations[&quot;market_crash&quot;])
+portfolio_risk = (crash_value - baseline_value) / baseline_value
+
+println(&quot;Portfolio stress loss: $(round(portfolio_risk * 100, digits=2))%&quot;)</code></pre><h2 id="Further-Reading"><a class="docs-heading-anchor" href="#Further-Reading">Further Reading</a><a id="Further-Reading-1"></a><a class="docs-heading-anchor-permalink" href="#Further-Reading" title="Permalink"></a></h2><ul><li><a href="../categorical_mixtures/">Categorical Contrasts Guide</a> - Detailed coverage of categorical contrasts and mixtures</li><li><a href="../performance/">Performance Guide</a> - Detailed optimization strategies and benchmarking</li><li><a href="../../api/#API-Reference">API Reference</a> - Complete function documentation</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../basic_usage/">« Basic Usage</a><a class="docs-footer-nextpage" href="../categorical_mixtures/">Categorical Mixtures »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Friday 17 October 2025 13:53">Friday 17 October 2025</span>. Using Julia version 1.12.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

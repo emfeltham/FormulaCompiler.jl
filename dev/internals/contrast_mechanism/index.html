@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>How Categorical Contrasts Work · FormulaCompiler.jl</title><meta name="title" content="How Categorical Contrasts Work · FormulaCompiler.jl"/><meta property="og:title" content="How Categorical Contrasts Work · FormulaCompiler.jl"/><meta property="twitter:title" content="How Categorical Contrasts Work · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/internals/contrast_mechanism/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/internals/contrast_mechanism/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/internals/contrast_mechanism/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><script src="../../assets/mermaid.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../../guide/basic_usage/">Basic Usage</a></li><li><a class="tocitem" href="../../guide/advanced_features/">Advanced Features</a></li><li><a class="tocitem" href="../../guide/categorical_mixtures/">Categorical Mixtures</a></li><li><a class="tocitem" href="../../guide/scenarios/">Scenario Analysis</a></li><li><a class="tocitem" href="../../guide/performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../../integration/glm/">GLM.jl</a></li><li><a class="tocitem" href="../../integration/mixed_models/">MixedModels.jl</a></li><li><a class="tocitem" href="../../integration/standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../../mathematical_foundation/">Mathematical Foundation</a></li><li><a class="tocitem" href="../../architecture/">Architecture</a></li><li><a class="tocitem" href="../../metaprogramming/">Metaprogramming</a></li><li><a class="tocitem" href="../../api/">API Reference</a></li><li><a class="tocitem" href="../../examples/">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>How Categorical Contrasts Work</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>How Categorical Contrasts Work</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/internals/contrast_mechanism.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="How-Categorical-Contrasts-Work"><a class="docs-heading-anchor" href="#How-Categorical-Contrasts-Work">How Categorical Contrasts Work</a><a id="How-Categorical-Contrasts-Work-1"></a><a class="docs-heading-anchor-permalink" href="#How-Categorical-Contrasts-Work" title="Permalink"></a></h1><p>This document explains the internal architecture and mechanism of categorical contrast computation in FormulaCompiler.jl, showing how the <code>ContrastEvaluator</code> achieves zero-allocation performance through the <code>CounterfactualVector</code> system.</p><h2 id="Table-of-Contents"><a class="docs-heading-anchor" href="#Table-of-Contents">Table of Contents</a><a id="Table-of-Contents-1"></a><a class="docs-heading-anchor-permalink" href="#Table-of-Contents" title="Permalink"></a></h2><ol><li><a href="#overview">Overview</a></li><li><a href="#simple-approach-direct-data-modification">Simple Approach: Direct Data Modification</a></li><li><a href="#counterfactualvector-mechanism">CounterfactualVector Mechanism</a></li><li><a href="#contrastevaluator-initialization">ContrastEvaluator Initialization</a></li><li><a href="#contrast-computation-flow">Contrast Computation Flow</a></li><li><a href="#gradient-computation">Gradient Computation</a></li><li><a href="#performance-characteristics">Performance Characteristics</a></li><li><a href="#advanced-topics">Advanced Topics</a></li></ol><hr/><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>Categorical contrasts compute <strong>counterfactual discrete differences</strong>: comparing the same observation under different categorical levels.</p><pre><code class="language-julia hljs"># For a specific individual/observation at row i
+Δ = X(row=i, treatment=&quot;Drug&quot;) - X(row=i, treatment=&quot;Control&quot;)</code></pre><p>This answers: &quot;What would be the treatment effect for this specific individual, holding all other characteristics constant?&quot;</p><p><strong>Important</strong>: This is NOT comparing two different observations that happen to have different treatment levels (which would confound treatment effects with individual differences).</p><p>FormulaCompiler provides <strong>two approaches</strong> for computing these counterfactual contrasts:</p><h3 id="1.-Simple-Approach:-Direct-Data-Modification"><a class="docs-heading-anchor" href="#1.-Simple-Approach:-Direct-Data-Modification">1. Simple Approach: Direct Data Modification</a><a id="1.-Simple-Approach:-Direct-Data-Modification-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Simple-Approach:-Direct-Data-Modification" title="Permalink"></a></h3><p>For simple cases, you can modify data directly and compute differences:</p><pre><code class="language-julia hljs"># Evaluate with different categorical levels
+data_control = merge(data, (treatment = fill(&quot;Control&quot;, n_rows),))
+data_drug = merge(data, (treatment = fill(&quot;Drug&quot;, n_rows),))
+
+X_control = modelrow(compiled, data_control, row)
+X_drug = modelrow(compiled, data_drug, row)
+Δ = X_drug - X_control</code></pre><p><strong>Pros</strong>: Simple, straightforward, no special APIs <strong>Cons</strong>: Allocates new data structures, not suitable for batch processing</p><h3 id="2.-Zero-Allocation-Approach:-ContrastEvaluator-CounterfactualVectors"><a class="docs-heading-anchor" href="#2.-Zero-Allocation-Approach:-ContrastEvaluator-CounterfactualVectors">2. Zero-Allocation Approach: ContrastEvaluator + CounterfactualVectors</a><a id="2.-Zero-Allocation-Approach:-ContrastEvaluator-CounterfactualVectors-1"></a><a class="docs-heading-anchor-permalink" href="#2.-Zero-Allocation-Approach:-ContrastEvaluator-CounterfactualVectors" title="Permalink"></a></h3><p>For performance-critical batch operations, use the zero-allocation system:</p><pre><code class="language-julia hljs">evaluator = contrastevaluator(compiled, data, [:treatment])
+Δ = Vector{Float64}(undef, length(compiled))
+contrast_modelrow!(Δ, evaluator, row, :treatment, &quot;Control&quot;, &quot;Drug&quot;)</code></pre><p><strong>Pros</strong>: Zero allocations, optimized for batch processing <strong>Cons</strong>: More setup, requires understanding of evaluator pattern</p><p>The rest of this document focuses on <strong>Approach 2</strong> (the zero-allocation system).</p><hr/><h2 id="Simple-Approach:-Direct-Data-Modification"><a class="docs-heading-anchor" href="#Simple-Approach:-Direct-Data-Modification">Simple Approach: Direct Data Modification</a><a id="Simple-Approach:-Direct-Data-Modification-1"></a><a class="docs-heading-anchor-permalink" href="#Simple-Approach:-Direct-Data-Modification" title="Permalink"></a></h2><p>For exploratory analysis, one-off contrasts, or when performance isn&#39;t critical, you can compute contrasts by directly modifying data and evaluating the compiled formula twice.</p><div class="admonition is-warning" id="Analytical-Distinction:-Counterfactual-vs-Cross-Sectional-Contrasts-6c89392e6d8199a2"><header class="admonition-header">Analytical Distinction: Counterfactual vs Cross-Sectional Contrasts<a class="admonition-anchor" href="#Analytical-Distinction:-Counterfactual-vs-Cross-Sectional-Contrasts-6c89392e6d8199a2" title="Permalink"></a></header><div class="admonition-body"><p>This approach computes <strong>counterfactual contrasts</strong>: comparing the <strong>same observation</strong> under different categorical levels. This is fundamentally different from comparing two different observations that happen to have different levels.</p><p><strong>Counterfactual (what we&#39;re doing here)</strong>:</p><pre><code class="language-julia hljs"># Same person (row 5), different treatments
+X_row5_if_control = modelrow(compiled, data_control, 5)
+X_row5_if_drug = modelrow(compiled, data_drug, 5)
+Δ_counterfactual = X_row5_if_drug - X_row5_if_control</code></pre><p>This answers: &quot;What would be the effect if this person received Drug instead of Control?&quot;</p><p><strong>Cross-sectional (NOT what we&#39;re doing)</strong>:</p><pre><code class="language-julia hljs"># Different people, different treatments
+X_person_in_control = modelrow(compiled, data, row_a)  # Person A (in Control)
+X_person_in_drug = modelrow(compiled, data, row_b)     # Person B (in Drug)
+Δ_cross_sectional = X_person_in_drug - X_person_in_control</code></pre><p>This confounds treatment effect with individual differences!</p></div></div><h3 id="Basic-Pattern"><a class="docs-heading-anchor" href="#Basic-Pattern">Basic Pattern</a><a id="Basic-Pattern-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Pattern" title="Permalink"></a></h3><pre><code class="language-julia hljs">using FormulaCompiler, GLM, DataFrames, Tables
+
+# Fit model and compile
+df = DataFrame(
+    y = randn(100),
+    x = randn(100),
+    treatment = rand([&quot;Control&quot;, &quot;Drug_A&quot;, &quot;Drug_B&quot;], 100)
+)
+model = lm(@formula(y ~ x * treatment), df)
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+
+# Choose a row to analyze
+row = 1
+
+# Create modified data with different treatment levels
+n_rows = length(data.y)
+data_control = merge(data, (treatment = fill(&quot;Control&quot;, n_rows),))
+data_drug = merge(data, (treatment = fill(&quot;Drug_A&quot;, n_rows),))
+
+# Evaluate model rows with different levels
+X_control = modelrow(compiled, data_control, row)
+X_drug = modelrow(compiled, data_drug, row)
+
+# Compute contrast
+Δ = X_drug .- X_control
+
+# Compute effect and standard error
+β = coef(model)
+effect = dot(β, Δ)
+
+# Gradient for uncertainty quantification (linear scale)
+∇β = Δ  # Parameter gradient: ∂(effect)/∂β = Δ
+vcov_matrix = vcov(model)
+se = sqrt(dot(∇β, vcov_matrix, ∇β))
+
+println(&quot;Treatment effect: $effect ± $se&quot;)</code></pre><h3 id="What-This-Does"><a class="docs-heading-anchor" href="#What-This-Does">What This Does</a><a id="What-This-Does-1"></a><a class="docs-heading-anchor-permalink" href="#What-This-Does" title="Permalink"></a></h3><ol><li><p><strong><code>merge(data, (treatment = fill(&quot;Control&quot;, n_rows),))</code></strong></p><ul><li>Creates a new NamedTuple with all columns from <code>data</code></li><li>Replaces the <code>:treatment</code> column with a vector of all <code>&quot;Control&quot;</code> values</li><li><strong>Crucially</strong>: Keeps all other covariates (x, age, etc.) at their original values for each row</li><li><strong>Memory</strong>: Allocates new vector for treatment column (~100 bytes for 100 rows)</li></ul></li><li><p><strong><code>modelrow(compiled, data_control, row)</code></strong></p><ul><li>Evaluates the compiled formula for row 1 using <code>data_control</code></li><li>Returns the model matrix row X <strong>for the same individual</strong> (row 1) as if they had <code>treatment=&quot;Control&quot;</code></li><li><strong>All other characteristics</strong> (x, age, etc.) remain as observed for row 1</li><li><strong>Memory</strong>: Allocates new output vector (~80 bytes for typical model)</li></ul></li><li><p><strong><code>X_drug .- X_control</code></strong></p><ul><li>Element-wise subtraction: the discrete effect vector</li><li>Shows the treatment effect <strong>for this specific individual</strong> with their specific covariate values</li><li>Holds everything else constant (ceteris paribus)</li></ul></li></ol><p><strong>Key insight</strong>: Both <code>X_control</code> and <code>X_drug</code> are evaluated for the <strong>same row</strong> (same person/observation), just with different treatment assignments. This is a counterfactual comparison, not a comparison across different observations.</p><h3 id="Why-Counterfactual-Contrasts-Matter"><a class="docs-heading-anchor" href="#Why-Counterfactual-Contrasts-Matter">Why Counterfactual Contrasts Matter</a><a id="Why-Counterfactual-Contrasts-Matter-1"></a><a class="docs-heading-anchor-permalink" href="#Why-Counterfactual-Contrasts-Matter" title="Permalink"></a></h3><p>The counterfactual approach isolates the treatment effect by holding all other variables constant:</p><pre><code class="language-julia hljs"># Example: Effect for a 45-year-old with specific characteristics
+row = 15  # Person with: age=45, x=2.3, education=&quot;College&quot;
+
+# Counterfactual contrast: Same person, different treatment
+X_if_control = modelrow(compiled, data_control, 15)  # This person AS IF Control
+X_if_drug = modelrow(compiled, data_drug, 15)        # This person AS IF Drug
+Δ_counterfactual = X_if_drug - X_if_control
+
+# Result: Pure treatment effect for THIS SPECIFIC person
+# Holds constant: age=45, x=2.3, education=&quot;College&quot;
+effect = dot(β, Δ_counterfactual)</code></pre><p><strong>Interpretation</strong>: &quot;If this 45-year-old college graduate with x=2.3 received Drug instead of Control, the predicted outcome would change by <code>effect</code>.&quot;</p><p><strong>Contrast with cross-sectional comparison</strong> (wrong approach):</p><pre><code class="language-julia hljs"># Find someone in Control and someone in Drug
+row_control = findfirst(data.treatment .== &quot;Control&quot;)  # Person A: age=45, x=2.3
+row_drug = findfirst(data.treatment .== &quot;Drug&quot;)        # Person B: age=60, x=-1.5
+
+X_person_control = modelrow(compiled, data, row_control)
+X_person_drug = modelrow(compiled, data, row_drug)
+Δ_wrong = X_person_drug - X_person_control
+
+# PROBLEM: This confounds treatment with age difference (60 vs 45)
+# and x difference (-1.5 vs 2.3)!</code></pre><p><strong>Why this matters for marginal effects</strong>:</p><ul><li>Discrete marginal effects measure <strong>ceteris paribus</strong> changes (holding everything else constant)</li><li>Counterfactual contrasts implement this mathematically</li><li>This is the standard definition in econometrics and causal inference</li></ul><h3 id="Computing-Scalar-Effects-and-Gradients"><a class="docs-heading-anchor" href="#Computing-Scalar-Effects-and-Gradients">Computing Scalar Effects and Gradients</a><a id="Computing-Scalar-Effects-and-Gradients-1"></a><a class="docs-heading-anchor-permalink" href="#Computing-Scalar-Effects-and-Gradients" title="Permalink"></a></h3><p>To get a scalar treatment effect, multiply by coefficients. For uncertainty quantification, also compute the parameter gradient:</p><pre><code class="language-julia hljs">β = coef(model)
+
+# Discrete effect on linear predictor (η scale)
+effect_eta = dot(β, Δ)
+
+# Parameter gradient for linear scale (needed for standard errors)
+# For linear scale, the gradient IS the contrast vector
+∇β_eta = Δ  # ∂(effect_eta)/∂β = Δ
+
+# Standard error via delta method
+vcov_matrix = vcov(model)
+se_eta = sqrt(dot(∇β_eta, vcov_matrix, ∇β_eta))
+
+# Confidence interval
+ci_lower_eta = effect_eta - 1.96 * se_eta
+ci_upper_eta = effect_eta + 1.96 * se_eta
+
+println(&quot;Linear scale effect: $effect_eta ± $se_eta&quot;)
+println(&quot;95% CI: [$ci_lower_eta, $ci_upper_eta]&quot;)</code></pre><p><strong>Response scale (for GLM models with link functions):</strong></p><pre><code class="language-julia hljs">using GLM
+
+# Compute linear predictors
+η_control = dot(β, X_control)
+η_drug = dot(β, X_drug)
+
+# Apply link function
+link = GLM.LogitLink()  # Example: logistic regression
+μ_control = GLM.linkinv(link, η_control)
+μ_drug = GLM.linkinv(link, η_drug)
+
+# Discrete effect on response scale
+effect_mu = μ_drug - μ_control
+
+# Parameter gradient for response scale (chain rule)
+# ∇β = g&#39;(η_drug) × X_drug - g&#39;(η_control) × X_control
+g_prime_control = GLM.mueta(link, η_control)  # dμ/dη at control
+g_prime_drug = GLM.mueta(link, η_drug)        # dμ/dη at drug
+∇β_mu = g_prime_drug .* X_drug .- g_prime_control .* X_control
+
+# Standard error via delta method
+se_mu = sqrt(dot(∇β_mu, vcov_matrix, ∇β_mu))
+
+# Confidence interval
+ci_lower_mu = effect_mu - 1.96 * se_mu
+ci_upper_mu = effect_mu + 1.96 * se_mu
+
+println(&quot;Response scale effect: $effect_mu ± $se_mu&quot;)
+println(&quot;95% CI: [$ci_lower_mu, $ci_upper_mu]&quot;)</code></pre><p><strong>Why gradients matter:</strong></p><ul><li>Enable uncertainty quantification (standard errors, confidence intervals)</li><li>Essential for hypothesis testing</li><li>Required for proper statistical inference</li><li>Delta method: SE = √(∇β&#39; Σ ∇β) where Σ is the covariance matrix</li></ul><h3 id="Multiple-Rows-or-Levels"><a class="docs-heading-anchor" href="#Multiple-Rows-or-Levels">Multiple Rows or Levels</a><a id="Multiple-Rows-or-Levels-1"></a><a class="docs-heading-anchor-permalink" href="#Multiple-Rows-or-Levels" title="Permalink"></a></h3><p>For multiple comparisons, use loops and include gradients for inference:</p><pre><code class="language-julia hljs"># Compare all levels to reference (with uncertainty)
+reference_level = &quot;Control&quot;
+other_levels = [&quot;Drug_A&quot;, &quot;Drug_B&quot;]
+
+for level in other_levels
+    data_level = merge(data, (treatment = fill(level, n_rows),))
+    X_level = modelrow(compiled, data_level, row)
+    X_ref = modelrow(compiled, data_control, row)
+
+    Δ = X_level .- X_ref
+    effect = dot(β, Δ)
+
+    # Gradient and standard error
+    ∇β = Δ  # For linear scale
+    se = sqrt(dot(∇β, vcov_matrix, ∇β))
+
+    println(&quot;Effect of $level vs $reference_level: $effect ± $se&quot;)
+end
+
+# Analyze multiple rows (with confidence intervals)
+rows_of_interest = [1, 10, 50]
+for row in rows_of_interest
+    X_control_row = modelrow(compiled, data_control, row)
+    X_drug_row = modelrow(compiled, data_drug, row)
+    Δ_row = X_drug_row .- X_control_row
+
+    effect_row = dot(β, Δ_row)
+    se_row = sqrt(dot(Δ_row, vcov_matrix, Δ_row))
+    ci_lower = effect_row - 1.96 * se_row
+    ci_upper = effect_row + 1.96 * se_row
+
+    println(&quot;Row $row effect: $effect_row, 95% CI: [$ci_lower, $ci_upper]&quot;)
+end</code></pre><h3 id="When-to-Use-This-Approach"><a class="docs-heading-anchor" href="#When-to-Use-This-Approach">When to Use This Approach</a><a id="When-to-Use-This-Approach-1"></a><a class="docs-heading-anchor-permalink" href="#When-to-Use-This-Approach" title="Permalink"></a></h3><p><strong>Good for:</strong></p><ul><li>Exploratory analysis (quick checks, prototyping)</li><li>One-off comparisons (single contrasts)</li><li>Simple scripts where performance isn&#39;t critical</li><li>Teaching/learning (simpler to understand)</li></ul><p><strong>Not ideal for:</strong></p><ul><li>Batch processing (computing 1000+ contrasts)</li><li>Performance-critical code (allocations add up)</li><li>Production pipelines (want zero-allocation guarantees)</li></ul><h3 id="Memory-Cost-Analysis"><a class="docs-heading-anchor" href="#Memory-Cost-Analysis">Memory Cost Analysis</a><a id="Memory-Cost-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Cost-Analysis" title="Permalink"></a></h3><p>For a dataset with 1000 rows and a typical model:</p><p><strong>Per contrast computed:</strong></p><ul><li>New treatment vector: ~8KB (1000 × Float64)</li><li>Model row output: ~80 bytes (typical)</li><li>Intermediate allocations: ~100 bytes</li><li><strong>Total per contrast</strong>: ~8.2KB</li></ul><p><strong>For 1000 contrasts</strong>: ~8.2MB allocated</p><p>Compare to <code>ContrastEvaluator</code>: <strong>0 bytes</strong> per contrast after setup.</p><h3 id="Integration-with-Existing-Data-Workflows"><a class="docs-heading-anchor" href="#Integration-with-Existing-Data-Workflows">Integration with Existing Data Workflows</a><a id="Integration-with-Existing-Data-Workflows-1"></a><a class="docs-heading-anchor-permalink" href="#Integration-with-Existing-Data-Workflows" title="Permalink"></a></h3><p>This approach works naturally with DataFrames manipulation:</p><pre><code class="language-julia hljs">using DataFrames, Chain
+
+# Create counterfactual datasets using DataFrames operations
+df_control = @chain df begin
+    transform(:treatment =&gt; (_ -&gt; &quot;Control&quot;) =&gt; :treatment)
+end
+
+df_drug = @chain df begin
+    transform(:treatment =&gt; (_ -&gt; &quot;Drug_A&quot;) =&gt; :treatment)
+end
+
+# Convert to columntables and evaluate
+data_control = Tables.columntable(df_control)
+data_drug = Tables.columntable(df_drug)
+
+X_control = modelrow(compiled, data_control, row)
+X_drug = modelrow(compiled, data_drug, row)
+Δ = X_drug .- X_control</code></pre><h3 id="Complete-Example:-Logistic-Regression-with-Uncertainty"><a class="docs-heading-anchor" href="#Complete-Example:-Logistic-Regression-with-Uncertainty">Complete Example: Logistic Regression with Uncertainty</a><a id="Complete-Example:-Logistic-Regression-with-Uncertainty-1"></a><a class="docs-heading-anchor-permalink" href="#Complete-Example:-Logistic-Regression-with-Uncertainty" title="Permalink"></a></h3><p>For GLM models with link functions, compute both linear and response scale effects:</p><pre><code class="language-julia hljs">using GLM, DataFrames, Tables
+
+# Fit logistic regression
+df = DataFrame(
+    outcome = rand([0, 1], 100),
+    age = rand(18:80, 100),
+    treatment = rand([&quot;Control&quot;, &quot;Drug&quot;], 100)
+)
+model = glm(@formula(outcome ~ age * treatment), df, Binomial(), LogitLink())
+data = Tables.columntable(df)
+compiled = compile_formula(model, data)
+
+# Counterfactual data
+n_rows = length(data.outcome)
+data_control = merge(data, (treatment = fill(&quot;Control&quot;, n_rows),))
+data_drug = merge(data, (treatment = fill(&quot;Drug&quot;, n_rows),))
+
+# Analyze specific individual
+row = 1
+β = coef(model)
+vcov_matrix = vcov(model)
+link = LogitLink()
+
+# Evaluate model rows
+X_control = modelrow(compiled, data_control, row)
+X_drug = modelrow(compiled, data_drug, row)
+Δ = X_drug .- X_control
+
+# Linear scale (log-odds) with uncertainty
+effect_eta = dot(β, Δ)
+∇β_eta = Δ
+se_eta = sqrt(dot(∇β_eta, vcov_matrix, ∇β_eta))
+println(&quot;Log-odds effect: $effect_eta ± $se_eta&quot;)
+
+# Response scale (probability) with uncertainty
+η_control = dot(β, X_control)
+η_drug = dot(β, X_drug)
+μ_control = GLM.linkinv(link, η_control)  # Probability if Control
+μ_drug = GLM.linkinv(link, η_drug)        # Probability if Drug
+effect_mu = μ_drug - μ_control
+
+# Gradient for response scale (chain rule)
+g_prime_control = GLM.mueta(link, η_control)
+g_prime_drug = GLM.mueta(link, η_drug)
+∇β_mu = g_prime_drug .* X_drug .- g_prime_control .* X_control
+se_mu = sqrt(dot(∇β_mu, vcov_matrix, ∇β_mu))
+
+println(&quot;Probability effect: $effect_mu ± $se_mu&quot;)
+println(&quot;  P(outcome=1|Control) = $μ_control&quot;)
+println(&quot;  P(outcome=1|Drug) = $μ_drug&quot;)</code></pre><h3 id="Alternative:-Using-Dictionaries"><a class="docs-heading-anchor" href="#Alternative:-Using-Dictionaries">Alternative: Using Dictionaries</a><a id="Alternative:-Using-Dictionaries-1"></a><a class="docs-heading-anchor-permalink" href="#Alternative:-Using-Dictionaries" title="Permalink"></a></h3><p>For ad-hoc modifications without merge:</p><pre><code class="language-julia hljs"># Create modified data manually
+data_control = (
+    x = data.x,
+    y = data.y,
+    treatment = fill(&quot;Control&quot;, length(data.y))  # Override one column
+)
+
+data_drug = (
+    x = data.x,
+    y = data.y,
+    treatment = fill(&quot;Drug_A&quot;, length(data.y))
+)
+
+X_control = modelrow(compiled, data_control, row)
+X_drug = modelrow(compiled, data_drug, row)
+Δ = X_drug .- X_control
+
+# With gradient
+β = coef(model)
+effect = dot(β, Δ)
+se = sqrt(dot(Δ, vcov(model), Δ))</code></pre><h3 id="Summary:-Simple-vs-Zero-Allocation"><a class="docs-heading-anchor" href="#Summary:-Simple-vs-Zero-Allocation">Summary: Simple vs Zero-Allocation</a><a id="Summary:-Simple-vs-Zero-Allocation-1"></a><a class="docs-heading-anchor-permalink" href="#Summary:-Simple-vs-Zero-Allocation" title="Permalink"></a></h3><table><tr><th style="text-align: right">Aspect</th><th style="text-align: right">Simple Approach</th><th style="text-align: right">ContrastEvaluator</th></tr><tr><td style="text-align: right"><strong>Ease of use</strong></td><td style="text-align: right">Very simple</td><td style="text-align: right">Requires setup</td></tr><tr><td style="text-align: right"><strong>Code clarity</strong></td><td style="text-align: right">Clear intent</td><td style="text-align: right">More abstraction</td></tr><tr><td style="text-align: right"><strong>Memory per contrast</strong></td><td style="text-align: right">~8KB</td><td style="text-align: right">0 bytes</td></tr><tr><td style="text-align: right"><strong>Best for</strong></td><td style="text-align: right">1-10 contrasts</td><td style="text-align: right">100+ contrasts</td></tr><tr><td style="text-align: right"><strong>Setup cost</strong></td><td style="text-align: right">None</td><td style="text-align: right">~50μs + ~50KB</td></tr><tr><td style="text-align: right"><strong>Learning curve</strong></td><td style="text-align: right">Minimal</td><td style="text-align: right">Moderate</td></tr></table><p><strong>Recommendation</strong>: Start with the simple approach for exploration. Switch to <code>ContrastEvaluator</code> when:</p><ul><li>You need to compute 100+ contrasts</li><li>Performance/memory is critical</li><li>Building production pipelines</li></ul><hr/><h2 id="CounterfactualVector-Mechanism"><a class="docs-heading-anchor" href="#CounterfactualVector-Mechanism">CounterfactualVector Mechanism</a><a id="CounterfactualVector-Mechanism-1"></a><a class="docs-heading-anchor-permalink" href="#CounterfactualVector-Mechanism" title="Permalink"></a></h2><p>The <code>ContrastEvaluator</code> achieves the same counterfactual comparison as the simple approach, but with zero allocations. It uses <code>CounterfactualVector</code>s to efficiently substitute values for a single row without copying data.</p><p><strong>Key insight</strong>: Like the simple approach, this compares the <strong>same row</strong> under different categorical levels. The only difference is performance optimization, not the analytical concept.</p><h3 id="Core-Concept"><a class="docs-heading-anchor" href="#Core-Concept">Core Concept</a><a id="Core-Concept-1"></a><a class="docs-heading-anchor-permalink" href="#Core-Concept" title="Permalink"></a></h3><p>A <code>CounterfactualVector</code> wraps an original data column and <strong>intercepts access to a specific row</strong>, returning a replacement value instead of the original:</p><pre><code class="language-julia hljs"># Original data column
+data.treatment = [&quot;Control&quot;, &quot;Drug_A&quot;, &quot;Drug_B&quot;, &quot;Control&quot;, ...]
+
+# Create CounterfactualVector
+cf_vec = CategoricalCounterfactualVector(data.treatment, row=1, replacement=&quot;Drug_A&quot;)
+
+# Behavior:
+cf_vec[1]  # → &quot;Drug_A&quot; (counterfactual - substituted value)
+cf_vec[2]  # → &quot;Drug_A&quot; (original value)
+cf_vec[3]  # → &quot;Drug_B&quot; (original value)
+cf_vec[4]  # → &quot;Control&quot; (original value)</code></pre><h3 id="Implementation"><a class="docs-heading-anchor" href="#Implementation">Implementation</a><a id="Implementation-1"></a><a class="docs-heading-anchor-permalink" href="#Implementation" title="Permalink"></a></h3><p>All <code>CounterfactualVector</code> types implement this interface:</p><pre><code class="language-julia hljs">abstract type CounterfactualVector{T} &lt;: AbstractVector{T} end
+
+# Generic getindex implementation
+@inline Base.getindex(v::CounterfactualVector, i::Int) =
+    (i == v.row ? v.replacement : v.base[i])</code></pre><p><strong>Key insight</strong>: This is just a conditional branch—no array copying, no allocations.</p><h3 id="Typed-Variants"><a class="docs-heading-anchor" href="#Typed-Variants">Typed Variants</a><a id="Typed-Variants-1"></a><a class="docs-heading-anchor-permalink" href="#Typed-Variants" title="Permalink"></a></h3><p>Different data types have specialized implementations:</p><pre><code class="language-julia hljs"># For numeric variables (Float64, Int64, etc.)
+mutable struct NumericCounterfactualVector{T&lt;:Real} &lt;: CounterfactualVector{T}
+    base::Vector{T}           # Original data
+    row::Int                  # Row index to override
+    replacement::T            # Replacement value
+end
+
+# For categorical variables
+mutable struct CategoricalCounterfactualVector{T,R} &lt;: CounterfactualVector{CategoricalValue{T,R}}
+    base::CategoricalArray{T,1,R}
+    row::Int
+    replacement::CategoricalValue{T,R}
+end
+
+# For boolean variables
+mutable struct BoolCounterfactualVector &lt;: CounterfactualVector{Bool}
+    base::Vector{Bool}
+    row::Int
+    replacement::Bool
+end</code></pre><p><strong>Type stability</strong>: Each variant has concrete types, enabling compiler optimizations.</p><h3 id="Mutable-Updates"><a class="docs-heading-anchor" href="#Mutable-Updates">Mutable Updates</a><a id="Mutable-Updates-1"></a><a class="docs-heading-anchor-permalink" href="#Mutable-Updates" title="Permalink"></a></h3><p>The vectors are <strong>mutable</strong> so fields can be updated without allocations:</p><pre><code class="language-julia hljs"># Update which row to override
+cf_vec.row = 5
+
+# Update the replacement value
+cf_vec.replacement = &quot;Drug_B&quot;
+
+# No allocations - just field assignments</code></pre><p>This enables reusing the same <code>CounterfactualVector</code> for multiple contrasts.</p><hr/><h2 id="ContrastEvaluator-Initialization"><a class="docs-heading-anchor" href="#ContrastEvaluator-Initialization">ContrastEvaluator Initialization</a><a id="ContrastEvaluator-Initialization-1"></a><a class="docs-heading-anchor-permalink" href="#ContrastEvaluator-Initialization" title="Permalink"></a></h2><h3 id="Construction-Process"><a class="docs-heading-anchor" href="#Construction-Process">Construction Process</a><a id="Construction-Process-1"></a><a class="docs-heading-anchor-permalink" href="#Construction-Process" title="Permalink"></a></h3><p>When you create a <code>ContrastEvaluator</code>, it builds the complete counterfactual infrastructure:</p><pre><code class="language-julia hljs">evaluator = contrastevaluator(compiled, data, [:treatment, :education, :female])</code></pre><h4 id="Step-1:-Build-Internal-Counterfactual-Structure"><a class="docs-heading-anchor" href="#Step-1:-Build-Internal-Counterfactual-Structure">Step 1: Build Internal Counterfactual Structure</a><a id="Step-1:-Build-Internal-Counterfactual-Structure-1"></a><a class="docs-heading-anchor-permalink" href="#Step-1:-Build-Internal-Counterfactual-Structure" title="Permalink"></a></h4><p>The <code>ContrastEvaluator</code> internally creates <code>CounterfactualVector</code> wrappers for specified variables:</p><pre><code class="language-julia hljs"># Internal implementation creates:
+# - A tuple of typed `CounterfactualVector` objects (one per variable)
+# - A `NamedTuple` that merges original data with `CounterfactualVector` wrappers</code></pre><p><strong>Example structure</strong>:</p><pre><code class="language-julia hljs"># Original data
+data = (
+    x = [1.0, 2.0, 3.0, ...],
+    outcome = [0.5, 1.2, 0.8, ...],
+    treatment = [&quot;Control&quot;, &quot;Drug_A&quot;, &quot;Drug_B&quot;, ...],
+    education = [&quot;HS&quot;, &quot;College&quot;, &quot;HS&quot;, ...],
+    female = [0, 1, 1, 0, ...]
+)
+
+# Internal data_counterfactual structure
+data_counterfactual = (
+    x = data.x,                                    # Original (not in vars)
+    outcome = data.outcome,                        # Original (not in vars)
+    treatment = counterfactuals[1],                # CategoricalCounterfactualVector
+    education = counterfactuals[2],                # CategoricalCounterfactualVector
+    female = counterfactuals[3]                    # NumericCounterfactualVector{Float64}
+)</code></pre><p><strong>Key insight</strong>: Variables not in <code>vars</code> use original columns; variables in <code>vars</code> are wrapped in <code>CounterfactualVector</code>s.</p><h4 id="Step-2:-Pre-compute-Categorical-Level-Mappings"><a class="docs-heading-anchor" href="#Step-2:-Pre-compute-Categorical-Level-Mappings">Step 2: Pre-compute Categorical Level Mappings</a><a id="Step-2:-Pre-compute-Categorical-Level-Mappings-1"></a><a class="docs-heading-anchor-permalink" href="#Step-2:-Pre-compute-Categorical-Level-Mappings" title="Permalink"></a></h4><pre><code class="language-julia hljs"># Lines 106-122 in contrast_evaluator.jl
+categorical_level_maps = Dict{Symbol, Dict{String, CategoricalValue}}()
+
+for (i, var) in enumerate(vars)
+    cf_vec = counterfactuals[i]
+    if cf_vec isa CategoricalCounterfactualVector
+        # Build String → CategoricalValue mapping
+        level_map = Dict{String, CategoricalValue}()
+        base_array = cf_vec.base
+
+        for level_str in levels(base_array)
+            # Find a CategoricalValue instance for this level
+            matching_idx = findfirst(x -&gt; string(x) == level_str, base_array)
+            if matching_idx !== nothing
+                level_map[level_str] = base_array[matching_idx]
+            end
+        end
+
+        categorical_level_maps[var] = level_map
+    end
+end</code></pre><p><strong>Purpose</strong>: Pre-computing these mappings avoids allocations during contrast evaluation. Converting strings like <code>&quot;Control&quot;</code> to <code>CategoricalValue</code> objects normally allocates, but looking up in a pre-built <code>Dict</code> does not.</p><p><strong>Example</strong>:</p><pre><code class="language-julia hljs">categorical_level_maps[:treatment] = Dict(
+    &quot;Control&quot; =&gt; CategoricalValue(&quot;Control&quot;, pool),
+    &quot;Drug_A&quot; =&gt; CategoricalValue(&quot;Drug_A&quot;, pool),
+    &quot;Drug_B&quot; =&gt; CategoricalValue(&quot;Drug_B&quot;, pool)
+)</code></pre><h4 id="Step-3:-Detect-Binary-Variables"><a class="docs-heading-anchor" href="#Step-3:-Detect-Binary-Variables">Step 3: Detect Binary Variables</a><a id="Step-3:-Detect-Binary-Variables-1"></a><a class="docs-heading-anchor-permalink" href="#Step-3:-Detect-Binary-Variables" title="Permalink"></a></h4><pre><code class="language-julia hljs"># Lines 124-141 in contrast_evaluator.jl
+binary_vars = Set{Symbol}()
+binary_coef_indices = Dict{Symbol, Int}()
+
+for (i, var) in enumerate(vars)
+    cf_vec = counterfactuals[i]
+    col = getproperty(data, var)
+
+    if _is_truly_binary_variable(cf_vec, col)
+        binary_vars = union(binary_vars, [var])
+        # Find coefficient index for fast path optimization
+        coef_idx = _find_binary_coefficient_index(compiled, var)
+        if coef_idx !== nothing
+            binary_coef_indices[var] = coef_idx
+        end
+    end
+end</code></pre><p><strong>Purpose</strong>: Binary variables (0/1, true/false) have a fast path—the contrast is simply ±1 at the coefficient position, skipping full model evaluation.</p><h4 id="Step-4:-Allocate-Buffers"><a class="docs-heading-anchor" href="#Step-4:-Allocate-Buffers">Step 4: Allocate Buffers</a><a id="Step-4:-Allocate-Buffers-1"></a><a class="docs-heading-anchor-permalink" href="#Step-4:-Allocate-Buffers" title="Permalink"></a></h4><pre><code class="language-julia hljs"># Lines 143-157 in contrast_evaluator.jl
+ContrastEvaluator(
+    compiled,
+    vars,
+    data_counterfactual,
+    counterfactuals,
+    Vector{Float64}(undef, length(compiled)),    # y_from_buf
+    Vector{Float64}(undef, length(compiled)),    # y_to_buf
+    categorical_level_maps,
+    binary_vars,
+    binary_coef_indices,
+    Vector{Float64}(undef, length(compiled)),    # gradient_buffer
+    Vector{Float64}(undef, length(compiled)),    # xrow_from_buf
+    Vector{Float64}(undef, length(compiled)),    # xrow_to_buf
+    1                                            # row
+)</code></pre><p><strong>One-time cost</strong>: All memory allocation happens during construction. Runtime evaluation reuses these buffers.</p><hr/><h2 id="Contrast-Computation-Flow"><a class="docs-heading-anchor" href="#Contrast-Computation-Flow">Contrast Computation Flow</a><a id="Contrast-Computation-Flow-1"></a><a class="docs-heading-anchor-permalink" href="#Contrast-Computation-Flow" title="Permalink"></a></h2><h3 id="Overview-2"><a class="docs-heading-anchor" href="#Overview-2">Overview</a><a class="docs-heading-anchor-permalink" href="#Overview-2" title="Permalink"></a></h3><p>Computing a contrast involves:</p><ol><li>Update counterfactual to &quot;from&quot; level → evaluate → store result</li><li>Update counterfactual to &quot;to&quot; level → evaluate → store result</li><li>Compute difference</li></ol><p>Let&#39;s trace through an example step-by-step.</p><h3 id="Example-Call"><a class="docs-heading-anchor" href="#Example-Call">Example Call</a><a id="Example-Call-1"></a><a class="docs-heading-anchor-permalink" href="#Example-Call" title="Permalink"></a></h3><pre><code class="language-julia hljs">contrast_modelrow!(Δ, evaluator, row=1, :treatment, &quot;Control&quot;, &quot;Drug&quot;)</code></pre><p>This computes: <code>Δ = X(treatment=&quot;Drug&quot;) - X(treatment=&quot;Control&quot;)</code> for row 1.</p><h3 id="Step-1:-Update-Counterfactual-to-&quot;from&quot;-Level"><a class="docs-heading-anchor" href="#Step-1:-Update-Counterfactual-to-&quot;from&quot;-Level">Step 1: Update Counterfactual to &quot;from&quot; Level</a><a id="Step-1:-Update-Counterfactual-to-&quot;from&quot;-Level-1"></a><a class="docs-heading-anchor-permalink" href="#Step-1:-Update-Counterfactual-to-&quot;from&quot;-Level" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Line 213 in contrast_evaluator.jl
+update_counterfactual_for_var!(
+    evaluator.counterfactuals,           # Tuple of CounterfactualVectors
+    evaluator.vars,                      # [:treatment, :education, :female]
+    :treatment,                          # Variable to modify
+    row,                                 # Row index = 1
+    &quot;Control&quot;,                           # Baseline level
+    evaluator.categorical_level_maps     # Pre-computed mappings
+)</code></pre><p><strong>What <code>update_counterfactual_for_var!</code> does</strong> (lines 385-400 in typed_overrides.jl):</p><pre><code class="language-julia hljs"># 1. Find the CounterfactualVector for :treatment
+cf_vec = get_counterfactual_for_var(counterfactuals, vars, :treatment)
+# → Returns counterfactuals[1] (CategoricalCounterfactualVector for :treatment)
+
+# 2. Update which row it&#39;s overriding
+update_counterfactual_row!(cf_vec, row)
+# → Sets cf_vec.row = 1
+
+# 3. Use pre-computed mapping to get CategoricalValue (zero allocations!)
+level_map = categorical_level_maps[:treatment]
+replacement_str = string(&quot;Control&quot;)  # → &quot;Control&quot;
+cat_val = level_map[replacement_str]  # Dict lookup - no allocation!
+# → Gets CategoricalValue(&quot;Control&quot;) from pre-built map
+
+# 4. Update the replacement value (mutable field assignment)
+update_counterfactual_replacement!(cf_vec, cat_val)
+# → Sets cf_vec.replacement = CategoricalValue(&quot;Control&quot;)</code></pre><p><strong>Result</strong>: The <code>CounterfactualVector</code> for <code>:treatment</code> now behaves as:</p><pre><code class="language-julia hljs">data_counterfactual.treatment[1]  # → &quot;Control&quot; (counterfactual)
+data_counterfactual.treatment[2]  # → &quot;Drug_A&quot; (original)
+data_counterfactual.treatment[3]  # → &quot;Drug_B&quot; (original)
+# ... all other rows return original values</code></pre><h3 id="Step-2:-Evaluate-Formula-with-&quot;from&quot;-Level"><a class="docs-heading-anchor" href="#Step-2:-Evaluate-Formula-with-&quot;from&quot;-Level">Step 2: Evaluate Formula with &quot;from&quot; Level</a><a id="Step-2:-Evaluate-Formula-with-&quot;from&quot;-Level-1"></a><a class="docs-heading-anchor-permalink" href="#Step-2:-Evaluate-Formula-with-&quot;from&quot;-Level" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Line 214 in contrast_evaluator.jl
+evaluator.compiled(evaluator.y_from_buf, evaluator.data_counterfactual, row)</code></pre><p><strong>What happens</strong>:</p><ol><li>The compiled formula evaluates row 1 using <code>data_counterfactual</code></li><li>When it accesses <code>data_counterfactual.treatment[1]</code>, it gets <code>&quot;Control&quot;</code> (the counterfactual)</li><li>All other variables use their original values (no substitution)</li><li>Result: <code>y_from_buf</code> contains the model matrix row X₀ with <code>treatment=&quot;Control&quot;</code></li></ol><p><strong>Visualization</strong>:</p><pre><code class="nohighlight hljs">Original data row 1:    treatment=&quot;Drug_A&quot;, education=&quot;HS&quot;, x=1.5
+Counterfactual row 1:   treatment=&quot;Control&quot;, education=&quot;HS&quot;, x=1.5
+                                    ↑
+                            substituted value</code></pre><h3 id="Step-3:-Update-Counterfactual-to-&quot;to&quot;-Level"><a class="docs-heading-anchor" href="#Step-3:-Update-Counterfactual-to-&quot;to&quot;-Level">Step 3: Update Counterfactual to &quot;to&quot; Level</a><a id="Step-3:-Update-Counterfactual-to-&quot;to&quot;-Level-1"></a><a class="docs-heading-anchor-permalink" href="#Step-3:-Update-Counterfactual-to-&quot;to&quot;-Level" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Line 216 in contrast_evaluator.jl
+update_counterfactual_for_var!(
+    evaluator.counterfactuals,
+    evaluator.vars,
+    :treatment,
+    row,
+    &quot;Drug&quot;,  # Now set to comparison level
+    evaluator.categorical_level_maps
+)</code></pre><p><strong>Same process as Step 1</strong>, but now:</p><pre><code class="language-julia hljs">cf_vec.row = 1                                    # Same row
+cf_vec.replacement = CategoricalValue(&quot;Drug&quot;)     # Different level</code></pre><p><strong>Result</strong>: The same <code>CounterfactualVector</code> now returns <code>&quot;Drug&quot;</code> for row 1.</p><h3 id="Step-4:-Evaluate-Formula-with-&quot;to&quot;-Level"><a class="docs-heading-anchor" href="#Step-4:-Evaluate-Formula-with-&quot;to&quot;-Level">Step 4: Evaluate Formula with &quot;to&quot; Level</a><a id="Step-4:-Evaluate-Formula-with-&quot;to&quot;-Level-1"></a><a class="docs-heading-anchor-permalink" href="#Step-4:-Evaluate-Formula-with-&quot;to&quot;-Level" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Line 217 in contrast_evaluator.jl
+evaluator.compiled(evaluator.y_to_buf, evaluator.data_counterfactual, row)</code></pre><p><strong>Result</strong>: <code>y_to_buf</code> contains the model matrix row X₁ with <code>treatment=&quot;Drug&quot;</code></p><h3 id="Step-5:-Compute-Discrete-Effect"><a class="docs-heading-anchor" href="#Step-5:-Compute-Discrete-Effect">Step 5: Compute Discrete Effect</a><a id="Step-5:-Compute-Discrete-Effect-1"></a><a class="docs-heading-anchor-permalink" href="#Step-5:-Compute-Discrete-Effect" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Line 219 in contrast_evaluator.jl
+Δ .= evaluator.y_to_buf .- evaluator.y_from_buf</code></pre><p><strong>Result</strong>: <code>Δ = X₁ - X₀</code> (the discrete effect vector)</p><p>This is the <strong>contrast vector</strong> showing how each coefficient contributes to the treatment effect.</p><h3 id="Complete-Flow-Diagram"><a class="docs-heading-anchor" href="#Complete-Flow-Diagram">Complete Flow Diagram</a><a id="Complete-Flow-Diagram-1"></a><a class="docs-heading-anchor-permalink" href="#Complete-Flow-Diagram" title="Permalink"></a></h3><pre><code class="nohighlight hljs">┌─────────────────────────────────────────────────────────────────┐
+│ 1. Update CounterfactualVector: treatment[1] → &quot;Control&quot;       │
+│    - Mutable field assignment: cf_vec.replacement = &quot;Control&quot;   │
+│    - Uses pre-computed categorical mapping (0 allocations)      │
+└───────────────────────┬─────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. Evaluate formula with data_counterfactual                    │
+│    - compiled(y_from_buf, data_counterfactual, row=1)          │
+│    - Formula accesses data_counterfactual.treatment[1]          │
+│    - CounterfactualVector returns &quot;Control&quot; (not original)      │
+│    - Result: y_from_buf = X₀ (model row with Control)          │
+└───────────────────────┬─────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. Update CounterfactualVector: treatment[1] → &quot;Drug&quot;          │
+│    - Mutable field assignment: cf_vec.replacement = &quot;Drug&quot;      │
+│    - Same vector, just update replacement field (0 allocations) │
+└───────────────────────┬─────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. Evaluate formula with data_counterfactual (again)            │
+│    - compiled(y_to_buf, data_counterfactual, row=1)            │
+│    - CounterfactualVector now returns &quot;Drug&quot;                    │
+│    - Result: y_to_buf = X₁ (model row with Drug)               │
+└───────────────────────┬─────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. Compute difference                                           │
+│    - Δ .= y_to_buf .- y_from_buf                               │
+│    - Result: Δ = X₁ - X₀ (discrete effect)                     │
+└─────────────────────────────────────────────────────────────────┘</code></pre><hr/><h2 id="Gradient-Computation"><a class="docs-heading-anchor" href="#Gradient-Computation">Gradient Computation</a><a id="Gradient-Computation-1"></a><a class="docs-heading-anchor-permalink" href="#Gradient-Computation" title="Permalink"></a></h2><h3 id="Purpose"><a class="docs-heading-anchor" href="#Purpose">Purpose</a><a id="Purpose-1"></a><a class="docs-heading-anchor-permalink" href="#Purpose" title="Permalink"></a></h3><p>Parameter gradients enable <strong>uncertainty quantification</strong> via the delta method:</p><pre><code class="language-julia hljs"># Compute gradient ∇β where ∇β[i] = ∂(discrete_effect)/∂β[i]
+contrast_gradient!(∇β, evaluator, row, :treatment, &quot;Control&quot;, &quot;Drug&quot;, β)
+
+# Delta method standard error
+se = sqrt(∇β&#39; * vcov_matrix * ∇β)</code></pre><h3 id="Linear-Scale-Gradients"><a class="docs-heading-anchor" href="#Linear-Scale-Gradients">Linear Scale Gradients</a><a id="Linear-Scale-Gradients-1"></a><a class="docs-heading-anchor-permalink" href="#Linear-Scale-Gradients" title="Permalink"></a></h3><p>For discrete effects on the linear predictor scale η = Xβ:</p><pre><code class="language-julia hljs">discrete_effect = η₁ - η₀ = (X₁&#39;β) - (X₀&#39;β) = (X₁ - X₀)&#39;β</code></pre><p>The gradient is simply:</p><pre><code class="language-julia hljs">∇β = ΔX = X₁ - X₀</code></pre><p><strong>Implementation</strong> (lines 786-796 in contrast_evaluator.jl):</p><pre><code class="language-julia hljs"># Update to &quot;from&quot; level and evaluate
+update_counterfactual_for_var!(evaluator.counterfactuals, evaluator.vars, var, row, from, ...)
+evaluator.compiled(evaluator.xrow_from_buf, evaluator.data_counterfactual, row)
+# → xrow_from_buf = X₀
+
+# Update to &quot;to&quot; level and evaluate
+update_counterfactual_for_var!(evaluator.counterfactuals, evaluator.vars, var, row, to, ...)
+evaluator.compiled(evaluator.xrow_to_buf, evaluator.data_counterfactual, row)
+# → xrow_to_buf = X₁
+
+# Gradient is the contrast vector
+∇β .= xrow_to_buf .- xrow_from_buf  # ∇β = X₁ - X₀</code></pre><h3 id="Response-Scale-Gradients"><a class="docs-heading-anchor" href="#Response-Scale-Gradients">Response Scale Gradients</a><a id="Response-Scale-Gradients-1"></a><a class="docs-heading-anchor-permalink" href="#Response-Scale-Gradients" title="Permalink"></a></h3><p>For discrete effects on the response scale μ = g⁻¹(η):</p><pre><code class="language-julia hljs">discrete_effect = μ₁ - μ₀ = g⁻¹(η₁) - g⁻¹(η₀)</code></pre><p>By the chain rule:</p><pre><code class="language-julia hljs">∇β = g&#39;(η₁) × X₁ - g&#39;(η₀) × X₀</code></pre><p>Where <code>g&#39;(η) = dμ/dη</code> is the link function derivative.</p><p><strong>Implementation</strong> (lines 825-842 in contrast_evaluator.jl):</p><pre><code class="language-julia hljs"># Compute X₀ and η₀ = X₀&#39;β
+update_counterfactual_for_var!(...)
+evaluator.compiled(evaluator.xrow_from_buf, evaluator.data_counterfactual, row)
+η₀ = dot(β, evaluator.xrow_from_buf)
+
+# Compute X₁ and η₁ = X₁&#39;β
+update_counterfactual_for_var!(...)
+evaluator.compiled(evaluator.xrow_to_buf, evaluator.data_counterfactual, row)
+η₁ = dot(β, evaluator.xrow_to_buf)
+
+# Compute link function derivatives
+g_prime_η₀ = _dmu_deta(link, η₀)  # dμ/dη at η₀
+g_prime_η₁ = _dmu_deta(link, η₁)  # dμ/dη at η₁
+
+# Apply chain rule
+∇β .= g_prime_η₁ .* xrow_to_buf .- g_prime_η₀ .* xrow_from_buf</code></pre><h3 id="Supported-Link-Functions"><a class="docs-heading-anchor" href="#Supported-Link-Functions">Supported Link Functions</a><a id="Supported-Link-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Supported-Link-Functions" title="Permalink"></a></h3><p>All GLM link functions are supported:</p><ul><li><code>IdentityLink</code>: g&#39;(η) = 1</li><li><code>LogLink</code>: g&#39;(η) = exp(η)</li><li><code>LogitLink</code>: g&#39;(η) = exp(η) / (1 + exp(η))²</li><li><code>ProbitLink</code>: g&#39;(η) = φ(η) (standard normal PDF)</li><li><code>CloglogLink</code>, <code>CauchitLink</code>, <code>InverseLink</code>, <code>SqrtLink</code>, etc.</li></ul><hr/><h2 id="Performance-Characteristics"><a class="docs-heading-anchor" href="#Performance-Characteristics">Performance Characteristics</a><a id="Performance-Characteristics-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Characteristics" title="Permalink"></a></h2><h3 id="Zero-Allocations-Achieved-Through"><a class="docs-heading-anchor" href="#Zero-Allocations-Achieved-Through">Zero Allocations Achieved Through</a><a id="Zero-Allocations-Achieved-Through-1"></a><a class="docs-heading-anchor-permalink" href="#Zero-Allocations-Achieved-Through" title="Permalink"></a></h3><ol><li><p><strong>Pre-allocated buffers</strong></p><ul><li>All output buffers allocated once during construction</li><li>Reused across all contrast computations</li><li>Buffers: <code>y_from_buf</code>, <code>y_to_buf</code>, <code>xrow_from_buf</code>, <code>xrow_to_buf</code>, <code>gradient_buffer</code></li></ul></li><li><p><strong>Mutable CounterfactualVectors</strong></p><ul><li>Update fields in-place: <code>cf_vec.row = new_row</code>, <code>cf_vec.replacement = new_value</code></li><li>No array copying or temporary allocations</li><li>Type-stable concrete types enable compiler optimizations</li></ul></li><li><p><strong>Pre-computed categorical mappings</strong></p><ul><li>String → CategoricalValue lookups cached at construction</li><li>Dictionary lookups don&#39;t allocate (just pointer access)</li><li>Avoids repeated level searches in CategoricalArray</li></ul></li><li><p><strong>Type specialization</strong></p><ul><li>All CounterfactualVector types are concrete (not abstract)</li><li>Compiled formula is fully type-specialized</li><li>No runtime dispatch on hot paths</li></ul></li></ol><h3 id="Memory-Efficiency-Comparison"><a class="docs-heading-anchor" href="#Memory-Efficiency-Comparison">Memory Efficiency Comparison</a><a id="Memory-Efficiency-Comparison-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Efficiency-Comparison" title="Permalink"></a></h3><p><strong>Traditional approach</strong> (allocates O(n) memory):</p><pre><code class="language-julia hljs"># Copy entire dataset and modify
+data_control = deepcopy(data)
+data_control.treatment .= &quot;Control&quot;  # Allocate new column!
+X₀ = modelmatrix(formula, DataFrame(data_control))
+
+data_drug = deepcopy(data)
+data_drug.treatment .= &quot;Drug&quot;  # Another allocation!
+X₁ = modelmatrix(formula, DataFrame(data_drug))
+
+Δ = X₁[row, :] - X₀[row, :]</code></pre><p><strong>Memory used</strong>: ~2n + O(model<em>matrix</em>size)</p><p><strong>CounterfactualVector approach</strong> (O(1) memory):</p><pre><code class="language-julia hljs"># Create evaluator once (one-time cost)
+evaluator = contrastevaluator(compiled, data, [:treatment])
+Δ = Vector{Float64}(undef, length(compiled))
+
+# Compute contrast (zero allocations)
+contrast_modelrow!(Δ, evaluator, row, :treatment, &quot;Control&quot;, &quot;Drug&quot;)</code></pre><p><strong>Memory used</strong>: ~32 bytes (for mutable field updates)</p><p><strong>Savings</strong>: &gt;99.999% memory reduction for large datasets</p><h3 id="Timing-Benchmarks"><a class="docs-heading-anchor" href="#Timing-Benchmarks">Timing Benchmarks</a><a id="Timing-Benchmarks-1"></a><a class="docs-heading-anchor-permalink" href="#Timing-Benchmarks" title="Permalink"></a></h3><p>From test suite (<code>test/test_contrast_evaluator.jl</code>):</p><pre><code class="language-julia hljs"># Construction (one-time cost)
+@benchmark contrastevaluator($compiled, $data, [:treatment, :education])
+# Typical: ~10-50μs, &lt;50KB allocated
+
+# Contrast computation (repeated operations)
+@benchmark contrast_modelrow!($Δ, $evaluator, 1, :treatment, &quot;Control&quot;, &quot;Drug&quot;)
+# Typical: ~50-200ns, 0 bytes allocated
+
+# Gradient computation
+@benchmark contrast_gradient!($∇β, $evaluator, 1, :treatment, &quot;Control&quot;, &quot;Drug&quot;, $β)
+# Typical: ~100-300ns, 0 bytes allocated</code></pre><h3 id="Batch-Processing"><a class="docs-heading-anchor" href="#Batch-Processing">Batch Processing</a><a id="Batch-Processing-1"></a><a class="docs-heading-anchor-permalink" href="#Batch-Processing" title="Permalink"></a></h3><p>Processing multiple contrasts reuses the same buffers:</p><pre><code class="language-julia hljs">evaluator = contrastevaluator(compiled, data, [:treatment])
+Δ = Vector{Float64}(undef, length(compiled))
+
+# Zero allocations for all iterations
+for row in 1:1000
+    contrast_modelrow!(Δ, evaluator, row, :treatment, &quot;Control&quot;, &quot;Drug&quot;)
+    # Process Δ...
+end</code></pre><p><strong>Performance</strong>: Constant memory usage regardless of number of contrasts.</p><hr/><h2 id="Advanced-Topics"><a class="docs-heading-anchor" href="#Advanced-Topics">Advanced Topics</a><a id="Advanced-Topics-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Topics" title="Permalink"></a></h2><h3 id="Binary-Variable-Fast-Path"><a class="docs-heading-anchor" href="#Binary-Variable-Fast-Path">Binary Variable Fast Path</a><a id="Binary-Variable-Fast-Path-1"></a><a class="docs-heading-anchor-permalink" href="#Binary-Variable-Fast-Path" title="Permalink"></a></h3><p>Binary variables (0/1, true/false) have optimized computation that skips formula evaluation:</p><pre><code class="language-julia hljs"># For binary variables, the contrast is simply ±1 at the coefficient position
+function _contrast_modelrow_binary_fast_path!(Δ, evaluator, var, from, to)
+    coef_idx = evaluator.binary_coef_indices[var]
+
+    # Zero out all coefficients
+    @inbounds for i in eachindex(Δ)
+        Δ[i] = 0.0
+    end
+
+    # Set single non-zero element
+    contrast_direction = _binary_contrast_direction(from, to)  # ±1.0
+    @inbounds Δ[coef_idx] = contrast_direction
+
+    return Δ
+end</code></pre><p><strong>Speedup</strong>: ~10x faster than general path for binary variables.</p><h3 id="Multiple-Variables"><a class="docs-heading-anchor" href="#Multiple-Variables">Multiple Variables</a><a id="Multiple-Variables-1"></a><a class="docs-heading-anchor-permalink" href="#Multiple-Variables" title="Permalink"></a></h3><p>The same evaluator can process different variables:</p><pre><code class="language-julia hljs">evaluator = contrastevaluator(compiled, data, [:treatment, :region, :education])
+Δ_treatment = Vector{Float64}(undef, length(compiled))
+Δ_region = Vector{Float64}(undef, length(compiled))
+
+# Different variables, same evaluator, same buffers
+contrast_modelrow!(Δ_treatment, evaluator, 1, :treatment, &quot;Control&quot;, &quot;Drug&quot;)
+contrast_modelrow!(Δ_region, evaluator, 1, :region, &quot;North&quot;, &quot;South&quot;)</code></pre><p><strong>Memory</strong>: O(1) regardless of number of variables or contrasts.</p><h3 id="Integration-with-Compiled-Formula"><a class="docs-heading-anchor" href="#Integration-with-Compiled-Formula">Integration with Compiled Formula</a><a id="Integration-with-Compiled-Formula-1"></a><a class="docs-heading-anchor-permalink" href="#Integration-with-Compiled-Formula" title="Permalink"></a></h3><p>The compiled formula is <strong>completely unaware</strong> that it&#39;s using CounterfactualVectors:</p><pre><code class="language-julia hljs"># Inside the compiled formula evaluation
+function (compiled::UnifiedCompiled)(output, data, row)
+    # Access column (might be CounterfactualVector)
+    treatment_val = data.treatment[row]  # Dispatches to getindex
+
+    # CounterfactualVector returns replacement value if row matches
+    # Otherwise returns original value
+    # Formula sees no difference!
+end</code></pre><p><strong>Transparency</strong>: The <code>AbstractVector</code> interface makes CounterfactualVectors indistinguishable from regular vectors to the formula compiler.</p><h3 id="Type-Stability-Validation"><a class="docs-heading-anchor" href="#Type-Stability-Validation">Type Stability Validation</a><a id="Type-Stability-Validation-1"></a><a class="docs-heading-anchor-permalink" href="#Type-Stability-Validation" title="Permalink"></a></h3><p>All CounterfactualVector types maintain concrete element types:</p><pre><code class="language-julia hljs"># Numeric: Float64 in, Float64 out
+cf_numeric::NumericCounterfactualVector{Float64}
+eltype(cf_numeric) === Float64  # ✓
+
+# Categorical: CategoricalValue in, CategoricalValue out
+cf_cat::CategoricalCounterfactualVector{String, UInt32}
+eltype(cf_cat) === CategoricalValue{String, UInt32}  # ✓
+
+# Boolean: Bool in, Bool out
+cf_bool::BoolCounterfactualVector
+eltype(cf_bool) === Bool  # ✓</code></pre><p><strong>Result</strong>: No type instabilities, no runtime dispatch, full compiler optimization.</p><hr/><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><p>The categorical contrast system achieves zero-allocation performance through:</p><ol><li><strong>CounterfactualVectors</strong>: Mutable wrappers that intercept single-row access</li><li><strong>Pre-computed mappings</strong>: Categorical level lookups cached at construction</li><li><strong>Buffer reuse</strong>: All output arrays allocated once, reused for all contrasts</li><li><strong>Type specialization</strong>: Concrete types throughout enable compiler optimization</li></ol><p><strong>The pattern</strong>:</p><pre><code class="nohighlight hljs">Construct evaluator → Update counterfactual → Evaluate → Update counterfactual → Evaluate → Difference</code></pre><p>All with <strong>zero allocations</strong> after the one-time construction cost, enabling efficient batch processing of thousands of contrasts without memory overhead.</p></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Friday 17 October 2025 13:53">Friday 17 October 2025</span>. Using Julia version 1.12.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

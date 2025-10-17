@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Metaprogramming · FormulaCompiler.jl</title><meta name="title" content="Metaprogramming · FormulaCompiler.jl"/><meta property="og:title" content="Metaprogramming · FormulaCompiler.jl"/><meta property="twitter:title" content="Metaprogramming · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/metaprogramming/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/metaprogramming/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/metaprogramming/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script><script src="../assets/mermaid.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../guide/basic_usage/">Basic Usage</a></li><li><a class="tocitem" href="../guide/advanced_features/">Advanced Features</a></li><li><a class="tocitem" href="../guide/categorical_mixtures/">Categorical Mixtures</a></li><li><a class="tocitem" href="../guide/scenarios/">Scenario Analysis</a></li><li><a class="tocitem" href="../guide/performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../integration/glm/">GLM.jl</a></li><li><a class="tocitem" href="../integration/mixed_models/">MixedModels.jl</a></li><li><a class="tocitem" href="../integration/standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../mathematical_foundation/">Mathematical Foundation</a></li><li><a class="tocitem" href="../architecture/">Architecture</a></li><li class="is-active"><a class="tocitem" href>Metaprogramming</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Design-Philosophy"><span>Design Philosophy</span></a></li><li><a class="tocitem" href="#Metaprogramming-Use-Cases"><span>Metaprogramming Use Cases</span></a></li><li><a class="tocitem" href="#Performance-Impact"><span>Performance Impact</span></a></li><li><a class="tocitem" href="#Implementation-Patterns"><span>Implementation Patterns</span></a></li><li><a class="tocitem" href="#Best-Practices"><span>Best Practices</span></a></li><li><a class="tocitem" href="#Integration-with-Broader-Architecture"><span>Integration with Broader Architecture</span></a></li><li><a class="tocitem" href="#Future-Considerations"><span>Future Considerations</span></a></li><li><a class="tocitem" href="#Conclusion"><span>Conclusion</span></a></li></ul></li><li><a class="tocitem" href="../api/">API Reference</a></li><li><a class="tocitem" href="../examples/">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Metaprogramming</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Metaprogramming</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/metaprogramming.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Metaprogramming-in-FormulaCompiler.jl"><a class="docs-heading-anchor" href="#Metaprogramming-in-FormulaCompiler.jl">Metaprogramming in FormulaCompiler.jl</a><a id="Metaprogramming-in-FormulaCompiler.jl-1"></a><a class="docs-heading-anchor-permalink" href="#Metaprogramming-in-FormulaCompiler.jl" title="Permalink"></a></h1><p><strong>NOT UP TO CURRENT SPEC</strong></p><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>FormulaCompiler.jl uses targeted metaprogramming to achieve zero-allocation evaluation for statistical formulas of arbitrary complexity. This document explains when, why, and how metaprogramming is employed to bypass Julia&#39;s inherent limitations while maintaining type stability and performance.</p><h2 id="Design-Philosophy"><a class="docs-heading-anchor" href="#Design-Philosophy">Design Philosophy</a><a id="Design-Philosophy-1"></a><a class="docs-heading-anchor-permalink" href="#Design-Philosophy" title="Permalink"></a></h2><h3 id="Metaprogramming-as-a-Precision-Tool"><a class="docs-heading-anchor" href="#Metaprogramming-as-a-Precision-Tool">Metaprogramming as a Precision Tool</a><a id="Metaprogramming-as-a-Precision-Tool-1"></a><a class="docs-heading-anchor-permalink" href="#Metaprogramming-as-a-Precision-Tool" title="Permalink"></a></h3><p>The package follows a <strong>&quot;metaprogramming as last resort&quot;</strong> philosophy:</p><ul><li><strong>Prefer natural Julia</strong>: Use recursion, tuples, and type parameters when possible</li><li><strong>Metaprogramming only when necessary</strong>: Apply when Julia&#39;s built-in mechanisms hit limits</li><li><strong>Targeted solutions</strong>: Use the minimal metaprogramming needed to solve specific problems</li><li><strong>Maintain simplicity</strong>: Avoid complex code generation that&#39;s hard to understand or maintain</li></ul><h3 id="Core-Principle:-Compile-Time-Specialization"><a class="docs-heading-anchor" href="#Core-Principle:-Compile-Time-Specialization">Core Principle: Compile-Time Specialization</a><a id="Core-Principle:-Compile-Time-Specialization-1"></a><a class="docs-heading-anchor-permalink" href="#Core-Principle:-Compile-Time-Specialization" title="Permalink"></a></h3><p>All metaprogramming serves a single goal: <strong>embed runtime decisions into compile-time type specialization</strong> to eliminate allocations and dynamic dispatch.</p><h2 id="Metaprogramming-Use-Cases"><a class="docs-heading-anchor" href="#Metaprogramming-Use-Cases">Metaprogramming Use Cases</a><a id="Metaprogramming-Use-Cases-1"></a><a class="docs-heading-anchor-permalink" href="#Metaprogramming-Use-Cases" title="Permalink"></a></h2><h3 id="1.-Large-Formula-Execution"><a class="docs-heading-anchor" href="#1.-Large-Formula-Execution">1. Large Formula Execution</a><a id="1.-Large-Formula-Execution-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Large-Formula-Execution" title="Permalink"></a></h3><p><strong>Problem</strong>: Julia&#39;s tuple specialization is heuristic-based and can fail for large operation tuples, causing performance degradation for complex statistical formulas.</p><p><strong>Location</strong>: <code>src/compilation/execution.jl</code></p><p><strong>Solution</strong>: Hybrid dispatch strategy with @generated fallback.</p><pre><code class="language-julia hljs">@inline function execute_ops(ops::Tuple, scratch, data, row_idx)
+    if length(ops) &lt;= RECURSION_LIMIT  # 10 operations
+        # Natural Julia recursion (preferred)
+        execute_ops_recursive(ops, scratch, data, row_idx)
+    else
+        # Metaprogramming fallback (forced specialization)
+        execute_ops_generated(ops, scratch, data, row_idx)
+    end
+end</code></pre><p>The <code>@generated</code> function forces complete unrolling:</p><pre><code class="language-julia hljs">@generated function execute_ops_generated(
+    ops::Tuple{Vararg{Any,N}}, 
+    scratch::AbstractVector{T}, 
+    data::NamedTuple, 
+    row_idx::Int
+) where {N, T}
+    # Build expressions for each operation at compile time
+    exprs = Expr[]
+    for i in 1:N
+        push!(exprs, :(execute_op(ops[$i], scratch, data, row_idx)))
+    end
+    
+    return quote
+        $(exprs...)
+        nothing
+    end
+end</code></pre><p><strong>Result</strong>: Zero allocations for formulas with 100+ terms, identical performance to small formulas.</p><h3 id="2.-Zero-Allocation-Finite-Differences"><a class="docs-heading-anchor" href="#2.-Zero-Allocation-Finite-Differences">2. Zero-Allocation Finite Differences</a><a id="2.-Zero-Allocation-Finite-Differences-1"></a><a class="docs-heading-anchor-permalink" href="#2.-Zero-Allocation-Finite-Differences" title="Permalink"></a></h3><p><strong>Problem</strong>: Computing derivatives via finite differences requires loops over variables, creating allocation pressure and dispatch overhead.</p><p><strong>Location</strong>: <code>src/evaluation/derivatives/finite_diff.jl</code></p><p><strong>Solution</strong>: Complete loop unrolling at compile time using type-level variable count.</p><pre><code class="language-julia hljs">@generated function _derivative_modelrow_fd_auto!(
+    J::AbstractMatrix{Float64},
+    de::derivativeevaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC},
+    row::Int,
+) where {T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC}
+    N = NV  # Extract number of variables from type parameter
+    stmts = Expr[]
+    
+    # Initialize buffers
+    push!(stmts, :(yplus = de.y_plus))
+    push!(stmts, :(yminus = de.yminus)) 
+    push!(stmts, :(xbase = de.xbase))
+    push!(stmts, :(nterms = length(de)))
+    
+    # Unroll variable extraction loop
+    for j in 1:N
+        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
+    end
+    
+    # Unroll override setup loop
+    for i in 1:N
+        push!(stmts, :(@inbounds de.overrides[$i].row = row))
+    end
+    
+    # Unroll main finite difference computation
+    for j in 1:N
+        push!(stmts, :(x = xbase[$j]))
+        
+        # Reset all overrides to base values
+        for k in 1:N
+            push!(stmts, :(@inbounds de.overrides[$k].replacement = xbase[$k]))
+        end
+        
+        # Compute step size
+        push!(stmts, :(h = cbrt(eps(Float64)) * max(abs(x), 1.0)))
+        
+        # Forward perturbation
+        push!(stmts, :(@inbounds de.overrides[$j].replacement = x + h))
+        push!(stmts, :(de.compiled_dual(yplus, de.data_over_dual, row)))
+        
+        # Backward perturbation  
+        push!(stmts, :(@inbounds de.overrides[$j].replacement = x - h))
+        push!(stmts, :(de.compiled_dual(yminus, de.data_over_dual, row)))
+        
+        # Central difference computation
+        push!(stmts, :(inv_2h = 1.0 / (2.0 * h)))
+        push!(stmts, quote
+            @fastmath for i in 1:nterms
+                @inbounds J[i, $j] = (yplus[i] - yminus[i]) * inv_2h
+            end
+        end)
+    end
+    
+    return quote
+        $(stmts...)
+        nothing
+    end
+end</code></pre><p><strong>Key Benefits</strong>:</p><ul><li><strong>Zero allocations</strong>: No dynamic arrays or temporary storage</li><li><strong>No dispatch overhead</strong>: All variable access patterns embedded at compile time  </li><li><strong>Optimal step sizing</strong>: Mathematical step size computed once per variable</li><li><strong>Type stability</strong>: All array accesses use compile-time indices</li></ul><h3 id="3.-Output-Buffer-Management"><a class="docs-heading-anchor" href="#3.-Output-Buffer-Management">3. Output Buffer Management</a><a id="3.-Output-Buffer-Management-1"></a><a class="docs-heading-anchor-permalink" href="#3.-Output-Buffer-Management" title="Permalink"></a></h3><p><strong>Problem</strong>: Copying results from scratch buffers to output vectors can allocate if done generically.</p><p><strong>Location</strong>: <code>src/compilation/execution.jl</code></p><p><strong>Solution</strong>: Generate copy operations with fixed indices.</p><pre><code class="language-julia hljs">@generated function copy_outputs_generated!(
+    ops::Tuple{Vararg{Any,N}}, 
+    output::AbstractVector{T}, 
+    scratch::AbstractVector{T}
+) where {N, T}
+    exprs = Expr[]
+    for i in 1:N
+        # Extract output position from operation type
+        if hasfield(typeof(ops.parameters[i]), :output_pos)
+            pos = ops.parameters[i].output_pos
+            push!(exprs, :(@inbounds output[$pos] = scratch[$pos]))
+        end
+    end
+    
+    return quote
+        $(exprs...)
+        nothing
+    end
+end</code></pre><h2 id="Performance-Impact"><a class="docs-heading-anchor" href="#Performance-Impact">Performance Impact</a><a id="Performance-Impact-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Impact" title="Permalink"></a></h2><p>The figures below are illustrative and hardware-dependent. See the Benchmark Protocol for environment setup and reproduction guidance.</p><h3 id="Metaprogramming-Effectiveness"><a class="docs-heading-anchor" href="#Metaprogramming-Effectiveness">Metaprogramming Effectiveness</a><a id="Metaprogramming-Effectiveness-1"></a><a class="docs-heading-anchor-permalink" href="#Metaprogramming-Effectiveness" title="Permalink"></a></h3><p>The metaprogramming eliminates allocations and dynamic dispatch in hot paths and preserves small-formula performance for large formulas. See the measured results on the index page and the Benchmark Protocol for how to reproduce them on your hardware.</p><h3 id="Compilation-Time-Trade-offs"><a class="docs-heading-anchor" href="#Compilation-Time-Trade-offs">Compilation Time Trade-offs</a><a id="Compilation-Time-Trade-offs-1"></a><a class="docs-heading-anchor-permalink" href="#Compilation-Time-Trade-offs" title="Permalink"></a></h3><p>Metaprogramming increases first-compilation latency and compiled code size modestly for complex formulas; subsequent runs use cached code without additional cost. For statistical applications where a formula is compiled once and evaluated many times, this trade‑off is favorable.</p><h2 id="Implementation-Patterns"><a class="docs-heading-anchor" href="#Implementation-Patterns">Implementation Patterns</a><a id="Implementation-Patterns-1"></a><a class="docs-heading-anchor-permalink" href="#Implementation-Patterns" title="Permalink"></a></h2><h3 id="Pattern-1:-Type-Driven-Generation"><a class="docs-heading-anchor" href="#Pattern-1:-Type-Driven-Generation">Pattern 1: Type-Driven Generation</a><a id="Pattern-1:-Type-Driven-Generation-1"></a><a class="docs-heading-anchor-permalink" href="#Pattern-1:-Type-Driven-Generation" title="Permalink"></a></h3><p>Extract compile-time constants from type parameters:</p><pre><code class="language-julia hljs">@generated function my_function(data::MyType{N, Positions}) where {N, Positions}
+    # N and Positions are compile-time constants
+    # Generate code using these values
+end</code></pre><h3 id="Pattern-2:-Tuple-Length-Unrolling"><a class="docs-heading-anchor" href="#Pattern-2:-Tuple-Length-Unrolling">Pattern 2: Tuple Length Unrolling</a><a id="Pattern-2:-Tuple-Length-Unrolling-1"></a><a class="docs-heading-anchor-permalink" href="#Pattern-2:-Tuple-Length-Unrolling" title="Permalink"></a></h3><p>Generate code for each tuple element:</p><pre><code class="language-julia hljs">@generated function process_tuple(ops::Tuple{Vararg{Any,N}}) where N
+    exprs = Expr[]
+    for i in 1:N
+        push!(exprs, :(process_element(ops[$i])))
+    end
+    return quote; $(exprs...); end
+end</code></pre><h3 id="Pattern-3:-Nested-Loop-Flattening"><a class="docs-heading-anchor" href="#Pattern-3:-Nested-Loop-Flattening">Pattern 3: Nested Loop Flattening</a><a id="Pattern-3:-Nested-Loop-Flattening-1"></a><a class="docs-heading-anchor-permalink" href="#Pattern-3:-Nested-Loop-Flattening" title="Permalink"></a></h3><p>Convert nested runtime loops into unrolled compile-time sequences:</p><pre><code class="language-julia hljs">@generated function nested_computation(data::MyType{NVars, NTerms}) where {NVars, NTerms}
+    stmts = Expr[]
+    for var in 1:NVars
+        for term in 1:NTerms
+            push!(stmts, :(computation($var, $term)))
+        end
+    end
+    return quote; $(stmts...); end
+end</code></pre><h2 id="Best-Practices"><a class="docs-heading-anchor" href="#Best-Practices">Best Practices</a><a id="Best-Practices-1"></a><a class="docs-heading-anchor-permalink" href="#Best-Practices" title="Permalink"></a></h2><h3 id="When-to-Use-Metaprogramming"><a class="docs-heading-anchor" href="#When-to-Use-Metaprogramming">When to Use Metaprogramming</a><a id="When-to-Use-Metaprogramming-1"></a><a class="docs-heading-anchor-permalink" href="#When-to-Use-Metaprogramming" title="Permalink"></a></h3><p><strong>Use metaprogramming when</strong>:</p><ul><li>Julia&#39;s built-in mechanisms hit limits (tuple specialization, inference)</li><li>Runtime dispatch causes measurable allocation or performance issues</li><li>Loop bounds are known at compile time and unrolling provides benefits</li><li>Type parameters carry sufficient information for code generation</li></ul><p><strong>Avoid metaprogramming when</strong>:</p><ul><li>Natural Julia code achieves the same performance</li><li>Code generation complexity outweighs benefits</li><li>Debugging or maintenance becomes significantly harder</li><li>Compilation time becomes prohibitive</li></ul><h3 id="Code-Generation-Guidelines"><a class="docs-heading-anchor" href="#Code-Generation-Guidelines">Code Generation Guidelines</a><a id="Code-Generation-Guidelines-1"></a><a class="docs-heading-anchor-permalink" href="#Code-Generation-Guidelines" title="Permalink"></a></h3><p><strong>Structure generated code clearly</strong>:</p><pre><code class="language-julia hljs">@generated function my_function(args...)
+    # 1. Extract compile-time information
+    N = get_compile_time_constant(args...)
+    
+    # 2. Build expressions systematically
+    setup_exprs = [...]
+    loop_exprs = [generate_loop(i) for i in 1:N]
+    cleanup_exprs = [...]
+    
+    # 3. Return well-structured quote block
+    return quote
+        $(setup_exprs...)
+        $(loop_exprs...)
+        $(cleanup_exprs...)
+        nothing  # Always explicit return
+    end
+end</code></pre><p><strong>Validate generated code</strong>:</p><pre><code class="language-julia hljs"># Include debug utilities
+@generated function my_function(args...)
+    code = generate_my_code(args...)
+    
+    # Optional: pretty-print generated code during development
+    @static if DEBUG_METAPROGRAMMING
+        @info &quot;Generated code:&quot; code
+    end
+    
+    return code
+end</code></pre><h3 id="Fallback-Strategies"><a class="docs-heading-anchor" href="#Fallback-Strategies">Fallback Strategies</a><a id="Fallback-Strategies-1"></a><a class="docs-heading-anchor-permalink" href="#Fallback-Strategies" title="Permalink"></a></h3><p>Always provide non-metaprogramming fallbacks:</p><pre><code class="language-julia hljs">function my_api_function(args...)
+    if should_use_metaprogramming(args...)
+        generated_version(args...)
+    else
+        fallback_version(args...)
+    end
+end</code></pre><h2 id="Integration-with-Broader-Architecture"><a class="docs-heading-anchor" href="#Integration-with-Broader-Architecture">Integration with Broader Architecture</a><a id="Integration-with-Broader-Architecture-1"></a><a class="docs-heading-anchor-permalink" href="#Integration-with-Broader-Architecture" title="Permalink"></a></h2><h3 id="Position-Mapping-Preservation"><a class="docs-heading-anchor" href="#Position-Mapping-Preservation">Position Mapping Preservation</a><a id="Position-Mapping-Preservation-1"></a><a class="docs-heading-anchor-permalink" href="#Position-Mapping-Preservation" title="Permalink"></a></h3><p>All metaprogramming maintains the package&#39;s core position mapping invariants:</p><ul><li><strong>Compile-time positions</strong>: All array indices embedded as constants</li><li><strong>Type stability</strong>: Generated code preserves input/output types</li><li><strong>Zero allocation</strong>: No dynamic memory management in generated paths</li></ul><h3 id="Testing-Generated-Code"><a class="docs-heading-anchor" href="#Testing-Generated-Code">Testing Generated Code</a><a id="Testing-Generated-Code-1"></a><a class="docs-heading-anchor-permalink" href="#Testing-Generated-Code" title="Permalink"></a></h3><p>Generated functions require special testing considerations:</p><pre><code class="language-julia hljs">@testset &quot;Generated Functions&quot; begin
+    # Test various type parameter combinations
+    for N in [1, 5, 10, 50, 100]
+        data = create_test_data(N)
+        
+        # Test correctness
+        @test generated_result(data) ≈ reference_result(data)
+        
+        # Test allocations
+        @test @allocated(generated_version(data)) == 0
+        
+        # Test performance
+        @test @elapsed(generated_version(data)) &lt; performance_threshold
+    end
+end</code></pre><h2 id="Future-Considerations"><a class="docs-heading-anchor" href="#Future-Considerations">Future Considerations</a><a id="Future-Considerations-1"></a><a class="docs-heading-anchor-permalink" href="#Future-Considerations" title="Permalink"></a></h2><h3 id="Evolution-Strategy"><a class="docs-heading-anchor" href="#Evolution-Strategy">Evolution Strategy</a><a id="Evolution-Strategy-1"></a><a class="docs-heading-anchor-permalink" href="#Evolution-Strategy" title="Permalink"></a></h3><p>The metaprogramming approach is designed to be <strong>incrementally replaceable</strong>:</p><ul><li><strong>Compiler improvements</strong>: If Julia&#39;s tuple specialization improves, generated functions can be simplified</li><li><strong>New language features</strong>: Future Julia versions may provide better alternatives</li><li><strong>Performance monitoring</strong>: Continuous benchmarking ensures metaprogramming remains beneficial</li></ul><h3 id="Maintenance-Approach"><a class="docs-heading-anchor" href="#Maintenance-Approach">Maintenance Approach</a><a id="Maintenance-Approach-1"></a><a class="docs-heading-anchor-permalink" href="#Maintenance-Approach" title="Permalink"></a></h3><ul><li><strong>Isolated complexity</strong>: All metaprogramming confined to specific, well-documented functions</li><li><strong>Clear interfaces</strong>: Generated functions provide the same API as non-generated alternatives</li><li><strong>Comprehensive testing</strong>: Extra validation for generated code paths</li></ul><h2 id="Conclusion"><a class="docs-heading-anchor" href="#Conclusion">Conclusion</a><a id="Conclusion-1"></a><a class="docs-heading-anchor-permalink" href="#Conclusion" title="Permalink"></a></h2><p>FormulaCompiler.jl&#39;s metaprogramming serves a specific, measurable purpose: achieving zero-allocation evaluation for arbitrarily complex statistical formulas. The approach is conservative, targeted, and provides clear performance benefits while maintaining code clarity and maintainability.</p><p>The key insight is that <strong>metaprogramming enables compile-time specialization</strong> that would be impossible through Julia&#39;s standard mechanisms alone, unlocking performance critical for statistical computing applications where the same formula is evaluated thousands or millions of times.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../architecture/">« Architecture</a><a class="docs-footer-nextpage" href="../api/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Friday 17 October 2025 13:53">Friday 17 October 2025</span>. Using Julia version 1.12.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

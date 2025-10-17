@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Categorical Mixtures · FormulaCompiler.jl</title><meta name="title" content="Categorical Mixtures · FormulaCompiler.jl"/><meta property="og:title" content="Categorical Mixtures · FormulaCompiler.jl"/><meta property="twitter:title" content="Categorical Mixtures · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/categorical_mixtures/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/guide/categorical_mixtures/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/guide/categorical_mixtures/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><script src="../../assets/mermaid.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../basic_usage/">Basic Usage</a></li><li><a class="tocitem" href="../advanced_features/">Advanced Features</a></li><li class="is-active"><a class="tocitem" href>Categorical Mixtures</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Quick-Start"><span>Quick Start</span></a></li><li><a class="tocitem" href="#Mixture-Object-Interface"><span>Mixture Object Interface</span></a></li><li><a class="tocitem" href="#Creating-Mixture-Data"><span>Creating Mixture Data</span></a></li><li><a class="tocitem" href="#Validation-and-Error-Handling"><span>Validation and Error Handling</span></a></li><li><a class="tocitem" href="#Performance-Characteristics"><span>Performance Characteristics</span></a></li><li><a class="tocitem" href="#Integration-with-Marginal-Effects"><span>Integration with Marginal Effects</span></a></li><li><a class="tocitem" href="#Advanced-Usage"><span>Advanced Usage</span></a></li><li><a class="tocitem" href="#Implementation-Details"><span>Implementation Details</span></a></li><li><a class="tocitem" href="#Error-Messages-and-Debugging"><span>Error Messages and Debugging</span></a></li><li><a class="tocitem" href="#Testing-and-Validation"><span>Testing and Validation</span></a></li><li><a class="tocitem" href="#Migration-Guide"><span>Migration Guide</span></a></li><li><a class="tocitem" href="#Limitations-and-Considerations"><span>Limitations and Considerations</span></a></li><li><a class="tocitem" href="#References"><span>References</span></a></li></ul></li><li><a class="tocitem" href="../scenarios/">Scenario Analysis</a></li><li><a class="tocitem" href="../performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../../integration/glm/">GLM.jl</a></li><li><a class="tocitem" href="../../integration/mixed_models/">MixedModels.jl</a></li><li><a class="tocitem" href="../../integration/standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../../mathematical_foundation/">Mathematical Foundation</a></li><li><a class="tocitem" href="../../architecture/">Architecture</a></li><li><a class="tocitem" href="../../metaprogramming/">Metaprogramming</a></li><li><a class="tocitem" href="../../api/">API Reference</a></li><li><a class="tocitem" href="../../examples/">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">User Guide</a></li><li class="is-active"><a href>Categorical Mixtures</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Categorical Mixtures</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/guide/categorical_mixtures.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Categorical-Mixtures-in-FormulaCompiler.jl"><a class="docs-heading-anchor" href="#Categorical-Mixtures-in-FormulaCompiler.jl">Categorical Mixtures in FormulaCompiler.jl</a><a id="Categorical-Mixtures-in-FormulaCompiler.jl-1"></a><a class="docs-heading-anchor-permalink" href="#Categorical-Mixtures-in-FormulaCompiler.jl" title="Permalink"></a></h1><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>FormulaCompiler.jl supports <strong>categorical mixtures</strong> - weighted combinations of categorical levels for profile-based marginal effects computation. Fractional values like <code>mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7)</code> are compiled into zero-allocation evaluators using type-specialized contrast operations. For boolean variables, use simple numeric probabilities (e.g., <code>treated = 0.7</code> for 70% treatment rate).</p><p><strong>Implementation characteristics:</strong></p><ul><li>Allocation behavior: 0 bytes allocated during execution (verified in test suite)</li><li>Compile-time specialization: Mixture weights embedded in type parameters</li><li>Statistical integration: Compatible with marginal effects packages (Margins.jl)</li><li>Memory complexity: O(1) memory usage independent of data size</li></ul><h2 id="Quick-Start"><a class="docs-heading-anchor" href="#Quick-Start">Quick Start</a><a id="Quick-Start-1"></a><a class="docs-heading-anchor-permalink" href="#Quick-Start" title="Permalink"></a></h2><pre><code class="language-julia hljs">using FormulaCompiler, GLM, DataFrames, Tables
+
+# Create data with categorical mixtures
+df = DataFrame(
+    x = [1.0, 2.0, 3.0],
+    group = [mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7),   # 30% A, 70% B
+             mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7),
+             mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7)]
+)
+
+# Fit and compile model
+model = lm(@formula(y ~ x * group), training_data)
+compiled = compile_formula(model, Tables.columntable(df))
+
+# Zero-allocation evaluation
+output = Vector{Float64}(undef, length(compiled))
+compiled(output, Tables.columntable(df), 1)  # Zero allocations; time varies by hardware</code></pre><h2 id="Mixture-Object-Interface"><a class="docs-heading-anchor" href="#Mixture-Object-Interface">Mixture Object Interface</a><a id="Mixture-Object-Interface-1"></a><a class="docs-heading-anchor-permalink" href="#Mixture-Object-Interface" title="Permalink"></a></h2><p>Categorical mixtures are detected via <strong>duck typing</strong> - any object with <code>levels</code> and <code>weights</code> properties:</p><pre><code class="language-julia hljs"># Example mixture object structure
+struct MixtureExample
+    levels::Vector{String}    # [&quot;A&quot;, &quot;B&quot;, &quot;C&quot;]
+    weights::Vector{Float64}  # [0.2, 0.3, 0.5]
+end
+
+# FormulaCompiler will automatically detect and handle such objects
+mixture = MixtureExample([&quot;Control&quot;, &quot;Treatment&quot;], [0.4, 0.6])</code></pre><h2 id="Creating-Mixture-Data"><a class="docs-heading-anchor" href="#Creating-Mixture-Data">Creating Mixture Data</a><a id="Creating-Mixture-Data-1"></a><a class="docs-heading-anchor-permalink" href="#Creating-Mixture-Data" title="Permalink"></a></h2><h3 id="Boolean-Variables-and-Population-Analysis"><a class="docs-heading-anchor" href="#Boolean-Variables-and-Population-Analysis">Boolean Variables and Population Analysis</a><a id="Boolean-Variables-and-Population-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Boolean-Variables-and-Population-Analysis" title="Permalink"></a></h3><p><strong>Boolean variables</strong> work seamlessly with FormulaCompiler&#39;s continuous interpretation. For population-level analysis and marginal effects, simply use numeric probabilities directly:</p><pre><code class="language-julia hljs"># Population analysis with boolean probabilities - much simpler!
+df = DataFrame(
+    x = [1.0, 2.0, 3.0],
+    treated = fill(0.7, 3)  # 70% treatment probability for population analysis
+)
+
+# Fits naturally with FormulaCompiler&#39;s boolean handling
+compiled = compile_formula(model, Tables.columntable(df))
+output = Vector{Float64}(undef, length(compiled))
+compiled(output, Tables.columntable(df), 1)  # treated effect = 0.7</code></pre><p><strong>Numeric approach properties:</strong></p><ul><li>Implementation: Uses standard Float64 values without mixture object construction</li><li>Syntax: <code>treated = 0.7</code> represents probability directly</li><li>Performance: Maintains zero-allocation execution</li><li>Compatibility: Works with data modification and counterfactual functions</li><li>Consistency: Matches StatsModels.jl boolean variable semantics</li></ul><p><strong>Application patterns:</strong></p><ul><li><strong>Individual scenarios</strong>: <code>treated = true</code> or <code>treated = false</code></li><li><strong>Population analysis</strong>: <code>treated = 0.6</code> (60% treatment rate)</li><li><strong>Marginal effects</strong>: Varying treatment probabilities across reference grids</li></ul><h3 id="Helper-Functions"><a class="docs-heading-anchor" href="#Helper-Functions">Helper Functions</a><a id="Helper-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Helper-Functions" title="Permalink"></a></h3><p>FormulaCompiler provides several utilities for creating mixture data:</p><pre><code class="language-julia hljs"># Create mixture column for reference grids
+mixture_spec = mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7)  # Your mixture constructor
+column = FormulaCompiler.create_mixture_column(mixture_spec, 1000)  # 1000 identical rows
+
+# Create balanced (equal weight) mixtures
+balanced_dict = create_balanced_mixture([&quot;A&quot;, &quot;B&quot;, &quot;C&quot;])
+# Returns: Dict(&quot;A&quot; =&gt; 0.333..., &quot;B&quot; =&gt; 0.333..., &quot;C&quot; =&gt; 0.333...)
+balanced_mixture = mix(balanced_dict...)
+
+# Expand base data with mixture specifications
+base_data = (x = [1.0, 2.0], y = [0.1, 0.2])
+mixtures = Dict(:group =&gt; mix(&quot;A&quot; =&gt; 0.5, &quot;B&quot; =&gt; 0.5))
+expanded = FormulaCompiler.expand_mixture_grid(base_data, mixtures)</code></pre><h3 id="Reference-Grid-Creation"><a class="docs-heading-anchor" href="#Reference-Grid-Creation">Reference Grid Creation</a><a id="Reference-Grid-Creation-1"></a><a class="docs-heading-anchor-permalink" href="#Reference-Grid-Creation" title="Permalink"></a></h3><p>For marginal effects analysis, create reference grids with mixtures:</p><pre><code class="language-julia hljs"># Method 1: Direct DataFrame creation
+reference_grid = DataFrame(
+    x = [1.0, 2.0, 3.0],
+    continuous_var = [0.0, 0.5, 1.0],
+    categorical_mix = fill(mix(&quot;A&quot; =&gt; 0.5, &quot;B&quot; =&gt; 0.5), 3)
+)
+
+# Method 2: Using helper functions  
+base_grid = DataFrame(x = [1.0, 2.0, 3.0])
+mixture_grid = FormulaCompiler.expand_mixture_grid(
+    Tables.columntable(base_grid), 
+    Dict(:treatment =&gt; mix(&quot;Control&quot; =&gt; 0.3, &quot;Treated&quot; =&gt; 0.7))
+)</code></pre><h2 id="Validation-and-Error-Handling"><a class="docs-heading-anchor" href="#Validation-and-Error-Handling">Validation and Error Handling</a><a id="Validation-and-Error-Handling-1"></a><a class="docs-heading-anchor-permalink" href="#Validation-and-Error-Handling" title="Permalink"></a></h2><h3 id="Automatic-Validation"><a class="docs-heading-anchor" href="#Automatic-Validation">Automatic Validation</a><a id="Automatic-Validation-1"></a><a class="docs-heading-anchor-permalink" href="#Automatic-Validation" title="Permalink"></a></h3><p>FormulaCompiler automatically validates mixture data during compilation:</p><pre><code class="language-julia hljs"># ✓ Valid - consistent mixtures
+valid_data = (x = [1, 2], group = [mix(&quot;A&quot;=&gt;0.3, &quot;B&quot;=&gt;0.7), mix(&quot;A&quot;=&gt;0.3, &quot;B&quot;=&gt;0.7)])
+
+# ✗ Invalid - inconsistent mixtures
+invalid_data = (x = [1, 2], group = [mix(&quot;A&quot;=&gt;0.3, &quot;B&quot;=&gt;0.7), mix(&quot;A&quot;=&gt;0.5, &quot;B&quot;=&gt;0.5)])
+compile_formula(model, invalid_data)  # Throws ArgumentError
+
+# ✗ Invalid - weights don&#39;t sum to 1.0  
+bad_weights = (x = [1, 2], group = [mix(&quot;A&quot;=&gt;0.3, &quot;B&quot;=&gt;0.6), mix(&quot;A&quot;=&gt;0.3, &quot;B&quot;=&gt;0.6)])
+compile_formula(model, bad_weights)  # Throws ArgumentError</code></pre><h3 id="Manual-Validation"><a class="docs-heading-anchor" href="#Manual-Validation">Manual Validation</a><a id="Manual-Validation-1"></a><a class="docs-heading-anchor-permalink" href="#Manual-Validation" title="Permalink"></a></h3><p>You can also validate mixture data manually:</p><pre><code class="language-julia hljs"># Validate entire dataset
+FormulaCompiler.validate_mixture_consistency!(data)
+
+# Validate individual components
+FormulaCompiler.validate_mixture_weights([0.3, 0.7])        # ✓ Valid
+FormulaCompiler.validate_mixture_weights([0.3, 0.6])        # ✗ Sum ≠ 1.0
+FormulaCompiler.validate_mixture_levels([&quot;A&quot;, &quot;B&quot;, &quot;C&quot;])    # ✓ Valid  
+FormulaCompiler.validate_mixture_levels([&quot;A&quot;, &quot;A&quot;, &quot;B&quot;])    # ✗ Duplicates</code></pre><h2 id="Performance-Characteristics"><a class="docs-heading-anchor" href="#Performance-Characteristics">Performance Characteristics</a><a id="Performance-Characteristics-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Characteristics" title="Permalink"></a></h2><h3 id="Compilation-Time"><a class="docs-heading-anchor" href="#Compilation-Time">Compilation Time</a><a id="Compilation-Time-1"></a><a class="docs-heading-anchor-permalink" href="#Compilation-Time" title="Permalink"></a></h3><ul><li><strong>Mixture detection</strong>: ~1μs per column</li><li><strong>Type specialization</strong>: ~10μs per unique mixture specification</li><li><strong>Overall overhead</strong>: &lt;20% increase for mixture-containing formulas</li></ul><h3 id="Execution-Performance"><a class="docs-heading-anchor" href="#Execution-Performance">Execution Performance</a><a id="Execution-Performance-1"></a><a class="docs-heading-anchor-permalink" href="#Execution-Performance" title="Permalink"></a></h3><ul><li><strong>Simple mixtures</strong>: tens of nanoseconds per row (similar to standard categorical)</li><li><strong>Complex mixtures</strong>: still on the order of tens to low hundreds of nanoseconds per row</li><li><strong>Memory usage</strong>: 0 bytes allocated during execution</li><li><strong>Scaling</strong>: Performance independent of mixture complexity</li></ul><h3 id="Benchmarks"><a class="docs-heading-anchor" href="#Benchmarks">Benchmarks</a><a id="Benchmarks-1"></a><a class="docs-heading-anchor-permalink" href="#Benchmarks" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Performance comparison (indicative)
+@benchmark compiled(output, data, 1)
+@benchmark compiled(output, mix_data, 1)
+# Overhead should remain modest; measure on your system.</code></pre><h2 id="Integration-with-Marginal-Effects"><a class="docs-heading-anchor" href="#Integration-with-Marginal-Effects">Integration with Marginal Effects</a><a id="Integration-with-Marginal-Effects-1"></a><a class="docs-heading-anchor-permalink" href="#Integration-with-Marginal-Effects" title="Permalink"></a></h2><h3 id="Basic-Marginal-Effects-Workflow"><a class="docs-heading-anchor" href="#Basic-Marginal-Effects-Workflow">Basic Marginal Effects Workflow</a><a id="Basic-Marginal-Effects-Workflow-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Marginal-Effects-Workflow" title="Permalink"></a></h3><pre><code class="language-julia hljs">using FormulaCompiler, GLM
+
+# Create reference grid with mixture
+reference_data = DataFrame(
+    x = [0.0, 1.0, 2.0],  # Values to evaluate at
+    group = fill(mix(&quot;Control&quot; =&gt; 0.5, &quot;Treatment&quot; =&gt; 0.5), 3)  # Population mixture
+)
+
+# Compile model
+model = lm(@formula(y ~ x * group), training_data)
+compiled = compile_formula(model, Tables.columntable(reference_data))
+
+# Evaluate marginal effects at each reference point
+n_points = nrow(reference_data)
+results = Matrix{Float64}(undef, n_points, length(compiled))
+
+for i in 1:n_points
+    compiled(view(results, i, :), Tables.columntable(reference_data), i)
+end</code></pre><h3 id="Integration-with-Derivatives-System"><a class="docs-heading-anchor" href="#Integration-with-Derivatives-System">Integration with Derivatives System</a><a id="Integration-with-Derivatives-System-1"></a><a class="docs-heading-anchor-permalink" href="#Integration-with-Derivatives-System" title="Permalink"></a></h3><p>Mixtures work seamlessly with derivative computation:</p><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta!
+
+# Build derivative evaluator with mixture data
+vars = [:x]  # Continuous variables for derivatives
+de_fd = derivativeevaluator(:fd, compiled, Tables.columntable(reference_data), vars)
+
+# Compute marginal effects with zero allocations (requires Margins.jl)
+gradient = Vector{Float64}(undef, length(vars))
+marginal_effects_eta!(gradient, de_fd, coef(model), 1)  # 0 bytes</code></pre><h2 id="Advanced-Usage"><a class="docs-heading-anchor" href="#Advanced-Usage">Advanced Usage</a><a id="Advanced-Usage-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Usage" title="Permalink"></a></h2><h3 id="Multiple-Mixture-Variables"><a class="docs-heading-anchor" href="#Multiple-Mixture-Variables">Multiple Mixture Variables</a><a id="Multiple-Mixture-Variables-1"></a><a class="docs-heading-anchor-permalink" href="#Multiple-Mixture-Variables" title="Permalink"></a></h3><p>You can have multiple categorical mixture variables in the same model:</p><pre><code class="language-julia hljs">df = DataFrame(
+    x = [1.0, 2.0, 3.0],
+    treatment = [mix(&quot;Control&quot; =&gt; 0.3, &quot;Treated&quot; =&gt; 0.7),
+                 mix(&quot;Control&quot; =&gt; 0.3, &quot;Treated&quot; =&gt; 0.7),
+                 mix(&quot;Control&quot; =&gt; 0.3, &quot;Treated&quot; =&gt; 0.7)],
+    region = [mix(&quot;North&quot; =&gt; 0.4, &quot;South&quot; =&gt; 0.6),
+              mix(&quot;North&quot; =&gt; 0.4, &quot;South&quot; =&gt; 0.6), 
+              mix(&quot;North&quot; =&gt; 0.4, &quot;South&quot; =&gt; 0.6)]
+)
+
+model = lm(@formula(y ~ x * treatment * region), training_data)
+compiled = compile_formula(model, Tables.columntable(df))  # Handles multiple mixtures</code></pre><h3 id="Complex-Mixture-Specifications"><a class="docs-heading-anchor" href="#Complex-Mixture-Specifications">Complex Mixture Specifications</a><a id="Complex-Mixture-Specifications-1"></a><a class="docs-heading-anchor-permalink" href="#Complex-Mixture-Specifications" title="Permalink"></a></h3><p>Support for arbitrary numbers of levels:</p><pre><code class="language-julia hljs"># Multi-level mixture
+complex_mixture = mix(
+    &quot;Category_A&quot; =&gt; 0.25,
+    &quot;Category_B&quot; =&gt; 0.30, 
+    &quot;Category_C&quot; =&gt; 0.20,
+    &quot;Category_D&quot; =&gt; 0.15,
+    &quot;Category_E&quot; =&gt; 0.10
+)
+
+df = DataFrame(
+    x = [1.0, 2.0],
+    complex_cat = [complex_mixture, complex_mixture]
+)</code></pre><h3 id="Interaction-Terms-with-Mixtures"><a class="docs-heading-anchor" href="#Interaction-Terms-with-Mixtures">Interaction Terms with Mixtures</a><a id="Interaction-Terms-with-Mixtures-1"></a><a class="docs-heading-anchor-permalink" href="#Interaction-Terms-with-Mixtures" title="Permalink"></a></h3><p>Mixtures work with all interaction patterns:</p><pre><code class="language-julia hljs"># Two-way interactions
+@formula(y ~ x * mixture_group)
+
+# Three-way interactions  
+@formula(y ~ x * z * mixture_group)
+
+# Mixed interactions
+@formula(y ~ log(x) * mixture_group * other_categorical)</code></pre><h2 id="Implementation-Details"><a class="docs-heading-anchor" href="#Implementation-Details">Implementation Details</a><a id="Implementation-Details-1"></a><a class="docs-heading-anchor-permalink" href="#Implementation-Details" title="Permalink"></a></h2><h3 id="Type-Specialization"><a class="docs-heading-anchor" href="#Type-Specialization">Type Specialization</a><a id="Type-Specialization-1"></a><a class="docs-heading-anchor-permalink" href="#Type-Specialization" title="Permalink"></a></h3><p>Mixture specifications are embedded in type parameters for maximum performance:</p><pre><code class="language-julia hljs"># Each unique mixture gets its own compiled method
+MixtureContrastOp{
+    :group,                    # Column name
+    (1, 2),                   # Output positions
+    (1, 2),                   # Level indices  
+    (0.3, 0.7)               # Weights (embedded in type!)
+}</code></pre><h3 id="Contrast-Matrix-Computation"><a class="docs-heading-anchor" href="#Contrast-Matrix-Computation">Contrast Matrix Computation</a><a id="Contrast-Matrix-Computation-1"></a><a class="docs-heading-anchor-permalink" href="#Contrast-Matrix-Computation" title="Permalink"></a></h3><p>Mixtures are evaluated as weighted combinations of contrast matrices:</p><pre><code class="language-julia hljs"># For dummy coding with mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7):
+# Standard contrast matrix:
+#   A: [1, 0]  (A vs reference)
+#   B: [0, 1]  (B vs reference)
+# 
+# Mixture result: 0.3 * [1, 0] + 0.7 * [0, 1] = [0.3, 0.7]</code></pre><h3 id="Memory-Layout"><a class="docs-heading-anchor" href="#Memory-Layout">Memory Layout</a><a id="Memory-Layout-1"></a><a class="docs-heading-anchor-permalink" href="#Memory-Layout" title="Permalink"></a></h3><p>The implementation uses compile-time specialization for optimal memory usage:</p><ul><li><strong>Compile time</strong>: Mixture specs embedded in types (~0 runtime memory)</li><li><strong>Execution time</strong>: Only scratch vector allocation (~8 bytes per term)</li><li><strong>Data storage</strong>: No mixture expansion in actual data (O(1) vs O(n))</li></ul><h2 id="Error-Messages-and-Debugging"><a class="docs-heading-anchor" href="#Error-Messages-and-Debugging">Error Messages and Debugging</a><a id="Error-Messages-and-Debugging-1"></a><a class="docs-heading-anchor-permalink" href="#Error-Messages-and-Debugging" title="Permalink"></a></h2><h3 id="Common-Error-Messages"><a class="docs-heading-anchor" href="#Common-Error-Messages">Common Error Messages</a><a id="Common-Error-Messages-1"></a><a class="docs-heading-anchor-permalink" href="#Common-Error-Messages" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Inconsistent mixture specifications
+&quot;Inconsistent mixture specification in column group at row 2: expected (levels=[\&quot;A\&quot;, \&quot;B\&quot;], weights=[0.3, 0.7]), got (levels=[\&quot;A\&quot;, \&quot;B\&quot;], weights=[0.5, 0.5])&quot;
+
+# Weights don&#39;t sum to 1.0
+&quot;Mixture weights in column group do not sum to 1.0: [0.3, 0.6] (sum = 0.9)&quot;
+
+# Duplicate levels
+&quot;Mixture in column group contains duplicate levels: [\&quot;A\&quot;, \&quot;B\&quot;, \&quot;A\&quot;]&quot;
+
+# Negative weights
+&quot;Mixture weights in column group must be non-negative: [0.5, -0.2]&quot;</code></pre><h3 id="Debugging-Tips"><a class="docs-heading-anchor" href="#Debugging-Tips">Debugging Tips</a><a id="Debugging-Tips-1"></a><a class="docs-heading-anchor-permalink" href="#Debugging-Tips" title="Permalink"></a></h3><ol><li><strong>Check mixture consistency</strong>: All rows must have identical mixture specifications</li><li><strong>Validate weights</strong>: Must be non-negative and sum to 1.0 (within 1e-10 tolerance)</li><li><strong>Verify levels</strong>: Must be unique strings/symbols</li><li><strong>Test detection</strong>: Use <code>is_mixture_column(column)</code> to verify detection</li></ol><h2 id="Testing-and-Validation"><a class="docs-heading-anchor" href="#Testing-and-Validation">Testing and Validation</a><a id="Testing-and-Validation-1"></a><a class="docs-heading-anchor-permalink" href="#Testing-and-Validation" title="Permalink"></a></h2><h3 id="Built-in-Tests"><a class="docs-heading-anchor" href="#Built-in-Tests">Built-in Tests</a><a id="Built-in-Tests-1"></a><a class="docs-heading-anchor-permalink" href="#Built-in-Tests" title="Permalink"></a></h3><p>FormulaCompiler includes comprehensive mixture tests:</p><pre><code class="language-bash hljs"># Run mixture-specific tests
+julia --project=test -e &quot;include(\&quot;test/test_mixture_detection.jl\&quot;)&quot;      # 142 tests
+julia --project=test -e &quot;include(\&quot;test/test_categorical_mixtures.jl\&quot;)&quot;  # 62 tests
+
+# Run full test suite  
+julia --project=. -e &quot;using Pkg; Pkg.test()&quot;  # 237 mixture tests included</code></pre><h3 id="Custom-Testing"><a class="docs-heading-anchor" href="#Custom-Testing">Custom Testing</a><a id="Custom-Testing-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-Testing" title="Permalink"></a></h3><p>Validate your mixture implementations:</p><pre><code class="language-julia hljs">using Test
+
+# Test mixture detection
+@test is_mixture_column([mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7), mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7)])
+@test !is_mixture_column([&quot;A&quot;, &quot;B&quot;, &quot;A&quot;])
+
+# Test compilation and execution
+df_mix = DataFrame(x = [1.0], group = [mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7)])
+compiled = compile_formula(model, Tables.columntable(df_mix))
+output = Vector{Float64}(undef, length(compiled))
+
+# Should execute without allocation
+@test (@allocated compiled(output, Tables.columntable(df_mix), 1)) == 0</code></pre><h2 id="Migration-Guide"><a class="docs-heading-anchor" href="#Migration-Guide">Migration Guide</a><a id="Migration-Guide-1"></a><a class="docs-heading-anchor-permalink" href="#Migration-Guide" title="Permalink"></a></h2><h3 id="From-Override-System"><a class="docs-heading-anchor" href="#From-Override-System">From Override System</a><a id="From-Override-System-1"></a><a class="docs-heading-anchor-permalink" href="#From-Override-System" title="Permalink"></a></h3><p>If you&#39;re currently using the override system for categorical mixtures:</p><pre><code class="language-julia hljs"># Pattern 1: Direct Mixture Data (Recommended - Compile-time Specialization)
+mix_data = DataFrame(x = [1.0, 2.0], group = [mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7), mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7)])
+compiled = compile_formula(model, Tables.columntable(mix_data))  # → MixtureContrastOp (fastest)
+
+# Pattern 2: Manual Data Modification (Flexible for dynamic scenarios)
+base_data = DataFrame(x = [1.0, 2.0], group = [&quot;A&quot;, &quot;A&quot;])
+mixture_data = merge(Tables.columntable(base_data), (group = fill(mix(&quot;A&quot; =&gt; 0.3, &quot;B&quot; =&gt; 0.7), 2),))
+compiled_cf = compile_formula(model, mixture_data)  # → MixtureContrastOp with data modification
+
+# Pattern 3: Manual Population Analysis
+base_data = DataFrame(x = [1.0, 2.0], group = [&quot;A&quot;, &quot;A&quot;])
+results = []
+for (level, weight) in [(&quot;A&quot;, 0.3), (&quot;B&quot;, 0.7)]
+    level_data = merge(Tables.columntable(base_data), (group = fill(level, 2),))
+    compiled = compile_formula(model, level_data)
+    # Evaluate and weight results manually
+    push!(results, (compiled, weight))
+end</code></pre><h3 id="Performance-Comparison"><a class="docs-heading-anchor" href="#Performance-Comparison">Performance Comparison</a><a id="Performance-Comparison-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Comparison" title="Permalink"></a></h3><table><tr><th style="text-align: right">Approach</th><th style="text-align: right">Compilation</th><th style="text-align: right">Memory Usage</th><th style="text-align: right">Allocations</th><th style="text-align: right">Relative Speed</th></tr><tr><td style="text-align: right">Override system</td><td style="text-align: right">Per-scenario</td><td style="text-align: right">O(scenarios)</td><td style="text-align: right">0 bytes</td><td style="text-align: right">Baseline</td></tr><tr><td style="text-align: right">Compile-time mixtures</td><td style="text-align: right">Once</td><td style="text-align: right">O(1)</td><td style="text-align: right">0 bytes</td><td style="text-align: right">~3-4x faster</td></tr></table><p><strong>Note</strong>: Both achieve zero allocations. Absolute timing varies by system; relative speedup is consistent.</p><h2 id="Limitations-and-Considerations"><a class="docs-heading-anchor" href="#Limitations-and-Considerations">Limitations and Considerations</a><a id="Limitations-and-Considerations-1"></a><a class="docs-heading-anchor-permalink" href="#Limitations-and-Considerations" title="Permalink"></a></h2><h3 id="Current-Limitations"><a class="docs-heading-anchor" href="#Current-Limitations">Current Limitations</a><a id="Current-Limitations-1"></a><a class="docs-heading-anchor-permalink" href="#Current-Limitations" title="Permalink"></a></h3><ol><li><strong>Consistent specifications</strong>: All rows must have identical mixture specifications</li><li><strong>Compile-time binding</strong>: Cannot change mixture weights at runtime  </li><li><strong>Duck typing dependency</strong>: Mixture objects must have <code>levels</code>, <code>weights</code>, and <code>original_levels</code> properties</li></ol><h3 id="Design-Trade-offs"><a class="docs-heading-anchor" href="#Design-Trade-offs">Design Trade-offs</a><a id="Design-Trade-offs-1"></a><a class="docs-heading-anchor-permalink" href="#Design-Trade-offs" title="Permalink"></a></h3><ul><li>Compile-time vs Runtime: Compile-time binding provides zero-allocation performance; mixture weights cannot be changed at runtime</li><li><strong>Memory vs Speed</strong>: Type specialization uses more compilation time/memory for faster execution</li><li><strong>Consistency requirement</strong>: Simplifies implementation but limits some use cases</li></ul><h3 id="Future-Enhancements"><a class="docs-heading-anchor" href="#Future-Enhancements">Future Enhancements</a><a id="Future-Enhancements-1"></a><a class="docs-heading-anchor-permalink" href="#Future-Enhancements" title="Permalink"></a></h3><p>Potential areas for future development:</p><ul><li>Runtime mixture resolution for varying specifications</li><li>Optimized binary mixture methods</li><li>Integration with more statistical packages</li><li>Support for hierarchical mixture specifications</li></ul><h2 id="References"><a class="docs-heading-anchor" href="#References">References</a><a id="References-1"></a><a class="docs-heading-anchor-permalink" href="#References" title="Permalink"></a></h2><ul><li><strong>Design Document</strong>: <code>CATEGORICAL_MIXTURES_DESIGN.md</code> - Complete technical design</li><li><strong>Implementation</strong>: Phases 1-5 complete with 237 tests passing</li><li><strong>Performance Targets</strong>: All targets met (≤110% of standard categorical performance)</li><li><strong>Integration</strong>: Ready for Margins.jl and other marginal effects packages</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../advanced_features/">« Advanced Features</a><a class="docs-footer-nextpage" href="../scenarios/">Scenario Analysis »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Friday 17 October 2025 13:53">Friday 17 October 2025</span>. Using Julia version 1.12.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

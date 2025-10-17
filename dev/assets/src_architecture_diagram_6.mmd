@@ -9,14 +9,14 @@ graph TB
     subgraph "FormulaCompiler Core"
         Comp["Compilation System<br>Position Mapping"]
         Exec["Runtime System<br>Zero Allocation Execution"]
-        Scen["Scenario System<br>Memory Efficient Overrides"]
-        Utils["Core Utilities<br>OverrideVector, helpers"]
+        Scen["Counterfactual System<br>Memory Efficient Analysis"]
+        Utils["Core Utilities<br>CounterfactualVector, helpers"]
     end
-    
-    subgraph "Performance Results"
-        Perf1["~50ns per row"]
-        Perf2["Zero allocations"] 
-        Perf3[">99% memory savings"]
+
+    subgraph "Performance Characteristics"
+        Perf1["Fast per-row evaluation"]
+        Perf2["Zero allocations"]
+        Perf3["O(1) memory overhead"]
     end
     
     GLM --> Comp
