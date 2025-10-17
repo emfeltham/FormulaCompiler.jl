@@ -395,15 +395,108 @@ end
 """
     _validate_mixture_values!(cf_vec, var, from, to)
 
-Validate mixture variable contrast values (placeholder for future mixture support).
+Validate mixture variable contrast values for categorical mixture variables.
+
+Ensures that `from` and `to` mixture contrasts:
+- Use the same mixture type as the compiled data column
+- Include identical level sets as the baseline mixture
+- Provide finite, non-negative weights that sum to 1.0
+
+This validation mirrors compile-time mixture checks but guards the contrast API
+so users receive immediate feedback when supplying incompatible mixture values.
 """
 function _validate_mixture_values!(cf_vec::CategoricalMixtureCounterfactualVector, var::Symbol, from, to)
-    # For now, just ensure they're not obviously wrong types
-    # TODO: Full mixture contrast validation would be implemented in future phases
-    if !(from isa Union{String, Symbol}) || !(to isa Union{String, Symbol})
-        error("Mixture variable :$var contrasts should use string or symbol level specifications")
+    isempty(cf_vec.base) && error("Mixture variable :$var does not have baseline data for validation")
+
+    baseline_value = cf_vec.base[1]
+    expected_type = typeof(baseline_value)
+
+    _validate_single_mixture_value(expected_type, var, "from", from)
+    _validate_single_mixture_value(expected_type, var, "to", to)
+
+    baseline_spec = extract_mixture_spec(baseline_value)
+    base_levels = _normalize_mixture_levels(baseline_spec.levels)
+    base_level_set = Set(base_levels)
+
+    _validate_mixture_spec(var, "from", from, base_levels, base_level_set)
+    _validate_mixture_spec(var, "to", to, base_levels, base_level_set)
+end
+
+@inline function _validate_single_mixture_value(expected_type::Type, var::Symbol, label::AbstractString, value)
+    if !(hasproperty(value, :levels) && hasproperty(value, :weights))
+        error("Mixture variable :$var $label contrast must be provided as a mixture object (e.g., mix(\"A\" => 0.5, \"B\" => 0.5)). Got $(typeof(value))")
+    end
+
+    if !(value isa expected_type)
+        error("Mixture variable :$var uses mixture type $(expected_type). The $label contrast must use the same type, got $(typeof(value)).")
+    end
+
+    # Extraction happens later during spec validation.
+end
+
+@inline function _normalize_mixture_levels(levels)
+    normalized = Vector{String}(undef, length(levels))
+    @inbounds for i in eachindex(levels)
+        level = levels[i]
+        normalized[i] = level isa String ? level :
+                        level isa Symbol ? String(level) :
+                        string(level)
+    end
+    return normalized
+end
+
+@inline function _validate_mixture_spec(var::Symbol, label::AbstractString, value, base_levels::Vector{String}, base_level_set::Set{String})
+    spec = extract_mixture_spec(value)
+    levels = _normalize_mixture_levels(spec.levels)
+    weights = spec.weights
+
+    spec_set = Set(levels)
+    if length(spec_set) != length(levels)
+        error("Mixture variable :$var $label contrast contains duplicate levels: $(join(levels, ", ")).")
+    end
+
+    if length(weights) != length(levels)
+        error("Mixture variable :$var $label contrast must specify a weight for each level. Got $(length(weights)) weights for $(length(levels)) levels.")
+    end
+
+    extra_levels = setdiff(spec_set, base_level_set)
+    if !isempty(extra_levels)
+        available_str = join(base_levels, ", ")
+        error("Mixture variable :$var $label contrast contains unknown levels: $(_format_level_list(extra_levels)). Available levels: $available_str")
+    end
+
+    missing_levels = setdiff(base_level_set, spec_set)
+    if !isempty(missing_levels)
+        available_str = join(base_levels, ", ")
+        error("Mixture variable :$var $label contrast is missing levels: $(_format_level_list(missing_levels)). All contrasts must include the same levels as the data mixture ($available_str)")
+    end
+
+    _validate_mixture_weights(var, label, weights)
+end
+
+@inline function _validate_mixture_weights(var::Symbol, label::AbstractString, weights)
+    isempty(weights) && error("Mixture variable :$var $label contrast must include at least one weight")
+
+    sum_weights = 0.0
+    @inbounds for w in weights
+        (w isa Real && isfinite(w)) ||
+            error("Mixture variable :$var $label contrast has non-finite weight $w")
+        w < 0.0 &&
+            error("Mixture variable :$var $label contrast has negative weight $w")
+        sum_weights += Float64(w)
+    end
+
+    if !(isapprox(sum_weights, 1.0; atol=1e-10))
+        error("Mixture variable :$var $label contrast weights must sum to 1.0 (got $sum_weights)")
     end
 end
+
+@inline function _format_level_list(levels)
+    collected = collect(levels)
+    sort!(collected)
+    return join(collected, ", ")
+end
+
 
 # Gradient Computation Functions for Discrete Effects
 
