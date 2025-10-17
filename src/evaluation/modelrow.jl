@@ -75,9 +75,9 @@ Creates cache key based on:
 3. Semantic type categories (compilation behavior)
 
 # Type Category Benefits
-- **Better cache hits**: Vector{Int} and Vector{Float64} share cache entry
-- **Correct mixture handling**: CategoricalArray vs CategoricalMixture distinguished
-- **Future-proof**: New types can be added to category system
+- Better cache hits: Vector{Int} and Vector{Float64} share cache entry
+- Correct mixture handling: CategoricalArray vs CategoricalMixture distinguished
+- Future-proof: New types can be added to category system
 
 # Examples
 ```julia
