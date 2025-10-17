@@ -1,0 +1,82 @@
+================================================================================
+Extracted Documentation Examples - FormulaCompiler.jl
+================================================================================
+
+Setting up global test fixtures...
+
+Global fixtures ready: df, model, data, compiled, row_vec, output
+
+
+================================================================================
+Source: README.md
+================================================================================
+
+# Basic Usage (lines 33-53)
+✓ Basic usage example passed
+
+# Direct Compilation Interface (lines 61-76)
+✓ Direct compilation interface example passed
+
+# Convenience Interface (lines 82-92)
+✓ Convenience interface example passed
+
+# Object-Based Interface (lines 98-102)
+✓ Object-based interface example passed
+
+# Batch Operations (lines 332-342)
+✓ Batch operations example passed
+
+================================================================================
+Source: docs/src/getting_started.md
+================================================================================
+
+
+# Batch Evaluation (lines 123-131)
+✓ Batch evaluation example passed
+
+================================================================================
+Source: docs/src/guide/basic_usage.md
+================================================================================
+
+
+# Multiple Row Evaluation (lines 79-95)
+✓ Multiple row evaluation example passed
+
+# Large Dataset Considerations (lines 271-287)
+✓ Large dataset considerations example passed
+
+================================================================================
+Source: docs/src/guide/performance.md
+================================================================================
+
+
+# Pre-allocation Strategies (lines 68-87)
+✓ Pre-allocation strategies example passed
+
+# Chunked Processing (lines 241-268)
+✓ Chunked processing example passed
+
+================================================================================
+Source: docs/src/guide/advanced_features.md
+================================================================================
+
+
+# Batch Processing Large Datasets (lines 620-645)
+✓ Batch processing large datasets example passed
+
+================================================================================
+Source: docs/src/examples.md
+================================================================================
+
+
+# Counterfactual Analysis (lines 36-55)
+✓ Counterfactual analysis example passed
+
+# Batch Processing (lines 74-81)
+✓ Batch processing example passed
+
+================================================================================
+Documentation Examples Extraction Complete
+Note: All batch modelrow! calls replaced with loop-based syntax
+All examples use shared global fixtures (compile once, use many times)
+================================================================================
