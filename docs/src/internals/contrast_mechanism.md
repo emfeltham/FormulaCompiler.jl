@@ -547,18 +547,17 @@ When you create a `ContrastEvaluator`, it builds the complete counterfactual inf
 evaluator = contrastevaluator(compiled, data, [:treatment, :education, :female])
 ```
 
-#### Step 1: Build Counterfactual Data Structure
+#### Step 1: Build Internal Counterfactual Structure
+
+The `ContrastEvaluator` internally creates `CounterfactualVector` wrappers for specified variables:
 
 ```julia
-# Line 103 in contrast_evaluator.jl
-data_counterfactual, counterfactuals = build_counterfactual_data(data, vars, 1, Float64)
+# Internal implementation creates:
+# - A tuple of typed `CounterfactualVector` objects (one per variable)
+# - A `NamedTuple` that merges original data with `CounterfactualVector` wrappers
 ```
 
-This creates:
-- **`counterfactuals`**: A tuple of typed `CounterfactualVector` objects (one per variable)
-- **`data_counterfactual`**: A `NamedTuple` that merges original data with `CounterfactualVector` wrappers
-
-**Example result**:
+**Example structure**:
 ```julia
 # Original data
 data = (
@@ -569,7 +568,7 @@ data = (
     female = [0, 1, 1, 0, ...]
 )
 
-# After build_counterfactual_data
+# Internal data_counterfactual structure
 data_counterfactual = (
     x = data.x,                                    # Original (not in vars)
     outcome = data.outcome,                        # Original (not in vars)

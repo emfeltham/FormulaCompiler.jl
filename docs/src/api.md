@@ -19,9 +19,23 @@ ModelRowEvaluator
 
 ## Derivatives
 
-Dual-backend derivatives with preallocated buffers for efficiency.
+FormulaCompiler provides computational primitives for computing derivatives of model matrix rows with respect to continuous variables. These functions enable zero-allocation Jacobian computation using either automatic differentiation (ForwardDiff) or finite differences.
+
+For marginal effects, standard errors, and complete statistical workflows, see [Margins.jl](https://github.com/emfeltham/Margins.jl).
 
 ### Evaluator Construction
+
+**Recommended**: Use the unified dispatcher for user-facing code:
+
+```julia
+# Automatic differentiation (preferred)
+de = derivativeevaluator(:ad, compiled, data, [:x, :z])
+
+# Finite differences
+de = derivativeevaluator(:fd, compiled, data, [:x, :z])
+```
+
+**Advanced**: Direct constructor functions (primarily for internal use):
 
 ```@docs
 derivativeevaluator
@@ -36,11 +50,20 @@ derivative_modelrow!
 derivative_modelrow
 ```
 
+### Variable Identification
+
+```@docs
+continuous_variables
+```
+
 ### Link Function Derivatives
+
+Computational primitives for GLM link function derivatives (used by Margins.jl for computing marginal effects on the mean response).
 
 ```@docs
 _dmu_deta
 _d2mu_deta2
+supported_link_functions
 ```
 
 ## Categorical Contrasts
@@ -52,7 +75,6 @@ CategoricalLevelMap
 contrast_modelrow!
 contrast_gradient!
 contrast_gradient
-supported_link_functions
 ```
 
 ## Categorical Mixtures
@@ -65,4 +87,10 @@ CategoricalMixture
 MixtureWithLevels
 validate_mixture_against_data
 mixture_to_scenario_value
+```
+
+## Utilities
+
+```@docs
+not
 ```

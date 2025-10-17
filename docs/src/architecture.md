@@ -67,7 +67,7 @@ Path to zero allocations:
 - No temporary arrays or dynamic dispatch during execution
 - Column access uses direct field lookup from a NamedTuple (column table)
 
-For complex formulas (>25 operations) and derivative computation, the system uses targeted metaprogramming to maintain zero-allocation performance. See [Metaprogramming](metaprogramming.md) for implementation details.
+For complex formulas (>10 operations) and derivative computation, the system uses targeted metaprogramming to maintain zero-allocation performance. See [Metaprogramming](metaprogramming.md) for implementation details.
 
 ## CounterfactualVector System
 

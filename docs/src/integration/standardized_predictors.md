@@ -88,7 +88,7 @@ compiled = compile_formula(model, data)
 compiled(output, data, row)  # 0 allocations; time varies by hardware
 ```
 
-### Why This Architecture Matters
+### Architecture Properties
 
 1. **Separation of Concerns**: Each layer has a single responsibility
 2. **Optimal Performance**: Transformations happen once, evaluations happen many times
@@ -226,7 +226,7 @@ Derivatives are automatically computed on the **original (raw) scale** through t
 ```julia
 # Build derivative evaluator
 compiled = compile_formula(model, data)
-de_fd = derivativeevaluator_fd(compiled, data, [:income, :age])
+de_fd = derivativeevaluator(:fd, compiled, data, [:income, :age])
 
 # Compute model matrix Jacobian
 J = Matrix{Float64}(undef, length(compiled), 2)
@@ -285,7 +285,7 @@ The same logic applies to AD via dual number arithmetic through StandardizeOp:
 ❌ **WRONG**: "I need to divide by `std()` to get effects per original unit"
 ✅ **CORRECT**: "Derivatives are already per original unit due to automatic chain rule"
 
-### Why This Matters
+### Technical Implications
 
 The automatic chain rule means:
 
@@ -299,7 +299,7 @@ When you multiply them: `g = (∂X/∂x_raw)' * β_std`, you get the correct mar
 
 ### For Margins.jl Users
 
-If you're using Margins.jl (which builds on FormulaCompiler), marginal effects are automatically on the original scale. See [Margins.jl STANDARDIZATION.md](https://github.com/...) for comprehensive details on how standardized predictors are handled in marginal effects analysis.
+If you're using Margins.jl (which builds on FormulaCompiler), marginal effects are automatically on the original scale. Margins.jl handles standardized predictors correctly through FormulaCompiler's automatic chain rule application.
 
 ### Validation
 
@@ -433,9 +433,11 @@ end
 ### Batch Marginal Effects
 
 ```julia
+using Margins  # Provides marginal_effects_eta!
+
 function batch_marginal_effects_standardized(model, data, variables, rows)
     compiled = compile_formula(model, data)
-    de_fd = derivativeevaluator_fd(compiled, data, variables)
+    de_fd = derivativeevaluator(:fd, compiled, data, variables)
 
     n_vars = length(variables)
     n_rows = length(rows)
@@ -552,7 +554,7 @@ data_correct = merge(standardized_data, (income = fill(income_std, n_rows),))
 
 ```julia
 # Compute derivatives
-de_fd = derivativeevaluator_fd(compiled, data, [:income, :age])
+de_fd = derivativeevaluator(:fd, compiled, data, [:income, :age])
 J = Matrix{Float64}(undef, length(compiled), length(vars))
 derivative_modelrow!(J, de_fd, row)
 

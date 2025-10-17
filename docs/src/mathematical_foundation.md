@@ -109,7 +109,7 @@ The key innovation is mapping each formula term to a fixed position in the outpu
 \text{Term}_j \rightarrow \text{Position}_j \in \{1, 2, \ldots, p\}
 ```
 
-This enables:
+This provides:
 
 ```math
 \mathbf{x}_i[j] = \text{Evaluate}(\text{Term}_j, \text{data}, i)
@@ -121,11 +121,11 @@ Each operation is embedded in Julia's type system:
 
 ```julia
 struct LoadOp{Col} end           # Load column Col
-struct FunctionOp{Col, F} end    # Apply function F to column Col  
+struct FunctionOp{Col, F} end    # Apply function F to column Col
 struct InteractionOp{A, B} end   # Multiply terms A and B
 ```
 
-This allows the compiler to generate specialized code for each specific formula.
+The compiler generates specialized code for each specific formula.
 
 ### Scratch Space Management
 
@@ -400,7 +400,7 @@ O(p) \text{ with compile-time } O(\text{complexity}(\text{formula}))
 | `:fd` (Finite Differences) | Slower (~22% slower) | 0 bytes | ≈1e-8 | Legacy support only |
 
 !!! warning "Use Automatic Differentiation"
-    **Always use `:ad` backend** (`derivativeevaluator_ad()` or `backend=:ad`).
+    **Always use `:ad` backend** (`derivativeevaluator(:ad, ...)` or `backend=:ad`).
 
     Advantages of `:ad`:
     - **Faster**: ~22% faster than finite differences

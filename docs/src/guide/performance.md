@@ -77,11 +77,12 @@ batch_matrix = Matrix{Float64}(undef, n_rows, length(compiled))
 # Reuse across operations
 for batch_start in 1:n_rows:total_rows
     batch_end = min(batch_start + n_rows - 1, total_rows)
-    batch_size = batch_end - batch_start + 1
-    
-    # Use view for variable batch sizes
-    batch_view = view(batch_matrix, 1:batch_size, :)
-    modelrow!(batch_view, compiled, data, batch_start:batch_end)
+
+    # Evaluate each row in the batch
+    for i in batch_start:batch_end
+        idx = i - batch_start + 1
+        compiled(view(batch_matrix, idx, :), data, i)
+    end
 end
 ```
 
@@ -251,14 +252,14 @@ function process_large_dataset_efficiently(model, data, chunk_size=10_000)
     for start_idx in 1:chunk_size:n_rows
         end_idx = min(start_idx + chunk_size - 1, n_rows)
         actual_chunk_size = end_idx - start_idx + 1
-        
-        # Use view for variable chunk sizes
-        chunk_view = view(chunk_matrix, 1:actual_chunk_size, :)
-        
+
         # Zero-allocation batch evaluation
-        modelrow!(chunk_view, compiled, data, start_idx:end_idx)
-        
+        for (chunk_row, data_row) in enumerate(start_idx:end_idx)
+            compiled(view(chunk_matrix, chunk_row, :), data, data_row)
+        end
+
         # Store results (this allocates, but unavoidable for storage)
+        chunk_view = view(chunk_matrix, 1:actual_chunk_size, :)
         push!(results, copy(chunk_view))
     end
     

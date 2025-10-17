@@ -56,10 +56,12 @@ end
 
 ### Marginal Effects
 ```julia
+using Margins  # Provides marginal_effects_eta! and marginal_effects_mu!
+
 # Identify continuous variables and build evaluators
 vars = continuous_variables(compiled, data)  # [:x]
-de_ad = derivativeevaluator_ad(compiled, data, vars)  # Returns ADEvaluator, zero allocations, higher accuracy (preferred)
-de_fd = derivativeevaluator_fd(compiled, data, vars)  # Returns FDEvaluator, zero allocations, alternative
+de_ad = derivativeevaluator(:ad, compiled, data, vars)  # Automatic differentiation: higher accuracy (preferred)
+de_fd = derivativeevaluator(:fd, compiled, data, vars)  # Finite differences: explicit step control
 β = coef(model)
 
 # Compute marginal effects
@@ -73,7 +75,9 @@ marginal_effects_eta!(g, de_fd, β, 1)  # Zero allocations, explicit step contro
 # Multiple rows at once
 n_rows = 50
 results = Matrix{Float64}(undef, n_rows, length(compiled))
-modelrow!(results, compiled, data, 1:n_rows)  # Zero allocations
+for i in 1:n_rows
+    compiled(view(results, i, :), data, i)  # Zero allocations
+end
 ```
 
 ## Domain Applications
@@ -140,9 +144,11 @@ end
 Compute returns to education and experience:
 
 ```julia
+using Margins  # Provides marginal_effects_eta!
+
 # Build derivative evaluator for continuous variables
 continuous_vars = [:Educ, :Exper]  # Education and experience are continuous
-de_fd = derivativeevaluator_fd(compiled, data, continuous_vars)
+de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
 
 # Compute marginal effects for representative workers
 g_eta = Vector{Float64}(undef, length(continuous_vars))
@@ -225,9 +231,11 @@ println("Predicted MPG: $(round(best_mpg, digits=2))")
 Compute sensitivity to design parameters:
 
 ```julia
+using Margins  # Provides marginal_effects_eta!
+
 # Marginal effects on fuel efficiency
 engineering_vars = [:HP, :WT]  # Continuous engineering parameters
-de_fd = derivativeevaluator_fd(compiled, data, engineering_vars)
+de_fd = derivativeevaluator(:fd, compiled, data, engineering_vars)
 
 g = Vector{Float64}(undef, length(engineering_vars))
 
@@ -301,9 +309,11 @@ end
 Quantify impact of patient characteristics on outcomes:
 
 ```julia
+using Margins  # Provides marginal_effects_eta!
+
 # Marginal effects for continuous clinical variables
 clinical_vars = [:age]  # Age is the main continuous predictor
-de_fd = derivativeevaluator_fd(compiled, data, clinical_vars)
+de_fd = derivativeevaluator(:fd, compiled, data, clinical_vars)
 
 g = Vector{Float64}(undef, length(clinical_vars))
 
@@ -602,7 +612,7 @@ All examples demonstrate FormulaCompiler.jl's key performance characteristics:
 
 - **Zero-allocation core evaluation**: `compiled(output, data, row)` calls allocate zero bytes
 - **Memory-efficient scenarios**: Override system uses constant memory regardless of data size
-- **Backend selection**: Choose between zero-allocation finite differences (`derivativeevaluator_fd(...)`) and small-allocation automatic differentiation (`derivativeevaluator_ad(...)`)
+- **Backend selection**: Choose between automatic differentiation (`:ad`, higher accuracy) and finite differences (`:fd`, explicit control) using `derivativeevaluator(:ad/:fd, ...)`
 - **Scalable patterns**: Performance remains constant regardless of dataset size
 
 For detailed performance optimization techniques, see the [Performance Guide](guide/performance.md).

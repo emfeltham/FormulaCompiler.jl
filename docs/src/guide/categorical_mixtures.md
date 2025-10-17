@@ -2,13 +2,13 @@
 
 ## Overview
 
-FormulaCompiler.jl supports **categorical mixtures** - weighted combinations of categorical levels that enable efficient profile-based marginal effects computation. This feature allows you to specify fractional values like `mix("A" => 0.3, "B" => 0.7)` directly in your data, which are then compiled into zero-allocation evaluators. For boolean variables, use simple numeric probabilities (e.g., `treated = 0.7` for 70% treatment rate).
+FormulaCompiler.jl supports **categorical mixtures** - weighted combinations of categorical levels for profile-based marginal effects computation. Fractional values like `mix("A" => 0.3, "B" => 0.7)` are compiled into zero-allocation evaluators using type-specialized contrast operations. For boolean variables, use simple numeric probabilities (e.g., `treated = 0.7` for 70% treatment rate).
 
-**Key benefits:**
-- **Zero-allocation execution**: tens of nanoseconds per row, 0 bytes allocated (typical; see Benchmark Protocol)
-- **Compile-time optimization**: All mixture weights embedded in type parameters
-- **Marginal effects ready**: Direct support for statistical packages like Margins.jl
-- **Memory efficient**: O(1) memory usage regardless of data size
+**Implementation characteristics:**
+- Allocation behavior: 0 bytes allocated during execution (verified in test suite)
+- Compile-time specialization: Mixture weights embedded in type parameters
+- Statistical integration: Compatible with marginal effects packages (Margins.jl)
+- Memory complexity: O(1) memory usage independent of data size
 
 ## Quick Start
 
@@ -66,15 +66,15 @@ output = Vector{Float64}(undef, length(compiled))
 compiled(output, Tables.columntable(df), 1)  # treated effect = 0.7
 ```
 
-**Benefits of Numeric Approach:**
-- **Simpler**: No complex mixture objects needed
-- **Direct**: `treated = 0.7` is clearer than `mix("false" => 0.3, "true" => 0.7)`
-- **Efficient**: Zero-allocation performance maintained
-- **Compatible**: Works with all scenario and counterfactual tools
-- **StatsModels consistent**: Matches how boolean variables are actually handled
+**Numeric approach properties:**
+- Implementation: Uses standard Float64 values without mixture object construction
+- Syntax: `treated = 0.7` represents probability directly
+- Performance: Maintains zero-allocation execution
+- Compatibility: Works with data modification and counterfactual functions
+- Consistency: Matches StatsModels.jl boolean variable semantics
 
-**Use Cases:**
-- **Individual scenarios**: `treated = true` or `treated = false`  
+**Application patterns:**
+- **Individual scenarios**: `treated = true` or `treated = false`
 - **Population analysis**: `treated = 0.6` (60% treatment rate)
 - **Marginal effects**: Varying treatment probabilities across reference grids
 
@@ -202,14 +202,16 @@ end
 
 ### Integration with Derivatives System
 
-Mixtures work seamlessly with FormulaCompiler's derivative system:
+Mixtures work seamlessly with derivative computation:
 
 ```julia
+using Margins  # Provides marginal_effects_eta!
+
 # Build derivative evaluator with mixture data
 vars = [:x]  # Continuous variables for derivatives
-de_fd = derivativeevaluator_fd(compiled, Tables.columntable(reference_data), vars)
+de_fd = derivativeevaluator(:fd, compiled, Tables.columntable(reference_data), vars)
 
-# Compute marginal effects with zero allocations
+# Compute marginal effects with zero allocations (requires Margins.jl)
 gradient = Vector{Float64}(undef, length(vars))
 marginal_effects_eta!(gradient, de_fd, coef(model), 1)  # 0 bytes
 ```
@@ -378,13 +380,12 @@ If you're currently using the override system for categorical mixtures:
 mix_data = DataFrame(x = [1.0, 2.0], group = [mix("A" => 0.3, "B" => 0.7), mix("A" => 0.3, "B" => 0.7)])
 compiled = compile_formula(model, Tables.columntable(mix_data))  # → MixtureContrastOp (fastest)
 
-# Pattern 2: CounterfactualVector Mixtures (Flexible but slower)
-data_cf, cf_vecs = build_counterfactual_data(Tables.columntable(base_data), [:group], 1)
-mixture_replacement = mix("A" => 0.3, "B" => 0.7)
-update_counterfactual_replacement!(cf_vecs[1], mixture_replacement)
-compiled_cf = compile_formula(model, data_cf)  # → ContrastOp with runtime mixture handling
+# Pattern 2: Manual Data Modification (Flexible for dynamic scenarios)
+base_data = DataFrame(x = [1.0, 2.0], group = ["A", "A"])
+mixture_data = merge(Tables.columntable(base_data), (group = fill(mix("A" => 0.3, "B" => 0.7), 2),))
+compiled_cf = compile_formula(model, mixture_data)  # → MixtureContrastOp with data modification
 
-# Pattern 3: Manual Population Analysis (Most flexible)
+# Pattern 3: Manual Population Analysis
 base_data = DataFrame(x = [1.0, 2.0], group = ["A", "A"])
 results = []
 for (level, weight) in [("A", 0.3), ("B", 0.7)]
@@ -395,7 +396,7 @@ for (level, weight) in [("A", 0.3), ("B", 0.7)]
 end
 ```
 
-### Performance Benefits
+### Performance Comparison
 
 | Approach | Compilation | Memory Usage | Allocations | Relative Speed |
 |----------|-------------|--------------|-------------|----------------|
@@ -414,7 +415,7 @@ end
 
 ### Design Trade-offs
 
-- **Flexibility vs Performance**: Compile-time binding sacrifices runtime flexibility for zero-allocation performance
+- Compile-time vs Runtime: Compile-time binding provides zero-allocation performance; mixture weights cannot be changed at runtime
 - **Memory vs Speed**: Type specialization uses more compilation time/memory for faster execution
 - **Consistency requirement**: Simplifies implementation but limits some use cases
 

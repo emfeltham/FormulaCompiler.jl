@@ -25,7 +25,7 @@ All metaprogramming serves a single goal: **embed runtime decisions into compile
 
 ### 1. Large Formula Execution
 
-**Problem**: Julia's tuple specialization is heuristic-based and typically fails beyond 25-35 operations, causing performance degradation for complex statistical formulas.
+**Problem**: Julia's tuple specialization is heuristic-based and can fail for large operation tuples, causing performance degradation for complex statistical formulas.
 
 **Location**: `src/compilation/execution.jl`
 
@@ -33,7 +33,7 @@ All metaprogramming serves a single goal: **embed runtime decisions into compile
 
 ```julia
 @inline function execute_ops(ops::Tuple, scratch, data, row_idx)
-    if length(ops) <= RECURSION_LIMIT  # 25 operations
+    if length(ops) <= RECURSION_LIMIT  # 10 operations
         # Natural Julia recursion (preferred)
         execute_ops_recursive(ops, scratch, data, row_idx)
     else

@@ -125,7 +125,9 @@ Evaluate multiple rows at once:
 matrix = Matrix{Float64}(undef, 10, length(compiled))
 
 # Evaluate rows 1-10 in batch
-modelrow!(matrix, compiled, data, 1:10)
+for i in 1:10
+    compiled(view(matrix, i, :), data, i)
+end
 ```
 
 ## How Compilation Works
@@ -317,6 +319,6 @@ Now that you understand the basics, explore advanced topics:
 - [MixedModels Integration](integration/mixed_models.md) - Mixed-effects model support
 
 ### Reference Documentation
-- [API Reference](../api.md) - Complete function documentation with examples
-- [Architecture](../architecture.md) - Implementation details and design principles  
-- [Mathematical Foundation](../mathematical_foundation.md) - Theoretical background and computational theory
+- [API Reference](api.md) - Complete function documentation with examples
+- [Architecture](architecture.md) - Implementation details and design principles
+- [Mathematical Foundation](mathematical_foundation.md) - Theoretical background and computational theory

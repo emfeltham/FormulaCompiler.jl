@@ -82,12 +82,16 @@ n_rows = 100
 matrix = Matrix{Float64}(undef, n_rows, length(compiled))
 
 # Evaluate multiple rows efficiently
-modelrow!(matrix, compiled, data, 1:n_rows)
+for i in 1:n_rows
+    compiled(view(matrix, i, :), data, i)
+end
 
 # Or specific rows
 specific_rows = [1, 5, 10, 50, 100]
 matrix_subset = Matrix{Float64}(undef, length(specific_rows), length(compiled))
-modelrow!(matrix_subset, compiled, data, specific_rows)
+for (idx, row) in enumerate(specific_rows)
+    compiled(view(matrix_subset, idx, :), data, row)
+end
 ```
 
 ### Working with Views
@@ -161,23 +165,22 @@ compiled = compile_formula(model, Tables.columntable(df))
 # This matches StatsModels exactly
 ```
 
-**For counterfactual analysis**, use CounterfactualVector with boolean or numeric overrides:
+**For counterfactual analysis**, use data modification with `merge()`:
 
 ```julia
-# Create counterfactual data structure
-data_cf, cf_vecs = build_counterfactual_data(data, [:treated], 1)
-treated_cf = cf_vecs[1]
+# Get dataset size
+n_rows = length(data.treated)
 
 # Boolean scenarios - individual counterfactuals
-update_counterfactual_replacement!(treated_cf, true)   # All treated
-compiled(output, data_cf, 1)  # Evaluate treated scenario
+data_treated = merge(data, (treated = fill(true, n_rows),))   # All treated
+compiled(output, data_treated, 1)  # Evaluate treated scenario
 
-update_counterfactual_replacement!(treated_cf, false)  # All control
-compiled(output, data_cf, 1)  # Evaluate control scenario
+data_control = merge(data, (treated = fill(false, n_rows),))  # All control
+compiled(output, data_control, 1)  # Evaluate control scenario
 
-# Numeric scenarios - population analysis
-update_counterfactual_replacement!(treated_cf, 0.7)   # 70% treated
-compiled(output, data_cf, 1)  # Evaluate partial treatment scenario
+# Numeric scenarios - population analysis (70% treated probability)
+data_partial = merge(data, (treated = fill(0.7, n_rows),))
+compiled(output, data_partial, 1)  # Evaluate partial treatment scenario
 ```
 
 **Key Points**:
@@ -275,9 +278,11 @@ results = Matrix{Float64}(undef, nrow(df), length(compiled))
 for chunk in 1:n_chunks
     start_idx = (chunk - 1) * chunk_size + 1
     end_idx = min(chunk * chunk_size, nrow(df))
-    
-    chunk_results = view(results, start_idx:end_idx, :)
-    modelrow!(chunk_results, compiled, data, start_idx:end_idx)
+
+    # Evaluate each row in the chunk
+    for i in start_idx:end_idx
+        compiled(view(results, i, :), data, i)
+    end
 end
 ```
 

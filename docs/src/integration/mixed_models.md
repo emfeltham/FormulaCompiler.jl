@@ -84,17 +84,16 @@ function population_predictions(mixed_model, data, scenarios)
     return results
 end
 
-# Example usage with CounterfactualVector
-data_cf, cf_vecs = build_counterfactual_data(data, [:treatment], 1)
-treatment_cf = cf_vecs[1]
+# Example usage with data modification
+n_rows = length(data.treatment)
 
 # Baseline scenario
-update_counterfactual_replacement!(treatment_cf, false)  # No treatment
-baseline_predictions = population_predictions_single(mixed_model, data, "baseline")
+data_control = merge(data, (treatment = fill(false, n_rows),))  # No treatment
+baseline_predictions = population_predictions_single(mixed_model, data_control, "baseline")
 
 # Treatment scenario
-update_counterfactual_replacement!(treatment_cf, true)   # Treatment
-treatment_predictions = population_predictions_single(mixed_model, data_cf, "treatment")
+data_treated = merge(data, (treatment = fill(true, n_rows),))  # Treatment
+treatment_predictions = population_predictions_single(mixed_model, data_treated, "treatment")
 ```
 
 ### Marginal Effects for Fixed Effects
@@ -130,7 +129,7 @@ function marginal_effects_mixed(mixed_model, data, variable)
 end
 ```
 
-## Performance Benefits
+## Performance Comparison
 
 ### Comparison with modelmatrix
 
@@ -221,11 +220,9 @@ function analyze_policy_scenarios(mixed_model, base_data)
     compiled = compile_formula(mixed_model, base_data)
     fixed_coefs = fixef(mixed_model)
     
-    # Create counterfactual data for policy analysis
-    data_cf, cf_vecs = build_counterfactual_data(base_data, [:treatment, :x, :additional_support], 1)
-    treatment_cf, x_cf, support_cf = cf_vecs
+    # Define policy scenarios using data modification
+    n_obs = Tables.rowcount(base_data)
 
-    # Define policy scenarios with CounterfactualVector
     policy_configs = [
         ("baseline", false, nothing, nothing),          # No treatment, original x and support
         ("universal_treatment", true, nothing, nothing), # Treatment, original x and support
@@ -237,33 +234,29 @@ function analyze_policy_scenarios(mixed_model, base_data)
     row_vec = Vector{Float64}(undef, length(compiled))
 
     for (name, treatment_val, x_val, support_val) in policy_configs
-        # Set counterfactual values
-        update_counterfactual_replacement!(treatment_cf, treatment_val)
+        # Create modified data for this policy
+        modified_data = base_data  # Start with baseline
 
-        if x_val !== nothing
-            update_counterfactual_replacement!(x_cf, x_val)
-        else
-            update_counterfactual_replacement!(x_cf, getproperty(base_data, :x)[1])  # Use original
-        end
+        if name != "baseline"
+            # Build modification dictionary
+            mods = Dict{Symbol, Any}()
+            mods[:treatment] = fill(treatment_val, n_obs)
 
-        if support_val !== nothing
-            update_counterfactual_replacement!(support_cf, support_val)
-        else
-            update_counterfactual_replacement!(support_cf, getproperty(base_data, :additional_support)[1])  # Use original
-        end
-
-        # Choose appropriate data source
-        current_data = (name == "baseline") ? base_data : data_cf
-        n_obs = Tables.rowcount(current_data)
-        predictions = Vector{Float64}(undef, n_obs)
-        
-        for i in 1:n_obs
-            if name != "baseline"
-                update_counterfactual_row!(treatment_cf, i)
-                update_counterfactual_row!(x_cf, i)
-                update_counterfactual_row!(support_cf, i)
+            if x_val !== nothing
+                mods[:x] = fill(x_val, n_obs)
             end
-            compiled(row_vec, current_data, i)
+
+            if support_val !== nothing
+                mods[:additional_support] = fill(support_val, n_obs)
+            end
+
+            modified_data = merge(base_data, NamedTuple(mods))
+        end
+
+        predictions = Vector{Float64}(undef, n_obs)
+
+        for i in 1:n_obs
+            compiled(row_vec, modified_data, i)
             predictions[i] = dot(fixed_coefs, row_vec)
         end
         
@@ -332,7 +325,7 @@ end
 
 ### When to Use FormulaCompiler with Mixed Models
 
-**Good use cases:**
+**Supported patterns:**
 - Population-level predictions
 - Fixed effects marginal effects
 - Policy scenario analysis
@@ -364,17 +357,16 @@ end
 ### Memory Efficiency
 
 ```julia
-# Mixed models can be large - use scenarios for memory efficiency
+# Mixed models can be large - use data modification for memory efficiency
 large_mixed_model = fit(MixedModel, complex_formula, large_df)
 base_data = Tables.columntable(large_df)
 
 # Instead of creating many copies of large_df
-# Use CounterfactualVector to override just the variables of interest
-data_cf, cf_vecs = build_counterfactual_data(base_data, [:key_variable], 1)
-key_cf = cf_vecs[1]
-update_counterfactual_replacement!(key_cf, new_value)
+# Use merge() to override just the variables of interest
+n_rows = length(base_data.key_variable)
+modified_data = merge(base_data, (key_variable = fill(new_value, n_rows),))
 
 # Evaluate with minimal memory overhead
 compiled = compile_formula(large_mixed_model, base_data)
-# ... use compiled with data_cf
+# ... use compiled with modified_data
 ```

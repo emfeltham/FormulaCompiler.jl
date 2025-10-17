@@ -26,6 +26,7 @@ Minimal runner
 Setup
 - Activate project: `Pkg.activate("..")`; `Pkg.instantiate()`
 - Using: `using BenchmarkTools, FormulaCompiler, GLM, MixedModels, Tables, DataFrames, CategoricalArrays, Random`
+- For marginal effects benchmarks (sections 5-6): `using Margins`  # See https://github.com/emfeltham/Margins.jl
 - Data format: Prefer `Tables.columntable(df)` for evaluation
 - Warmup: run each function once before benchmarking
 
@@ -52,26 +53,27 @@ Benchmarks
 - Targets: In-place 0 bytes; allocating shows expected vector/matrix allocations
 
 3) Counterfactual Overhead
-- Build counterfactual data: `data_cf, cf_vecs = build_counterfactual_data(data, [:x, :group], 1)`
-- Update replacements: `update_counterfactual_replacement!(cf_vecs[1], 2.0)`
-- Compare compiled(row,data,i) vs compiled(row,data_cf,i)
-- Target: identical times within noise; 0 allocations
+- Build counterfactual data: `data_cf = merge(data, (x = fill(2.0, length(data.x)),))`
+- Compare evaluation: `@benchmark $compiled($row, $data, 25)` vs `@benchmark $compiled($row, $data_cf, 25)`
+- Target: identical times within noise; 0 allocations for both
 
 4) Derivative Jacobian (AD and FD)
-- Build evaluators: `vars = continuous_variables(compiled, data)`; `de_ad = derivativeevaluator_ad(compiled, data, vars)`; `de_fd = derivativeevaluator_fd(compiled, data, vars)`
-- AD Jacobian: `J = similar(rand(length(compiled), length(vars))); @benchmark derivative_modelrow!($J, $de_ad, 25)`
+- Build evaluators: `de_ad = derivativeevaluator(:ad, compiled, data, [:x, :z])`; `de_fd = derivativeevaluator(:fd, compiled, data, [:x, :z])`
+- AD Jacobian: `J = similar(rand(length(compiled), 2)); @benchmark derivative_modelrow!($J, $de_ad, 25)`
 - FD Jacobian: `@benchmark derivative_modelrow!($J, $de_fd, 25)`
 - FD single-column: `col = similar(rand(length(compiled))); @benchmark fd_jacobian_column!($col, $de_fd, 1, 1)`
 - Targets: AD ≤512 bytes; FD 0 bytes
 
-5) Marginal Effects (η and μ)
-- `β = coef(model)`; `g = similar(rand(length(vars)))`
+5) Marginal Effects (η and μ) [Requires Margins.jl]
+- `using Margins`
+- `β = coef(model)`; `g = similar(rand(2))`  # Assuming 2 continuous variables
 - η-scale AD: `@benchmark marginal_effects_eta!($g, $de_ad, $β, 25)`
 - η-scale FD: `@benchmark marginal_effects_eta!($g, $de_fd, $β, 25)`
 - μ-scale with link (e.g., Logit): `@benchmark marginal_effects_mu!($g, $de_ad, $β, 25, LogitLink())` and `@benchmark marginal_effects_mu!($g, $de_fd, $β, 25, LogitLink())`
 - Targets: FD 0 bytes; AD ≤512 bytes
 
-6) Delta Method SE
+6) Delta Method SE [Requires Margins.jl]
+- `using Margins`
 - `gβ = similar(rand(length(β))); Σ = I*1.0` (or `vcov(model)`)
 - `@benchmark delta_method_se($gβ, $Σ)`
 - Target: 0 bytes, O(10^1) ns for dense small Σ

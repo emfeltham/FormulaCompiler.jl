@@ -198,13 +198,14 @@ println("Average North vs South effect: $(round(mean(regional_effects), digits=3
 Compute parameter gradients for standard errors:
 
 ```julia
-# Parameter gradient for delta method
+# Parameter gradient for delta method (FormulaCompiler computational primitive)
 ∇β = Vector{Float64}(undef, length(compiled_cat))
 contrast_gradient!(∇β, evaluator, 1, :region, "North", "South", coef(model_cat))
 
-# Standard error using delta method
+# Standard error using delta method (requires Margins.jl)
+using Margins
 vcov_matrix = vcov(model_cat)
-se = delta_method_se(evaluator, 1, :region, "North", "South", coef(model_cat), vcov_matrix)
+se = delta_method_se(∇β, vcov_matrix)
 println("Standard error: $(round(se, digits=3))")
 ```
 
@@ -481,5 +482,5 @@ end
 
 - [Advanced Features](advanced_features.md) - Additional computational patterns
 - [Categorical Mixtures](categorical_mixtures.md) - Profile-based marginal effects
-- [Examples](../examples.md) - Real-world applications
-- [API Reference](../api.md) - Complete function documentation
+- [Examples](@ref) - Real-world applications
+- [API Reference](@ref) - Complete function documentation

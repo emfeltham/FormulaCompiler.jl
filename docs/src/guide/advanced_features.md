@@ -86,7 +86,7 @@ compiled = compile_formula(model, data)
 
 # Population average marginal effects (simple loop)
 function compute_population_ame(compiled, data, β, vars)
-    de_fd = derivativeevaluator_fd(compiled, data, vars)
+    de_fd = derivativeevaluator(:fd, compiled, data, vars)
     n_rows = length(first(data))
     ame_sum = zeros(length(vars))
     g_temp = Vector{Float64}(undef, length(vars))
@@ -245,7 +245,9 @@ using BenchmarkTools
 
 ## Derivative Computation System
 
-FormulaCompiler provides comprehensive automatic differentiation capabilities for computing Jacobians, marginal effects, and gradients with dual backend support optimized for different performance requirements.
+FormulaCompiler provides comprehensive automatic differentiation capabilities for computing Jacobians with dual backend support. For marginal effects, standard errors, and statistical inference, use [Margins.jl](https://github.com/emfeltham/Margins.jl) which builds on these computational primitives.
+
+> **Note**: Examples in this section use functions from [Margins.jl](https://github.com/emfeltham/Margins.jl) (`marginal_effects_eta!`, `marginal_effects_mu!`, `delta_method_se`). Install Margins.jl to use these examples: `using Pkg; Pkg.add(url="https://github.com/emfeltham/Margins.jl")`
 
 ### Performance Characteristics
 
@@ -286,9 +288,9 @@ compiled = compile_formula(model, data)
 continuous_vars = continuous_variables(compiled, data)  # [:price, :quantity]
 
 # Build derivative evaluator (AD backend preferred: zero allocations, higher accuracy)
-de_ad = derivativeevaluator_ad(compiled, data, continuous_vars)
+de_ad = derivativeevaluator(:ad, compiled, data, continuous_vars)
 # OR build FD evaluator (alternative: zero allocations, explicit step control)
-de_fd = derivativeevaluator_fd(compiled, data, continuous_vars)
+de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
 ```
 
 ### Jacobian Computation
@@ -297,12 +299,12 @@ Compute partial derivatives of model matrix rows:
 
 ```julia
 # Method 1: Automatic differentiation (zero allocations, higher accuracy - preferred)
-de_ad = derivativeevaluator_ad(compiled, data, continuous_vars)
+de_ad = derivativeevaluator(:ad, compiled, data, continuous_vars)
 J_ad = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
 derivative_modelrow!(J_ad, de_ad, 1)
 
 # Method 2: Finite differences (zero allocations, explicit step control - alternative)
-de_fd = derivativeevaluator_fd(compiled, data, continuous_vars)
+de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
 J_fd = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
 derivative_modelrow!(J_fd, de_fd, 1)
 
@@ -315,17 +317,19 @@ derivative_modelrow!(J_fd, de_fd, 1)
 Compute effects on linear predictor and response scales:
 
 ```julia
+using Margins  # Provides marginal_effects_eta!, marginal_effects_mu!
+
 β = coef(model)
 
 # Effects on linear predictor η = Xβ
 g_eta = Vector{Float64}(undef, length(continuous_vars))
 
 # AD backend: Zero allocations, higher accuracy (preferred)
-de_ad = derivativeevaluator_ad(compiled, data, continuous_vars)
+de_ad = derivativeevaluator(:ad, compiled, data, continuous_vars)
 marginal_effects_eta!(g_eta, de_ad, β, 1)
 
 # FD backend: Zero allocations, explicit step control (alternative)
-de_fd = derivativeevaluator_fd(compiled, data, continuous_vars)
+de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
 marginal_effects_eta!(g_eta, de_fd, β, 1)
 
 # Effects on response scale μ (for GLM models)
@@ -429,12 +433,8 @@ economic_vars = [:price, :quantity]  # Domain-specific subset
 interaction_vars = [:price]          # Focus on key interactions
 
 # Backend selection based on requirements
-function compute_derivatives_with_backend_choice(compiled, data, vars, β, row, require_zero_alloc=false)
-    if require_zero_alloc
-        de = derivativeevaluator_fd(compiled, data, vars)
-    else
-        de = derivativeevaluator_ad(compiled, data, vars)
-    end
+function compute_derivatives_with_backend_choice(compiled, data, vars, β, row, backend=:ad)
+    de = derivativeevaluator(backend, compiled, data, vars)
     g = Vector{Float64}(undef, length(vars))
     marginal_effects_eta!(g, de, β, row)
     return g
@@ -455,7 +455,7 @@ mm = fit(MixedModel, @formula(y ~ 1 + x + z + (1|group)), df; progress=false)
 data = Tables.columntable(df)
 compiled = compile_formula(mm, data)  # fixed-effects only
 vars = [:x, :z]
-de_fd = derivativeevaluator_fd(compiled, data, vars)
+de_fd = derivativeevaluator(:fd, compiled, data, vars)
 
 J = Matrix{Float64}(undef, length(compiled), length(vars))
 derivative_modelrow!(J, de_fd, 1)
@@ -476,8 +476,8 @@ The derivative system achieves near-zero allocations through:
 using BenchmarkTools
 
 # Build evaluators once (one-time cost)
-de_ad = derivativeevaluator_ad(compiled, data, [:x, :z])  # Zero allocations, higher accuracy (preferred)
-de_fd = derivativeevaluator_fd(compiled, data, [:x, :z])  # Zero allocations, explicit step control (alternative)
+de_ad = derivativeevaluator(:ad, compiled, data, [:x, :z])  # Zero allocations, higher accuracy (preferred)
+de_fd = derivativeevaluator(:fd, compiled, data, [:x, :z])  # Zero allocations, explicit step control (alternative)
 J = Matrix{Float64}(undef, length(compiled), length(de_ad.vars))
 
 # Benchmark derivatives
@@ -629,10 +629,14 @@ function process_large_dataset(model, data, batch_size=1000)
     for start_idx in 1:batch_size:n_rows
         end_idx = min(start_idx + batch_size - 1, n_rows)
         batch_size_actual = end_idx - start_idx + 1
-        
+
         batch_result = Matrix{Float64}(undef, batch_size_actual, n_cols)
-        modelrow!(batch_result, compiled, data, start_idx:end_idx)
-        
+
+        # Evaluate each row in the batch
+        for (batch_idx, data_idx) in enumerate(start_idx:end_idx)
+            compiled(view(batch_result, batch_idx, :), data, data_idx)
+        end
+
         push!(results, batch_result)
     end
     
@@ -785,7 +789,7 @@ function policy_impact_analysis(baseline_model, policy_data, policy_parameters)
     
     # Identify continuous policy levers
     policy_vars = intersect(keys(policy_parameters), continuous_variables(compiled, policy_data))
-    de_fd = derivativeevaluator_fd(compiled, policy_data, collect(policy_vars))
+    de_fd = derivativeevaluator(:fd, compiled, policy_data, collect(policy_vars))
     
     # Create policy scenarios using data modification
     scenarios = [
@@ -852,9 +856,9 @@ function biomarker_analysis(survival_model, patient_data, biomarker_ranges)
     # Identify biomarker variables for sensitivity analysis
     biomarker_vars = Symbol.(keys(biomarker_ranges))
     continuous_biomarkers = intersect(biomarker_vars, continuous_variables(compiled, patient_data))
-    
+
     if !isempty(continuous_biomarkers)
-        de_fd = derivativeevaluator_fd(compiled, patient_data, continuous_biomarkers)
+        de_fd = derivativeevaluator(:fd, compiled, patient_data, continuous_biomarkers)
     end
     
     # Create biomarker scenarios using loops
@@ -927,7 +931,7 @@ function portfolio_risk_analysis(risk_model, market_data, stress_scenarios)
     # Risk factor sensitivity
     risk_factors = continuous_variables(compiled, market_data)
     if !isempty(risk_factors)
-        de_fd = derivativeevaluator_fd(compiled, market_data, risk_factors)
+        de_fd = derivativeevaluator(:fd, compiled, market_data, risk_factors)
     end
     
     # Create market stress scenarios using data modification
@@ -996,6 +1000,4 @@ println("Portfolio stress loss: $(round(portfolio_risk * 100, digits=2))%")
 
 - [Categorical Contrasts Guide](categorical_mixtures.md) - Detailed coverage of categorical contrasts and mixtures
 - [Performance Guide](performance.md) - Detailed optimization strategies and benchmarking
-- [Examples](../examples.md) - Additional domain-specific applications
-- [API Reference](../api.md) - Complete function documentation
-- [Contrast Internals](../internals/contrast_mechanism.md) - How CounterfactualVector system works internally
+- [API Reference](@ref) - Complete function documentation

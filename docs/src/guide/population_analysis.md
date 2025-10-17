@@ -1,6 +1,8 @@
 # Population Analysis Using Row-Wise Functions
 
-This guide shows how to perform population-level analysis using FormulaCompiler's existing row-wise functions. The key insight is that **population effects are simply averages over individual effects** - simple loops over rows are all you need.
+This guide shows how to perform population-level analysis using row-wise marginal effects functions. The key insight is that **population effects are simply averages over individual effects** - simple loops over rows are all you need.
+
+> **Note**: Marginal effects functions (`marginal_effects_eta!`, `marginal_effects_mu!`, etc.) are provided by [Margins.jl](https://github.com/emfeltham/Margins.jl). FormulaCompiler provides the computational primitives (`derivative_modelrow!`) that Margins.jl builds upon. Install Margins.jl to use the examples in this guide: `using Pkg; Pkg.add(url="https://github.com/emfeltham/Margins.jl")`
 
 ## Core Principle
 
@@ -21,10 +23,10 @@ population_ame = mean(population_effects)  # Simple arithmetic
 
 ### Basic Pattern
 
-Use existing `marginal_effects_eta!()` in a loop to compute Average Marginal Effects (AME):
+Use `marginal_effects_eta!()` in a loop to compute Average Marginal Effects (AME):
 
 ```julia
-using FormulaCompiler, GLM, DataFrames, Tables
+using FormulaCompiler, Margins, GLM, DataFrames, Tables
 
 # Setup: Fit model and compile
 df = DataFrame(
@@ -38,7 +40,7 @@ data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 
 # Build derivative evaluator for variables of interest
-de = derivativeevaluator_fd(compiled, data, [:x, :age])
+de = derivativeevaluator(:fd, compiled, data, [:x, :age])
 β = coef(model)
 
 # Compute population marginal effects
@@ -91,7 +93,7 @@ for (i, var) in enumerate(de.vars)
 end
 ```
 
-## Scenario Analysis Using CounterfactualVector
+## Scenario Analysis Using Data Modification
 
 ### Single Variable Scenario
 
@@ -102,18 +104,14 @@ Evaluate "what if all individuals had a specific value for a variable":
 scenario_var = :income
 scenario_value = log(50000)  # Model uses log(income)
 
-# Create counterfactual system for this variable
-cf_data, cf_vecs = build_counterfactual_data(data, [scenario_var], 1)
+# Create counterfactual data with modified variable
+cf_data = merge(data, (income = fill(scenario_value, n_rows),))
 
 # Evaluate scenario for each individual
 scenario_predictions = Vector{Float64}(undef, n_rows)
 output_buffer = Vector{Float64}(undef, length(compiled))
 
 for row in 1:n_rows
-    # Update counterfactual to this row with scenario value
-    update_counterfactual_row!(cf_vecs[1], row)
-    update_counterfactual_replacement!(cf_vecs[1], scenario_value)
-
     # Evaluate model with counterfactual data
     compiled(output_buffer, cf_data, row)
 
@@ -146,23 +144,16 @@ Policy analysis with multiple variables changed simultaneously:
 policy_vars = [:income, :education_years]
 policy_values = [log(30000), 16.0]  # $30k income, 16 years education
 
-# Create counterfactual system
-cf_data, cf_vecs = build_counterfactual_data(data, policy_vars, 1)
-
-# Pre-set policy values
-for (i, value) in enumerate(policy_values)
-    update_counterfactual_replacement!(cf_vecs[i], value)
-end
+# Create counterfactual data with multiple modified variables
+cf_data = merge(data, (
+    income = fill(policy_values[1], n_rows),
+    education_years = fill(policy_values[2], n_rows)
+))
 
 # Evaluate policy for each individual
 policy_predictions = Vector{Float64}(undef, n_rows)
 
 for row in 1:n_rows
-    # Update all counterfactuals to this row
-    for cf_vec in cf_vecs
-        update_counterfactual_row!(cf_vec, row)
-    end
-
     # Evaluate under policy
     compiled(output_buffer, cf_data, row)
     policy_predictions[row] = dot(β, output_buffer)
@@ -202,33 +193,31 @@ for scenario in scenarios
             compiled(output_buffer, data, row)
             predictions[row] = dot(β, output_buffer)
         end
+        scenario_results[scenario.name] = predictions
     else
-        # Counterfactual scenario
-        cf_data, cf_vecs = build_counterfactual_data(data, scenario.vars, 1)
-
+        # Counterfactual scenario - build modified data
         # Handle relative vs absolute changes
+        modified_cols = Dict{Symbol, Vector{Float64}}()
+
+        for (i, (var, value)) in enumerate(zip(scenario.vars, scenario.values))
+            if var == :income  # Relative change
+                # Add log(1.2) to each individual's log(income)
+                modified_cols[var] = getproperty(data, var) .+ value
+            else  # Absolute change
+                # Add fixed value to each individual's value
+                modified_cols[var] = getproperty(data, var) .+ value
+            end
+        end
+
+        cf_data = merge(data, NamedTuple(modified_cols))
+
         predictions = Vector{Float64}(undef, n_rows)
         for row in 1:n_rows
-            # Set counterfactual values (handling relative changes)
-            for (i, (var, value)) in enumerate(zip(scenario.vars, scenario.values))
-                if var == :income  # Relative change
-                    original_value = getproperty(data, var)[row]
-                    new_value = original_value + value  # log(1.2) added to log(income)
-                else  # Absolute change
-                    original_value = getproperty(data, var)[row]
-                    new_value = original_value + value
-                end
-
-                update_counterfactual_row!(cf_vecs[i], row)
-                update_counterfactual_replacement!(cf_vecs[i], new_value)
-            end
-
             compiled(output_buffer, cf_data, row)
             predictions[row] = dot(β, output_buffer)
         end
+        scenario_results[scenario.name] = predictions
     end
-
-    scenario_results[scenario.name] = predictions
 end
 
 # Compare scenarios
@@ -334,7 +323,7 @@ end
 ame_results = compute_population_ame_parallel(de, β)
 ```
 
-## Why This Approach Works
+## Implementation Properties
 
 ### Memory Efficiency
 
@@ -342,7 +331,7 @@ ame_results = compute_population_ame_parallel(de, β)
 - **No data copying**: CounterfactualVector provides transparent value substitution
 - **Buffer reuse**: Same temporary arrays used across all rows
 
-### Performance Benefits
+### Performance Characteristics
 
 - **Zero allocations**: After warmup, row-wise functions allocate 0 bytes
 - **Cache efficiency**: Sequential row processing optimizes memory access
@@ -354,7 +343,7 @@ ame_results = compute_population_ame_parallel(de, β)
 - **Clear semantics**: Population = individual + averaging (mathematically obvious)
 - **Easy debugging**: Can inspect individual-level results before averaging
 
-### Flexibility
+### Extensibility
 
 - **Custom aggregation**: Not limited to simple averages (can use quantiles, weighted averages, etc.)
 - **Conditional analysis**: Easy to subset rows or apply complex filters
@@ -365,18 +354,16 @@ ame_results = compute_population_ame_parallel(de, β)
 If you were previously using population-specific functions:
 
 ```julia
-# OLD: Population-specific API
-scenario = create_scenario("policy", data; income = 50000)
+# OLD: Population-specific API (removed in v1.1.0)
+scenario = create_scenario("policy", data; income = 50000)  # REMOVED
 compiled_scenario = compile_formula(model, scenario.data)
 population_effect = compute_population_effect(compiled_scenario, ...)
 
-# NEW: Row-wise loops
-cf_data, cf_vecs = build_counterfactual_data(data, [:income], 1)
-update_counterfactual_replacement!(cf_vecs[1], log(50000))
+# CURRENT: Simple data modification + loops
+cf_data = merge(data, (income = fill(log(50000), n_rows),))
 
 effects = Vector{Float64}(undef, n_rows)
 for row in 1:n_rows
-    update_counterfactual_row!(cf_vecs[1], row)
     compiled(output_buffer, cf_data, row)
     effects[row] = dot(β, output_buffer)
 end
@@ -385,7 +372,7 @@ population_effect = mean(effects)
 
 The row-wise approach is:
 - **Faster**: Simple loops with minimal overhead
-- **More flexible**: Easy to customize aggregation and analysis
+- Extensible aggregation: Supports custom aggregation functions beyond simple averaging
 - **More transparent**: Can examine individual-level results
 - **Memory efficient**: O(1) usage vs O(n) for data copying approaches
 
