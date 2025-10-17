@@ -70,7 +70,9 @@ compiled(row_vec, data, 100)  # Row 100
 
 # Evaluate multiple rows
 matrix = Matrix{Float64}(undef, 10, length(compiled))
-modelrow!(matrix, compiled, data, 1:10)
+for i in 1:10
+    compiled(view(matrix, i, :), data, i)
+end
 ```
 
 ### Convenience Interface
@@ -238,11 +240,7 @@ Mixture evaluation maintains zero-allocation performance through compile-time sp
 
 ## Derivatives
 
-FormulaCompiler provides computational primitives for computing derivatives of model matrix rows with respect to continuous variables. For marginal effects, standard errors, and complete statistical workflows, see [Margins.jl](https://github.com/emfeltham/Margins.jl).
-
-### Computational Primitives
-
-The package provides zero-allocation Jacobian computation using both automatic differentiation (ForwardDiff) and finite differences:
+FormulaCompiler provides computational primitives for zero-allocation derivative computation. For marginal effects, cf. [Margins.jl](https://github.com/emfeltham/Margins.jl).
 
 ```julia
 using FormulaCompiler, GLM
@@ -251,52 +249,23 @@ using FormulaCompiler, GLM
 vars = [:x, :z]
 de = derivativeevaluator(:ad, compiled, data, vars)
 
-# Compute Jacobian: J[i,j] = ∂(model_matrix[i])/∂vars[j]
+# Compute Jacobian: J[i,j] = ∂modelmatrix[i]/∂vars[j]
 J = Matrix{Float64}(undef, length(compiled), length(vars))
-derivative_modelrow!(J, de, 1)  # Zero allocations
-```
-
-### Marginal Effects
-
-For marginal effects computation, use [Margins.jl](https://github.com/emfeltham/Margins.jl), which provides:
-
-```julia
-using Margins
-
-# Marginal effects on linear predictor η = Xβ
-g_eta = Vector{Float64}(undef, length(vars))
-marginal_effects_eta!(g_eta, de, coef(model), 1)
-
-# Marginal effects on mean response μ (with link function)
-g_mu = Vector{Float64}(undef, length(vars))
-marginal_effects_mu!(g_mu, de, coef(model), LogitLink(), 1)
-
-# Standard errors via delta method
-se = delta_method_se(g_eta, vcov(model))
+derivative_modelrow!(J, de, 1)  # Row 1
 ```
 
 ### Backend Selection
 
 While automatic differentiation is the strongly preferred default option, two backends are available:
 
-- `:ad` (automatic differentiation via ForwardDiff): Recommended for standard formulas. Provides machine-precision accuracy and approximately 20% faster performance than finite differences.
+- `:ad` (automatic differentiation via ForwardDiff.jl): Recommended for standard formulas. Provides machine-precision accuracy and approximately 20% faster performance than finite differences.
 - `:fd` (finite differences): Recommended for formulas containing boolean predicates. Guarantees zero allocations for all formula types.
-
-Backend selection is specified when constructing the evaluator:
-
-```julia
-# Automatic differentiation (recommended)
-de_ad = derivativeevaluator(:ad, compiled, data, [:x, :z])
-
-# Finite differences (for boolean predicates)
-de_fd = derivativeevaluator(:fd, compiled, data, [:x, :z])
-```
 
 Both backends achieve zero-allocation performance through pre-allocated buffers and in-place operations.
 
-### Link Function Derivatives
+### Supported Link Functions
 
-FormulaCompiler provides computational primitives for the following GLM link functions (used by Margins.jl for computing marginal effects on the mean response μ):
+The following GLM link functions are supported for marginal effects on the mean response μ:
 
 - Identity
 - Log
@@ -362,9 +331,11 @@ row_vec = Vector{Float64}(undef, length(compiled))  # Reuse across calls
 Batch evaluation is more efficient than individual allocating calls:
 
 ```julia
-# Efficient: batch evaluation
+# Efficient: batch evaluation with pre-allocation
 matrix = Matrix{Float64}(undef, 1000, length(compiled))
-modelrow!(matrix, compiled, data, 1:1000)
+for i in 1:1000
+    compiled(view(matrix, i, :), data, i)
+end
 
 # Inefficient: repeated allocation
 results = [modelrow(model, data, i) for i in 1:1000]
@@ -406,7 +377,7 @@ The package uses a compilation pipeline based on position mapping:
 
 - Position mapping: Formula terms are mapped to fixed scratch and output positions during compilation, with all position information encoded in type parameters.
 - Type specialization: Each unique formula generates a specialized evaluation method with concrete types throughout.
-- Adaptive dispatch: Small formulas (≤10 operations) use recursive dispatch; larger formulas use generated functions to respect Julia's compilation limits.
+- Adaptive dispatch: Small formulas (≤25 operations) use recursive dispatch; larger formulas use generated functions to respect Julia's compilation limits.
 - Zero-allocation execution: All memory layouts are determined at compile time, enabling allocation-free runtime evaluation.
 
 ## Use Cases
@@ -416,11 +387,12 @@ The package is designed for applications requiring many model matrix evaluations
 - Marginal effects computation requiring numerical derivatives
 - Monte Carlo simulations requiring millions of model evaluations
 - Bootstrap resampling with repeated matrix construction
+- Applications requiring low-latency prediction
 - Large-scale inference with memory constraints
 
 ## Related Packages
 
-- [Margins.jl](https://github.com/juliangehring/Margins.jl): Marginal effects computation (uses FormulaCompiler.jl)
+- [Margins.jl](https://github.com/emfeltham/Margins.jl): Marginal effects computation (uses FormulaCompiler.jl)
 - [GLM.jl](https://github.com/JuliaStats/GLM.jl): Generalized linear models
 - [MixedModels.jl](https://github.com/JuliaStats/MixedModels.jl): Mixed-effects models
 - [StandardizedPredictors.jl](https://github.com/beacon-biosignals/StandardizedPredictors.jl): Standardized predictors
@@ -429,11 +401,7 @@ The package is designed for applications requiring many model matrix evaluations
 
 ## Documentation
 
-Additional documentation is available in the repository:
-
-- [DIAGRAMS.md](DIAGRAMS.md): System architecture and usage workflows with visual guides
-- [categorical_handling.md](categorical_handling.md): Categorical variable and interaction handling
-- [docs/diagrams/](docs/diagrams/): Individual diagram files
+Additional documentation is available in the [docs/](docs/) directory and the [online documentation](https://emfeltham.github.io/FormulaCompiler.jl/dev/).
 
 ## Contributing
 
