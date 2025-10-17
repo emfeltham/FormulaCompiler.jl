@@ -102,7 +102,7 @@ compiled = compile_formula(mixed, data)  # Compiles fixed effects: y ~ x + treat
 See also: [`modelrow!`](@ref), [`ModelRowEvaluator`](@ref)
 """
 function compile_formula(model, data_example::NamedTuple)
-    # Phase 2: Validate mixture columns are consistent
+    # Validate mixture columns are consistent
     validate_mixture_consistency!(data_example)
     
     # Extract schema-applied formula using standard API
@@ -166,7 +166,7 @@ compiled(output, data, 1)  # Zero allocations
 See also: [`compile_formula(model, data)`](@ref) for model-based compilation
 """
 function compile_formula(formula::StatsModels.FormulaTerm, data_example::NamedTuple)
-    # Phase 2: Validate mixture columns are consistent
+    # Validate mixture columns are consistent
     validate_mixture_consistency!(data_example)
 
     ops_vec, scratch_size, output_size = decompose_formula(formula, data_example)

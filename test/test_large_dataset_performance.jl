@@ -1,10 +1,10 @@
-# Phase 6.3.2: Large Dataset Performance Testing
+# Large Dataset Performance Testing
 # Test ContrastEvaluator performance and memory scaling with large datasets
 
 using DataFrames, GLM, FormulaCompiler, Tables, CategoricalArrays, BenchmarkTools
 using Test, Random
 
-@testset "Large Dataset Performance (Phase 6.3.2)" begin
+@testset "Large Dataset Performance" begin
     # Set seed for reproducible tests
     Random.seed!(12345)
 

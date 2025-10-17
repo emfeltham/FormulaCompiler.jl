@@ -180,7 +180,7 @@ Base.length(de::AbstractDerivativeEvaluator) = length(de.compiled_base)
 
 # Closure implementation for ADEvaluator (defined after type definitions to avoid forward reference)
 # Legacy closure - returns Vector{Dual} (allocating)
-# Phase 2: In-place closure for ForwardDiff.jacobian! (zero-allocation)
+# In-place closure for ForwardDiff.jacobian! (zero-allocation)
 # Note: ForwardDiff.jacobian! expects f!(y, x) where it controls the types of y and x
 # It will pass in Dual-typed x and expect Dual-typed y to be written
 function (g::DerivClosure{<:ADEvaluatorCore})(y::AbstractVector, x::AbstractVector)

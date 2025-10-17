@@ -27,17 +27,17 @@ the position mapping system's performance benefits.
 
 This function demonstrates how position mappings enable zero-allocation formula evaluation:
 
-### Phase 1: Scratch Space Preparation
+### Scratch Space Preparation
 - **Reuse**: Uses formula's pre-allocated scratch buffer (no allocation)
 - **Reset**: Clears scratch space for current row (`fill!(scratch, 0.0)`)
 - **Fixed Size**: Scratch buffer size determined at compile time
 
-### Phase 2: Operation Execution  
+### Operation Execution  
 - **Type-Specialized Dispatch**: Each operation uses compile-time position parameters
 - **Sequential Processing**: Operations execute in dependency order
 - **Zero Allocation**: All positions known at compile time → pure array indexing
 
-### Phase 3: Output Transfer
+### Output Transfer
 - **Position Mapping**: Transfers scratch results to output using `CopyOp` mappings
 - **Model Matrix Compatibility**: Output ordering matches `modelmatrix(model)`
 

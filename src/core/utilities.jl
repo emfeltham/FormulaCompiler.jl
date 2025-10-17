@@ -30,10 +30,7 @@ q = not(p)  # 0.7
 not(x::Bool) = !x
 not(x::T) where {T<:Real} = one(x) - x
 
-
-
 # Mixture Detection Utilities
-# Following Phase 1 implementation from CATEGORICAL_MIXTURES_DESIGN.md
 
 """
     is_mixture_column(col)

@@ -1,5 +1,5 @@
 # test_mixedmodels_integration.jl - MixedModels.jl Integration Tests for ContrastEvaluator
-# Phase 6.2.2: Test integration with MixedModels.jl
+# Test integration with MixedModels.jl
 
 using Test, BenchmarkTools
 using FormulaCompiler
@@ -13,7 +13,7 @@ if !@isdefined(invlogit)
     invlogit(x) = 1.0 ./ (1.0 .+ exp.(-x))
 end
 
-@testset "MixedModels Integration Tests (Phase 6.2.2)" begin
+@testset "MixedModels Integration Tests" begin
     # Create hierarchical/clustered test data suitable for mixed models
     function create_mixed_model_data(n_subjects=50, n_obs_per_subject=8)
         n_total = n_subjects * n_obs_per_subject

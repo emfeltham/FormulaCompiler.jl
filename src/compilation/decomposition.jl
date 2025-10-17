@@ -517,7 +517,7 @@ function decompose_standard_categorical(ctx::CompilationContext, term::Categoric
     return positions
 end
 
-# New mixture decomposition logic (Phase 1 implementation)
+# Mixture decomposition logic
 function decompose_mixture_term(ctx::CompilationContext, term::CategoricalTerm, mixture_col)
     # Extract mixture specification from first row (all rows should have same mixture)
     mixture_spec = extract_mixture_spec(mixture_col[1])

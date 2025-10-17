@@ -399,7 +399,7 @@ Validate mixture variable contrast values (placeholder for future mixture suppor
 """
 function _validate_mixture_values!(cf_vec::CategoricalMixtureCounterfactualVector, var::Symbol, from, to)
     # For now, just ensure they're not obviously wrong types
-    # Full mixture contrast validation would be implemented in future phases
+    # TODO: Full mixture contrast validation would be implemented in future phases
     if !(from isa Union{String, Symbol}) || !(to isa Union{String, Symbol})
         error("Mixture variable :$var contrasts should use string or symbol level specifications")
     end

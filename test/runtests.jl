@@ -30,7 +30,7 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
     include("test_categorical_correctness.jl") # Detailed categorical counterfactual correctness
     include("test_compressed_categoricals.jl") # Compressed categorical arrays (UInt8, UInt16, UInt32)
 
-    # Categorical mixtures (Phase 5 complete implementation)
+    # Categorical mixtures
     include("test_mixture_evaluation.jl") # Comprehensive mixture evaluation primitives
     include("test_mixture_modelrows.jl") # Modelrow correctness with mixtures
 

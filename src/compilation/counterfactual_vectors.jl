@@ -13,7 +13,7 @@ and marginal effects computation.
 
 using CategoricalArrays
 
-# Phase 1: Abstract type hierarchy and concrete implementations
+# Abstract type hierarchy and concrete implementations
 
 """
     CounterfactualVector{T} <: AbstractVector{T}
@@ -252,7 +252,7 @@ mutable struct CategoricalMixtureCounterfactualVector{T} <: CounterfactualVector
     replacement::T
 end
 
-# Phase 2: Type-stable construction functions
+# Type-stable construction functions
 
 """
     counterfactualvector(col::AbstractVector, row::Int) -> CounterfactualVector
@@ -553,7 +553,7 @@ end
             update_counterfactual_replacement!(cf_vec, replacement)
         elseif cf_vec isa NumericCounterfactualVector{T} where T
             # Numeric variables (Int, Float, etc.) - handle type conversion
-            # Phase 2 optimization: try direct assignment first (zero allocations when types match)
+            # Try direct assignment first (zero allocations when types match)
             if replacement isa eltype(cf_vec)
                 # Types already match - direct assignment (0 bytes)
                 update_counterfactual_replacement!(cf_vec, replacement)

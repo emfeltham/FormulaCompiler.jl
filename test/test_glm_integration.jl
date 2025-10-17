@@ -1,5 +1,4 @@
 # test_glm_integration.jl - GLM.jl Integration Tests for ContrastEvaluator
-# Phase 6.2.1: Test integration with GLM.jl models
 
 using Test, BenchmarkTools
 using FormulaCompiler
@@ -13,7 +12,7 @@ if !@isdefined(invlogit)
     invlogit(x) = 1.0 ./ (1.0 .+ exp.(-x))
 end
 
-@testset "GLM Integration Tests (Phase 6.2.1)" begin
+@testset "GLM Integration Tests" begin
     # Create comprehensive test data suitable for all GLM families
     function create_glm_test_data(n=500)
         df = DataFrame(
@@ -394,9 +393,9 @@ end
         end
     end
 
-    println("GLM Integration Tests (Phase 6.2.1) completed successfully!")
-    println("✓ Linear, Logistic, and Poisson models fully supported")
-    println("✓ All link functions working correctly with gradient computation")
-    println("✓ Zero allocations maintained across all GLM families")
-    println("✓ Mathematical consistency validated across model types")
+    println("GLM Integration Tests completed successfully!")
+    println("Linear, Logistic, and Poisson models fully supported")
+    println("All link functions working correctly with gradient computation")
+    println("Zero allocations maintained across all GLM families")
+    println("Mathematical consistency validated across model types")
 end
