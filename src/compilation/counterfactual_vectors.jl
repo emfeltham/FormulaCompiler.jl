@@ -373,6 +373,17 @@ function update_counterfactual_replacement!(
     return cv
 end
 
+# Handle TypedCounterfactualVector with Float64 base being updated with Dual
+# This occurs when large datasets use SentinelArrays.ChainedVector or other non-Vector types
+function update_counterfactual_replacement!(
+    cv::TypedCounterfactualVector{T, V},
+    replacement::D
+) where {T <: AbstractFloat, V <: AbstractVector{T}, D <: ForwardDiff.Dual}
+    # Extract the value from the Dual (ignoring partials since base type is Float64)
+    cv.replacement = ForwardDiff.value(replacement)
+    return cv
+end
+
 # Step 2.3: Backend-Specific Data Builder Functions
 
 # Basic builder function (preserves original types - for FDEvaluator, ContrastEvaluator, and general use)
