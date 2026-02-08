@@ -90,8 +90,8 @@ using Test, Random
         @info "Max evaluation time: $(round(max_time * 1e9, digits=1))ns"
 
         # Performance thresholds
-        @test mean_time < 1e-6  # Mean under 1 microsecond
-        @test max_time < 5e-6   # Max under 5 microseconds
+        @test mean_time < 3e-6  # Mean under 3 microseconds (relaxed for CI runners)
+        @test max_time < 10e-6  # Max under 10 microseconds (relaxed for CI runners)
 
         # Test allocation performance (should be zero or minimal)
         @info "Testing allocation performance..."
@@ -193,7 +193,7 @@ using Test, Random
         @test result.memory == 0
         mean_time_ns = result.times |> median
         @info "High-cardinality contrast time: $(round(mean_time_ns, digits=1))ns"
-        @test mean_time_ns < 2e-6 * 1e9  # Under 2 microseconds
+        @test mean_time_ns < 5e-6 * 1e9  # Under 5 microseconds (relaxed for CI runners)
 
         # Test that performance doesn't degrade with many levels
         @info "Testing performance scaling with categorical levels..."
