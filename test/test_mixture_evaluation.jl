@@ -4,8 +4,7 @@
 using Test
 using FormulaCompiler
 using FormulaCompiler: mix, compile_formula, MixtureContrastOp, execute_op, BoolCounterfactualVector,
-    is_mixture_column, validate_mixture_consistency!, extract_mixture_spec, ContrastOp,
-    validate_mixture_weights, validate_mixture_levels
+    is_mixture_column, validate_mixture_consistency!, extract_mixture_spec, ContrastOp
 using DataFrames, Tables
 using StatsModels, GLM, CategoricalArrays
 using LinearAlgebra  # For I(n) identity matrix
