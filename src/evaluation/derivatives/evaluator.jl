@@ -226,7 +226,7 @@ function derivativeevaluator_ad(
     )
 
     input_vec = Vector{Float64}(undef, nvars)
-    var_columns = ntuple(i -> getproperty(data, vars[i]), nvars)
+    var_columns = ntuple(i -> convert(Vector{Float64}, getproperty(data, vars[i])), nvars)
     g = DerivClosure(core)
     cfg = ForwardDiff.JacobianConfig(g, input_vec, chunk, FC_AD_TAG())
     ctx = JacobianContext(g, cfg, input_vec, var_columns)

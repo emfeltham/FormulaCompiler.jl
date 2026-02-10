@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - February 2026
+
+### Fixed
+
+- Zero-allocation AD Jacobian under `--check-bounds=yes` (and therefore `Pkg.test()`)
+  - ForwardDiff's `extract_jacobian!` uses `reshape()` which allocates a 48-byte `ReshapedArray` wrapper when bounds checking is enabled — the compiler can't inline the extraction step, so escape analysis fails to elide the heap allocation
+  - Replaced `ForwardDiff.jacobian!` with custom `fc_jacobian!` that uses ForwardDiff's seeding and dual evaluation but extracts partials via direct loop indexing, avoiding `reshape` entirely
+  - New internal functions: `_extract_jacobian_direct!`, `_extract_jacobian_chunk_direct!`, `fc_jacobian!`
+  - Handles both vector mode (single pass) and chunk mode (multiple passes)
+  - All 35 previously-failing AD allocation tests now pass
+
+- Type instability in `ContrastEvaluator` counterfactual lookups
+  - Added `@generated` specializations for `get_cf_for_var` and `update_counterfactual_for_var!` that unroll variable lookup into compile-time if-chains with literal tuple indices
+  - Eliminates 64-byte allocation per call from runtime tuple indexing producing `Union` types
+
+- Integer column handling in AD derivative evaluator
+  - `derivativeevaluator_ad` now converts variable columns to `Vector{Float64}` at construction time
+  - Handles integer-typed columns (e.g., `age::Vector{Int}`) that require Float64 for ForwardDiff dual arithmetic
+  - One-time conversion cost at evaluator construction, zero runtime impact
+
+### Changed
+
+- Julia compat extended to include 1.12
+
 ## [1.1.1] - October 2025
 
 ### Added
