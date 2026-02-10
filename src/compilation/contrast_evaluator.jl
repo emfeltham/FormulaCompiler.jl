@@ -156,6 +156,56 @@ function contrastevaluator(compiled, data, vars::Vector{Symbol})
     )
 end
 
+# @generated specializations for ContrastEvaluator that eliminate type instability
+# from runtime tuple indexing. The generic @inline versions in counterfactual_vectors.jl
+# use getproperty(evaluator.var_map, var) which returns a runtime Int, causing
+# evaluator.counterfactuals[idx] to produce a Union type and allocate 64 bytes per call.
+# These @generated versions unroll the variable lookup into compile-time if-chains with
+# literal tuple indices, giving Julia the concrete type at each branch.
+
+@generated function get_cf_for_var(evaluator::ContrastEvaluator{T,Ops,S,O,NTM,CFT,CLM,VT,VM}, var::Symbol) where {T,Ops,S,O,NTM,CFT,CLM,VT,VM}
+    var_names = fieldnames(VM)
+    N = length(var_names)
+
+    branches = Expr[]
+    for i in 1:N
+        sym = var_names[i]
+        push!(branches, quote
+            if var === $(QuoteNode(sym))
+                return @inbounds evaluator.counterfactuals[$i]
+            end
+        end)
+    end
+
+    return quote
+        $(branches...)
+        error("Variable ", var, " not found in evaluator")
+    end
+end
+
+@generated function update_counterfactual_for_var!(evaluator::ContrastEvaluator{T,Ops,S,O,NTM,CFT,CLM,VT,VM}, var::Symbol, row::Int, replacement) where {T,Ops,S,O,NTM,CFT,CLM,VT,VM}
+    var_names = fieldnames(VM)
+    N = length(var_names)
+
+    branches = Expr[]
+    for i in 1:N
+        sym = var_names[i]
+        push!(branches, quote
+            if var === $(QuoteNode(sym))
+                cf_vec = @inbounds evaluator.counterfactuals[$i]
+                update_counterfactual_row!(cf_vec, row)
+                _update_replacement!(cf_vec, replacement, evaluator.categorical_level_maps, var)
+                return nothing
+            end
+        end)
+    end
+
+    return quote
+        $(branches...)
+        error("Variable ", var, " not found in evaluator")
+    end
+end
+
 """
     contrast_modelrow!(Δ, evaluator, row, var, from, to) -> Δ
 

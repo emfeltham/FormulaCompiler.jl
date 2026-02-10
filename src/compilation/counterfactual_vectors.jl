@@ -586,7 +586,7 @@ end
 end
 
 """
-    update_counterfactual_for_var!(evaluator, var, row, replacement) -> CounterfactualVector
+    update_counterfactual_for_var!(evaluator, var, row, replacement) -> Nothing
 
 Zero-allocation counterfactual update using ContrastEvaluator's NamedTuple index map.
 
@@ -617,7 +617,7 @@ update_counterfactual_for_var!(evaluator, :treatment, 1, "Drug")  # 0 bytes
     # Dispatch to type-specific update (no runtime isa checks!)
     _update_replacement!(cf_vec, replacement, evaluator.categorical_level_maps, var)
 
-    return cf_vec
+    return nothing
 end
 
 # Multiple dispatch versions - eliminates all runtime isa checks!
