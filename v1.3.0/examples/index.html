@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Examples · FormulaCompiler.jl</title><meta name="title" content="Examples · FormulaCompiler.jl"/><meta property="og:title" content="Examples · FormulaCompiler.jl"/><meta property="twitter:title" content="Examples · FormulaCompiler.jl"/><meta name="description" content="Documentation for FormulaCompiler.jl."/><meta property="og:description" content="Documentation for FormulaCompiler.jl."/><meta property="twitter:description" content="Documentation for FormulaCompiler.jl."/><meta property="og:url" content="https://emfeltham.github.io/FormulaCompiler.jl/examples/"/><meta property="twitter:url" content="https://emfeltham.github.io/FormulaCompiler.jl/examples/"/><link rel="canonical" href="https://emfeltham.github.io/FormulaCompiler.jl/examples/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script><script src="../assets/mermaid.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">FormulaCompiler.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../getting_started/">Getting Started</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../guide/basic_usage/">Basic Usage</a></li><li><a class="tocitem" href="../guide/advanced_features/">Advanced Features</a></li><li><a class="tocitem" href="../guide/categorical_mixtures/">Categorical Mixtures</a></li><li><a class="tocitem" href="../guide/scenarios/">Scenario Analysis</a></li><li><a class="tocitem" href="../guide/performance/">Performance Tips</a></li></ul></li><li><span class="tocitem">Ecosystem Integration</span><ul><li><a class="tocitem" href="../integration/glm/">GLM.jl</a></li><li><a class="tocitem" href="../integration/mixed_models/">MixedModels.jl</a></li><li><a class="tocitem" href="../integration/standardized_predictors/">StandardizedPredictors.jl</a></li></ul></li><li><a class="tocitem" href="../mathematical_foundation/">Mathematical Foundation</a></li><li><a class="tocitem" href="../architecture/">Architecture</a></li><li><a class="tocitem" href="../metaprogramming/">Metaprogramming</a></li><li><a class="tocitem" href="../api/">API Reference</a></li><li class="is-active"><a class="tocitem" href>Examples</a><ul class="internal"><li><a class="tocitem" href="#Quick-Reference"><span>Quick Reference</span></a></li><li><a class="tocitem" href="#Domain-Applications"><span>Domain Applications</span></a></li><li><a class="tocitem" href="#Advanced-Computational-Patterns"><span>Advanced Computational Patterns</span></a></li><li><a class="tocitem" href="#Performance-Notes"><span>Performance Notes</span></a></li><li><a class="tocitem" href="#Further-Reading"><span>Further Reading</span></a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Examples</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Examples</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/emfeltham/FormulaCompiler.jl/blob/main/docs/src/examples.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Examples"><a class="docs-heading-anchor" href="#Examples">Examples</a><a id="Examples-1"></a><a class="docs-heading-anchor-permalink" href="#Examples" title="Permalink"></a></h1><p>Real-world examples demonstrating FormulaCompiler.jl capabilities across multiple domains.</p><p>For fundamental usage patterns, see <a href="../guide/basic_usage/">Basic Usage</a>. For advanced computational techniques, see <a href="../guide/advanced_features/">Advanced Features</a>.</p><h2 id="Quick-Reference"><a class="docs-heading-anchor" href="#Quick-Reference">Quick Reference</a><a id="Quick-Reference-1"></a><a class="docs-heading-anchor-permalink" href="#Quick-Reference" title="Permalink"></a></h2><p>Essential patterns for immediate use. All examples use synthetic data for simplicity and self-containment.</p><h3 id="Core-Compilation-Pattern"><a class="docs-heading-anchor" href="#Core-Compilation-Pattern">Core Compilation Pattern</a><a id="Core-Compilation-Pattern-1"></a><a class="docs-heading-anchor-permalink" href="#Core-Compilation-Pattern" title="Permalink"></a></h3><pre><code class="language-julia hljs">using FormulaCompiler, GLM, DataFrames, Tables
+
+# Basic setup
+df = DataFrame(x = randn(100), y = randn(100), group = rand([&quot;A&quot;, &quot;B&quot;], 100))
+model = lm(@formula(y ~ x * group), df)
+data = Tables.columntable(df)
+
+# Compile and evaluate
+compiled = compile_formula(model, data)
+output = Vector{Float64}(undef, length(compiled))
+compiled(output, data, 1)  # Zero allocations</code></pre><h3 id="Performance-Validation"><a class="docs-heading-anchor" href="#Performance-Validation">Performance Validation</a><a id="Performance-Validation-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Validation" title="Permalink"></a></h3><pre><code class="language-julia hljs">using BenchmarkTools
+
+# Verify zero allocations
+result = @benchmark $compiled($output, $data, 1)
+@assert result.memory == 0 &quot;Expected zero allocations&quot;</code></pre><h3 id="Counterfactual-Analysis"><a class="docs-heading-anchor" href="#Counterfactual-Analysis">Counterfactual Analysis</a><a id="Counterfactual-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Counterfactual-Analysis" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Single policy scenario using direct data modification
+n_rows = length(data.x)
+data_policy = merge(data, (x = fill(2.0, n_rows), group = fill(&quot;A&quot;, n_rows)))
+compiled(output, data_policy, 1)  # Evaluate with modified data
+
+# Multi-scenario analysis
+x_values = [-1.0, 0.0, 1.0]
+group_values = [&quot;A&quot;, &quot;B&quot;]
+results = Matrix{Float64}(undef, 6, length(compiled))  # 3×2 = 6 scenarios
+
+scenario_idx = 1
+for x_val in x_values
+    for group_val in group_values
+        data_scenario = merge(data, (x = fill(x_val, n_rows), group = fill(group_val, n_rows)))
+        compiled(view(results, scenario_idx, :), data_scenario, 1)
+        scenario_idx += 1
+    end
+end</code></pre><h3 id="Marginal-Effects"><a class="docs-heading-anchor" href="#Marginal-Effects">Marginal Effects</a><a id="Marginal-Effects-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects" title="Permalink"></a></h3><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta! and marginal_effects_mu!
+
+# Identify continuous variables and build evaluators
+vars = continuous_variables(compiled, data)  # [:x]
+de_ad = derivativeevaluator(:ad, compiled, data, vars)  # Automatic differentiation: higher accuracy (preferred)
+de_fd = derivativeevaluator(:fd, compiled, data, vars)  # Finite differences: explicit step control
+β = coef(model)
+
+# Compute marginal effects
+g = Vector{Float64}(undef, length(vars))
+marginal_effects_eta!(g, de_ad, β, 1)  # Zero allocations, higher accuracy
+marginal_effects_eta!(g, de_fd, β, 1)  # Zero allocations, explicit step control</code></pre><h3 id="Batch-Processing"><a class="docs-heading-anchor" href="#Batch-Processing">Batch Processing</a><a id="Batch-Processing-1"></a><a class="docs-heading-anchor-permalink" href="#Batch-Processing" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Multiple rows at once
+n_rows = 50
+results = Matrix{Float64}(undef, n_rows, length(compiled))
+for i in 1:n_rows
+    compiled(view(results, i, :), data, i)  # Zero allocations
+end</code></pre><h2 id="Domain-Applications"><a class="docs-heading-anchor" href="#Domain-Applications">Domain Applications</a><a id="Domain-Applications-1"></a><a class="docs-heading-anchor-permalink" href="#Domain-Applications" title="Permalink"></a></h2><p>Real-world applications using authentic datasets from RDatasets.jl. These examples demonstrate FormulaCompiler.jl&#39;s capabilities with data structures practitioners encounter in their domains.</p><h3 id="Economics:-Labor-Market-Analysis"><a class="docs-heading-anchor" href="#Economics:-Labor-Market-Analysis">Economics: Labor Market Analysis</a><a id="Economics:-Labor-Market-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Economics:-Labor-Market-Analysis" title="Permalink"></a></h3><p>Wage determination analysis using real Belgian wage data:</p><pre><code class="language-julia hljs">using RDatasets, FormulaCompiler, GLM, Tables
+
+# Load real wage data from Belgian labor market
+wages = dataset(&quot;Ecdat&quot;, &quot;Bwages&quot;)  # 1472 observations
+# Columns: Wage (hourly wage), Educ (education years), Exper (experience), Sex
+
+# Convert categorical variable properly
+wages.Male = wages.Sex .== &quot;male&quot;
+data = Tables.columntable(wages)
+
+# Wage determination model with gender interaction
+model = lm(@formula(log(Wage) ~ Educ * Male + Exper + I(Exper^2)), wages)
+compiled = compile_formula(model, data)</code></pre><h4 id="Policy-Analysis-with-Scenarios"><a class="docs-heading-anchor" href="#Policy-Analysis-with-Scenarios">Policy Analysis with Scenarios</a><a id="Policy-Analysis-with-Scenarios-1"></a><a class="docs-heading-anchor-permalink" href="#Policy-Analysis-with-Scenarios" title="Permalink"></a></h4><p>Analyze gender pay gap under different policy scenarios:</p><pre><code class="language-julia hljs"># Define policy scenarios using direct data modification
+mean_educ = mean(wages.Educ)
+mean_exper = mean(wages.Exper)
+n_rows = length(data.Educ)
+
+output = Vector{Float64}(undef, length(compiled))
+β = coef(model)
+
+# Create scenario data
+scenarios = [
+    (&quot;status_quo&quot;, data),
+    (&quot;equal_education&quot;, merge(data, (Educ = fill(mean_educ, n_rows),))),
+    (&quot;equal_experience&quot;, merge(data, (Exper = fill(mean_exper, n_rows),))),
+    (&quot;standardized_worker&quot;, merge(data, (Educ = fill(mean_educ, n_rows), Exper = fill(mean_exper, n_rows))))
+]
+
+# Policy scenario analysis
+for (scenario_name, scenario_data) in scenarios
+    # Sample analysis for first 100 workers
+    wages_predicted = Float64[]
+    for worker in 1:100
+        compiled(output, scenario_data, worker)
+        push!(wages_predicted, exp(dot(β, output)))  # Convert from log scale
+    end
+
+    mean_wage = mean(wages_predicted)
+    println(&quot;$(scenario_name): Mean predicted wage = \$$(round(mean_wage, digits=2))&quot;)
+end</code></pre><h4 id="Marginal-Effects-on-Wages"><a class="docs-heading-anchor" href="#Marginal-Effects-on-Wages">Marginal Effects on Wages</a><a id="Marginal-Effects-on-Wages-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects-on-Wages" title="Permalink"></a></h4><p>Compute returns to education and experience:</p><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta!
+
+# Build derivative evaluator for continuous variables
+continuous_vars = [:Educ, :Exper]  # Education and experience are continuous
+de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
+
+# Compute marginal effects for representative workers
+g_eta = Vector{Float64}(undef, length(continuous_vars))
+
+# Male worker with median characteristics
+male_median_idx = findfirst(row -&gt; row.Male &amp;&amp; row.Educ ≈ median(wages.Educ), eachrow(wages))
+if !isnothing(male_median_idx)
+    marginal_effects_eta!(g_eta, de_fd, β, male_median_idx)
+    println(&quot;Male median worker - Returns to education: $(round(g_eta[1]*100, digits=2))%&quot;)
+    println(&quot;Male median worker - Returns to experience: $(round(g_eta[2]*100, digits=2))%&quot;)
+end</code></pre><h3 id="Engineering:-Automotive-Performance-Analysis"><a class="docs-heading-anchor" href="#Engineering:-Automotive-Performance-Analysis">Engineering: Automotive Performance Analysis</a><a id="Engineering:-Automotive-Performance-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Engineering:-Automotive-Performance-Analysis" title="Permalink"></a></h3><p>Engine performance modeling using the classic mtcars dataset:</p><pre><code class="language-julia hljs">using RDatasets, FormulaCompiler, GLM
+
+# Load automotive engineering data
+mtcars = dataset(&quot;datasets&quot;, &quot;mtcars&quot;)  # 32 classic cars
+# Key variables: MPG (fuel efficiency), HP (horsepower), WT (weight), Cyl (cylinders)
+
+data = Tables.columntable(mtcars)
+
+# Fuel efficiency model with engine characteristics
+model = lm(@formula(MPG ~ HP * WT + Cyl + log(HP)), mtcars)
+compiled = compile_formula(model, data)</code></pre><h4 id="Engineering-Design-Scenarios"><a class="docs-heading-anchor" href="#Engineering-Design-Scenarios">Engineering Design Scenarios</a><a id="Engineering-Design-Scenarios-1"></a><a class="docs-heading-anchor-permalink" href="#Engineering-Design-Scenarios" title="Permalink"></a></h4><p>Analyze fuel efficiency under different design specifications:</p><pre><code class="language-julia hljs"># Engineering design analysis using direct data modification
+base_hp = mean(mtcars.HP)
+base_wt = mean(mtcars.WT)
+n_rows = length(data.HP)
+
+# Define design parameter combinations
+hp_values = [base_hp * 0.8, base_hp, base_hp * 1.2]      # -20%, baseline, +20% power
+wt_values = [base_wt * 0.9, base_wt, base_wt * 1.1]      # -10%, baseline, +10% weight
+cyl_values = [4, 6, 8]                                    # Engine configurations
+
+# Performance analysis across design space (3×3×3 = 27 scenarios)
+output = Vector{Float64}(undef, length(compiled))
+β = coef(model)
+
+scenario_results = Float64[]
+scenario_descriptions = String[]
+for hp_val in hp_values, wt_val in wt_values, cyl_val in cyl_values
+    # Create scenario data
+    data_scenario = merge(data, (
+        HP = fill(hp_val, n_rows),
+        WT = fill(wt_val, n_rows),
+        Cyl = fill(cyl_val, n_rows)
+    ))
+
+    # Evaluate reference car design with these parameters
+    compiled(output, data_scenario, 1)
+    predicted_mpg = dot(β, output)
+    push!(scenario_results, predicted_mpg)
+
+    # Track scenario description
+    hp_change = round((hp_val / base_hp - 1) * 100, digits=1)
+    wt_change = round((wt_val / base_wt - 1) * 100, digits=1)
+    push!(scenario_descriptions, &quot;HP: $(hp_change)%, WT: $(wt_change)%, Cyl: $(cyl_val)&quot;)
+end
+
+best_scenario_idx = argmax(scenario_results)
+best_mpg = scenario_results[best_scenario_idx]
+println(&quot;Best design scenario: $(scenario_descriptions[best_scenario_idx])&quot;)
+println(&quot;Predicted MPG: $(round(best_mpg, digits=2))&quot;)</code></pre><h4 id="Performance-Sensitivity-Analysis"><a class="docs-heading-anchor" href="#Performance-Sensitivity-Analysis">Performance Sensitivity Analysis</a><a id="Performance-Sensitivity-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Sensitivity-Analysis" title="Permalink"></a></h4><p>Compute sensitivity to design parameters:</p><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta!
+
+# Marginal effects on fuel efficiency
+engineering_vars = [:HP, :WT]  # Continuous engineering parameters
+de_fd = derivativeevaluator(:fd, compiled, data, engineering_vars)
+
+g = Vector{Float64}(undef, length(engineering_vars))
+
+# Analyze sensitivity for different vehicle classes
+for (car_type, indices) in [(&quot;Sports cars&quot;, findall(x -&gt; x &gt; 200, mtcars.HP)),
+                            (&quot;Economy cars&quot;, findall(x -&gt; x &lt; 100, mtcars.HP))]
+    if !isempty(indices)
+        representative_idx = indices[1]
+        marginal_effects_eta!(g, de_fd, β, representative_idx)
+
+        println(&quot;$car_type sensitivity:&quot;)
+        println(&quot;  MPG change per HP unit: $(round(g[1], digits=3))&quot;)
+        println(&quot;  MPG change per 1000lb weight: $(round(g[2]*1000, digits=3))&quot;)
+    end
+end</code></pre><h3 id="Biostatistics:-Cancer-Survival-Analysis"><a class="docs-heading-anchor" href="#Biostatistics:-Cancer-Survival-Analysis">Biostatistics: Cancer Survival Analysis</a><a id="Biostatistics:-Cancer-Survival-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Biostatistics:-Cancer-Survival-Analysis" title="Permalink"></a></h3><p>Clinical outcome modeling using real lung cancer data:</p><pre><code class="language-julia hljs">using RDatasets
+
+# Load NCCTG lung cancer clinical trial data
+lung = dataset(&quot;survival&quot;, &quot;lung&quot;)  # 228 patients
+# Variables: time (survival days), status (censoring), age, sex, ph.ecog (performance score)
+
+# Remove missing values for demonstration
+lung_complete = dropmissing(lung, [:age, :sex, :ph_ecog])
+data = Tables.columntable(lung_complete)
+
+# Survival time model (using log transformation for demonstration)
+# In practice, would use survival analysis methods
+model = lm(@formula(log(time + 1) ~ age + sex + ph_ecog + age * sex), lung_complete)
+compiled = compile_formula(model, data)</code></pre><h4 id="Clinical-Scenarios"><a class="docs-heading-anchor" href="#Clinical-Scenarios">Clinical Scenarios</a><a id="Clinical-Scenarios-1"></a><a class="docs-heading-anchor-permalink" href="#Clinical-Scenarios" title="Permalink"></a></h4><p>Analyze survival outcomes under different patient profiles:</p><pre><code class="language-julia hljs"># Clinical analysis using direct data modification
+n_rows = length(data.age)
+output = Vector{Float64}(undef, length(compiled))
+β = coef(model)
+
+# Define clinical scenarios
+clinical_scenarios = [
+    (&quot;young_male&quot;, merge(data, (age = fill(50, n_rows), sex = fill(1, n_rows)))),
+    (&quot;old_male&quot;, merge(data, (age = fill(70, n_rows), sex = fill(1, n_rows)))),
+    (&quot;young_female&quot;, merge(data, (age = fill(50, n_rows), sex = fill(2, n_rows)))),
+    (&quot;old_female&quot;, merge(data, (age = fill(70, n_rows), sex = fill(2, n_rows)))),
+    (&quot;high_performance&quot;, merge(data, (ph_ecog = fill(0, n_rows),))),
+    (&quot;poor_performance&quot;, merge(data, (ph_ecog = fill(2, n_rows),)))
+]
+
+# Clinical outcome analysis
+for (profile_name, scenario_data) in clinical_scenarios
+    compiled(output, scenario_data, 1)
+    predicted_log_survival = dot(β, output)
+    predicted_days = exp(predicted_log_survival) - 1
+
+    println(&quot;$(profile_name): Predicted survival = $(round(predicted_days, digits=0)) days&quot;)
+end</code></pre><h4 id="Clinical-Risk-Factors"><a class="docs-heading-anchor" href="#Clinical-Risk-Factors">Clinical Risk Factors</a><a id="Clinical-Risk-Factors-1"></a><a class="docs-heading-anchor-permalink" href="#Clinical-Risk-Factors" title="Permalink"></a></h4><p>Quantify impact of patient characteristics on outcomes:</p><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta!
+
+# Marginal effects for continuous clinical variables
+clinical_vars = [:age]  # Age is the main continuous predictor
+de_fd = derivativeevaluator(:fd, compiled, data, clinical_vars)
+
+g = Vector{Float64}(undef, length(clinical_vars))
+
+# Risk assessment for different patient groups
+for (group, sex_val) in [(&quot;Male patients&quot;, 1), (&quot;Female patients&quot;, 2)]
+    group_indices = findall(x -&gt; x == sex_val, lung_complete.sex)
+    if !isempty(group_indices)
+        representative_idx = group_indices[div(length(group_indices), 2)]  # Median patient
+        marginal_effects_eta!(g, de_fd, β, representative_idx)
+
+        daily_age_effect = g[1]  # Effect per year of age
+        yearly_effect = exp(daily_age_effect) - 1  # Convert from log scale
+
+        println(&quot;$group - Age effect: $(round(yearly_effect*100, digits=2))% per year&quot;)
+    end
+end</code></pre><h3 id="Social-Sciences:-Educational-Outcomes"><a class="docs-heading-anchor" href="#Social-Sciences:-Educational-Outcomes">Social Sciences: Educational Outcomes</a><a id="Social-Sciences:-Educational-Outcomes-1"></a><a class="docs-heading-anchor-permalink" href="#Social-Sciences:-Educational-Outcomes" title="Permalink"></a></h3><p>University admission analysis using UC Berkeley data:</p><pre><code class="language-julia hljs"># Load UC Berkeley admission data (famous dataset for Simpson&#39;s paradox)
+ucb = dataset(&quot;datasets&quot;, &quot;UCBAdmissions&quot;)
+# This is aggregate data, so we&#39;ll expand it for modeling
+
+# Create individual-level data from aggregate counts
+individual_data = DataFrame()
+for row in eachrow(ucb)
+    n_cases = Int(row.Freq)
+    individual_cases = DataFrame(
+        Admitted = fill(row.Admit == &quot;Admitted&quot;, n_cases),
+        Gender = fill(row.Gender, n_cases), 
+        Department = fill(row.Dept, n_cases)
+    )
+    individual_data = vcat(individual_data, individual_cases)
+end
+
+# Convert to appropriate types
+individual_data.Male = individual_data.Gender .== &quot;Male&quot;
+data = Tables.columntable(individual_data)
+
+# Admission probability model
+model = glm(@formula(Admitted ~ Male * Department), individual_data, Binomial(), LogitLink())
+compiled = compile_formula(model, data)</code></pre><h4 id="Educational-Policy-Analysis"><a class="docs-heading-anchor" href="#Educational-Policy-Analysis">Educational Policy Analysis</a><a id="Educational-Policy-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Educational-Policy-Analysis" title="Permalink"></a></h4><p>Analyze admission scenarios across departments:</p><pre><code class="language-julia hljs"># Policy analysis using direct data modification
+n_rows = length(data.Male)
+output = Vector{Float64}(undef, length(compiled))
+β = coef(model)
+
+# Define policy scenarios
+policy_scenarios = [
+    (&quot;gender_blind&quot;, merge(data, (Male = fill(true, n_rows),))),
+    (&quot;gender_blind_female&quot;, merge(data, (Male = fill(false, n_rows),))),
+    (&quot;dept_a_focus&quot;, merge(data, (Department = fill(&quot;A&quot;, n_rows),))),
+    (&quot;dept_f_focus&quot;, merge(data, (Department = fill(&quot;F&quot;, n_rows),)))
+]
+
+# Policy impact analysis
+for (policy_name, scenario_data) in policy_scenarios
+    admission_probs = Float64[]
+
+    # Sample 100 cases for analysis
+    sample_size = min(100, n_rows)
+    for i in 1:sample_size
+        compiled(output, scenario_data, i)
+        linear_pred = dot(β, output)
+        prob = 1 / (1 + exp(-linear_pred))  # Logistic transformation
+        push!(admission_probs, prob)
+    end
+
+    mean_prob = mean(admission_probs)
+    println(&quot;$(policy_name): Mean admission probability = $(round(mean_prob*100, digits=1))%&quot;)
+end</code></pre><h2 id="Advanced-Computational-Patterns"><a class="docs-heading-anchor" href="#Advanced-Computational-Patterns">Advanced Computational Patterns</a><a id="Advanced-Computational-Patterns-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Computational-Patterns" title="Permalink"></a></h2><p>High-performance applications combining multiple FormulaCompiler.jl features with authentic datasets.</p><h3 id="Large-Scale-Monte-Carlo-Simulation"><a class="docs-heading-anchor" href="#Large-Scale-Monte-Carlo-Simulation">Large-Scale Monte Carlo Simulation</a><a id="Large-Scale-Monte-Carlo-Simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Large-Scale-Monte-Carlo-Simulation" title="Permalink"></a></h3><p>Bootstrap confidence intervals for economic policy effects:</p><pre><code class="language-julia hljs">using RDatasets, Statistics, Random
+
+# Use wage data for bootstrap analysis
+wages = dataset(&quot;Ecdat&quot;, &quot;Bwages&quot;)
+wages.Male = wages.Sex .== &quot;male&quot;
+n_obs = nrow(wages)
+
+# Policy model
+base_model = lm(@formula(log(Wage) ~ Educ * Male + Exper), wages)
+base_data = Tables.columntable(wages)
+compiled = compile_formula(base_model, base_data)
+
+# Bootstrap function for policy effect estimation
+function bootstrap_policy_effect(n_bootstrap=1000)
+    Random.seed!(123)  # Reproducible results
+    
+    policy_effects = Float64[]
+    output = Vector{Float64}(undef, length(compiled))
+    
+    for b in 1:n_bootstrap
+        # Bootstrap sample
+        boot_indices = rand(1:n_obs, n_obs)
+
+        # Create policy scenario
+        n_rows = length(base_data.Educ)
+        policy_data = merge(base_data, (Educ = fill(mean(wages.Educ), n_rows),))
+
+        # Compute policy effect for bootstrap sample
+        status_quo_wages = Float64[]
+        policy_wages = Float64[]
+
+        for idx in boot_indices[1:100]  # Sample subset for speed
+            # Status quo
+            compiled(output, base_data, idx)
+            push!(status_quo_wages, exp(dot(coef(base_model), output)))
+
+            # Policy scenario
+            compiled(output, policy_data, idx)
+            push!(policy_wages, exp(dot(coef(base_model), output)))
+        end
+
+        # Policy effect (proportional change)
+        effect = mean(policy_wages) / mean(status_quo_wages) - 1
+        push!(policy_effects, effect)
+    end
+    
+    return policy_effects
+end
+
+# Run bootstrap analysis
+println(&quot;Running bootstrap analysis...&quot;)
+policy_effects = bootstrap_policy_effect(500)
+
+# Results
+mean_effect = mean(policy_effects)
+ci_lower = quantile(policy_effects, 0.025)
+ci_upper = quantile(policy_effects, 0.975)
+
+println(&quot;Policy effect: $(round(mean_effect*100, digits=2))%&quot;)
+println(&quot;95% CI: [$(round(ci_lower*100, digits=2))%, $(round(ci_upper*100, digits=2))%]&quot;)</code></pre><h3 id="Cross-Validation-with-Real-Data"><a class="docs-heading-anchor" href="#Cross-Validation-with-Real-Data">Cross-Validation with Real Data</a><a id="Cross-Validation-with-Real-Data-1"></a><a class="docs-heading-anchor-permalink" href="#Cross-Validation-with-Real-Data" title="Permalink"></a></h3><p>Model validation using automotive performance data:</p><pre><code class="language-julia hljs">using Random
+
+# Load and prepare mtcars data
+mtcars = dataset(&quot;datasets&quot;, &quot;mtcars&quot;)
+n_cars = nrow(mtcars)
+data = Tables.columntable(mtcars)
+
+function cross_validate_performance(k_folds=5)
+    Random.seed!(456)
+    fold_indices = rand(1:k_folds, n_cars)
+    
+    fold_errors = Float64[]
+    output = Vector{Float64}(undef, 0)  # Will resize based on model
+    
+    for fold in 1:k_folds
+        # Split data
+        train_idx = findall(x -&gt; x != fold, fold_indices)
+        test_idx = findall(x -&gt; x == fold, fold_indices)
+        
+        # Fit model on training data
+        train_data = mtcars[train_idx, :]
+        model = lm(@formula(MPG ~ HP + WT + Cyl), train_data)
+        
+        # Compile for test evaluation
+        compiled = compile_formula(model, data)
+        if isempty(output)
+            output = Vector{Float64}(undef, length(compiled))
+        end
+        β = coef(model)
+        
+        # Predict on test set
+        test_errors = Float64[]
+        for test_car in test_idx
+            compiled(output, data, test_car)
+            predicted = dot(β, output)
+            actual = mtcars.MPG[test_car]
+            push!(test_errors, (predicted - actual)^2)
+        end
+        
+        push!(fold_errors, mean(test_errors))
+    end
+    
+    return sqrt(mean(fold_errors))  # RMSE
+end
+
+# Run cross-validation
+cv_rmse = cross_validate_performance(5)
+println(&quot;Cross-validation RMSE: $(round(cv_rmse, digits=2)) MPG&quot;)</code></pre><h3 id="Parallel-Scenario-Analysis"><a class="docs-heading-anchor" href="#Parallel-Scenario-Analysis">Parallel Scenario Analysis</a><a id="Parallel-Scenario-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Parallel-Scenario-Analysis" title="Permalink"></a></h3><p>Distributed policy analysis across multiple cores:</p><pre><code class="language-julia hljs">using Distributed, SharedArrays
+
+# For demonstration - would typically use addprocs() to add workers
+# addprocs(2)
+
+# @everywhere using FormulaCompiler, RDatasets, GLM, Tables
+
+function parallel_policy_analysis()
+    wages = dataset(&quot;Ecdat&quot;, &quot;Bwages&quot;)
+    wages.Male = wages.Sex .== &quot;male&quot;
+    data = Tables.columntable(wages)
+    
+    model = lm(@formula(log(Wage) ~ Educ * Male + Exper), wages)
+    compiled = compile_formula(model, data)
+    
+    # Define policy grid parameters
+    educ_levels = [10, 12, 14, 16, 18, 20]        # Education levels
+    exper_levels = [0, 5, 10, 15, 20, 25]         # Experience levels
+    male_levels = [false, true]                    # Gender
+
+    n_rows = length(data.Educ)
+    n_scenarios = length(educ_levels) * length(exper_levels) * length(male_levels)  # 6×6×2 = 72
+    n_workers = min(100, n_rows)  # Sample size for analysis
+
+    # Results storage
+    results = SharedArray{Float64}(n_scenarios)
+
+    # Parallel computation would go here
+    # @distributed for scenario_idx in 1:n_scenarios
+    scenario_idx = 1
+    for educ_val in educ_levels, exper_val in exper_levels, male_val in male_levels
+        # Create scenario data
+        scenario_data = merge(data, (
+            Educ = fill(educ_val, n_rows),
+            Exper = fill(exper_val, n_rows),
+            Male = fill(male_val, n_rows)
+        ))
+
+        output = Vector{Float64}(undef, length(compiled))
+        β = coef(model)
+
+        wage_predictions = Float64[]
+        for worker in 1:n_workers
+            compiled(output, scenario_data, worker)
+            wage_pred = exp(dot(β, output))
+            push!(wage_predictions, wage_pred)
+        end
+
+        results[scenario_idx] = mean(wage_predictions)
+        scenario_idx += 1
+    end
+
+    return results, educ_levels, exper_levels, male_levels  # Return results and grid parameters
+end
+
+# Run parallel analysis
+println(&quot;Running comprehensive policy analysis...&quot;)
+results, educ_levels, exper_levels, male_levels = parallel_policy_analysis()
+
+# Find optimal policy
+best_idx = argmax(results)
+best_wage = results[best_idx]
+
+# Decode scenario index to parameters
+n_exper = length(exper_levels)
+n_male = length(male_levels)
+educ_idx = div(best_idx - 1, n_exper * n_male) + 1
+exper_idx = div(mod(best_idx - 1, n_exper * n_male), n_male) + 1
+male_idx = mod(best_idx - 1, n_male) + 1
+
+println(&quot;Optimal policy scenario:&quot;)
+println(&quot;  Education: $(educ_levels[educ_idx]) years&quot;)
+println(&quot;  Experience: $(exper_levels[exper_idx]) years&quot;)
+println(&quot;  Gender: $(male_levels[male_idx] ? &quot;Male&quot; : &quot;Female&quot;)&quot;)
+println(&quot;  Mean predicted wage: \$$(round(best_wage, digits=2))&quot;)</code></pre><h2 id="Performance-Notes"><a class="docs-heading-anchor" href="#Performance-Notes">Performance Notes</a><a id="Performance-Notes-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Notes" title="Permalink"></a></h2><p>All examples demonstrate FormulaCompiler.jl&#39;s key performance characteristics:</p><ul><li><strong>Zero-allocation core evaluation</strong>: <code>compiled(output, data, row)</code> calls allocate zero bytes</li><li><strong>Memory-efficient scenarios</strong>: Override system uses constant memory regardless of data size</li><li><strong>Backend selection</strong>: Choose between automatic differentiation (<code>:ad</code>, higher accuracy) and finite differences (<code>:fd</code>, explicit control) using <code>derivativeevaluator(:ad/:fd, ...)</code></li><li><strong>Scalable patterns</strong>: Performance remains constant regardless of dataset size</li></ul><p>For detailed performance optimization techniques, see the <a href="../guide/performance/">Performance Guide</a>.</p><h2 id="Further-Reading"><a class="docs-heading-anchor" href="#Further-Reading">Further Reading</a><a id="Further-Reading-1"></a><a class="docs-heading-anchor-permalink" href="#Further-Reading" title="Permalink"></a></h2><ul><li><a href="../guide/basic_usage/">Basic Usage</a> - Fundamental patterns and validation techniques</li><li><a href="../guide/scenarios/">Scenario Analysis</a> - Comprehensive coverage of the override system</li><li><a href="../guide/advanced_features/">Advanced Features</a> - Derivative computation and high-performance patterns</li><li><a href="../api/">API Reference</a> - Complete function documentation</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../api/">« API Reference</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Monday 23 February 2026 23:58">Monday 23 February 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
