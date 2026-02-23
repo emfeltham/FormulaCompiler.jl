@@ -1,0 +1,26 @@
+flowchart TD
+    A["Statistical Model<br>GLM/MixedModel with fitted formula"] --> B["Extract Formula<br>model.mf.f"]
+    B --> C["Decompose Terms<br>identify and classify components"]
+    
+    C --> D{Term Classification}
+    D -->|Constants| E["Constant Operation<br>Fixed values in output"]
+    D -->|Continuous| F["Continuous Operation<br>Direct column access"]
+    D -->|Categorical| G["Categorical Operation<br>Contrast matrix application"]
+    D -->|Functions| H["Function Operation<br>log, exp, sqrt, etc."]
+    D -->|Interactions| I["Interaction Operation<br>Kronecker product patterns"]
+    
+    E --> J["Position Analysis<br>Determine output locations"]
+    F --> J
+    G --> J
+    H --> J
+    I --> J
+    
+    J --> K["Memory Layout Planning<br>Scratch space allocation"]
+    K --> L["Type Specialization<br>Embed positions in operation types"]
+    L --> M["Code Generation<br>Create type-stable evaluator"]
+    M --> N["Compiled Evaluator<br>Zero-allocation callable object"]
+    
+    style A fill:#e1f5fe
+    style N fill:#e8f5e8
+    style J fill:#f3e5f5
+    style L fill:#fff3e0
