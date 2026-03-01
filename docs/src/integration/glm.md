@@ -152,8 +152,10 @@ compiled_contrasts = compile_formula(model_contrasts, Tables.columntable(df_cont
 
 ```julia
 # Weighted regression
-weights = rand(0.5:0.1:2.0, 1000)
-weighted_model = lm(@formula(y ~ x1 + x2), df, wts=weights)
+ws = rand(0.5:0.1:2.0, 1000)
+weighted_model = lm(
+    @formula(y ~ x1 + x2), df; weights=ws
+)
 
 # GLM with offset
 df_offset = DataFrame(

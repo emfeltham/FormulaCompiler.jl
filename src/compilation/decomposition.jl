@@ -650,6 +650,46 @@ function decompose_term!(ctx::CompilationContext, term::ZScoredTerm, data_exampl
     return std_pos
 end
 
+# Handle CenteredTerm (from StandardizedPredictors)
+function decompose_term!(ctx::CompilationContext, term::CenteredTerm, data_example)
+    # CenteredTerm only centers (no scaling): (x - center)
+    # Reuse StandardizeOp with scale=1.0
+
+    # First decompose the inner term to get the raw value position
+    raw_pos = decompose_term!(ctx, term.term, data_example)
+
+    # Allocate a new position for the centered value
+    std_pos = allocate_position!(ctx)
+
+    # Add standardization operation: (raw - center) / 1.0
+    push!(ctx.operations, StandardizeOp{raw_pos, std_pos, term.center, 1.0}())
+
+    # Store the centered position in the position map
+    ctx.position_map[term] = std_pos
+
+    return std_pos
+end
+
+# Handle ScaledTerm (from StandardizedPredictors)
+function decompose_term!(ctx::CompilationContext, term::ScaledTerm, data_example)
+    # ScaledTerm only scales (no centering): x / scale
+    # Reuse StandardizeOp with center=0.0
+
+    # First decompose the inner term to get the raw value position
+    raw_pos = decompose_term!(ctx, term.term, data_example)
+
+    # Allocate a new position for the scaled value
+    std_pos = allocate_position!(ctx)
+
+    # Add standardization operation: (raw - 0.0) / scale
+    push!(ctx.operations, StandardizeOp{raw_pos, std_pos, 0.0, term.scale}())
+
+    # Store the scaled position in the position map
+    ctx.position_map[term] = std_pos
+
+    return std_pos
+end
+
 # Handle RandomEffectsTerm (from MixedModels)
 function decompose_term!(ctx::CompilationContext, term::RandomEffectsTerm, data_example)
     # Skip random effects for now - we only compile fixed effects

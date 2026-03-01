@@ -90,6 +90,14 @@ function extract_columns_recursive!(columns::Vector{Symbol}, term::ZScoredTerm)
     extract_columns_recursive!(columns, term.term)
 end
 
+function extract_columns_recursive!(columns::Vector{Symbol}, term::CenteredTerm)
+    extract_columns_recursive!(columns, term.term)
+end
+
+function extract_columns_recursive!(columns::Vector{Symbol}, term::ScaledTerm)
+    extract_columns_recursive!(columns, term.term)
+end
+
 function extract_columns_recursive!(columns::Vector{Symbol}, term::MatrixTerm)
     for sub_term in term.terms
         extract_columns_recursive!(columns, sub_term)

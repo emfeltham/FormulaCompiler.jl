@@ -236,7 +236,7 @@ The position tuple `(4, 5)` represents all allocated positions.
 - **Type parameter**: Output positions (compile-time)
 - **Field storage**: Contrast matrix (runtime data, but pre-computed)
 """
-struct ContrastOp{Column, OutPositions} <: AbstractOp 
+struct ContrastOp{Column, OutPositions} <: AbstractOp
     contrast_matrix::Matrix{Float64}  # Pre-computed contrast matrix
 end
 

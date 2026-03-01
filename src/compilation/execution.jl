@@ -400,10 +400,8 @@ end
         return Int(cat_value)
     elseif isa(cat_value, String)
         # Handle String values in Vector{String} columns (common with GLM/DataFrames)
-        # For normal String categorical data, we need to map to level codes
-        # This requires knowing the unique levels in the column to assign consistent codes
-
-        # Try to find unique levels in the parent column to assign consistent level codes
+        # NOTE: This path is O(n) per row due to sort!(unique(column_data)).
+        # For O(1) performance, use CategoricalArrays to wrap string columns before fitting.
         if column_data isa AbstractVector{String}
             # Get unique levels from the column and sort for consistent indexing
             unique_levels = sort!(unique(column_data))
@@ -480,11 +478,11 @@ end
         # Standard categorical handling (unchanged)
         # Extract level code dynamically with zero allocations
         level = extract_level_code(column_data, row_idx)
-        
+
         # Clamp to valid range (safety check)
         n_levels = size(op.contrast_matrix, 1)
         level = clamp(level, 1, n_levels)
-        
+
         # Apply contrast matrix (stored as field)
         for (i, pos) in enumerate(Positions)
             scratch[pos] = convert(eltype(scratch), op.contrast_matrix[level, i])
