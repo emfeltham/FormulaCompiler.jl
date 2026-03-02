@@ -199,13 +199,13 @@ compiled = compile_formula(mixed_model, Tables.columntable(df))  # Fixed effects
 
 ### StandardizedPredictors.jl Integration
 
-Standardized predictors (via [StandardizedPredictors.jl](https://github.com/beacon-biosignals/StandardizedPredictors.jl)) are integrated during compilation (currently limited to currently `ZScore`):
+All three [StandardizedPredictors.jl](https://github.com/beacon-biosignals/StandardizedPredictors.jl) transformations are supported: `ZScore()`, `Center()`, and `Scale()`:
 
 ```julia
 using StandardizedPredictors
 
-contrasts = Dict(:x => ZScore(), :z => ZScore())
-model = lm(@formula(y ~ x + z + group), df, contrasts=contrasts)
+contrasts = Dict(:x => ZScore(), :z => Center(), :w => Scale())
+model = lm(@formula(y ~ x + z + w + group), df, contrasts=contrasts)
 compiled = compile_formula(model, Tables.columntable(df))
 ```
 
@@ -289,7 +289,7 @@ The package supports the complete StatsModels.jl formula language:
 - Mathematical functions: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`
 - Boolean predicates: `(x > 0)`, `(z >= mean(z))`
 - Complex formulas: `x * log(z) * group + sqrt(abs(y))`
-- Standardized predictors: ZScore and custom transformations
+- Standardized predictors: ZScore, Center, Scale, and custom transformations
 - Mixed models: automatic fixed-effects extraction
 
 ## Performance Considerations

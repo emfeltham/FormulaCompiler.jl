@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide explains how FormulaCompiler.jl integrates with StandardizedPredictors.jl to provide efficient evaluation of models with standardized variables. The guide covers user-facing workflows and the underlying architectural principles that enable this integration.
+This guide explains how FormulaCompiler.jl integrates with StandardizedPredictors.jl to provide efficient evaluation of models with standardized, centered, and scaled variables. All three StandardizedPredictors.jl transformations are supported: `ZScore()`, `Center()`, and `Scale()`. The guide covers user-facing workflows and the underlying architectural principles that enable this integration.
 
 ## Table of Contents
 
@@ -27,9 +27,9 @@ df = DataFrame(
     education = rand(["High School", "College", "Graduate"], 1000)
 )
 
-# Fit model with standardized predictors
+# Fit model with standardized, centered, or scaled predictors
 model = lm(@formula(y ~ income + age + education), df,
-           contrasts = Dict(:income => ZScore(), :age => ZScore()))
+           contrasts = Dict(:income => ZScore(), :age => Center(), :education_years => Scale()))
 
 # Compile for fast evaluation
 data = Tables.columntable(df)
@@ -63,8 +63,8 @@ The Julia statistical ecosystem operates on a three-layer architecture that sepa
 
 ```julia
 # Schema layer work happens here:
-model = lm(@formula(y ~ x), data, contrasts = Dict(:x => ZScore()))
-# Standardization applied during fitting
+model = lm(@formula(y ~ x), data, contrasts = Dict(:x => ZScore()))  # or Center(), Scale()
+# Transformation applied during fitting
 ```
 
 #### Layer 2: Compilation Layer  
@@ -97,16 +97,16 @@ compiled(output, data, row)  # 0 allocations; time varies by hardware
 
 ### Common Misconception
 
-**Incorrect approach**: FormulaCompiler should apply z-scoring during evaluation
+**Incorrect approach**: FormulaCompiler should apply transformations during evaluation
 ```julia
 # This would be inefficient - applying transformation every evaluation
-compiled(output, data, row)  # Would standardize x every time
+compiled(output, data, row)  # Would standardize/center/scale x every time
 ```
 
-**Correct approach**: FormulaCompiler operates on pre-standardized data
+**Correct approach**: FormulaCompiler operates on pre-transformed data
 ```julia
 # Efficient - transformation applied once during model fitting
-model = lm(..., contrasts = Dict(:x => ZScore()))  # Transform once
+model = lm(..., contrasts = Dict(:x => ZScore()))  # or Center(), Scale()
 compiled(output, data, row)  # Use pre-transformed data
 ```
 
@@ -114,37 +114,55 @@ compiled(output, data, row)  # Use pre-transformed data
 
 ### Basic Usage
 
-#### Single Variable Standardization
+#### Z-Score Standardization (mean=0, std=1)
 ```julia
 using StandardizedPredictors, FormulaCompiler, GLM
 
-# Standardize income only
+# Standardize income (subtracts mean, divides by std)
 model = lm(@formula(sales ~ income + region), data,
            contrasts = Dict(:income => ZScore()))
 
 compiled = compile_formula(model, Tables.columntable(data))
 ```
 
-#### Multiple Variable Standardization
+#### Centering Only (mean=0, preserves original scale)
 ```julia
-# Standardize multiple continuous variables
+# Center age (subtracts mean, does not rescale)
+model = lm(@formula(sales ~ age + region), data,
+           contrasts = Dict(:age => Center()))
+
+compiled = compile_formula(model, Tables.columntable(data))
+```
+
+#### Scaling Only (std=1, preserves original location)
+```julia
+# Scale income (divides by std, does not center)
+model = lm(@formula(sales ~ income + region), data,
+           contrasts = Dict(:income => Scale()))
+
+compiled = compile_formula(model, Tables.columntable(data))
+```
+
+#### Multiple Variable Transformations
+```julia
+# Mix and match transformations across variables
 model = lm(@formula(y ~ income + age + experience), data,
            contrasts = Dict(
-               :income => ZScore(),
-               :age => ZScore(),
-               :experience => ZScore()
+               :income => ZScore(),       # Full standardization
+               :age => Center(),          # Center only
+               :experience => Scale()     # Scale only
            ))
 ```
 
-#### Mixed Standardization and Contrasts
+#### Mixed Transformations and Contrasts
 ```julia
-# Combine standardization with categorical contrasts
+# Combine standardization/centering/scaling with categorical contrasts
 model = lm(@formula(y ~ income + age + region + education), data,
            contrasts = Dict(
                :income => ZScore(),           # Standardize continuous
-               :age => ZScore(),             # Standardize continuous  
-               :region => EffectsCoding(),   # Effects coding for categorical
-               :education => DummyCoding()   # Dummy coding for categorical
+               :age => Center(),              # Center continuous
+               :region => EffectsCoding(),    # Effects coding for categorical
+               :education => DummyCoding()    # Dummy coding for categorical
            ))
 ```
 
@@ -303,7 +321,7 @@ If you're using Margins.jl (which builds on FormulaCompiler), marginal effects a
 
 ### Validation
 
-This behavior is validated by comprehensive tests in `test/test_standardized_predictors.jl`:
+This behavior is validated by comprehensive tests in `test/test_standardized_predictors.jl` and `test/test_centered_scaled_predictors.jl`:
 
 ```julia
 # Compare raw vs standardized models
@@ -322,50 +340,84 @@ All 278 tests pass, including 18 tests specifically validating derivative scale 
 
 ## Developer Guide: How Integration Works
 
-### The ZScoredTerm Implementation
+### Term Type Implementations
 
-FormulaCompiler.jl handles StandardizedPredictors.jl through a simple but crucial implementation:
+FormulaCompiler.jl handles all three StandardizedPredictors.jl term types through simple but crucial pass-through implementations:
 
 ```julia
 # src/compilation/decomposition.jl
+
+# ZScore: center and scale parameters (x - μ) / σ
 function decompose_term!(ctx::CompilationContext, term::ZScoredTerm, data_example)
-    # StandardizedPredictors.jl applies transformations at the schema level during model fitting
-    # By compilation time, the data has already been transformed
-    # We just decompose the inner term normally
+    return decompose_term!(ctx, term.term, data_example)
+end
+
+# Center: center parameter only, scale = 1.0 (x - μ)
+function decompose_term!(ctx::CompilationContext, term::CenteredTerm, data_example)
+    return decompose_term!(ctx, term.term, data_example)
+end
+
+# Scale: scale parameter only, center = 0.0 (x / σ)
+function decompose_term!(ctx::CompilationContext, term::ScaledTerm, data_example)
     return decompose_term!(ctx, term.term, data_example)
 end
 ```
 
 ### Why Pass-Through is Correct
 
-1. **Schema-Level Transformation**: By the time `decompose_term!` is called, the data has already been standardized
-2. **Metadata Only**: `ZScoredTerm` contains transformation metadata, not active transformation instructions
-3. **No Double-Standardization**: Applying standardization again would be incorrect
+1. **Schema-Level Transformation**: By the time `decompose_term!` is called, the data has already been transformed
+2. **Metadata Only**: The term types contain transformation metadata, not active transformation instructions
+3. **No Double-Transformation**: Applying the transformation again would be incorrect
 
-### ZScoredTerm Structure
+### Term Type Structures
+
+All three types share the same underlying structure with `center` and `scale` fields:
 
 ```julia
 struct ZScoredTerm{T,C,S} <: AbstractTerm
     term::T        # Original term (e.g., Term(:income))
     center::C      # Mean value used for centering
-    scale::S       # Standard deviation used for scaling  
+    scale::S       # Standard deviation used for scaling
+end
+
+struct CenteredTerm{T,C,S} <: AbstractTerm
+    term::T        # Original term
+    center::C      # Mean value used for centering
+    scale::S       # Always 1.0 (degenerate: no scaling)
+end
+
+struct ScaledTerm{T,C,S} <: AbstractTerm
+    term::T        # Original term
+    center::C      # Always 0.0 (degenerate: no centering)
+    scale::S       # Standard deviation used for scaling
 end
 ```
 
-The `center` and `scale` fields contain the transformation parameters, but they're **metadata only** - the actual transformation has already been applied to the data.
+The degenerate parameter pattern means:
+- `CenteredTerm` has `scale = 1.0` → derivative w.r.t. raw variable is unchanged (1/1 = 1)
+- `ScaledTerm` has `center = 0.0` → derivative includes `1/σ` factor from chain rule
+- `ZScoredTerm` has both active → derivative includes `1/σ` factor from chain rule
 
 ### Integration Points
 
 #### 1. Import Declaration
 ```julia
 # src/FormulaCompiler.jl
-using StandardizedPredictors: ZScoredTerm
+using StandardizedPredictors: ZScoredTerm, CenteredTerm, ScaledTerm
 ```
 
 #### 2. Term Decomposition
 ```julia
-# src/compilation/decomposition.jl  
+# src/compilation/decomposition.jl
 function decompose_term!(ctx::CompilationContext, term::ZScoredTerm, data_example)
+    return decompose_term!(ctx, term.term, data_example)
+end
+
+function decompose_term!(ctx::CompilationContext, term::CenteredTerm, data_example)
+    return decompose_term!(ctx, term.term, data_example)
+end
+
+function decompose_term!(ctx::CompilationContext, term::ScaledTerm, data_example)
     return decompose_term!(ctx, term.term, data_example)
 end
 ```
@@ -374,6 +426,14 @@ end
 ```julia
 # src/integration/mixed_models.jl
 function extract_columns_recursive!(columns::Vector{Symbol}, term::ZScoredTerm)
+    extract_columns_recursive!(columns, term.term)
+end
+
+function extract_columns_recursive!(columns::Vector{Symbol}, term::CenteredTerm)
+    extract_columns_recursive!(columns, term.term)
+end
+
+function extract_columns_recursive!(columns::Vector{Symbol}, term::ScaledTerm)
     extract_columns_recursive!(columns, term.term)
 end
 ```
@@ -385,11 +445,18 @@ The integration is validated through comprehensive tests:
 ```julia
 # test/test_standardized_predictors.jl
 @testset "StandardizedPredictors Integration" begin
-    # Basic modelrow evaluation
-    # Derivative computation  
+    # Basic modelrow evaluation (ZScore, Center, Scale)
+    # Derivative computation
     # Scenario analysis
     # Complex formulas with functions and interactions
     # Performance validation (zero allocations)
+end
+
+# test/test_centered_scaled_predictors.jl
+@testset "CenteredTerm and ScaledTerm Integration" begin
+    # Center() and Scale() specific tests
+    # Degenerate parameter validation
+    # Mixed transformation models
 end
 ```
 
@@ -491,9 +558,9 @@ models, compiled = compare_standardized_models(formulas, df, [:income, :age])
 
 ### Compilation Overhead
 
-Standardization adds **zero compilation overhead** because:
+All three transformations add **zero compilation overhead** because:
 
-1. **No additional operations**: ZScoredTerm just passes through to inner term
+1. **No additional operations**: ZScoredTerm, CenteredTerm, and ScaledTerm all pass through to the inner term
 2. **Same generated code**: Identical operations as non-standardized models
 3. **Same memory usage**: No additional scratch space or operations
 
@@ -589,20 +656,27 @@ model = lm(@formula(y ~ income + age + region), data, contrasts=contrasts)
 
 ### Debugging Tips
 
-#### Verify Standardization Applied
+#### Verify Transformation Applied
 ```julia
-# Check that standardized variables have expected properties
-function validate_standardization(model, data)
-    # Extract model matrix  
+# Check that transformed variables have expected properties
+function validate_transformation(model, data)
+    # Extract model matrix
     X = modelmatrix(model)
-    
-    # For standardized columns, mean should ≈ 0, std ≈ 1
+
     for i in 2:size(X, 2)  # Skip intercept
         col_mean = mean(X[:, i])
         col_std = std(X[:, i])
-        
-        if abs(col_mean) > 1e-10  # Not centered
-            @warn "Column $i may not be properly standardized" col_mean col_std
+
+        # ZScore: mean ≈ 0, std ≈ 1
+        # Center: mean ≈ 0, std ≠ 1 (preserves original scale)
+        # Scale: mean ≠ 0, std ≈ 1 (preserves original location)
+
+        if abs(col_mean) < 1e-10 && abs(col_std - 1.0) < 1e-10
+            @info "Column $i appears z-scored (ZScore)" col_mean col_std
+        elseif abs(col_mean) < 1e-10
+            @info "Column $i appears centered (Center or ZScore)" col_mean col_std
+        elseif abs(col_std - 1.0) < 1e-10
+            @info "Column $i appears scaled (Scale or ZScore)" col_mean col_std
         end
     end
 end
@@ -623,7 +697,7 @@ end
 
 ## Summary
 
-FormulaCompiler.jl's integration with StandardizedPredictors.jl demonstrates Julia's layered statistical ecosystem:
+FormulaCompiler.jl's integration with StandardizedPredictors.jl demonstrates Julia's layered statistical ecosystem. All three transformations (`ZScore()`, `Center()`, `Scale()`) are fully supported:
 
 1. **Schema Layer**: StandardizedPredictors.jl transforms data during model fitting
 2. **Compilation Layer**: FormulaCompiler.jl generates optimized code for pre-transformed data  

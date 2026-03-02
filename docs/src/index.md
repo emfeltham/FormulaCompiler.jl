@@ -117,7 +117,7 @@ marginal_effects_eta!(g, de, beta, row)  # Marginal effects on η
 - Read the [Getting Started](getting_started.md) guide for a detailed walkthrough
 - Explore [Advanced Features](guide/advanced_features.md) for scenario analysis and memory optimization
 - Learn about [Categorical Mixtures](guide/categorical_mixtures.md) for marginal effects computation
-- See [StandardizedPredictors Integration](integration/standardized_predictors.md) for comprehensive z-score standardization workflows
+- See [StandardizedPredictors Integration](integration/standardized_predictors.md) for z-score standardization, centering, and scaling workflows
 - Check out [Examples](examples.md) for real-world use cases
 - Review the [Mathematical Foundation](mathematical_foundation.md) for comprehensive theory and implementation details
 - Review the [API Reference](api.md) for complete function documentation
