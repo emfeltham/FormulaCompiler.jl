@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - March 2026
+
+### Added
+
+- Full support for `CenteredTerm` and `ScaledTerm` from StandardizedPredictors.jl
+  - `Center()` transformation: centering only (mean=0, preserves original scale; scale=1.0)
+  - `Scale()` transformation: scaling only (std=1, preserves original location; center=0.0)
+  - `decompose_term!` methods for `CenteredTerm` and `ScaledTerm` (pass-through, same pattern as `ZScoredTerm`)
+  - `extract_columns_recursive!` methods for mixed model support
+  - All three transformations (`ZScore()`, `Center()`, `Scale()`) now fully supported
+  - New test file: `test/test_centered_scaled_predictors.jl`
+
 ## [1.3.0] - February 2026
 
 ### Fixed
