@@ -35,6 +35,7 @@ for row in 1:100
     contrast_modelrow!(contrast_buf, evaluator, row, :treatment, false, true)
     # Process contrast_buf...
 end</code></pre><p>See &quot;Categorical Contrasts&quot; section below for comprehensive examples.</p><h3 id="Population-Analysis-with-Loop-Patterns"><a class="docs-heading-anchor" href="#Population-Analysis-with-Loop-Patterns">Population Analysis with Loop Patterns</a><a id="Population-Analysis-with-Loop-Patterns-1"></a><a class="docs-heading-anchor-permalink" href="#Population-Analysis-with-Loop-Patterns" title="Permalink"></a></h3><p>FormulaCompiler uses simple loops for population analysis instead of special infrastructure:</p><pre><code class="language-julia hljs">using DataFrames, Tables
+using LinearAlgebra: mul!
 
 df = DataFrame(
     x = randn(1000),
@@ -51,10 +52,12 @@ function compute_population_ame(compiled, data, β, vars)
     de_fd = derivativeevaluator(:fd, compiled, data, vars)
     n_rows = length(first(data))
     ame_sum = zeros(length(vars))
+    J = Matrix{Float64}(undef, length(compiled), length(vars))
     g_temp = Vector{Float64}(undef, length(vars))
 
     for row in 1:n_rows
-        marginal_effects_eta!(g_temp, de_fd, β, row)  # Zero allocations
+        derivative_modelrow!(J, de_fd, row)  # Zero allocations
+        mul!(g_temp, J&#39;, β)                  # ∂η/∂vars at this row
         ame_sum .+= g_temp
     end
 
@@ -168,7 +171,7 @@ effect_scenario_2 = dot(β, row_vec)
 println(&quot;Scenario effects: &quot;, effect_scenario_1 - effect_baseline, &quot;, &quot;, effect_scenario_2 - effect_baseline)</code></pre><h2 id="Advanced-Compilation-Features"><a class="docs-heading-anchor" href="#Advanced-Compilation-Features">Advanced Compilation Features</a><a id="Advanced-Compilation-Features-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Compilation-Features" title="Permalink"></a></h2><h3 id="Introspection-and-Performance"><a class="docs-heading-anchor" href="#Introspection-and-Performance">Introspection and Performance</a><a id="Introspection-and-Performance-1"></a><a class="docs-heading-anchor-permalink" href="#Introspection-and-Performance" title="Permalink"></a></h3><p>Profile compilation performance:</p><pre><code class="language-julia hljs">using BenchmarkTools
 
 # Benchmark compilation time
-@benchmark compile_formula($model, $data)</code></pre><h2 id="Derivative-Computation-System"><a class="docs-heading-anchor" href="#Derivative-Computation-System">Derivative Computation System</a><a id="Derivative-Computation-System-1"></a><a class="docs-heading-anchor-permalink" href="#Derivative-Computation-System" title="Permalink"></a></h2><p>FormulaCompiler provides comprehensive automatic differentiation capabilities for computing Jacobians with dual backend support. For marginal effects, standard errors, and statistical inference, use <a href="https://github.com/emfeltham/Margins.jl">Margins.jl</a> which builds on these computational primitives.</p><blockquote><p><strong>Note</strong>: Examples in this section use functions from <a href="https://github.com/emfeltham/Margins.jl">Margins.jl</a> (<code>marginal_effects_eta!</code>, <code>marginal_effects_mu!</code>, <code>delta_method_se</code>). Install Margins.jl to use these examples: <code>using Pkg; Pkg.add(url=&quot;https://github.com/emfeltham/Margins.jl&quot;)</code></p></blockquote><h3 id="Performance-Characteristics"><a class="docs-heading-anchor" href="#Performance-Characteristics">Performance Characteristics</a><a id="Performance-Characteristics-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Characteristics" title="Permalink"></a></h3><ul><li><strong>Core evaluation</strong>: Zero allocations (modelrow!, compiled functions)</li><li><strong>Both derivative backends</strong>: Zero allocations (ForwardDiff and finite differences)</li><li><strong>AD backend preferred</strong>: Higher accuracy (machine precision) and faster performance</li><li><strong>FD backend alternative</strong>: Explicit step size control</li><li><strong>Validation</strong>: Cross-validated between backends for robustness</li></ul><div class="admonition is-info" id="Backend-Selection-5c8a21016e664c87"><header class="admonition-header">Backend Selection<a class="admonition-anchor" href="#Backend-Selection-5c8a21016e664c87" title="Permalink"></a></header><div class="admonition-body"><p>FormulaCompiler provides dual backends for derivative computation, both achieving zero allocations. Use <code>:ad</code> (ForwardDiff) as the default for higher accuracy and performance. Use <code>:fd</code> (finite differences) only when you need explicit control over step sizes.</p></div></div><h3 id="Derivative-Evaluator-Construction"><a class="docs-heading-anchor" href="#Derivative-Evaluator-Construction">Derivative Evaluator Construction</a><a id="Derivative-Evaluator-Construction-1"></a><a class="docs-heading-anchor-permalink" href="#Derivative-Evaluator-Construction" title="Permalink"></a></h3><p>Build reusable derivative evaluators for efficient computation:</p><pre><code class="language-julia hljs">using FormulaCompiler, GLM
+@benchmark compile_formula($model, $data)</code></pre><h2 id="Derivative-Computation-System"><a class="docs-heading-anchor" href="#Derivative-Computation-System">Derivative Computation System</a><a id="Derivative-Computation-System-1"></a><a class="docs-heading-anchor-permalink" href="#Derivative-Computation-System" title="Permalink"></a></h2><p>FormulaCompiler provides comprehensive automatic differentiation capabilities for computing Jacobians with dual backend support. For marginal effects, standard errors, and statistical inference, use <a href="https://github.com/emfeltham/Margins.jl">Margins.jl</a> which builds on these computational primitives.</p><blockquote><p><strong>Note</strong>: Examples in this section use only FormulaCompiler&#39;s primitives (<code>derivative_modelrow!</code>, <code>contrast_modelrow!</code>, <code>contrast_gradient!</code>) plus <code>LinearAlgebra</code>. For averaged marginal effects with standard errors, use <a href="https://github.com/emfeltham/Margins.jl">Margins.jl</a>&#39;s public API, e.g. <code>population_margins(model, data; type = :effects, vars = [:price])</code> or <code>profile_margins(...)</code>.</p></blockquote><h3 id="Performance-Characteristics"><a class="docs-heading-anchor" href="#Performance-Characteristics">Performance Characteristics</a><a id="Performance-Characteristics-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Characteristics" title="Permalink"></a></h3><ul><li><strong>Core evaluation</strong>: Zero allocations (modelrow!, compiled functions)</li><li><strong>Both derivative backends</strong>: Zero allocations (ForwardDiff and finite differences)</li><li><strong>AD backend preferred</strong>: Higher accuracy (machine precision) and faster performance</li><li><strong>FD backend alternative</strong>: Explicit step size control</li><li><strong>Validation</strong>: Cross-validated between backends for robustness</li></ul><div class="admonition is-info" id="Backend-Selection-5c8a21016e664c87"><header class="admonition-header">Backend Selection<a class="admonition-anchor" href="#Backend-Selection-5c8a21016e664c87" title="Permalink"></a></header><div class="admonition-body"><p>FormulaCompiler provides dual backends for derivative computation, both achieving zero allocations. Use <code>:ad</code> (ForwardDiff) as the default for higher accuracy and performance. Use <code>:fd</code> (finite differences) only when you need explicit control over step sizes.</p></div></div><h3 id="Derivative-Evaluator-Construction"><a class="docs-heading-anchor" href="#Derivative-Evaluator-Construction">Derivative Evaluator Construction</a><a id="Derivative-Evaluator-Construction-1"></a><a class="docs-heading-anchor-permalink" href="#Derivative-Evaluator-Construction" title="Permalink"></a></h3><p>Build reusable derivative evaluators for efficient computation:</p><pre><code class="language-julia hljs">using FormulaCompiler, GLM
 
 # Setup model with mixed variable types
 df = DataFrame(
@@ -204,28 +207,33 @@ J_fd = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
 derivative_modelrow!(J_fd, de_fd, 1)
 
 # All methods produce equivalent results
-@assert isapprox(J_ad, J_fd; rtol=1e-6) &quot;AD and FD should match&quot;</code></pre><h3 id="Marginal-Effects-Computation"><a class="docs-heading-anchor" href="#Marginal-Effects-Computation">Marginal Effects Computation</a><a id="Marginal-Effects-Computation-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects-Computation" title="Permalink"></a></h3><p>Compute effects on linear predictor and response scales:</p><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta!, marginal_effects_mu!
+@assert isapprox(J_ad, J_fd; rtol=1e-6) &quot;AD and FD should match&quot;</code></pre><h3 id="Marginal-Effects-Computation"><a class="docs-heading-anchor" href="#Marginal-Effects-Computation">Marginal Effects Computation</a><a id="Marginal-Effects-Computation-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects-Computation" title="Permalink"></a></h3><p>Compute effects on linear predictor and response scales:</p><pre><code class="language-julia hljs">using LinearAlgebra: dot, mul!
+using StatsModels  # for TableRegressionModel
 
 β = coef(model)
 
-# Effects on linear predictor η = Xβ
+# Effects on linear predictor η = Xβ: g_eta = J&#39;β
+J = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
 g_eta = Vector{Float64}(undef, length(continuous_vars))
 
 # AD backend: Zero allocations, higher accuracy (preferred)
 de_ad = derivativeevaluator(:ad, compiled, data, continuous_vars)
-marginal_effects_eta!(g_eta, de_ad, β, 1)
+derivative_modelrow!(J, de_ad, 1)
+mul!(g_eta, J&#39;, β)
 
 # FD backend: Zero allocations, explicit step control (alternative)
 de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
-marginal_effects_eta!(g_eta, de_fd, β, 1)
+derivative_modelrow!(J, de_fd, 1)
+mul!(g_eta, J&#39;, β)
 
-# Effects on response scale μ (for GLM models)
-if model isa GLM.GeneralizedLinearModel
-    link_function = GLM.Link(model)
-    g_mu = Vector{Float64}(undef, length(continuous_vars))
-
-    # Using AD evaluator for response scale effects
-    marginal_effects_mu!(g_mu, de_ad, β, 1, link_function)
+# Effects on response scale μ (for GLM models): chain rule, dμ/dx = dμ/dη ⋅ dη/dx
+glm_fit = model isa StatsModels.TableRegressionModel ? model.model : model
+if glm_fit isa GLM.GeneralizedLinearModel
+    link_function = GLM.Link(glm_fit)
+    xrow = Vector{Float64}(undef, length(compiled))
+    compiled(xrow, data, 1)
+    η = dot(β, xrow)
+    g_mu = g_eta .* GLM.mueta(link_function, η)
 
     println(&quot;Marginal effects on linear predictor: $g_eta&quot;)
     println(&quot;Marginal effects on response scale: $g_mu&quot;)
@@ -274,9 +282,9 @@ end
 ∇β = Vector{Float64}(undef, length(compiled))
 contrast_gradient!(∇β, evaluator, 1, :region, &quot;North&quot;, &quot;South&quot;, β)
 
-# Delta method standard error
+# Delta method standard error: sqrt(∇β&#39; Σ ∇β)
 vcov_matrix = vcov(model)
-se = delta_method_se(evaluator, 1, :region, &quot;North&quot;, &quot;South&quot;, β, vcov_matrix)</code></pre><p><strong>When to use</strong>: 100+ contrasts, production pipelines, memory-constrained environments.</p><div class="admonition is-info" id="How-Categorical-Contrasts-Work-ec574b2131dd54dc"><header class="admonition-header">How Categorical Contrasts Work<a class="admonition-anchor" href="#How-Categorical-Contrasts-Work-ec574b2131dd54dc" title="Permalink"></a></header><div class="admonition-body"><p>For a detailed explanation of both approaches, including the internal mechanism of <code>ContrastEvaluator</code> and <code>CounterfactualVectors</code>, see <a href="../../internals/contrast_mechanism/">How Categorical Contrasts Work</a>.</p></div></div><h3 id="Advanced-Configuration"><a class="docs-heading-anchor" href="#Advanced-Configuration">Advanced Configuration</a><a id="Advanced-Configuration-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Configuration" title="Permalink"></a></h3><p>Optimize derivative computation for specific use cases:</p><pre><code class="language-julia hljs"># Variable selection strategies
+se = sqrt(dot(∇β, vcov_matrix, ∇β))</code></pre><p><strong>When to use</strong>: 100+ contrasts, production pipelines, memory-constrained environments.</p><div class="admonition is-info" id="How-Categorical-Contrasts-Work-ec574b2131dd54dc"><header class="admonition-header">How Categorical Contrasts Work<a class="admonition-anchor" href="#How-Categorical-Contrasts-Work-ec574b2131dd54dc" title="Permalink"></a></header><div class="admonition-body"><p>For a detailed explanation of both approaches, including the internal mechanism of <code>ContrastEvaluator</code> and <code>CounterfactualVectors</code>, see <a href="../../internals/contrast_mechanism/">How Categorical Contrasts Work</a>.</p></div></div><h3 id="Advanced-Configuration"><a class="docs-heading-anchor" href="#Advanced-Configuration">Advanced Configuration</a><a id="Advanced-Configuration-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Configuration" title="Permalink"></a></h3><p>Optimize derivative computation for specific use cases:</p><pre><code class="language-julia hljs"># Variable selection strategies
 all_continuous = continuous_variables(compiled, data)
 economic_vars = [:price, :quantity]  # Domain-specific subset
 interaction_vars = [:price]          # Focus on key interactions
@@ -284,8 +292,10 @@ interaction_vars = [:price]          # Focus on key interactions
 # Backend selection based on requirements
 function compute_derivatives_with_backend_choice(compiled, data, vars, β, row, backend=:ad)
     de = derivativeevaluator(backend, compiled, data, vars)
+    J = Matrix{Float64}(undef, length(compiled), length(vars))
     g = Vector{Float64}(undef, length(vars))
-    marginal_effects_eta!(g, de, β, row)
+    derivative_modelrow!(J, de, row)
+    mul!(g, J&#39;, β)  # ∂η/∂vars (using LinearAlgebra: mul!)
     return g
 end</code></pre><h3 id="Mixed-Models-(Fixed-Effects)"><a class="docs-heading-anchor" href="#Mixed-Models-(Fixed-Effects)">Mixed Models (Fixed Effects)</a><a id="Mixed-Models-(Fixed-Effects)-1"></a><a class="docs-heading-anchor-permalink" href="#Mixed-Models-(Fixed-Effects)" title="Permalink"></a></h3><p>Derivatives target the fixed-effects design (random effects are intentionally excluded):</p><pre><code class="language-julia hljs">using MixedModels
 
@@ -310,11 +320,12 @@ J = Matrix{Float64}(undef, length(compiled), length(de_ad.vars))
 @benchmark derivative_modelrow!($J, $de_ad, 25)  # AD (faster)
 @benchmark derivative_modelrow!($J, $de_fd, 25)  # FD
 
-# Benchmark marginal effects
+# Benchmark marginal effects on η (Jacobian + J&#39;β)
+using LinearAlgebra: mul!
 β = coef(model)
 g = Vector{Float64}(undef, length(de_ad.vars))
-@benchmark marginal_effects_eta!($g, $de_ad, $β, 25)  # AD (faster, more accurate)
-@benchmark marginal_effects_eta!($g, $de_fd, $β, 25)  # FD</code></pre><h2 id="Complex-Formula-Support"><a class="docs-heading-anchor" href="#Complex-Formula-Support">Complex Formula Support</a><a id="Complex-Formula-Support-1"></a><a class="docs-heading-anchor-permalink" href="#Complex-Formula-Support" title="Permalink"></a></h2><h3 id="Nested-Functions"><a class="docs-heading-anchor" href="#Nested-Functions">Nested Functions</a><a id="Nested-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Nested-Functions" title="Permalink"></a></h3><p>FormulaCompiler.jl handles complex nested functions:</p><pre><code class="language-julia hljs">@formula(y ~ log(sqrt(abs(x))) + exp(sin(z)) * group)</code></pre><h3 id="Boolean-Logic"><a class="docs-heading-anchor" href="#Boolean-Logic">Boolean Logic</a><a id="Boolean-Logic-1"></a><a class="docs-heading-anchor-permalink" href="#Boolean-Logic" title="Permalink"></a></h3><p>Sophisticated boolean expressions:</p><pre><code class="language-julia hljs">@formula(y ~ (x &gt; 0) * (z &lt; mean(z)) + (group == &quot;A&quot;) * log(w))</code></pre><h3 id="Custom-Functions"><a class="docs-heading-anchor" href="#Custom-Functions">Custom Functions</a><a id="Custom-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-Functions" title="Permalink"></a></h3><p>Define custom functions for use in formulas:</p><pre><code class="language-julia hljs"># Define custom function
+@benchmark (derivative_modelrow!($J, $de_ad, 25); mul!($g, $J&#39;, $β))  # AD (faster, more accurate)
+@benchmark (derivative_modelrow!($J, $de_fd, 25); mul!($g, $J&#39;, $β))  # FD</code></pre><h2 id="Complex-Formula-Support"><a class="docs-heading-anchor" href="#Complex-Formula-Support">Complex Formula Support</a><a id="Complex-Formula-Support-1"></a><a class="docs-heading-anchor-permalink" href="#Complex-Formula-Support" title="Permalink"></a></h2><h3 id="Nested-Functions"><a class="docs-heading-anchor" href="#Nested-Functions">Nested Functions</a><a id="Nested-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Nested-Functions" title="Permalink"></a></h3><p>FormulaCompiler.jl handles complex nested functions:</p><pre><code class="language-julia hljs">@formula(y ~ log(sqrt(abs(x))) + exp(sin(z)) * group)</code></pre><h3 id="Boolean-Logic"><a class="docs-heading-anchor" href="#Boolean-Logic">Boolean Logic</a><a id="Boolean-Logic-1"></a><a class="docs-heading-anchor-permalink" href="#Boolean-Logic" title="Permalink"></a></h3><p>Sophisticated boolean expressions:</p><pre><code class="language-julia hljs">@formula(y ~ (x &gt; 0) * (z &lt; mean(z)) + (group == &quot;A&quot;) * log(w))</code></pre><h3 id="Custom-Functions"><a class="docs-heading-anchor" href="#Custom-Functions">Custom Functions</a><a id="Custom-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-Functions" title="Permalink"></a></h3><p>Define custom functions for use in formulas:</p><pre><code class="language-julia hljs"># Define custom function
 custom_transform(x) = x &gt; 0 ? log(1 + x) : -log(1 - x)
 
 # Use in formula (requires function to be defined in scope)
@@ -523,6 +534,7 @@ end</code></pre><h2 id="Real-World-Application-Patterns"><a class="docs-heading-
 
         # Evaluate predictions and marginal effects for each individual
         row_vec = Vector{Float64}(undef, length(compiled))
+        J = Matrix{Float64}(undef, length(compiled), length(policy_vars))
         marginal_vec = Vector{Float64}(undef, length(policy_vars))
 
         for i in 1:n_individuals
@@ -531,7 +543,8 @@ end</code></pre><h2 id="Real-World-Application-Patterns"><a class="docs-heading-
             scenario_predictions[i] = dot(β, row_vec)
 
             # Marginal effects
-            marginal_effects_eta!(marginal_vec, de_fd, β, i)  # Zero allocations
+            derivative_modelrow!(J, de_fd, i)  # Zero allocations
+            mul!(marginal_vec, J&#39;, β)          # ∂η/∂policy_vars
             scenario_marginals[i, :] .= marginal_vec
         end
 
@@ -594,10 +607,12 @@ println(&quot;Policy effect: $(round(policy_effect, digits=3))&quot;)</code></pr
     # Compute marginal effects for sensitivity analysis
     if !isempty(continuous_biomarkers)
         marginal_matrix = Matrix{Float64}(undef, n_patients, length(continuous_biomarkers))
+        J = Matrix{Float64}(undef, length(compiled), length(continuous_biomarkers))
         marginal_vec = Vector{Float64}(undef, length(continuous_biomarkers))
         
         for patient_idx in 1:n_patients
-            marginal_effects_eta!(marginal_vec, de_fd, β, patient_idx)
+            derivative_modelrow!(J, de_fd, patient_idx)
+            mul!(marginal_vec, J&#39;, β)  # ∂η/∂biomarkers
             marginal_matrix[patient_idx, :] .= marginal_vec
         end
         
@@ -660,10 +675,12 @@ bio_results = biomarker_analysis(oncology_model, patient_data, biomarker_ranges)
     # Risk sensitivity analysis
     if !isempty(risk_factors)
         sensitivity_matrix = Matrix{Float64}(undef, n_assets, length(risk_factors))
+        J = Matrix{Float64}(undef, length(compiled), length(risk_factors))
         sensitivity_vec = Vector{Float64}(undef, length(risk_factors))
         
         for asset_idx in 1:n_assets
-            marginal_effects_eta!(sensitivity_vec, de_fd, β, asset_idx)
+            derivative_modelrow!(J, de_fd, asset_idx)
+            mul!(sensitivity_vec, J&#39;, β)  # ∂η/∂risk_factors
             sensitivity_matrix[asset_idx, :] .= sensitivity_vec
         end
         
@@ -691,4 +708,4 @@ baseline_value = sum(risk_analysis.scenario_valuations[&quot;baseline&quot;])
 crash_value = sum(risk_analysis.scenario_valuations[&quot;market_crash&quot;])
 portfolio_risk = (crash_value - baseline_value) / baseline_value
 
-println(&quot;Portfolio stress loss: $(round(portfolio_risk * 100, digits=2))%&quot;)</code></pre><h2 id="Further-Reading"><a class="docs-heading-anchor" href="#Further-Reading">Further Reading</a><a id="Further-Reading-1"></a><a class="docs-heading-anchor-permalink" href="#Further-Reading" title="Permalink"></a></h2><ul><li><a href="../categorical_mixtures/">Categorical Contrasts Guide</a> - Detailed coverage of categorical contrasts and mixtures</li><li><a href="../performance/">Performance Guide</a> - Detailed optimization strategies and benchmarking</li><li><a href="../../api/#API-Reference">API Reference</a> - Complete function documentation</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../basic_usage/">« Basic Usage</a><a class="docs-footer-nextpage" href="../categorical_mixtures/">Categorical Mixtures »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Thursday 15 October 2026 21:47">Thursday 15 October 2026</span>. Using Julia version 1.13.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+println(&quot;Portfolio stress loss: $(round(portfolio_risk * 100, digits=2))%&quot;)</code></pre><h2 id="Further-Reading"><a class="docs-heading-anchor" href="#Further-Reading">Further Reading</a><a id="Further-Reading-1"></a><a class="docs-heading-anchor-permalink" href="#Further-Reading" title="Permalink"></a></h2><ul><li><a href="../categorical_mixtures/">Categorical Contrasts Guide</a> - Detailed coverage of categorical contrasts and mixtures</li><li><a href="../performance/">Performance Guide</a> - Detailed optimization strategies and benchmarking</li><li><a href="../../api/#API-Reference">API Reference</a> - Complete function documentation</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../basic_usage/">« Basic Usage</a><a class="docs-footer-nextpage" href="../categorical_mixtures/">Categorical Mixtures »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Thursday 15 October 2026 21:52">Thursday 15 October 2026</span>. Using Julia version 1.13.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

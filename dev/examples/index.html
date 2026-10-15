@@ -30,7 +30,7 @@ for x_val in x_values
         compiled(view(results, scenario_idx, :), data_scenario, 1)
         scenario_idx += 1
     end
-end</code></pre><h3 id="Marginal-Effects"><a class="docs-heading-anchor" href="#Marginal-Effects">Marginal Effects</a><a id="Marginal-Effects-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects" title="Permalink"></a></h3><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta! and marginal_effects_mu!
+end</code></pre><h3 id="Marginal-Effects"><a class="docs-heading-anchor" href="#Marginal-Effects">Marginal Effects</a><a id="Marginal-Effects-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects" title="Permalink"></a></h3><pre><code class="language-julia hljs">using LinearAlgebra: mul!
 
 # Identify continuous variables and build evaluators
 vars = continuous_variables(compiled, data)  # [:x]
@@ -38,10 +38,14 @@ de_ad = derivativeevaluator(:ad, compiled, data, vars)  # Automatic differentiat
 de_fd = derivativeevaluator(:fd, compiled, data, vars)  # Finite differences: explicit step control
 β = coef(model)
 
-# Compute marginal effects
+# Marginal effects on η = Xβ: g = J&#39;β, where J[i, j] = ∂X[i]/∂vars[j]
+J = Matrix{Float64}(undef, length(compiled), length(vars))  # allocate once
 g = Vector{Float64}(undef, length(vars))
-marginal_effects_eta!(g, de_ad, β, 1)  # Zero allocations, higher accuracy
-marginal_effects_eta!(g, de_fd, β, 1)  # Zero allocations, explicit step control</code></pre><h3 id="Batch-Processing"><a class="docs-heading-anchor" href="#Batch-Processing">Batch Processing</a><a id="Batch-Processing-1"></a><a class="docs-heading-anchor-permalink" href="#Batch-Processing" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Multiple rows at once
+derivative_modelrow!(J, de_ad, 1); mul!(g, J&#39;, β)  # Zero allocations, higher accuracy
+derivative_modelrow!(J, de_fd, 1); mul!(g, J&#39;, β)  # Zero allocations, explicit step control
+
+# Averaged effects with standard errors are provided by Margins.jl:
+# population_margins(model, data; type = :effects, vars = vars)</code></pre><h3 id="Batch-Processing"><a class="docs-heading-anchor" href="#Batch-Processing">Batch Processing</a><a id="Batch-Processing-1"></a><a class="docs-heading-anchor-permalink" href="#Batch-Processing" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Multiple rows at once
 n_rows = 50
 results = Matrix{Float64}(undef, n_rows, length(compiled))
 for i in 1:n_rows
@@ -85,19 +89,21 @@ for (scenario_name, scenario_data) in scenarios
 
     mean_wage = mean(wages_predicted)
     println(&quot;$(scenario_name): Mean predicted wage = \$$(round(mean_wage, digits=2))&quot;)
-end</code></pre><h4 id="Marginal-Effects-on-Wages"><a class="docs-heading-anchor" href="#Marginal-Effects-on-Wages">Marginal Effects on Wages</a><a id="Marginal-Effects-on-Wages-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects-on-Wages" title="Permalink"></a></h4><p>Compute returns to education and experience:</p><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta!
+end</code></pre><h4 id="Marginal-Effects-on-Wages"><a class="docs-heading-anchor" href="#Marginal-Effects-on-Wages">Marginal Effects on Wages</a><a id="Marginal-Effects-on-Wages-1"></a><a class="docs-heading-anchor-permalink" href="#Marginal-Effects-on-Wages" title="Permalink"></a></h4><p>Compute returns to education and experience:</p><pre><code class="language-julia hljs">using LinearAlgebra: mul!
 
 # Build derivative evaluator for continuous variables
 continuous_vars = [:Educ, :Exper]  # Education and experience are continuous
 de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
 
 # Compute marginal effects for representative workers
+J = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
 g_eta = Vector{Float64}(undef, length(continuous_vars))
 
 # Male worker with median characteristics
 male_median_idx = findfirst(row -&gt; row.Male &amp;&amp; row.Educ ≈ median(wages.Educ), eachrow(wages))
 if !isnothing(male_median_idx)
-    marginal_effects_eta!(g_eta, de_fd, β, male_median_idx)
+    derivative_modelrow!(J, de_fd, male_median_idx)
+    mul!(g_eta, J&#39;, β)  # ∂η/∂(Educ, Exper)
     println(&quot;Male median worker - Returns to education: $(round(g_eta[1]*100, digits=2))%&quot;)
     println(&quot;Male median worker - Returns to experience: $(round(g_eta[2]*100, digits=2))%&quot;)
 end</code></pre><h3 id="Engineering:-Automotive-Performance-Analysis"><a class="docs-heading-anchor" href="#Engineering:-Automotive-Performance-Analysis">Engineering: Automotive Performance Analysis</a><a id="Engineering:-Automotive-Performance-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Engineering:-Automotive-Performance-Analysis" title="Permalink"></a></h3><p>Engine performance modeling using the classic mtcars dataset:</p><pre><code class="language-julia hljs">using RDatasets, FormulaCompiler, GLM
@@ -148,12 +154,13 @@ end
 best_scenario_idx = argmax(scenario_results)
 best_mpg = scenario_results[best_scenario_idx]
 println(&quot;Best design scenario: $(scenario_descriptions[best_scenario_idx])&quot;)
-println(&quot;Predicted MPG: $(round(best_mpg, digits=2))&quot;)</code></pre><h4 id="Performance-Sensitivity-Analysis"><a class="docs-heading-anchor" href="#Performance-Sensitivity-Analysis">Performance Sensitivity Analysis</a><a id="Performance-Sensitivity-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Sensitivity-Analysis" title="Permalink"></a></h4><p>Compute sensitivity to design parameters:</p><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta!
+println(&quot;Predicted MPG: $(round(best_mpg, digits=2))&quot;)</code></pre><h4 id="Performance-Sensitivity-Analysis"><a class="docs-heading-anchor" href="#Performance-Sensitivity-Analysis">Performance Sensitivity Analysis</a><a id="Performance-Sensitivity-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Sensitivity-Analysis" title="Permalink"></a></h4><p>Compute sensitivity to design parameters:</p><pre><code class="language-julia hljs">using LinearAlgebra: mul!
 
 # Marginal effects on fuel efficiency
 engineering_vars = [:HP, :WT]  # Continuous engineering parameters
 de_fd = derivativeevaluator(:fd, compiled, data, engineering_vars)
 
+J = Matrix{Float64}(undef, length(compiled), length(engineering_vars))
 g = Vector{Float64}(undef, length(engineering_vars))
 
 # Analyze sensitivity for different vehicle classes
@@ -161,7 +168,8 @@ for (car_type, indices) in [(&quot;Sports cars&quot;, findall(x -&gt; x &gt; 200
                             (&quot;Economy cars&quot;, findall(x -&gt; x &lt; 100, mtcars.HP))]
     if !isempty(indices)
         representative_idx = indices[1]
-        marginal_effects_eta!(g, de_fd, β, representative_idx)
+        derivative_modelrow!(J, de_fd, representative_idx)
+        mul!(g, J&#39;, β)  # ∂η/∂(HP, WT)
 
         println(&quot;$car_type sensitivity:&quot;)
         println(&quot;  MPG change per HP unit: $(round(g[1], digits=3))&quot;)
@@ -202,12 +210,13 @@ for (profile_name, scenario_data) in clinical_scenarios
     predicted_days = exp(predicted_log_survival) - 1
 
     println(&quot;$(profile_name): Predicted survival = $(round(predicted_days, digits=0)) days&quot;)
-end</code></pre><h4 id="Clinical-Risk-Factors"><a class="docs-heading-anchor" href="#Clinical-Risk-Factors">Clinical Risk Factors</a><a id="Clinical-Risk-Factors-1"></a><a class="docs-heading-anchor-permalink" href="#Clinical-Risk-Factors" title="Permalink"></a></h4><p>Quantify impact of patient characteristics on outcomes:</p><pre><code class="language-julia hljs">using Margins  # Provides marginal_effects_eta!
+end</code></pre><h4 id="Clinical-Risk-Factors"><a class="docs-heading-anchor" href="#Clinical-Risk-Factors">Clinical Risk Factors</a><a id="Clinical-Risk-Factors-1"></a><a class="docs-heading-anchor-permalink" href="#Clinical-Risk-Factors" title="Permalink"></a></h4><p>Quantify impact of patient characteristics on outcomes:</p><pre><code class="language-julia hljs">using LinearAlgebra: mul!
 
 # Marginal effects for continuous clinical variables
 clinical_vars = [:age]  # Age is the main continuous predictor
 de_fd = derivativeevaluator(:fd, compiled, data, clinical_vars)
 
+J = Matrix{Float64}(undef, length(compiled), length(clinical_vars))
 g = Vector{Float64}(undef, length(clinical_vars))
 
 # Risk assessment for different patient groups
@@ -215,7 +224,8 @@ for (group, sex_val) in [(&quot;Male patients&quot;, 1), (&quot;Female patients&
     group_indices = findall(x -&gt; x == sex_val, lung_complete.sex)
     if !isempty(group_indices)
         representative_idx = group_indices[div(length(group_indices), 2)]  # Median patient
-        marginal_effects_eta!(g, de_fd, β, representative_idx)
+        derivative_modelrow!(J, de_fd, representative_idx)
+        mul!(g, J&#39;, β)  # ∂η/∂age
 
         daily_age_effect = g[1]  # Effect per year of age
         yearly_effect = exp(daily_age_effect) - 1  # Convert from log scale
@@ -452,4 +462,4 @@ println(&quot;Optimal policy scenario:&quot;)
 println(&quot;  Education: $(educ_levels[educ_idx]) years&quot;)
 println(&quot;  Experience: $(exper_levels[exper_idx]) years&quot;)
 println(&quot;  Gender: $(male_levels[male_idx] ? &quot;Male&quot; : &quot;Female&quot;)&quot;)
-println(&quot;  Mean predicted wage: \$$(round(best_wage, digits=2))&quot;)</code></pre><h2 id="Performance-Notes"><a class="docs-heading-anchor" href="#Performance-Notes">Performance Notes</a><a id="Performance-Notes-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Notes" title="Permalink"></a></h2><p>All examples demonstrate FormulaCompiler.jl&#39;s key performance characteristics:</p><ul><li><strong>Zero-allocation core evaluation</strong>: <code>compiled(output, data, row)</code> calls allocate zero bytes</li><li><strong>Memory-efficient scenarios</strong>: Override system uses constant memory regardless of data size</li><li><strong>Backend selection</strong>: Choose between automatic differentiation (<code>:ad</code>, higher accuracy) and finite differences (<code>:fd</code>, explicit control) using <code>derivativeevaluator(:ad/:fd, ...)</code></li><li><strong>Scalable patterns</strong>: Performance remains constant regardless of dataset size</li></ul><p>For detailed performance optimization techniques, see the <a href="../guide/performance/">Performance Guide</a>.</p><h2 id="Further-Reading"><a class="docs-heading-anchor" href="#Further-Reading">Further Reading</a><a id="Further-Reading-1"></a><a class="docs-heading-anchor-permalink" href="#Further-Reading" title="Permalink"></a></h2><ul><li><a href="../guide/basic_usage/">Basic Usage</a> - Fundamental patterns and validation techniques</li><li><a href="../guide/scenarios/">Scenario Analysis</a> - Comprehensive coverage of the override system</li><li><a href="../guide/advanced_features/">Advanced Features</a> - Derivative computation and high-performance patterns</li><li><a href="../api/">API Reference</a> - Complete function documentation</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../api/">« API Reference</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Thursday 15 October 2026 21:47">Thursday 15 October 2026</span>. Using Julia version 1.13.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+println(&quot;  Mean predicted wage: \$$(round(best_wage, digits=2))&quot;)</code></pre><h2 id="Performance-Notes"><a class="docs-heading-anchor" href="#Performance-Notes">Performance Notes</a><a id="Performance-Notes-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Notes" title="Permalink"></a></h2><p>All examples demonstrate FormulaCompiler.jl&#39;s key performance characteristics:</p><ul><li><strong>Zero-allocation core evaluation</strong>: <code>compiled(output, data, row)</code> calls allocate zero bytes</li><li><strong>Memory-efficient scenarios</strong>: Override system uses constant memory regardless of data size</li><li><strong>Backend selection</strong>: Choose between automatic differentiation (<code>:ad</code>, higher accuracy) and finite differences (<code>:fd</code>, explicit control) using <code>derivativeevaluator(:ad/:fd, ...)</code></li><li><strong>Scalable patterns</strong>: Performance remains constant regardless of dataset size</li></ul><p>For detailed performance optimization techniques, see the <a href="../guide/performance/">Performance Guide</a>.</p><h2 id="Further-Reading"><a class="docs-heading-anchor" href="#Further-Reading">Further Reading</a><a id="Further-Reading-1"></a><a class="docs-heading-anchor-permalink" href="#Further-Reading" title="Permalink"></a></h2><ul><li><a href="../guide/basic_usage/">Basic Usage</a> - Fundamental patterns and validation techniques</li><li><a href="../guide/scenarios/">Scenario Analysis</a> - Comprehensive coverage of the override system</li><li><a href="../guide/advanced_features/">Advanced Features</a> - Derivative computation and high-performance patterns</li><li><a href="../api/">API Reference</a> - Complete function documentation</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../api/">« API Reference</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Thursday 15 October 2026 21:52">Thursday 15 October 2026</span>. Using Julia version 1.13.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
