@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - July 2026
+
+### Fixed
+
+- Contrast-matrix rows are now aligned to the CategoricalArray pool's ref-code order.
+  StatsModels builds the contrast matrix from *observed* levels only, but execution indexes
+  rows by pool ref code, so a column whose pool contained unused (zero-count) or reordered
+  levels selected the wrong contrast row (e.g. off-by-one when an unused level precedes
+  observed ones), silently corrupting model rows, predictions and effects.
+  `decompose_standard_categorical` now remaps rows by level; unused levels get zero rows,
+  which are never selected. Plain `String` columns were unaffected.
+  Tests added to `test/test_categorical_correctness.jl`.
+
+## [1.4.1] - June 2026
+
+### Changed
+
+- Widened CategoricalArrays compat to `"0.10, 1"` (supports 1.0/1.1; no source changes).
+
 ## [1.4.0] - March 2026
 
 ### Added
