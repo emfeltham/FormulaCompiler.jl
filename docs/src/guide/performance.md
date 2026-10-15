@@ -267,7 +267,21 @@ function process_large_dataset_efficiently(model, data, chunk_size=10_000)
 end
 ```
 
+### Thread Safety
+
+Compiled formulas, derivative evaluators and contrast evaluators are **not thread-safe**.
+Each holds mutable scratch buffers (and, for evaluators, counterfactual state) that every
+call overwrites, so two threads or tasks calling the same object at once silently produce
+wrong rows. Build one evaluator per task or thread: call `compile_formula` (and
+`derivativeevaluator` / `contrastevaluator`) inside each task, together with that task's
+output buffers. Do not share objects returned by `get_or_compile_formula` or used by
+`modelrow` across threads either; they come from a process-wide cache. See
+[Population Analysis](population_analysis.md#Parallel-Processing) for a threaded example.
+
 ### Parallel Processing
+
+Separate processes (Distributed.jl) each work on their own copy of the compiled formula,
+so the following pattern is safe:
 
 ```julia
 using Distributed

@@ -71,7 +71,7 @@ mutable struct BoolCounterfactualVector <: CounterfactualVector{Bool}
 end
 
 """
-    NumericCounterfactualVector{T<:Real} <: CounterfactualVector{T}
+    NumericCounterfactualVector{T<:Real, B<:Real} <: CounterfactualVector{T}
 
 Type-stable counterfactual vector for numeric variables.
 
@@ -79,10 +79,14 @@ Provides efficient single-row substitution for numeric data with concrete elemen
 type T. Supports any Real number type with consistent performance characteristics.
 
 # Type Parameters
-- `T<:Real`: Element type (Int64, Float64, Float32, etc.)
+- `T<:Real`: Element type (Int64, Float64, Float32, ForwardDiff.Dual, etc.)
+- `B<:Real`: Storage type of `base`. Usually `B == T`. The AD backend uses `T = Dual`
+  with `B = Float64`, so the original column is shared instead of copied into a Dual
+  array (which would cost (chunk + 1) × 8 bytes per row per variable); elements are
+  converted to `T` when read.
 
 # Fields
-- `base::Vector{T}`: Original numeric data
+- `base::Vector{B}`: Original numeric data
 - `row::Int`: Row index to override (1-based)
 - `replacement::T`: Numeric value to substitute
 
@@ -97,11 +101,24 @@ cf_vec[3]  # → 99.0 (counterfactual)
 cf_vec[4]  # → 4.0 (original)
 ```
 """
-mutable struct NumericCounterfactualVector{T<:Real} <: CounterfactualVector{T}
-    base::Vector{T}
+mutable struct NumericCounterfactualVector{T<:Real, B<:Real} <: CounterfactualVector{T}
+    base::Vector{B}
     row::Int
     replacement::T
 end
+
+# One-parameter constructor: stores `base` as Vector{T} (converting if needed)
+NumericCounterfactualVector{T}(base::AbstractVector, row::Int, replacement) where {T<:Real} =
+    NumericCounterfactualVector{T, T}(convert(Vector{T}, base), row, convert(T, replacement))
+
+# Parameter-free constructor: element type from `base`, as before the storage parameter existed
+NumericCounterfactualVector(base::Vector{T}, row::Int, replacement) where {T<:Real} =
+    NumericCounterfactualVector{T, T}(base, row, convert(T, replacement))
+
+# Rows other than the counterfactual row are read from `base` and converted to T
+# (a no-op when B == T), keeping getindex type-stable.
+@inline Base.@propagate_inbounds Base.getindex(v::NumericCounterfactualVector{T}, i::Int) where {T} =
+    (i == v.row ? v.replacement : convert(T, v.base[i]))
 
 """
     CategoricalCounterfactualVector{T,R} <: CounterfactualVector{CategoricalValue{T,R}}
@@ -156,6 +173,11 @@ end
 @inline Base.@propagate_inbounds function Base.getindex(v::CategoricalCounterfactualVector{T,R}, i::Int) where {T,R}
     @inbounds return i == v.row ? v.replacement : v.base.refs[i]
 end
+
+# ContrastOp level resolution: getindex yields a raw ref code of `base`'s pool, so resolve it
+# against that pool (an integer ref code is not a level value).
+@inline contrast_row(idx::LevelIndex, column::CategoricalCounterfactualVector, row_idx::Int) =
+    pool_ref_row(idx, CategoricalArrays.pool(column.base), column[row_idx])
 
 # Update method for CategoricalCounterfactualVector - accepts CategoricalValue and extracts reference index
 function update_counterfactual_replacement!(
@@ -323,6 +345,15 @@ counterfactualvector(col::Vector{Bool}, row::Int, ::Type{S}) where S =
 # Numeric types: convert for ADEvaluator type stability (uniform Dual types required)
 counterfactualvector(col::Vector{T}, row::Int, ::Type{S}) where {T<:Union{AbstractFloat,Signed,Unsigned}, S<:Number} =
     NumericCounterfactualVector{S}(convert(Vector{S}, col), row, zero(S))
+
+# AD backend: element type is a Dual, but store the column as Float64 and convert on read.
+# Copying every differentiated column into a Dual array cost ~(chunk + 1) × 8 bytes per row
+# per variable (≈1 GB for 21 variables at n = 500,000), and the evaluator only ever reads
+# `replacement` at the active row. Storage is always Float64 (`convert` returns a Float64
+# column itself, without copying) so the counterfactuals tuple stays homogeneous; mixing
+# storage types would make the AD closure's runtime-indexed loop dispatch dynamically.
+counterfactualvector(col::Vector{T}, row::Int, ::Type{S}) where {T<:Union{AbstractFloat,Signed,Unsigned}, S<:ForwardDiff.Dual} =
+    NumericCounterfactualVector{S, Float64}(convert(Vector{Float64}, col), row, zero(S))
 
 counterfactualvector(col::CategoricalArray{T,1,R}, row::Int, ::Type{S}) where {T,R,S} =
     CategoricalCounterfactualVector{T,R}(col, row, R(1))  # Use first ref index - zero allocations!

@@ -56,7 +56,7 @@ end
 
 ### Marginal Effects
 ```julia
-using Margins  # Provides marginal_effects_eta! and marginal_effects_mu!
+using LinearAlgebra: mul!
 
 # Identify continuous variables and build evaluators
 vars = continuous_variables(compiled, data)  # [:x]
@@ -64,10 +64,14 @@ de_ad = derivativeevaluator(:ad, compiled, data, vars)  # Automatic differentiat
 de_fd = derivativeevaluator(:fd, compiled, data, vars)  # Finite differences: explicit step control
 β = coef(model)
 
-# Compute marginal effects
+# Marginal effects on η = Xβ: g = J'β, where J[i, j] = ∂X[i]/∂vars[j]
+J = Matrix{Float64}(undef, length(compiled), length(vars))  # allocate once
 g = Vector{Float64}(undef, length(vars))
-marginal_effects_eta!(g, de_ad, β, 1)  # Zero allocations, higher accuracy
-marginal_effects_eta!(g, de_fd, β, 1)  # Zero allocations, explicit step control
+derivative_modelrow!(J, de_ad, 1); mul!(g, J', β)  # Zero allocations, higher accuracy
+derivative_modelrow!(J, de_fd, 1); mul!(g, J', β)  # Zero allocations, explicit step control
+
+# Averaged effects with standard errors are provided by Margins.jl:
+# population_margins(model, data; type = :effects, vars = vars)
 ```
 
 ### Batch Processing
@@ -144,19 +148,21 @@ end
 Compute returns to education and experience:
 
 ```julia
-using Margins  # Provides marginal_effects_eta!
+using LinearAlgebra: mul!
 
 # Build derivative evaluator for continuous variables
 continuous_vars = [:Educ, :Exper]  # Education and experience are continuous
 de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
 
 # Compute marginal effects for representative workers
+J = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
 g_eta = Vector{Float64}(undef, length(continuous_vars))
 
 # Male worker with median characteristics
 male_median_idx = findfirst(row -> row.Male && row.Educ ≈ median(wages.Educ), eachrow(wages))
 if !isnothing(male_median_idx)
-    marginal_effects_eta!(g_eta, de_fd, β, male_median_idx)
+    derivative_modelrow!(J, de_fd, male_median_idx)
+    mul!(g_eta, J', β)  # ∂η/∂(Educ, Exper)
     println("Male median worker - Returns to education: $(round(g_eta[1]*100, digits=2))%")
     println("Male median worker - Returns to experience: $(round(g_eta[2]*100, digits=2))%")
 end
@@ -231,12 +237,13 @@ println("Predicted MPG: $(round(best_mpg, digits=2))")
 Compute sensitivity to design parameters:
 
 ```julia
-using Margins  # Provides marginal_effects_eta!
+using LinearAlgebra: mul!
 
 # Marginal effects on fuel efficiency
 engineering_vars = [:HP, :WT]  # Continuous engineering parameters
 de_fd = derivativeevaluator(:fd, compiled, data, engineering_vars)
 
+J = Matrix{Float64}(undef, length(compiled), length(engineering_vars))
 g = Vector{Float64}(undef, length(engineering_vars))
 
 # Analyze sensitivity for different vehicle classes
@@ -244,7 +251,8 @@ for (car_type, indices) in [("Sports cars", findall(x -> x > 200, mtcars.HP)),
                             ("Economy cars", findall(x -> x < 100, mtcars.HP))]
     if !isempty(indices)
         representative_idx = indices[1]
-        marginal_effects_eta!(g, de_fd, β, representative_idx)
+        derivative_modelrow!(J, de_fd, representative_idx)
+        mul!(g, J', β)  # ∂η/∂(HP, WT)
 
         println("$car_type sensitivity:")
         println("  MPG change per HP unit: $(round(g[1], digits=3))")
@@ -309,12 +317,13 @@ end
 Quantify impact of patient characteristics on outcomes:
 
 ```julia
-using Margins  # Provides marginal_effects_eta!
+using LinearAlgebra: mul!
 
 # Marginal effects for continuous clinical variables
 clinical_vars = [:age]  # Age is the main continuous predictor
 de_fd = derivativeevaluator(:fd, compiled, data, clinical_vars)
 
+J = Matrix{Float64}(undef, length(compiled), length(clinical_vars))
 g = Vector{Float64}(undef, length(clinical_vars))
 
 # Risk assessment for different patient groups
@@ -322,7 +331,8 @@ for (group, sex_val) in [("Male patients", 1), ("Female patients", 2)]
     group_indices = findall(x -> x == sex_val, lung_complete.sex)
     if !isempty(group_indices)
         representative_idx = group_indices[div(length(group_indices), 2)]  # Median patient
-        marginal_effects_eta!(g, de_fd, β, representative_idx)
+        derivative_modelrow!(J, de_fd, representative_idx)
+        mul!(g, J', β)  # ∂η/∂age
 
         daily_age_effect = g[1]  # Effect per year of age
         yearly_effect = exp(daily_age_effect) - 1  # Convert from log scale

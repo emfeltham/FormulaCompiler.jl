@@ -203,7 +203,7 @@ include("test/test_models.jl")
 ### 6. Derivatives System
 
 **`test_derivatives.jl`** - Dual-backend derivatives system:
-- **Jacobian computation**: `derivative_modelrow!` / `derivative_modelrow` (AD), `derivative_modelrow_fd!` / `derivative_modelrow_fd` (FD)
+- **Jacobian computation**: `derivative_modelrow!` / `derivative_modelrow` (AD), the same functions with an FD evaluator (`derivativeevaluator(:fd, ...)`)
 - **Marginal effects (η)**: `marginal_effects_eta!` / `marginal_effects_eta` with backend selection (`:ad` or `:fd`)
 - **Continuous variable detection**: `continuous_variables()` auto-discovery
 - **Cross-backend validation**: AD vs FD numerical agreement (rtol=1e-6, atol=1e-8)

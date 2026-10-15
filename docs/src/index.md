@@ -100,10 +100,13 @@ de = derivativeevaluator(:ad, compiled, data, vars)  # Automatic differentiation
 J = Matrix{Float64}(undef, length(compiled), length(vars))
 derivative_modelrow!(J, de, row)  # 0 bytes, machine precision
 
-# For marginal effects, use Margins.jl
-using Margins
+# Marginal effects on η = Xβ from the Jacobian (zero allocations after warmup)
+using LinearAlgebra: mul!
 g = Vector{Float64}(undef, length(vars))
-marginal_effects_eta!(g, de, beta, row)  # Marginal effects on η
+mul!(g, J', beta)  # g[j] = ∂η/∂vars[j]
+
+# Averaged effects, standard errors, and reporting: use Margins.jl
+# population_margins(model, data; type = :effects, vars = vars)
 ```
 
 ## Use Cases

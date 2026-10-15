@@ -47,11 +47,51 @@ Zero-allocation replacement for ForwardDiff.extract_jacobian_chunk!.
     return J
 end
 
+# =============================================================================
+# Seeding helpers — local replacements for ForwardDiff's internal `seed!`
+# =============================================================================
+#
+# ForwardDiff's `seed!` methods are internal and changed in ForwardDiff 1.4.5:
+# the zero-partials forms `seed!(duals, x)` and `seed!(duals, x, index)` were
+# renamed to `seed_zero_partials!`, which made `fc_jacobian!` throw a
+# MethodError. These helpers use only the `Dual` and `Partials` constructors,
+# which are stable across all supported ForwardDiff versions. `x` is always a
+# dense Vector{Float64}, so no structural-index handling is needed.
+
+"""
+    _seed_values!(xdual, x, index, count)
+
+Write `x[i]` with zero partials into `xdual[i]` for `i in index:index+count-1`.
+"""
+@inline function _seed_values!(xdual::AbstractVector{ForwardDiff.Dual{T,V,N}},
+                               x::Vector{Float64}, index::Int, count::Int) where {T,V,N}
+    z = zero(ForwardDiff.Partials{N,V})
+    @inbounds for i in index:(index + count - 1)
+        xdual[i] = ForwardDiff.Dual{T,V,N}(x[i], z)
+    end
+    return xdual
+end
+
+"""
+    _seed_chunk!(xdual, x, index, seeds, count)
+
+Write `x[index+k-1]` with partials `seeds[k]` into `xdual` for `k in 1:count`.
+"""
+@inline function _seed_chunk!(xdual::AbstractVector{ForwardDiff.Dual{T,V,N}},
+                              x::Vector{Float64}, index::Int,
+                              seeds::NTuple{N,ForwardDiff.Partials{N,V}}, count::Int) where {T,V,N}
+    @inbounds for k in 1:count
+        i = index + k - 1
+        xdual[i] = ForwardDiff.Dual{T,V,N}(x[i], seeds[k])
+    end
+    return xdual
+end
+
 """
     fc_jacobian!(J, g, x, cfg)
 
-Custom Jacobian computation that uses ForwardDiff's seeding and dual evaluation
-but replaces the extraction step with direct loop indexing.
+Custom Jacobian computation that evaluates `g` on dual numbers seeded from
+`cfg` and extracts the partials with direct loop indexing.
 
 Achieves zero allocations even under --check-bounds=yes by avoiding the
 reshape() call in ForwardDiff.extract_jacobian!.
@@ -60,16 +100,16 @@ function fc_jacobian!(J::Matrix{Float64}, g::F, x::Vector{Float64},
                       cfg::ForwardDiff.JacobianConfig{T,V,N}) where {F,T,V,N}
     xlen = length(x)
     xdual = cfg.duals
+    seeds = cfg.seeds
 
     if N == xlen
         # Vector mode: single pass evaluates all partials at once
-        ForwardDiff.seed!(xdual, x, cfg.seeds)
+        _seed_chunk!(xdual, x, 1, seeds, N)
         ydual = g(xdual)
         _extract_jacobian_direct!(T, J, ydual, N)
     else
         # Chunk mode: multiple passes, N variables at a time
-        seeds = cfg.seeds
-        ForwardDiff.seed!(xdual, x)
+        _seed_values!(xdual, x, 1, xlen)
 
         # Loop bounds
         remainder = xlen % N
@@ -77,22 +117,22 @@ function fc_jacobian!(J::Matrix{Float64}, g::F, x::Vector{Float64},
         lastchunkindex = xlen - lastchunksize + 1
 
         # First chunk
-        ForwardDiff.seed!(xdual, x, 1, seeds)
+        _seed_chunk!(xdual, x, 1, seeds, N)
         ydual = g(xdual)
         _extract_jacobian_chunk_direct!(T, J, ydual, 0, N)
-        ForwardDiff.seed!(xdual, x, 1)
+        _seed_values!(xdual, x, 1, N)
 
         # Middle chunks
         for c in 2:div(xlen - lastchunksize, N)
             i = (c - 1) * N + 1
-            ForwardDiff.seed!(xdual, x, i, seeds)
+            _seed_chunk!(xdual, x, i, seeds, N)
             ydual = g(xdual)
             _extract_jacobian_chunk_direct!(T, J, ydual, i - 1, N)
-            ForwardDiff.seed!(xdual, x, i)
+            _seed_values!(xdual, x, i, N)
         end
 
         # Final chunk
-        ForwardDiff.seed!(xdual, x, lastchunkindex, seeds, lastchunksize)
+        _seed_chunk!(xdual, x, lastchunkindex, seeds, lastchunksize)
         ydual = g(xdual)
         _extract_jacobian_chunk_direct!(T, J, ydual, lastchunkindex - 1, lastchunksize)
     end

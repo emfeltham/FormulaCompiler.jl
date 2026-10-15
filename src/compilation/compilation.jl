@@ -57,16 +57,26 @@ provides constant-time row access regardless of dataset size.
 
 # Formula Features
 - **Basic terms**: `x`, `log(z)`, `x^2`, `(x > 0)`, integer and float variables
-- **Categorical variables**: Must use `CategoricalArrays.jl` format - raw strings not supported
+- **Categorical variables**: `CategoricalArray` columns, or `String`/`Bool`/integer columns
+  treated as categorical by the model (default for strings, or via `contrasts`)
 - **Interactions**: `x * group`, `x * y * z`, `log(x) * group`
 - **Functions**: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^` (integer and fractional powers)
 - **Boolean conditions**: `(x > 0)`, `(z >= mean(z))`, `(group == \"A\")`
 - **Complex formulas**: `x * log(abs(z)) * group + sqrt(y) + (w > threshold)`
 
 # Data Requirements
-- **Categorical variables**: Must use `categorical(column)` before model fitting
-- **Missing values**: Not supported - remove with `dropmissing()` or impute before compilation
+- **Categorical variables**: Values are resolved against the levels the model was fitted
+  with, not against the pool or unique values of the data being evaluated, so the compiled
+  object can be evaluated on subsets, reference grids, or data whose pool is reordered.
+  A value that is not a model level throws an `ArgumentError`.
+- **Missing values**: Not supported - remove with `dropmissing()` or impute before
+  compilation. A missing categorical value throws an `ArgumentError` at evaluation.
 - **Table format**: Use `Tables.columntable(df)` for optimal performance
+
+# Thread Safety
+The returned object owns a mutable scratch buffer and is **not thread-safe**: do not call
+the same compiled object (or evaluators built from it) from several threads or tasks at
+once. Build one per task.
 
 # Example
 ```julia

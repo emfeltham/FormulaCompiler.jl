@@ -10,7 +10,7 @@
 ###############################################################################
 
 # also need these to manipulate the formula
-const RET = MixedModels.RandomEffectsTerm
+const RET = MixedModels.AbstractReTerm   # RandomEffectsTerm, ZeroCorr (zerocorr(...)), ...
 const FT  = StatsModels.FunctionTerm{typeof(|)}
 const CT  = StatsModels.ConstantTerm
 
@@ -45,7 +45,8 @@ function fixed_effects_form(model::Union{LinearMixedModel,
     full = formula(model)      # e.g. y ~ x + z + x&z + (1|g)
     rhs  = full.rhs            # vector of top‐level terms
 
-    # drop any RandomEffectsTerm or the FunctionTerm for `|`
+    # drop every random-effects term (RandomEffectsTerm, ZeroCorr from `zerocorr(...)`, any
+    # other AbstractReTerm) and the unapplied FunctionTerm for `|`
     fe = filter(t -> !(t isa RET) && !(t isa FT), rhs)
 
     # if nothing was removed, just hand back the original

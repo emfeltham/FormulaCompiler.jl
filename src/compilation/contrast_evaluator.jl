@@ -65,6 +65,59 @@ end
 Base.length(ce::ContrastEvaluator) = length(ce.compiled)
 
 """
+    categorical_levels(compiled::UnifiedCompiled) -> Dict{Symbol, Vector}
+
+Levels of every variable the fitted model treats as categorical, in the model's level order
+(the first level is the reference for the default dummy coding). Determined by the model's
+contrasts, not by the data's column types: an integer, `String`, or `Bool` column declared
+categorical (e.g. `contrasts = Dict(:k => DummyCoding())`) is included, and its levels are
+the values the model was fitted with.
+"""
+function categorical_levels(compiled::UnifiedCompiled)
+    out = Dict{Symbol, Vector}()
+    for op in compiled.ops
+        if op isa ContrastOp
+            col = typeof(op).parameters[1]
+            haskey(out, col) && continue
+            levs = op.index.levels
+            eltype(levs) === Nothing && continue          # positional index: levels unknown
+            out[col] = copy(levs)
+        end
+    end
+    return out
+end
+
+"""
+    categorical_variables(compiled::UnifiedCompiled) -> Vector{Symbol}
+
+Sorted names of the variables the fitted model treats as categorical. The complement of
+[`continuous_variables`](@ref) among the model's variables, decided by the model's contrasts
+rather than by column element types.
+"""
+categorical_variables(compiled::UnifiedCompiled) = sort!(collect(keys(categorical_levels(compiled))))
+
+# Return `data` with each CategoricalArray in `vars` whose pool lacks some of the model's
+# levels replaced by a copy whose pool has them appended (codes and values unchanged).
+function _cover_model_levels(compiled, data::NamedTuple, vars)
+    model_levels = categorical_levels(compiled)
+    replaced = Dict{Symbol, Any}()
+    for var in vars
+        haskey(model_levels, var) && haskey(data, var) || continue
+        col = getproperty(data, var)
+        col isa CategoricalArray || continue
+        current = CategoricalArrays.unwrap.(levels(col))
+        have = Set(current)
+        absent = [l for l in model_levels[var] if !(convert(eltype(current), l) in have)]
+        isempty(absent) && continue
+        newcol = copy(col)
+        levels!(newcol, vcat(current, convert(Vector{eltype(current)}, absent)))
+        replaced[var] = newcol
+    end
+    isempty(replaced) && return data
+    return NamedTuple{keys(data)}(map(k -> get(replaced, k, getproperty(data, k)), keys(data)))
+end
+
+"""
     contrastevaluator(compiled, data, vars) -> ContrastEvaluator
 
 Construct a ContrastEvaluator for efficient categorical and binary contrast computation.
@@ -96,6 +149,13 @@ contrast_modelrow!(contrast_buf, evaluator, 1, :group, "Control", "Treatment")
 ```
 """
 function contrastevaluator(compiled, data, vars::Vector{Symbol})
+    # Contrasts may target any level the fitted model knows, including levels absent from
+    # the data's pool (e.g. a subset re-`categorical`-ized after dropping the reference
+    # level). Counterfactual categorical replacements are ref codes into the column's pool,
+    # so the evaluator works on a copy of such columns with the missing model levels
+    # appended. The caller's data is not modified or replaced.
+    data = _cover_model_levels(compiled, data, vars)
+
     # Preserve natural types for zero-allocation performance
     # Initialize with row=0 so CounterfactualVectors don't shadow actual data initially
     data_counterfactual, counterfactuals = build_counterfactual_data(data, vars, 0)
@@ -418,10 +478,10 @@ function _validate_numeric_values!(cf_vec::NumericCounterfactualVector, var::Sym
 
     # Check if values can be converted to the numeric type
     try
-        convert(eltype(cf_vec.base), from)
-        convert(eltype(cf_vec.base), to)
+        convert(eltype(cf_vec), from)
+        convert(eltype(cf_vec), to)
     catch e
-        error("Cannot convert contrast values ($from, $to) to $(eltype(cf_vec.base)) for numeric variable :$var")
+        error("Cannot convert contrast values ($from, $to) to $(eltype(cf_vec)) for numeric variable :$var")
     end
 end
 
@@ -737,9 +797,7 @@ function _contrast_gradient_response_scale!(
     link
 )
     # Reset all counterfactuals to prevent state bleeding
-    @inbounds for i in 1:length(evaluator.counterfactuals)
-        update_counterfactual_row!(evaluator.counterfactuals[i], 0)
-    end
+    reset_all_counterfactuals!(evaluator.counterfactuals)
 
     # Step 1: Compute X₀ and η₀ = X₀'β
     update_counterfactual_for_var!(evaluator, var, row, from)
@@ -747,9 +805,7 @@ function _contrast_gradient_response_scale!(
     η₀ = dot(β, evaluator.xrow_from_buf)
 
     # Reset again before computing X₁
-    @inbounds for i in 1:length(evaluator.counterfactuals)
-        update_counterfactual_row!(evaluator.counterfactuals[i], 0)
-    end
+    reset_all_counterfactuals!(evaluator.counterfactuals)
 
     # Step 2: Compute X₁ and η₁ = X₁'β
     update_counterfactual_for_var!(evaluator, var, row, to)
@@ -767,9 +823,7 @@ function _contrast_gradient_response_scale!(
     end
 
     # Clean up: Reset counterfactuals to inactive state
-    @inbounds for i in 1:length(evaluator.counterfactuals)
-        update_counterfactual_row!(evaluator.counterfactuals[i], 0)
-    end
+    reset_all_counterfactuals!(evaluator.counterfactuals)
 
     return ∇β
 end
