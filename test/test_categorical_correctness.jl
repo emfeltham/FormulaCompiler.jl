@@ -505,3 +505,62 @@ end
         @test !baseline_in_coefs  # Baseline shouldn't appear in coefficient names
     end
 end
+
+@testset "Unused / reordered categorical levels" begin
+    # Regression test: when a CategoricalArray pool contains an unused (zero-count) level
+    # and/or a non-alphabetical level ordering, StatsModels builds the ContrastsMatrix over
+    # the OBSERVED levels only (dropping unused ones) and in its own level order. The compiled
+    # formula must map each value to the correct contrast row via the model's level ordering,
+    # not by using the pool ref code (`levelcode`) directly as the matrix row index.
+    #
+    # The buggy behavior produced an off-by-one (a leading unused level shifted every row),
+    # yielding predictions attributed to the wrong level. See the Margins.jl issue for context.
+    Random.seed!(934)
+    n = 3000
+    cat_vals = repeat(["A", "B", "C", "D", "E", "F"], inner = n ÷ 6)
+    tp = Dict("A"=>0.5, "B"=>0.65, "C"=>0.5, "D"=>0.45, "E"=>0.5, "F"=>0.55)
+    y = [rand() < tp[c] ? 1 : 0 for c in cat_vals]
+
+    # Compare the compiled model row against GLM's own design matrix row for one observation
+    # of every observed level. This is link-/coefficient-free and pins down exactly the
+    # categorical contrast columns that were misencoded.
+    function check_matches_glm(catcol, model, df)
+        data = Tables.columntable(df)
+        compiled = compile_formula(model, data)
+        out = Vector{Float64}(undef, length(compiled))
+        X = modelmatrix(model)
+        ok = true
+        for lev in unique(string.(catcol))
+            i = findfirst(==(lev), string.(catcol))
+            compiled(out, data, i)
+            ok &= isapprox(out, X[i, :]; atol = 1e-12)
+        end
+        return ok
+    end
+
+    @testset "Unused level + reordering + custom base" begin
+        c = categorical(cat_vals)
+        levels!(c, ["Unused", "A", "C", "F", "E", "D", "B"])  # unused level, non-alphabetical
+        df = DataFrame(cat = c, y = y)
+        model = glm(@formula(y ~ cat), df, Binomial(), LogitLink(),
+                    contrasts = Dict(:cat => DummyCoding(base = "C")))
+        # The pool has 7 levels but only 6 are observed → 5 dummy columns
+        @test length(coef(model)) == 6
+        @test check_matches_glm(df.cat, model, df)
+    end
+
+    @testset "Reordered levels, no unused (remap is identity-correct)" begin
+        c = categorical(cat_vals)
+        levels!(c, ["F", "E", "D", "C", "B", "A"])
+        df = DataFrame(cat = c, y = y)
+        model = glm(@formula(y ~ cat), df, Binomial(), LogitLink())
+        @test check_matches_glm(df.cat, model, df)
+    end
+
+    @testset "Default alphabetical levels (no regression)" begin
+        c = categorical(cat_vals)
+        df = DataFrame(cat = c, y = y)
+        model = glm(@formula(y ~ cat), df, Binomial(), LogitLink())
+        @test check_matches_glm(df.cat, model, df)
+    end
+end

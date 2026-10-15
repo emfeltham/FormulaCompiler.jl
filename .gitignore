@@ -36,3 +36,6 @@ CLAUDE.md
 AGENTS.md
 notes/*
 paper.md
+
+# locally generated diagram renders (already-tracked ones stay tracked)
+docs/diagrams/generated/*.svg
