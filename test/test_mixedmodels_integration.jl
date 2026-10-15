@@ -440,6 +440,25 @@ end
         end
     end
 
+    # Random-effects wrappers other than RandomEffectsTerm (e.g. zerocorr) must be dropped
+    # from the fixed-effects formula; zerocorr previously failed with "Cannot decompose term".
+    @testset "Random-effects term variants match the fixed-effects matrix" begin
+        rng = Random.MersenneTwister(7)
+        n = 300
+        d = DataFrame(y = randn(rng, n), x = randn(rng, n),
+                      g = categorical(rand(rng, ["a", "b", "c"], n)),
+                      s = categorical(rand(rng, 1:20, n)), t = categorical(rand(rng, 1:5, n)))
+        for f in (@formula(y ~ 1 + x * g + (1 + x | s)),
+                  @formula(y ~ 0 + x + g + zerocorr(1 + x | s) + (1 | t)),
+                  @formula(y ~ x + (1 | s / t)))
+            m = fit(MixedModel, f, d; progress = false)
+            data = Tables.columntable(d)
+            compiled = compile_formula(m, data)
+            @test length(compiled) == size(m.X, 2)
+            @test maximum(maximum(abs.(modelrow(compiled, data, i) .- m.X[i, :])) for i in 1:n) < 1e-12
+        end
+    end
+
     println("MixedModels Integration Tests (Phase 6.2.2) completed successfully!")
     println("✓ Linear and Generalized Linear Mixed Models fully supported")
     println("✓ Fixed effects extraction and contrast computation validated")

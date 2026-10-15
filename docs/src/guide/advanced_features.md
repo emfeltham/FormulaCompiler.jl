@@ -73,6 +73,7 @@ FormulaCompiler uses simple loops for population analysis instead of special inf
 
 ```julia
 using DataFrames, Tables
+using LinearAlgebra: mul!
 
 df = DataFrame(
     x = randn(1000),
@@ -89,10 +90,12 @@ function compute_population_ame(compiled, data, β, vars)
     de_fd = derivativeevaluator(:fd, compiled, data, vars)
     n_rows = length(first(data))
     ame_sum = zeros(length(vars))
+    J = Matrix{Float64}(undef, length(compiled), length(vars))
     g_temp = Vector{Float64}(undef, length(vars))
 
     for row in 1:n_rows
-        marginal_effects_eta!(g_temp, de_fd, β, row)  # Zero allocations
+        derivative_modelrow!(J, de_fd, row)  # Zero allocations
+        mul!(g_temp, J', β)                  # ∂η/∂vars at this row
         ame_sum .+= g_temp
     end
 
@@ -247,7 +250,7 @@ using BenchmarkTools
 
 FormulaCompiler provides comprehensive automatic differentiation capabilities for computing Jacobians with dual backend support. For marginal effects, standard errors, and statistical inference, use [Margins.jl](https://github.com/emfeltham/Margins.jl) which builds on these computational primitives.
 
-> **Note**: Examples in this section use functions from [Margins.jl](https://github.com/emfeltham/Margins.jl) (`marginal_effects_eta!`, `marginal_effects_mu!`, `delta_method_se`). Install Margins.jl to use these examples: `using Pkg; Pkg.add(url="https://github.com/emfeltham/Margins.jl")`
+> **Note**: Examples in this section use only FormulaCompiler's primitives (`derivative_modelrow!`, `contrast_modelrow!`, `contrast_gradient!`) plus `LinearAlgebra`. For averaged marginal effects with standard errors, use [Margins.jl](https://github.com/emfeltham/Margins.jl)'s public API, e.g. `population_margins(model, data; type = :effects, vars = [:price])` or `profile_margins(...)`.
 
 ### Performance Characteristics
 
@@ -317,28 +320,33 @@ derivative_modelrow!(J_fd, de_fd, 1)
 Compute effects on linear predictor and response scales:
 
 ```julia
-using Margins  # Provides marginal_effects_eta!, marginal_effects_mu!
+using LinearAlgebra: dot, mul!
+using StatsModels  # for TableRegressionModel
 
 β = coef(model)
 
-# Effects on linear predictor η = Xβ
+# Effects on linear predictor η = Xβ: g_eta = J'β
+J = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
 g_eta = Vector{Float64}(undef, length(continuous_vars))
 
 # AD backend: Zero allocations, higher accuracy (preferred)
 de_ad = derivativeevaluator(:ad, compiled, data, continuous_vars)
-marginal_effects_eta!(g_eta, de_ad, β, 1)
+derivative_modelrow!(J, de_ad, 1)
+mul!(g_eta, J', β)
 
 # FD backend: Zero allocations, explicit step control (alternative)
 de_fd = derivativeevaluator(:fd, compiled, data, continuous_vars)
-marginal_effects_eta!(g_eta, de_fd, β, 1)
+derivative_modelrow!(J, de_fd, 1)
+mul!(g_eta, J', β)
 
-# Effects on response scale μ (for GLM models)
-if model isa GLM.GeneralizedLinearModel
-    link_function = GLM.Link(model)
-    g_mu = Vector{Float64}(undef, length(continuous_vars))
-
-    # Using AD evaluator for response scale effects
-    marginal_effects_mu!(g_mu, de_ad, β, 1, link_function)
+# Effects on response scale μ (for GLM models): chain rule, dμ/dx = dμ/dη ⋅ dη/dx
+glm_fit = model isa StatsModels.TableRegressionModel ? model.model : model
+if glm_fit isa GLM.GeneralizedLinearModel
+    link_function = GLM.Link(glm_fit)
+    xrow = Vector{Float64}(undef, length(compiled))
+    compiled(xrow, data, 1)
+    η = dot(β, xrow)
+    g_mu = g_eta .* GLM.mueta(link_function, η)
 
     println("Marginal effects on linear predictor: $g_eta")
     println("Marginal effects on response scale: $g_mu")
@@ -412,9 +420,9 @@ end
 ∇β = Vector{Float64}(undef, length(compiled))
 contrast_gradient!(∇β, evaluator, 1, :region, "North", "South", β)
 
-# Delta method standard error
+# Delta method standard error: sqrt(∇β' Σ ∇β)
 vcov_matrix = vcov(model)
-se = delta_method_se(evaluator, 1, :region, "North", "South", β, vcov_matrix)
+se = sqrt(dot(∇β, vcov_matrix, ∇β))
 ```
 
 **When to use**: 100+ contrasts, production pipelines, memory-constrained environments.
@@ -435,8 +443,10 @@ interaction_vars = [:price]          # Focus on key interactions
 # Backend selection based on requirements
 function compute_derivatives_with_backend_choice(compiled, data, vars, β, row, backend=:ad)
     de = derivativeevaluator(backend, compiled, data, vars)
+    J = Matrix{Float64}(undef, length(compiled), length(vars))
     g = Vector{Float64}(undef, length(vars))
-    marginal_effects_eta!(g, de, β, row)
+    derivative_modelrow!(J, de, row)
+    mul!(g, J', β)  # ∂η/∂vars (using LinearAlgebra: mul!)
     return g
 end
 ```
@@ -484,11 +494,12 @@ J = Matrix{Float64}(undef, length(compiled), length(de_ad.vars))
 @benchmark derivative_modelrow!($J, $de_ad, 25)  # AD (faster)
 @benchmark derivative_modelrow!($J, $de_fd, 25)  # FD
 
-# Benchmark marginal effects
+# Benchmark marginal effects on η (Jacobian + J'β)
+using LinearAlgebra: mul!
 β = coef(model)
 g = Vector{Float64}(undef, length(de_ad.vars))
-@benchmark marginal_effects_eta!($g, $de_ad, $β, 25)  # AD (faster, more accurate)
-@benchmark marginal_effects_eta!($g, $de_fd, $β, 25)  # FD
+@benchmark (derivative_modelrow!($J, $de_ad, 25); mul!($g, $J', $β))  # AD (faster, more accurate)
+@benchmark (derivative_modelrow!($J, $de_fd, 25); mul!($g, $J', $β))  # FD
 ```
 
 ## Complex Formula Support
@@ -809,6 +820,7 @@ function policy_impact_analysis(baseline_model, policy_data, policy_parameters)
 
         # Evaluate predictions and marginal effects for each individual
         row_vec = Vector{Float64}(undef, length(compiled))
+        J = Matrix{Float64}(undef, length(compiled), length(policy_vars))
         marginal_vec = Vector{Float64}(undef, length(policy_vars))
 
         for i in 1:n_individuals
@@ -817,7 +829,8 @@ function policy_impact_analysis(baseline_model, policy_data, policy_parameters)
             scenario_predictions[i] = dot(β, row_vec)
 
             # Marginal effects
-            marginal_effects_eta!(marginal_vec, de_fd, β, i)  # Zero allocations
+            derivative_modelrow!(J, de_fd, i)  # Zero allocations
+            mul!(marginal_vec, J', β)          # ∂η/∂policy_vars
             scenario_marginals[i, :] .= marginal_vec
         end
 
@@ -888,10 +901,12 @@ function biomarker_analysis(survival_model, patient_data, biomarker_ranges)
     # Compute marginal effects for sensitivity analysis
     if !isempty(continuous_biomarkers)
         marginal_matrix = Matrix{Float64}(undef, n_patients, length(continuous_biomarkers))
+        J = Matrix{Float64}(undef, length(compiled), length(continuous_biomarkers))
         marginal_vec = Vector{Float64}(undef, length(continuous_biomarkers))
         
         for patient_idx in 1:n_patients
-            marginal_effects_eta!(marginal_vec, de_fd, β, patient_idx)
+            derivative_modelrow!(J, de_fd, patient_idx)
+            mul!(marginal_vec, J', β)  # ∂η/∂biomarkers
             marginal_matrix[patient_idx, :] .= marginal_vec
         end
         
@@ -962,10 +977,12 @@ function portfolio_risk_analysis(risk_model, market_data, stress_scenarios)
     # Risk sensitivity analysis
     if !isempty(risk_factors)
         sensitivity_matrix = Matrix{Float64}(undef, n_assets, length(risk_factors))
+        J = Matrix{Float64}(undef, length(compiled), length(risk_factors))
         sensitivity_vec = Vector{Float64}(undef, length(risk_factors))
         
         for asset_idx in 1:n_assets
-            marginal_effects_eta!(sensitivity_vec, de_fd, β, asset_idx)
+            derivative_modelrow!(J, de_fd, asset_idx)
+            mul!(sensitivity_vec, J', β)  # ∂η/∂risk_factors
             sensitivity_matrix[asset_idx, :] .= sensitivity_vec
         end
         

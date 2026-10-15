@@ -5,6 +5,126 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - October 2026
+
+### Fixed
+
+- AD derivatives with more than 12 variables (ForwardDiff chunk mode) threw a `MethodError`
+  under ForwardDiff ≥ 1.4.5, which the `"0.10, 1.0"` compat bound allows. `fc_jacobian!`
+  called ForwardDiff's internal zero-partials `seed!(duals, x)` / `seed!(duals, x, index)`,
+  which ForwardDiff 1.4.5 renamed. Seeding now uses local helpers built only on the
+  `Dual`/`Partials` constructors, so it no longer depends on ForwardDiff internals.
+  Vector mode (≤ 12 variables) was unaffected. Tests added in `test/test_ad_chunk_mode.jl`
+  (the suite previously had no chunk-mode coverage).
+- Categorical values are now resolved against the fitted model's contrast levels instead of
+  the data being evaluated. Before, `ContrastOp` indexed contrast rows by the evaluation
+  data's codes, which gave wrong model rows (and wrong predictions, effects and contrasts
+  downstream) in several cases:
+  - `CategoricalArray` columns: the compiled object baked in a ref-code remap for the
+    compile-time pool, and the `get_or_compile_formula` cache key ignored pools. Data with a
+    reordered, subset or rebuilt pool, or a reference grid with its own small pool, reused the
+    stale remap (e.g. an average prediction of 0.604 instead of 0.496; contrasts with flipped
+    signs). The result depended on which data had been compiled first.
+  - `String` columns and integer/Bool columns made categorical through `contrasts`: the level
+    index was recomputed for every row from `sort(unique(column))` of the evaluation data,
+    which was wrong for subsets lacking a level and for custom level orders
+    (`DummyCoding(levels = [...])`), and integer values were used directly as row indices
+    (wrong unless the codes were exactly `1:k`). It was also O(n) per row with 400 bytes
+    allocated per row, so a 20,000-row population pass took seconds.
+  - Through `ContrastEvaluator`, Bool and integer categorical contrasts returned all zeros
+    because `true`/`false` (and `0`/`1`) both mapped to the first row.
+  `ContrastOp` now carries a `LevelIndex` built from `ContrastsMatrix.levels`:
+  `CategoricalValue`s resolve through a ref-code → row table keyed by pool identity (rebuilt
+  only when a different pool is seen, extended when levels are appended), and other values
+  through a hash lookup. Per-row evaluation is O(1) and allocation-free for String columns
+  (≈13 ns vs 4.4 µs at n = 1,000 and 98 µs at n = 20,000 for `y ~ x * s`). CategoricalArray
+  rows remain allocation-free (≈1–2 ns slower per categorical term). Because compiled objects
+  no longer depend on the evaluation data's pool, the cache key needs no pool information and
+  same-data cache hits are unchanged. Tests in `test/test_categorical_level_resolution.jl`.
+- Missing categorical values (ref code 0) and out-of-range codes were silently clamped to
+  the first level. They now throw an `ArgumentError`, as do values that are not levels of the
+  fitted model (for example a string never seen in fitting). Tests in
+  `test/test_categorical_level_resolution.jl`.
+- Link derivative helpers (`_dmu_deta`, `_d2mu_deta2`, used for response-scale effects):
+  the logit forms were computed from σ(η)(1 − σ(η)), which is exactly 0 once σ(η) rounds to
+  1 (η ≳ 37), so response-scale effects and their gradients vanished for confident
+  predictions (true dμ/dη at η = 40 is 4.2e-18). The cloglog second derivative returned NaN
+  for η > 709 (0 × −Inf). Both now use stable forms (`exp(-|η|)`, `expm1`, log space).
+  `PowerLink` and `NegativeBinomialLink` threw a `MethodError`; they now have analytic
+  derivatives (the negative binomial derivative is computed directly because
+  `GLM.mueta(::NegativeBinomialLink, η)` returns μ rather than dμ/dη), and any other
+  `GLM.Link` falls back to forward-mode AD of `GLM.linkinv`. Tests in
+  `test/test_link_derivatives.jl` check every link against closed-form 256-bit BigFloat
+  references for η from −800 to 800.
+
+- MixedModels formulas with `zerocorr(...)` random effects failed to compile with
+  "Cannot decompose term". `fixed_effects_form` dropped only `RandomEffectsTerm` and the
+  unapplied `|` term, so the `ZeroCorr` wrapper fell through to the generic decomposer. Every
+  `MixedModels.AbstractReTerm` is now dropped. Tests in `test/test_mixedmodels_integration.jl`
+  compare compiled rows with the fitted model's fixed-effects matrix for correlated slopes,
+  `zerocorr`, and nested `(1|s/t)` terms.
+- A compiled formula given an output vector shorter than `length(compiled)` silently skipped
+  the out-of-range writes, leaving stale values in the caller's buffer. It now throws a
+  `DimensionMismatch`; longer buffers are still accepted. The check is one integer comparison
+  per call and evaluation remains allocation-free.
+- Twelve exported names (`marginal_effects_eta!`, `marginal_effects_mu!`, `delta_method_se`,
+  `accumulate_ame_gradient!`, ...) had no definitions: their implementations moved to Margins.jl
+  in v2.0 but the export list was not updated. They are no longer exported.
+  `derivative_modelrow(de, row)`, the allocating counterpart of `derivative_modelrow!` that
+  was exported but undefined, is now implemented. `test/test_api_contracts.jl` checks that
+  every exported name is defined.
+
+- Contrasts could not target a level the fitted model knows but the data's pool lacks (e.g. a
+  subset re-`categorical`-ized after dropping the reference level): categorical counterfactual
+  replacements are ref codes into the column's pool. `contrastevaluator` now works on an
+  internal copy of such columns with the missing model levels appended; the caller's data is
+  not modified or replaced, and columns that already cover the model's levels are used as is.
+
+### Added
+
+- `categorical_levels(compiled)` and `categorical_variables(compiled)`: the variables the fitted
+  model treats as categorical and their levels in model order, decided by the model's contrasts
+  rather than column element types. An integer, `String`, or `Bool` column declared categorical
+  (e.g. `contrasts = Dict(:k => DummyCoding())`) is included. They complement
+  `continuous_variables`, so downstream packages need no element-type heuristics.
+- `link_derivatives(link, η) -> (μ, dμ/dη, d²μ/dη²)`: public interface to the inverse link and its
+  first two derivatives for every `GLM.Link` (the exported `_dmu_deta`/`_d2mu_deta2` remain for
+  compatibility).
+- `derivative_modelrow!(J, x, de, row)`: also writes the model row Xᵢ into `x`. With the AD
+  backend Xᵢ is read from the dual numbers already computed, saving a formula evaluation for
+  callers that need both (e.g. response-scale marginal effects and their delta-method gradients).
+- `validate_mixture_weights` and `validate_mixture_levels` are now public (the
+  `CategoricalMixture` constructor uses them). Errors name the offending weights or duplicate
+  levels.
+
+### Changed
+
+- Performance: the AD backend no longer copies every differentiated column into a full-length
+  array of dual numbers. `NumericCounterfactualVector` gains a storage type parameter
+  (`NumericCounterfactualVector{T,B}`) and stores the original column as Float64, converting on
+  read. Storage stays homogeneous, so evaluation remains allocation-free. This saves about
+  (chunk + 1) × 8 bytes per row per differentiated variable, about 1 GB for 21 variables at
+  n = 500,000. The one-parameter constructor `NumericCounterfactualVector{T}(base, row, value)`
+  is unchanged.
+- Performance: the response-scale contrast gradient reset its counterfactuals with a
+  runtime-indexed loop over a heterogeneous tuple (type-unstable, about 1 KB allocated per
+  call). It now uses the unrolled `reset_all_counterfactuals!`.
+- `ContrastOp` gains a third type parameter (its `LevelIndex` of model levels).
+  `typeof(op).parameters[1]` (the column) and `op isa ContrastOp` are unaffected. The internal
+  `extract_level_code` is removed.
+
+### Documentation
+
+- Compiled formulas, derivative evaluators and contrast evaluators are not thread-safe
+  (they own mutable scratch buffers). The population-analysis guide showed a `@threads` loop
+  sharing one evaluator across threads, which gives wrong results. It now builds one compiled
+  formula and evaluator per task, and the performance guide and the `compile_formula` and
+  `get_or_compile_formula` docstrings say so explicitly.
+- Examples throughout the docs called `marginal_effects_eta!`, `marginal_effects_mu!` and
+  `delta_method_se`, which were removed from FormulaCompiler in 1.0 and are not exported by
+  Margins.jl. They now use `derivative_modelrow!` with `mul!(g, J', β)` (η scale), `GLM.mueta`
+  (μ scale) and `sqrt(dot(∇β, Σ, ∇β))`, or point to Margins.jl's public API.
+
 ## [1.4.2] - July 2026
 
 ### Fixed

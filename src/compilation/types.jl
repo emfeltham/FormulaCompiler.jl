@@ -209,7 +209,67 @@ Enables direct support for `!flag` syntax in formulas without preprocessing.
 struct NegationOp{InPos, OutPos} <: AbstractOp end
 
 """
-    ContrastOp{Column, OutPositions} <: AbstractOp
+    PoolRowMap
+
+Immutable snapshot mapping the ref codes of one `CategoricalPool` to contrast-matrix rows.
+`rows[ref]` is the model level row for ref code `ref`, or 0 if that pool level is not a
+model level. Pools can only grow by appending levels, so the table stays valid for every
+ref code it covers; a ref code beyond `length(rows)` triggers a rebuild.
+"""
+struct PoolRowMap
+    pool::Any
+    rows::Vector{Int}
+end
+
+"""
+    PoolRowCache
+
+Mutable holder for the most recent [`PoolRowMap`](@ref). A rebuilt map is published with a
+single field store, so a reader never sees a partially built table.
+"""
+mutable struct PoolRowCache
+    map::PoolRowMap
+end
+
+"""
+    LevelIndex{K}
+
+Resolves categorical values to rows of a `ContrastOp`'s contrast matrix using the
+*model's* contrast levels (`ContrastsMatrix.levels`), independent of the pool or the set
+of values present in the data being evaluated.
+
+- `levels::Vector{K}`: model levels, in contrast-matrix row order
+- `lookup::Dict{K,Int}`: level value → row (used for `String`, `Bool`, integer, ... values)
+- `cache::PoolRowCache`: ref code → row table for the last `CategoricalPool` seen
+
+`LevelIndex{Nothing}` is the positional form used when a `ContrastOp` is built from a bare
+matrix: the ref code or integer value is the row (range-checked).
+"""
+struct LevelIndex{K}
+    levels::Vector{K}
+    lookup::Dict{K, Int}
+    cache::PoolRowCache
+end
+
+struct _NoPool end
+
+function LevelIndex(levels::AbstractVector)
+    levs = collect(levels)
+    K = eltype(levs)
+    lookup = Dict{K, Int}()
+    for (i, l) in enumerate(levs)
+        lookup[l] = i
+    end
+    return LevelIndex{K}(levs, lookup, PoolRowCache(PoolRowMap(_NoPool(), Int[])))
+end
+
+# Positional index: `nlevels` rows, no level values
+LevelIndex{Nothing}(::Nothing, nlevels::Int) =
+    LevelIndex{Nothing}(Nothing[nothing for _ in 1:nlevels], Dict{Nothing, Int}(),
+                        PoolRowCache(PoolRowMap(_NoPool(), Int[])))
+
+"""
+    ContrastOp{Column, OutPositions, K} <: AbstractOp
 
 **Categorical Contrast Operation**: Expands categorical variables using contrast matrices.
 
@@ -221,7 +281,7 @@ struct NegationOp{InPos, OutPos} <: AbstractOp end
 ## Position Allocation
 ```julia  
 # CategoricalTerm with 3 levels, 2 contrasts → positions [4, 5]
-ContrastOp{:group, (4, 5)}(contrast_matrix)
+ContrastOp{:group, (4, 5)}(contrast_matrix, LevelIndex(["A", "B", "C"]))
 
 # Execution fills multiple positions:
 # scratch[4] = contrast_matrix[level, 1] 
@@ -234,11 +294,28 @@ The position tuple `(4, 5)` represents all allocated positions.
 
 ## Type vs Field Storage
 - **Type parameter**: Output positions (compile-time)
-- **Field storage**: Contrast matrix (runtime data, but pre-computed)
+- **Field storage**: Contrast matrix (runtime data, but pre-computed) and a
+  [`LevelIndex`](@ref) that maps each row's value to a contrast-matrix row
+
+## Level Resolution
+Rows of `contrast_matrix` follow the model's contrast levels (`ContrastsMatrix.levels`),
+not the pool of whatever data is evaluated. At run time each value is resolved against
+the model's levels: `CategoricalValue`s through a per-pool ref-code table (rebuilt only
+when a different pool is seen), other values (`String`, `Bool`, integer codes, ...)
+through a hash lookup. Missing values and values that are not model levels throw.
 """
-struct ContrastOp{Column, OutPositions} <: AbstractOp
-    contrast_matrix::Matrix{Float64}  # Pre-computed contrast matrix
+struct ContrastOp{Column, OutPositions, K} <: AbstractOp
+    contrast_matrix::Matrix{Float64}  # Contrast matrix, rows in model level order
+    index::LevelIndex{K}              # value / pool ref code → contrast-matrix row
 end
+
+# Positional form (no level information): row = ref code / integer value, range-checked.
+ContrastOp{Column, OutPositions}(contrast_matrix::AbstractMatrix) where {Column, OutPositions} =
+    ContrastOp{Column, OutPositions, Nothing}(Matrix{Float64}(contrast_matrix),
+                                              LevelIndex{Nothing}(nothing, size(contrast_matrix, 1)))
+
+ContrastOp{Column, OutPositions}(contrast_matrix::AbstractMatrix, index::LevelIndex{K}) where {Column, OutPositions, K} =
+    ContrastOp{Column, OutPositions, K}(Matrix{Float64}(contrast_matrix), index)
 
 """
     MixtureContrastOp{Column, OutPositions, LevelIndices, Weights} <: AbstractOp

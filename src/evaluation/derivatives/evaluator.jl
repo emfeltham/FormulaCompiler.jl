@@ -69,11 +69,12 @@ de = derivativeevaluator(:ad, compiled, data, vars)  # Automatic differentiation
 J = Matrix{Float64}(undef, length(compiled), length(vars))
 derivative_modelrow!(J, de, 1)  # J[i,j] = ∂X[i]/∂vars[j]
 
-# Marginal effects on linear predictor η = Xβ
+# Marginal effects on linear predictor η = Xβ: g_eta = J'β
+using LinearAlgebra: mul!
 β = coef(model)
 g_eta = Vector{Float64}(undef, length(vars))
-marginal_effects_eta!(g_eta, de, β, 1)  # Small allocations
-marginal_effects_eta!(g_eta, de, β, 1)  # Zero allocations
+mul!(g_eta, J', β)  # g_eta[j] = ∂η/∂vars[j]; zero allocations
+# (Averaged effects with standard errors: Margins.jl `population_margins`)
 ```
 
 # Method Overloads
@@ -101,7 +102,7 @@ de = derivativeevaluator(compiled, data, [:x, :group])
 # Error: Non-continuous/categorical vars: [:group]. Use scenario system for categorical profiles.
 ```
 
-See also: [`derivative_modelrow!`](@ref), [`marginal_effects_eta!`](@ref), [`continuous_variables`](@ref)
+See also: [`derivative_modelrow!`](@ref), [`continuous_variables`](@ref)
 """
 # Main constructor with positional backend argument
 function derivativeevaluator(
@@ -232,4 +233,46 @@ function derivativeevaluator_ad(
     ctx = JacobianContext(g, cfg, input_vec, var_columns)
 
     return ADEvaluator(core, ctx)
+end
+
+"""
+    derivative_modelrow(de::AbstractDerivativeEvaluator, row::Int) -> Matrix{Float64}
+
+Allocating convenience form of [`derivative_modelrow!`](@ref): returns the Jacobian
+`J[i, j] = ∂X[i]/∂vars[j]` of the model row at `row` as a new `length(de) × length(de.vars)`
+matrix. Use `derivative_modelrow!` with a preallocated matrix in loops.
+"""
+function derivative_modelrow(de::AbstractDerivativeEvaluator, row::Int)
+    J = Matrix{Float64}(undef, length(de), length(de.vars))
+    return derivative_modelrow!(J, de, row)
+end
+
+"""
+    derivative_modelrow!(J, x, de::AbstractDerivativeEvaluator, row) -> J
+
+Like `derivative_modelrow!(J, de, row)`, and also write the model row Xᵢ itself into `x`
+(length `length(de)`). Callers that need both, e.g. response-scale marginal effects whose
+parameter gradients involve Xᵢ, avoid a second formula evaluation: the AD backend reads Xᵢ
+from the values of the dual numbers it already computed; the FD backend evaluates the row
+once.
+"""
+function derivative_modelrow!(J::AbstractMatrix{Float64}, x::AbstractVector{Float64},
+                              de::ADEvaluator, row::Int)
+    length(x) == length(de) || throw(DimensionMismatch(
+        "model-row buffer has length $(length(x)), expected $(length(de))"))
+    derivative_modelrow!(J, de, row)
+    ydual = de.core.dual_output             # last dual evaluation; values are Xᵢ in every chunk
+    @inbounds for i in eachindex(x)
+        x[i] = ForwardDiff.value(ydual[i])
+    end
+    return J
+end
+
+function derivative_modelrow!(J::AbstractMatrix{Float64}, x::AbstractVector{Float64},
+                              de::FDEvaluator, row::Int)
+    length(x) == length(de) || throw(DimensionMismatch(
+        "model-row buffer has length $(length(x)), expected $(length(de))"))
+    derivative_modelrow!(J, de, row)
+    de.compiled_base(x, de.base_data, row)
+    return J
 end

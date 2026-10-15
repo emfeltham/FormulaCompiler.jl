@@ -499,44 +499,38 @@ function get_column_data(term::CategoricalTerm, data_example)
     return getproperty(data_example, term.sym)
 end
 
-# Standard categorical decomposition (existing logic)
+# Standard categorical decomposition
 function decompose_standard_categorical(ctx::CompilationContext, term::CategoricalTerm, col_data)
-    # Get contrast matrix from term. Its rows are ordered by `contrasts.levels`, which
-    # StatsModels derives from the *observed* levels only — so unused (zero-count) levels are
-    # dropped and the ordering can differ from the CategoricalArray pool's level ordering.
+    # Contrast matrix rows are ordered by `contrasts.levels`, the levels the model was fitted
+    # with. StatsModels derives these from the observed levels only (unused pool levels are
+    # dropped) and a contrasts spec may reorder them (`DummyCoding(levels = [...])`).
     contrasts = term.contrasts
-    contrast_matrix = Matrix{Float64}(contrasts.matrix)  # Ensure it's Float64
+    contrast_matrix = Matrix{Float64}(contrasts.matrix)
 
-    # Execution (`execute_op(::ContrastOp, ...)`) indexes rows by `levelcode`, i.e. the pool
-    # ref code. Remap rows into pool-ref order so that row `r` holds the coding for the pool
-    # level whose ref code is `r`. Without this, a pool with unused/reordered levels selects the
-    # wrong contrast row (off-by-one when an unused level precedes observed ones).
-    # Only genuine categorical columns carry a pool; plain String columns already use the
-    # schema's sorted-unique ordering at runtime (see `extract_level_code`), which matches.
-    if col_data isa CategoricalArrays.CategoricalArray ||
-       (eltype(col_data) <: CategoricalArrays.CategoricalValue)
-        pool_levels = CategoricalArrays.levels(col_data)  # full pool, in ref-code order
-        n_contrasts = size(contrast_matrix, 2)
-        remapped = zeros(Float64, length(pool_levels), n_contrasts)
-        for (r, lev) in enumerate(pool_levels)
-            # Unused level → absent from invindex → leave its row as zeros (never selected at
-            # runtime because no observation carries that ref code).
-            row = get(contrasts.invindex, lev, nothing)
-            row === nothing || (remapped[r, :] = @view contrast_matrix[row, :])
-        end
-        contrast_matrix = remapped
-    end
+    # Values are resolved against these model levels at run time (`contrast_row`), never
+    # against the pool or the unique values of the data being evaluated, so the compiled
+    # object does not depend on how the evaluation data codes its levels.
+    index = LevelIndex(contrasts.levels)
+
+    # Prime the pool table for the compile-time column so the first evaluation on this
+    # data does not need to build it.
+    _prime_level_index!(index, col_data)
 
     n_contrasts = size(contrast_matrix, 2)
 
     # Allocate positions for each contrast
     positions = allocate_positions!(ctx, n_contrasts)
 
-    # Create contrast operation with matrix as field value
-    push!(ctx.operations, ContrastOp{term.sym, Tuple(positions)}(contrast_matrix))
+    push!(ctx.operations, ContrastOp{term.sym, Tuple(positions)}(contrast_matrix, index))
 
     ctx.position_map[term] = positions
     return positions
+end
+
+_prime_level_index!(index::LevelIndex, col) = nothing
+function _prime_level_index!(index::LevelIndex, col::CategoricalArrays.CategoricalArray)
+    _rebuild_pool_map!(index, CategoricalArrays.pool(col))
+    return nothing
 end
 
 # Mixture decomposition logic
@@ -712,8 +706,8 @@ function decompose_term!(ctx::CompilationContext, term::ScaledTerm, data_example
     return std_pos
 end
 
-# Handle RandomEffectsTerm (from MixedModels)
-function decompose_term!(ctx::CompilationContext, term::RandomEffectsTerm, data_example)
+# Handle random-effects terms from MixedModels (RandomEffectsTerm, ZeroCorr, ...)
+function decompose_term!(ctx::CompilationContext, term::MixedModels.AbstractReTerm, data_example)
     # Skip random effects for now - we only compile fixed effects
     # Random effects are handled separately by MixedModels
     return Int[]

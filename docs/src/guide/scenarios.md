@@ -202,10 +202,10 @@ Compute parameter gradients for standard errors:
 ∇β = Vector{Float64}(undef, length(compiled_cat))
 contrast_gradient!(∇β, evaluator, 1, :region, "North", "South", coef(model_cat))
 
-# Standard error using delta method (requires Margins.jl)
-using Margins
+# Standard error by the delta method: sqrt(∇β' Σ ∇β)
+using LinearAlgebra: dot
 vcov_matrix = vcov(model_cat)
-se = delta_method_se(∇β, vcov_matrix)
+se = sqrt(dot(∇β, vcov_matrix, ∇β))
 println("Standard error: $(round(se, digits=3))")
 ```
 

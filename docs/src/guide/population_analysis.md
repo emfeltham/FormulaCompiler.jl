@@ -1,8 +1,8 @@
 # Population Analysis Using Row-Wise Functions
 
-This guide shows how to perform population-level analysis using row-wise marginal effects functions. The key insight is that **population effects are simply averages over individual effects** - simple loops over rows are all you need.
+This guide shows how to perform population-level analysis using FormulaCompiler's row-wise primitives. The key insight is that **population effects are simply averages over individual effects** - simple loops over rows are all you need.
 
-> **Note**: Marginal effects functions (`marginal_effects_eta!`, `marginal_effects_mu!`, etc.) are provided by [Margins.jl](https://github.com/emfeltham/Margins.jl). FormulaCompiler provides the computational primitives (`derivative_modelrow!`) that Margins.jl builds upon. Install Margins.jl to use the examples in this guide: `using Pkg; Pkg.add(url="https://github.com/emfeltham/Margins.jl")`
+> **Note**: The examples below use only FormulaCompiler primitives: `derivative_modelrow!` gives the Jacobian `J[i, j] = ∂X[i]/∂vars[j]` of a model row, and the marginal effects on the linear predictor are `J' * β`. For finished marginal effects with standard errors (AME, MEM, predictions, contrasts), use the public API of [Margins.jl](https://github.com/emfeltham/Margins.jl) (`population_margins`, `profile_margins`), which is built on these primitives.
 
 ## Core Principle
 
@@ -13,7 +13,8 @@ AME = (1/n) × Σᵢ ∂f(xᵢ)/∂x
 # Implementation: Individual effects + averaging
 population_effects = Vector{Float64}(undef, n_rows)
 for (i, row) in enumerate(rows)
-    marginal_effects_eta!(temp_buffer, de, β, row)  # Existing row-wise function
+    derivative_modelrow!(J, de, row)   # J[i, j] = ∂X[i]/∂vars[j]
+    mul!(temp_buffer, J', β)           # ∂η/∂vars for this row
     population_effects[i] = temp_buffer[var_index]
 end
 population_ame = mean(population_effects)  # Simple arithmetic
@@ -23,10 +24,11 @@ population_ame = mean(population_effects)  # Simple arithmetic
 
 ### Basic Pattern
 
-Use `marginal_effects_eta!()` in a loop to compute Average Marginal Effects (AME):
+Use `derivative_modelrow!` in a loop to compute Average Marginal Effects (AME) on the linear predictor:
 
 ```julia
-using FormulaCompiler, Margins, GLM, DataFrames, Tables
+using FormulaCompiler, GLM, DataFrames, Tables
+using LinearAlgebra: mul!
 
 # Setup: Fit model and compile
 df = DataFrame(
@@ -45,12 +47,14 @@ de = derivativeevaluator(:fd, compiled, data, [:x, :age])
 
 # Compute population marginal effects
 n_rows = length(df.y)
+J = Matrix{Float64}(undef, length(compiled), length(de.vars))  # Jacobian buffer
 temp_buffer = Vector{Float64}(undef, length(de.vars))
 ame_results = zeros(length(de.vars))
 
 for row in 1:n_rows
-    # Compute marginal effects for this individual
-    marginal_effects_eta!(temp_buffer, de, β, row)
+    # Compute marginal effects ∂η/∂x for this individual
+    derivative_modelrow!(J, de, row)
+    mul!(temp_buffer, J', β)
 
     # Accumulate for population average
     ame_results .+= temp_buffer
@@ -78,7 +82,8 @@ total_weight = sum(weights)
 weighted_ame = zeros(length(de.vars))
 
 for row in 1:n_rows
-    marginal_effects_eta!(temp_buffer, de, β, row)
+    derivative_modelrow!(J, de, row)
+    mul!(temp_buffer, J', β)
 
     # Weight each individual's contribution
     weighted_ame .+= weights[row] .* temp_buffer
@@ -241,14 +246,16 @@ For large datasets, reuse buffers to minimize allocations:
 # Pre-allocate all buffers
 n_rows = length(df.y)
 n_vars = length(de.vars)
+J = Matrix{Float64}(undef, length(compiled), n_vars)
 temp_buffer = Vector{Float64}(undef, n_vars)
 output_buffer = Vector{Float64}(undef, length(compiled))
 ame_accumulator = zeros(n_vars)
 
 # Efficient loop with buffer reuse
 for row in 1:n_rows
-    # Reuse temp_buffer for each row
-    marginal_effects_eta!(temp_buffer, de, β, row)
+    # Reuse J and temp_buffer for each row
+    derivative_modelrow!(J, de, row)
+    mul!(temp_buffer, J', β)
     ame_accumulator .+= temp_buffer
 end
 
@@ -265,13 +272,15 @@ function compute_population_ame_batched(de, β, batch_size=1000)
     n_vars = length(de.vars)
 
     ame_accumulator = zeros(n_vars)
+    J = Matrix{Float64}(undef, length(β), n_vars)
     temp_buffer = Vector{Float64}(undef, n_vars)
 
     for batch_start in 1:batch_size:n_rows
         batch_end = min(batch_start + batch_size - 1, n_rows)
 
         for row in batch_start:batch_end
-            marginal_effects_eta!(temp_buffer, de, β, row)
+            derivative_modelrow!(J, de, row)
+            mul!(temp_buffer, J', β)
             ame_accumulator .+= temp_buffer
         end
 
@@ -290,38 +299,52 @@ ame_results = compute_population_ame_batched(de, β, 5000)
 
 ### Parallel Processing
 
-For massive datasets, use threading:
+!!! warning "Evaluators are not thread-safe"
+    Compiled formulas (`compile_formula`), derivative evaluators (`derivativeevaluator`)
+    and contrast evaluators (`contrastevaluator`) hold mutable scratch buffers and
+    counterfactual state. Calling the same object from several threads or tasks at once
+    gives wrong results silently. Build one evaluator per task, as below. The same applies
+    to objects returned by `get_or_compile_formula`/`modelrow`, which come from a shared
+    cache: compile a fresh object per task with `compile_formula`.
+
+To use threads, split the rows into chunks and give each task its own compiled formula,
+evaluator and buffers:
 
 ```julia
 using Base.Threads
+using LinearAlgebra: mul!
 
-function compute_population_ame_parallel(de, β)
-    n_rows = length(getproperty(de.base_data, first(de.vars)))
-    n_vars = length(de.vars)
+function compute_population_ame_parallel(model, data, vars, β; backend = :fd)
+    n_rows = length(getproperty(data, first(vars)))
+    n_vars = length(vars)
+    chunks = collect(Iterators.partition(1:n_rows, cld(n_rows, nthreads())))
 
-    # Thread-local accumulators
-    thread_accumulators = [zeros(n_vars) for _ in 1:nthreads()]
-
-    @threads for row in 1:n_rows
-        tid = threadid()
-        temp_buffer = Vector{Float64}(undef, n_vars)
-
-        marginal_effects_eta!(temp_buffer, de, β, row)
-        thread_accumulators[tid] .+= temp_buffer
+    tasks = map(chunks) do rows
+        @spawn begin
+            # One compiled formula and evaluator per task: never shared across tasks
+            compiled = compile_formula(model, data)
+            de = derivativeevaluator(backend, compiled, data, vars)
+            J = Matrix{Float64}(undef, length(compiled), n_vars)
+            g = Vector{Float64}(undef, n_vars)
+            acc = zeros(n_vars)
+            for row in rows
+                derivative_modelrow!(J, de, row)
+                mul!(g, J', β)
+                acc .+= g
+            end
+            acc
+        end
     end
 
-    # Combine thread results
-    total_accumulator = zeros(n_vars)
-    for acc in thread_accumulators
-        total_accumulator .+= acc
-    end
-
-    return total_accumulator ./ n_rows
+    return sum(fetch.(tasks)) ./ n_rows
 end
 
-# Usage (requires Julia started with multiple threads)
-ame_results = compute_population_ame_parallel(de, β)
+# Usage (start Julia with several threads, e.g. `julia -t 4`)
+ame_results = compute_population_ame_parallel(model, data, [:x, :age], β)
 ```
+
+Building an evaluator costs far more than evaluating a row, so use a few large chunks
+(about one per thread) rather than one task per row.
 
 ## Implementation Properties
 
@@ -339,7 +362,7 @@ ame_results = compute_population_ame_parallel(de, β)
 
 ### Simplicity
 
-- **No special API**: Uses existing, well-tested row-wise functions
+- **No special API**: Uses existing, well-tested row-wise primitives
 - **Clear semantics**: Population = individual + averaging (mathematically obvious)
 - **Easy debugging**: Can inspect individual-level results before averaging
 
@@ -380,7 +403,7 @@ The row-wise approach is:
 
 Population analysis in FormulaCompiler is achieved through:
 
-1. **Individual-level computation**: Use existing row-wise functions (`marginal_effects_eta!`, etc.)
+1. **Individual-level computation**: Use row-wise primitives (`modelrow!`, `derivative_modelrow!`, `contrast_modelrow!`)
 2. **Counterfactual scenarios**: Use `CounterfactualVector` system for single-observation perturbations
 3. **Simple aggregation**: Apply standard arithmetic (mean, weighted average, etc.)
 

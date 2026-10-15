@@ -26,7 +26,7 @@ Minimal runner
 Setup
 - Activate project: `Pkg.activate("..")`; `Pkg.instantiate()`
 - Using: `using BenchmarkTools, FormulaCompiler, GLM, MixedModels, Tables, DataFrames, CategoricalArrays, Random`
-- For marginal effects benchmarks (sections 5-6): `using Margins`  # See https://github.com/emfeltham/Margins.jl
+- For marginal effects benchmarks (section 5): `using LinearAlgebra`
 - Data format: Prefer `Tables.columntable(df)` for evaluation
 - Warmup: run each function once before benchmarking
 
@@ -64,19 +64,14 @@ Benchmarks
 - FD single-column: `col = similar(rand(length(compiled))); @benchmark fd_jacobian_column!($col, $de_fd, 1, 1)`
 - Targets: AD ≤512 bytes; FD 0 bytes
 
-5) Marginal Effects (η and μ) [Requires Margins.jl]
-- `using Margins`
-- `β = coef(model)`; `g = similar(rand(2))`  # Assuming 2 continuous variables
-- η-scale AD: `@benchmark marginal_effects_eta!($g, $de_ad, $β, 25)`
-- η-scale FD: `@benchmark marginal_effects_eta!($g, $de_fd, $β, 25)`
-- μ-scale with link (e.g., Logit): `@benchmark marginal_effects_mu!($g, $de_ad, $β, 25, LogitLink())` and `@benchmark marginal_effects_mu!($g, $de_fd, $β, 25, LogitLink())`
-- Targets: FD 0 bytes; AD ≤512 bytes
-
-6) Delta Method SE [Requires Margins.jl]
-- `using Margins`
-- `gβ = similar(rand(length(β))); Σ = I*1.0` (or `vcov(model)`)
-- `@benchmark delta_method_se($gβ, $Σ)`
-- Target: 0 bytes, O(10^1) ns for dense small Σ
+5) Marginal Effects on η (Jacobian + matrix-vector product)
+- `using LinearAlgebra: mul!`
+- `β = coef(model)`; `J = Matrix{Float64}(undef, length(compiled), 2)`; `g = Vector{Float64}(undef, 2)`  # Assuming 2 continuous variables
+- η-scale AD: `@benchmark (derivative_modelrow!($J, $de_ad, 25); mul!($g, $J', $β))`
+- η-scale FD: `@benchmark (derivative_modelrow!($J, $de_fd, 25); mul!($g, $J', $β))`
+- μ-scale effects are the η-scale vector times dμ/dη (e.g., `GLM.mueta(LogitLink(), η)`), a scalar multiply that adds no allocations
+- Targets: 0 bytes after warmup (both backends)
+- Averaged effects and delta-method standard errors are provided by Margins.jl (`population_margins`, `profile_margins`) and are benchmarked there
 
 7) MixedModels Fixed Effects
 - Fit a small LMM/GLMM; compile with fixed-effects extraction

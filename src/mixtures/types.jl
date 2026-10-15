@@ -34,20 +34,60 @@ system and compiled into efficient zero-allocation evaluators using MixtureContr
 struct CategoricalMixture{T}
     levels::Vector{T}
     weights::Vector{Float64}
-    
+
     function CategoricalMixture(levels::Vector{T}, weights::Vector{Float64}) where T
-        # Validation
-        length(levels) == length(weights) || 
+        length(levels) == length(weights) ||
             throw(ArgumentError("levels and weights must have same length"))
-        all(weights .≥ 0.0) || 
-            throw(ArgumentError("all weights must be non-negative"))
-        abs(sum(weights) - 1.0) < 1e-10 || 
-            throw(ArgumentError("weights must sum to 1.0, got $(sum(weights))"))
-        length(unique(levels)) == length(levels) || 
-            throw(ArgumentError("levels must be unique"))
-            
+        validate_mixture_levels(levels)
+        validate_mixture_weights(weights)
         new{T}(levels, weights)
     end
+end
+
+"""
+    validate_mixture_weights(weights; atol=1e-10)
+
+Throw an `ArgumentError` unless the mixture weights are non-negative and sum to 1
+(within `atol`). Used by the `CategoricalMixture` constructor.
+
+```julia
+validate_mixture_weights([0.3, 0.7])           # ok
+validate_mixture_weights([0.3, 0.8])           # error: does not sum to 1
+validate_mixture_weights([0.3, -0.7, 1.4])     # error: negative weight
+```
+"""
+function validate_mixture_weights(weights::AbstractVector{<:Real}; atol::Real=1e-10)
+    if any(w < 0 for w in weights)
+        throw(ArgumentError("Mixture weights must be non-negative: $weights"))
+    end
+    weight_sum = sum(weights)
+    if !isapprox(weight_sum, 1.0, atol=atol)
+        throw(ArgumentError("Mixture weights must sum to 1.0 (±$atol): got $weights (sum = $weight_sum)"))
+    end
+    return nothing
+end
+
+"""
+    validate_mixture_levels(levels)
+
+Throw an `ArgumentError` unless the mixture levels are non-empty and unique. Used by the
+`CategoricalMixture` constructor.
+
+```julia
+validate_mixture_levels(["A", "B", "C"])    # ok
+validate_mixture_levels(["A", "A", "B"])    # error: duplicate level "A"
+validate_mixture_levels(String[])           # error: empty
+```
+"""
+function validate_mixture_levels(levels::AbstractVector)
+    if isempty(levels)
+        throw(ArgumentError("Mixture levels cannot be empty"))
+    end
+    if length(unique(levels)) != length(levels)
+        duplicates = [level for level in unique(levels) if count(==(level), levels) > 1]
+        throw(ArgumentError("Mixture levels must be unique. Duplicates found: $duplicates"))
+    end
+    return nothing
 end
 
 # Support for indexing and iteration

@@ -16,25 +16,11 @@ include("derivatives/finite_diff.jl")
 include("derivatives/contrasts.jl")
 include("derivatives/link_functions.jl")
 
-# Export public API
-export 
+# Export public API (the marginal-effects, gradient and delta-method functions formerly
+# listed here moved to Margins.jl in v2.0; see src/FormulaCompiler.jl)
+export
        derivativeevaluator,
        derivative_modelrow!, derivative_modelrow,
-       derivative_modelrow_fd,
-       # High-performance direct function calls
-       marginal_effects_eta!, marginal_effects_eta!,
-       marginal_effects_mu!, marginal_effects_mu!,
-       marginal_effects_eta_grad!, marginal_effects_eta_grad,
-       # Simple concrete type dispatch functions (Step 3.5.1)
-       marginal_effects_eta!, marginal_effects_mu!,
        contrast_modelrow!, contrast_modelrow,
        continuous_variables,
-       # Single-column FD and parameter gradient functions
-       fd_jacobian_column!, fd_jacobian_column_pos!,
-       me_eta_grad_beta!,
-       me_mu_grad_beta!,
-       # Variance computation primitives
-       delta_method_se,
-       accumulate_ame_gradient!,
-       # Batch operations
-       marginal_effects_batch!
+       fd_jacobian_column!

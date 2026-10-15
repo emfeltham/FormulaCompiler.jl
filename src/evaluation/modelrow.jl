@@ -74,6 +74,14 @@ Creates cache key based on:
 2. Column names (formula structure)
 3. Semantic type categories (compilation behavior)
 
+Categorical pools and level orders are deliberately not part of the key: a compiled
+`ContrastOp` resolves values against the model's own contrast levels at run time (see
+`LevelIndex`), so one compiled object is correct for any data with these columns,
+including subsets, reordered or rebuilt pools, and reference grids.
+
+The cached object is shared process-wide and is not thread-safe; for threaded work call
+`compile_formula` once per task.
+
 # Type Category Benefits
 - Better cache hits: Vector{Int} and Vector{Float64} share cache entry
 - Correct mixture handling: CategoricalArray vs CategoricalMixture distinguished

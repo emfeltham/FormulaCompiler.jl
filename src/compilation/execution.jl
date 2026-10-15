@@ -88,6 +88,8 @@ function (f::UnifiedCompiled{T, Ops, S, O})(
     data::NamedTuple, 
     row_idx::Int
 ) where {T, Ops, S, O}
+    # A short buffer used to make copy operations skip silently, leaving stale values
+    length(output) >= O || _throw_output_too_short(length(output), O)
     # Use the formula's own pre-allocated scratch
     scratch = f.scratch
     fill!(scratch, zero(T))  # Clear scratch
@@ -377,118 +379,167 @@ end
 end
 
 ###############################################################################
-# DYNAMIC CATEGORICAL LEVEL EXTRACTION (From restart branch)
+# CATEGORICAL LEVEL RESOLUTION
 ###############################################################################
+#
+# A ContrastOp's matrix rows follow the model's contrast levels. Each row's value is
+# resolved to a matrix row with `contrast_row(op.index, column, row_idx)`:
+#
+# - CategoricalValue (CategoricalArray columns, views, Vector{CategoricalValue}):
+#   pool ref code → row via a table built once per pool (`PoolRowMap`). The table is keyed
+#   by pool identity (CategoricalPools only ever grow by appending levels, which extends
+#   the table), so data with a reordered, subset or rebuilt pool is resolved correctly.
+# - Other values (String, Bool, integer codes, ...): hash lookup in the model's levels.
+#
+# Missing values and values that are not model levels throw; nothing is clamped.
 
-"""
-    extract_level_code(column_data, row_idx::Int) -> Int
-
-Extract level code with zero allocations using type-stable dispatch.
-Handles CategoricalVector and CounterfactualVector types for zero-allocation extraction.
-"""
-@inline function extract_level_code(column_data::CategoricalVector, row_idx::Int)
-    return Int(levelcode(column_data[row_idx]))
+@noinline function _throw_missing_level(::LevelIndex)
+    throw(ArgumentError("missing value in a categorical column; FormulaCompiler cannot " *
+                        "evaluate model rows for observations with missing categorical values"))
 end
 
-
-@inline function extract_level_code(column_data::AbstractVector, row_idx::Int)
-    # Fallback for other vector types that contain categorical values
-    cat_value = column_data[row_idx]
-    if isa(cat_value, CategoricalValue)
-        return Int(levelcode(cat_value))
-    elseif isa(cat_value, Integer)
-        return Int(cat_value)
-    elseif isa(cat_value, String)
-        # Handle String values in Vector{String} columns (common with GLM/DataFrames)
-        # NOTE: This path is O(n) per row due to sort!(unique(column_data)).
-        # For O(1) performance, use CategoricalArrays to wrap string columns before fitting.
-        if column_data isa AbstractVector{String}
-            # Get unique levels from the column and sort for consistent indexing
-            unique_levels = sort!(unique(column_data))
-            level_idx = findfirst(==(cat_value), unique_levels)
-            if level_idx !== nothing
-                return level_idx
-            else
-                error("String value '$cat_value' not found in column levels")
-            end
-        else
-            # This case should be handled by CounterfactualVector types for complex scenarios
-            error("String categorical value '$cat_value' found in non-String column type $(typeof(column_data)). Use CounterfactualVector types for override scenarios.")
-        end
-    elseif isa(cat_value, Bool)
-        # Handle boolean values: false = level 1, true = level 2
-        return cat_value ? 2 : 1
-    elseif hasproperty(cat_value, :level)
-        return Int(cat_value.level)
-    elseif hasproperty(cat_value, :levels) && hasproperty(cat_value, :weights)
-        # Handle mixture objects that incorrectly reach this path
-        # This is a defensive fix - mixtures should normally be handled by MixtureContrastOp
-        error("Categorical mixture objects should not reach extract_level_code(). " *
-              "This indicates a compilation routing issue. " *
-              "Mixture objects should be compiled to MixtureContrastOp, not ContrastOp. " *
-              "Check that is_mixture_column() detection is working during compilation. " *
-              "Mixture type: $(typeof(cat_value))")
-    else
-        error("Cannot extract level code from $(typeof(cat_value))")
+@noinline function _throw_unknown_level(idx::LevelIndex, value)
+    if hasproperty(value, :levels) && hasproperty(value, :weights)
+        error("Categorical mixture objects should not reach a standard ContrastOp. " *
+              "This indicates a compilation routing issue: mixture columns compile to " *
+              "MixtureContrastOp. Mixture type: $(typeof(value))")
     end
+    throw(ArgumentError("value $(repr(value)) is not a level of the fitted model's " *
+                        "categorical variable (model levels: $(join(repr.(idx.levels), ", ")))"))
 end
 
-
-# Specialized method for Vector{Bool} for better performance with boolean auto-promotion
-@inline function extract_level_code(column_data::Vector{Bool}, row_idx::Int)
-    # Handle boolean values directly: false = level 1, true = level 2
-    # This matches the boolean contrast matrix: [false, true] → [0.0, 1.0]
-    return column_data[row_idx] ? 2 : 1
+@noinline function _throw_bad_code(idx::LevelIndex, code)
+    throw(ArgumentError("categorical code $code is out of range 1:$(length(idx.levels))"))
 end
+
+# Build (and publish) the ref code → row table for `pool`.
+@noinline function _rebuild_pool_map!(idx::LevelIndex, pool)
+    pool_levels = CategoricalArrays.levels(pool)  # in ref-code order
+    rows = zeros(Int, length(pool_levels))
+    for (r, lev) in enumerate(pool_levels)
+        rows[r] = _lookup_level(idx, lev isa CategoricalValue ? CategoricalArrays.unwrap(lev) : lev)
+    end
+    m = PoolRowMap(pool, rows)
+    idx.cache.map = m
+    return m
+end
+
+@inline _lookup_level(idx::LevelIndex, value) = get(idx.lookup, value, 0)
+# Positional index: integer values are rows
+@inline _lookup_level(idx::LevelIndex{Nothing}, value::Integer) =
+    (1 <= value <= length(idx.levels) ? Int(value) : 0)
+@inline _lookup_level(idx::LevelIndex{Nothing}, value) = 0
+
+"""
+    pool_ref_row(idx::LevelIndex, pool, ref::Integer) -> Int
+
+Contrast-matrix row for ref code `ref` of `pool` (0 = missing → error).
+Allocation-free unless `pool` differs from the last pool seen.
+"""
+@inline function pool_ref_row(idx::LevelIndex, pool, ref::Integer)
+    ref == 0 && _throw_missing_level(idx)
+    m = idx.cache.map
+    # Pools only grow by appending levels, so a table built for this pool stays valid for
+    # every ref code it covers; a larger ref code means levels were added since. Only `===`
+    # and a length check on the hot path: `pool` may be abstractly typed here (e.g. the
+    # base array of a CategoricalCounterfactualVector), and this must not dispatch on it.
+    if m.pool !== pool || ref > length(m.rows)
+        m = _rebuild_pool_map!(idx, pool)::PoolRowMap
+    end
+    (1 <= ref <= length(m.rows)) || _throw_bad_code(idx, ref)
+    r = @inbounds m.rows[ref]
+    r == 0 && _throw_unknown_pool_level(idx, pool, ref)
+    return r
+end
+
+@noinline _throw_unknown_pool_level(idx::LevelIndex, pool, ref) =
+    _throw_unknown_level(idx, CategoricalArrays.unwrap(CategoricalArrays.levels(pool)[ref]))
+
+# Positional index: the ref code is the row
+@inline function pool_ref_row(idx::LevelIndex{Nothing}, pool, ref::Integer)
+    ref == 0 && _throw_missing_level(idx)
+    (1 <= ref <= length(idx.levels)) || _throw_bad_code(idx, ref)
+    return Int(ref)
+end
+
+"""
+    value_row(idx::LevelIndex, value) -> Int
+
+Contrast-matrix row for one categorical value.
+"""
+@inline value_row(idx::LevelIndex, v::CategoricalValue) =
+    pool_ref_row(idx, CategoricalArrays.pool(v), CategoricalArrays.refcode(v))
+@inline value_row(idx::LevelIndex, ::Missing) = _throw_missing_level(idx)
+@inline function value_row(idx::LevelIndex, v)
+    r = _lookup_level(idx, v)
+    r == 0 && _throw_unknown_level(idx, v)
+    return r
+end
+@inline function value_row(idx::LevelIndex{Nothing}, v::Integer)
+    r = _lookup_level(idx, v)
+    r == 0 && _throw_bad_code(idx, v)
+    return r
+end
+
+"""
+    contrast_row(idx::LevelIndex, column, row_idx) -> Int
+
+Contrast-matrix row for `column[row_idx]`, resolved against the model's levels.
+Specialised for `CategoricalCounterfactualVector` (which yields raw ref codes) in
+`counterfactual_vectors.jl`.
+"""
+@inline contrast_row(idx::LevelIndex, column::AbstractVector, row_idx::Int) =
+    value_row(idx, column[row_idx])
 
 # Categorical contrast operation (multi-output) with dynamic level extraction
 @inline function execute_op(
-    op::ContrastOp{Col, Positions}, 
-    scratch, 
-    data, 
+    op::ContrastOp{Col, Positions},
+    scratch,
+    data,
     row_idx
 ) where {Col, Positions}
     # Get categorical column data
     column_data = getproperty(data, Col)
-    
+
     # Check if this is a categorical mixture counterfactual vector
     if column_data isa CategoricalMixtureCounterfactualVector
-        # Handle categorical mixture: weighted combination of contrast rows
-        mixture_obj = column_data[row_idx]  # Get mixture for current row (could be original or replacement)
-
-        # Initialize positions to zero
-        for (i, pos) in enumerate(Positions)
-            scratch[pos] = 0.0
-        end
-
-        # Map mixture level names to contrast matrix row indices
-        original_levels = mixture_obj.original_levels
-
-        # Compute weighted combination
-        for (level_name, weight) in zip(mixture_obj.levels, mixture_obj.weights)
-            level_name_str = string(level_name)
-            level_idx = findfirst(==(level_name_str), original_levels)
-            if !isnothing(level_idx)
-                for (i, pos) in enumerate(Positions)
-                    scratch[pos] += weight * op.contrast_matrix[level_idx, i]
-                end
-            end
-        end
+        _execute_mixture_row!(op, scratch, column_data[row_idx])
     else
-        # Standard categorical handling (unchanged)
-        # Extract level code dynamically with zero allocations
-        level = extract_level_code(column_data, row_idx)
-
-        # Clamp to valid range (safety check)
-        n_levels = size(op.contrast_matrix, 1)
-        level = clamp(level, 1, n_levels)
+        # Resolve the value to a contrast-matrix row via the model's levels
+        level = contrast_row(op.index, column_data, row_idx)
 
         # Apply contrast matrix (stored as field)
         for (i, pos) in enumerate(Positions)
-            scratch[pos] = convert(eltype(scratch), op.contrast_matrix[level, i])
+            scratch[pos] = convert(eltype(scratch), @inbounds op.contrast_matrix[level, i])
         end
     end
 end
+
+# Categorical mixture value in a standard ContrastOp column: weighted combination of rows
+function _execute_mixture_row!(op::ContrastOp{Col, Positions}, scratch, mixture_obj) where {Col, Positions}
+    for pos in Positions
+        scratch[pos] = 0.0
+    end
+    for (level_name, weight) in zip(mixture_obj.levels, mixture_obj.weights)
+        level_idx = _mixture_level_row(op.index, level_name)
+        for (i, pos) in enumerate(Positions)
+            scratch[pos] += weight * op.contrast_matrix[level_idx, i]
+        end
+    end
+    return nothing
+end
+
+function _mixture_level_row(idx::LevelIndex, level_name)
+    r = _lookup_level(idx, level_name)
+    r != 0 && return r
+    name = string(level_name)
+    for (i, l) in enumerate(idx.levels)
+        string(l) == name && return i
+    end
+    _throw_unknown_level(idx, level_name)
+end
+_mixture_level_row(idx::LevelIndex{Nothing}, level_name) =
+    error("mixture level $(repr(level_name)) cannot be resolved: ContrastOp has no level information")
 
 """
     execute_op(::MixtureContrastOp{Col, Positions, LevelIndices, Weights}, scratch, data, row_idx)
@@ -606,11 +657,13 @@ end
     copy_outputs_recursive!(Base.tail(ops), output, scratch)
 end
 
-# Handle CopyOp operations
+@noinline _throw_output_too_short(n, O) = throw(DimensionMismatch(
+    "output vector has length $n, but the compiled formula writes $O values; use length(compiled)"))
+
+# Handle CopyOp operations (output length checked by the caller; scratch sized at compile time)
 @inline function copy_single_output!(::CopyOp{InPos, OutIdx}, output, scratch) where {InPos, OutIdx}
-    if OutIdx <= length(output) && InPos <= length(scratch)
-        output[OutIdx] = scratch[InPos]
-    end
+    @inbounds output[OutIdx] = scratch[InPos]
+    return nothing
 end
 
 # Skip non-copy operations

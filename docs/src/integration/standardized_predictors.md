@@ -500,21 +500,24 @@ end
 ### Batch Marginal Effects
 
 ```julia
-using Margins  # Provides marginal_effects_eta!
+using LinearAlgebra: mul!
 
 function batch_marginal_effects_standardized(model, data, variables, rows)
     compiled = compile_formula(model, data)
     de_fd = derivativeevaluator(:fd, compiled, data, variables)
+    β = coef(model)
 
     n_vars = length(variables)
     n_rows = length(rows)
 
-    # Pre-allocate results
+    # Pre-allocate results and buffers
     marginal_effects = Matrix{Float64}(undef, n_rows, n_vars)
+    J = Matrix{Float64}(undef, length(compiled), n_vars)
     g = Vector{Float64}(undef, n_vars)
 
     for (i, row) in enumerate(rows)
-        marginal_effects_eta!(g, de_fd, coef(model), row)
+        derivative_modelrow!(J, de_fd, row)
+        mul!(g, J', β)  # ∂η/∂variables (original scale)
         marginal_effects[i, :] .= g
     end
 

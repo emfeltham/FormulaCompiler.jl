@@ -205,15 +205,17 @@ end
 Mixtures work seamlessly with derivative computation:
 
 ```julia
-using Margins  # Provides marginal_effects_eta!
+using LinearAlgebra: mul!
 
 # Build derivative evaluator with mixture data
 vars = [:x]  # Continuous variables for derivatives
 de_fd = derivativeevaluator(:fd, compiled, Tables.columntable(reference_data), vars)
 
-# Compute marginal effects with zero allocations (requires Margins.jl)
+# Marginal effects on η with zero allocations (after warmup)
+J = Matrix{Float64}(undef, length(compiled), length(vars))
 gradient = Vector{Float64}(undef, length(vars))
-marginal_effects_eta!(gradient, de_fd, coef(model), 1)  # 0 bytes
+derivative_modelrow!(J, de_fd, 1)    # 0 bytes
+mul!(gradient, J', coef(model))      # gradient[j] = ∂η/∂vars[j]
 ```
 
 ## Advanced Usage

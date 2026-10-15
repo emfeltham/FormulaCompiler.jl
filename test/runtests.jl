@@ -29,6 +29,7 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
     include("test_zero_allocation_overrides.jl") # Zero-allocation counterfactual performance validation
     include("test_categorical_correctness.jl") # Detailed categorical counterfactual correctness
     include("test_compressed_categoricals.jl") # Compressed categorical arrays (UInt8, UInt16, UInt32)
+    include("test_categorical_level_resolution.jl") # Level resolution vs model levels (pools, String/Int/Bool, missing)
 
     # Categorical mixtures
     include("test_mixture_evaluation.jl") # Comprehensive mixture evaluation primitives
@@ -44,11 +45,14 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
     # AD allocation validation - Complex formula and batch scaling tests
     include("test_ad_alloc_formula_variants.jl") # Formula pattern allocation profiling
     include("test_formulacompiler_primitives_allocations.jl") # Batch scaling + NamedTuple regression guards
+    include("test_ad_chunk_mode.jl") # AD Jacobians with > 12 variables (ForwardDiff chunk mode)
+    include("test_api_contracts.jl") # exported names defined; output-buffer size checked
 
     # Regression tests
     # MIGRATED: test_derivatives_log_profile_regression.jl → Margins/test/primitives/test_derivatives_log_profile_regression.jl
     # Edge-case regression and stability tests
     include("test_derivatives_domain_edge_cases.jl")
+    include("test_link_derivatives.jl") # Link dμ/dη, d²μ/dη² vs BigFloat references (stability, Power/NegBin links)
     
     # External package integration
     include("test_standardized_predictors.jl") # StandardizedPredictors.jl integration
