@@ -490,7 +490,7 @@ function decompose_term!(ctx::CompilationContext, term::CategoricalTerm, data_ex
     if is_mixture_column(col_data)
         return decompose_mixture_term(ctx, term, col_data)
     else
-        return decompose_standard_categorical(ctx, term)
+        return decompose_standard_categorical(ctx, term, col_data)
     end
 end
 
@@ -500,19 +500,41 @@ function get_column_data(term::CategoricalTerm, data_example)
 end
 
 # Standard categorical decomposition (existing logic)
-function decompose_standard_categorical(ctx::CompilationContext, term::CategoricalTerm)
-    # Get contrast matrix from term
+function decompose_standard_categorical(ctx::CompilationContext, term::CategoricalTerm, col_data)
+    # Get contrast matrix from term. Its rows are ordered by `contrasts.levels`, which
+    # StatsModels derives from the *observed* levels only — so unused (zero-count) levels are
+    # dropped and the ordering can differ from the CategoricalArray pool's level ordering.
     contrasts = term.contrasts
     contrast_matrix = Matrix{Float64}(contrasts.matrix)  # Ensure it's Float64
-    n_levels = size(contrast_matrix, 1)
+
+    # Execution (`execute_op(::ContrastOp, ...)`) indexes rows by `levelcode`, i.e. the pool
+    # ref code. Remap rows into pool-ref order so that row `r` holds the coding for the pool
+    # level whose ref code is `r`. Without this, a pool with unused/reordered levels selects the
+    # wrong contrast row (off-by-one when an unused level precedes observed ones).
+    # Only genuine categorical columns carry a pool; plain String columns already use the
+    # schema's sorted-unique ordering at runtime (see `extract_level_code`), which matches.
+    if col_data isa CategoricalArrays.CategoricalArray ||
+       (eltype(col_data) <: CategoricalArrays.CategoricalValue)
+        pool_levels = CategoricalArrays.levels(col_data)  # full pool, in ref-code order
+        n_contrasts = size(contrast_matrix, 2)
+        remapped = zeros(Float64, length(pool_levels), n_contrasts)
+        for (r, lev) in enumerate(pool_levels)
+            # Unused level → absent from invindex → leave its row as zeros (never selected at
+            # runtime because no observation carries that ref code).
+            row = get(contrasts.invindex, lev, nothing)
+            row === nothing || (remapped[r, :] = @view contrast_matrix[row, :])
+        end
+        contrast_matrix = remapped
+    end
+
     n_contrasts = size(contrast_matrix, 2)
-    
+
     # Allocate positions for each contrast
     positions = allocate_positions!(ctx, n_contrasts)
-    
+
     # Create contrast operation with matrix as field value
     push!(ctx.operations, ContrastOp{term.sym, Tuple(positions)}(contrast_matrix))
-    
+
     ctx.position_map[term] = positions
     return positions
 end
