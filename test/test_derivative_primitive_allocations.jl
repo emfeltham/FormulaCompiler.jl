@@ -59,17 +59,12 @@ end
 
     # Buffers for derivative tests
     J = Matrix{Float64}(undef, length(compiled), length(vars))  # Jacobian matrix
-    row_vec = Vector{Float64}(undef, length(compiled))
 
     # Warmup
-    compiled(row_vec, data, 2)
     derivative_modelrow!(J, de_ad, 2)
     derivative_modelrow!(J, de_fd, 2)
 
-    # Core compiled evaluation: expect 0 allocations
-    b_comp = @benchmark $compiled($row_vec, $data, 3) samples=600
-    push!(results, ("compiled_row", "base", minimum(b_comp.memory), minimum(b_comp.times)))
-    @test results[end, :min_memory_bytes] == 0
+    # compiled-row allocations are checked in test_allocations.jl ("Interaction w/o main")
 
     # === derivative_modelrow! (core Jacobian evaluation) ===
 

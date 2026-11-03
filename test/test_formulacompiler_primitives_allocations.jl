@@ -27,7 +27,6 @@
 # julia --project=. test/test_formulacompiler_primitives_allocations.jl  > test/test_formulacompiler_primitives_allocations.txt 2>&1
 
 using Test
-using BenchmarkTools
 using GLM
 using DataFrames
 using Tables
@@ -60,10 +59,32 @@ function batch_modelrow(compiled, data_cols, n_rows, output)
     end
 end
 
-n_test = 500_000
+# Function barriers: warm up, then return (allocation count, bytes) of one call
+function modelrow_allocs(compiled, data_cols, row_idx, output)
+    test_modelrow(compiled, data_cols, row_idx, output)
+    return (@allocations test_modelrow(compiled, data_cols, row_idx, output)),
+           (@allocated test_modelrow(compiled, data_cols, row_idx, output))
+end
+
+function derivative_allocs(de, J, row_idx)
+    test_derivative(de, J, row_idx)
+    return (@allocations test_derivative(de, J, row_idx)), (@allocated test_derivative(de, J, row_idx))
+end
+
+function batch_modelrow_allocs(compiled, data_cols, n_rows, output)
+    batch_modelrow(compiled, data_cols, 10, output)
+    return @allocations batch_modelrow(compiled, data_cols, n_rows, output)
+end
+
+function batch_derivatives_allocs(de, J, n_rows)
+    batch_derivatives(de, J, 10)
+    return @allocations batch_derivatives(de, J, n_rows)
+end
+
+n_test = 5_000  # zero allocations per row do not depend on n
 
 @testset "FormulaCompiler Primitives - Complex Formula Allocations" begin
-    # Generate test dataset (smaller for faster testing)
+    # Generate test dataset
     df = generate_synthetic_dataset(n_test; seed=08540)
 
     # Fit the complex model from complex_example.jl
@@ -108,79 +129,26 @@ n_test = 500_000
     continuous_vars = [:age_h, :dists_p_inv, :are_related_dists_a_inv, :schoolyears_h]
 
     @testset "modelrow() - Direct formula evaluation" begin
-        # Pre-allocate output buffer
         output = Vector{Float64}(undef, length(compiled))
-
-        # Warmup
-        test_modelrow(compiled, data_cols, 1, output)
-
-        # Measure allocations for single row evaluation
-        bench = @benchmark $test_modelrow($compiled, $data_cols, 1, $output) samples=1000 evals=1
-
-        min_allocs = minimum(bench).allocs
-        min_bytes = minimum(bench).memory
-        median_time_ns = median(bench).time
-
-        println("\n=== modelrow() Allocations ===")
-        println("  Allocations: $min_allocs")
-        println("  Memory: $min_bytes bytes")
-        println("  Median time: $(median_time_ns) ns")
-
+        min_allocs, min_bytes = modelrow_allocs(compiled, data_cols, 1, output)
         @test min_allocs == 0
         @test min_bytes == 0
     end
 
+    # Also the NamedTuple size regression guard: data_cols has ~53 columns; the cached
+    # column tuples in ADEvaluator keep AD allocations at zero for wide tables.
     @testset "derivative_modelrow!() - AD backend" begin
-        # Build derivative evaluator
         de = derivativeevaluator(:ad, compiled, data_cols, continuous_vars)
-
-        # Pre-allocate Jacobian buffer (matrix: n_terms × n_vars)
         J = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
-
-        # Warmup
-        test_derivative(de, J, 1)
-
-        # Measure allocations
-        bench = @benchmark $test_derivative($de, $J, 1) samples=1000 evals=1
-
-        min_allocs = minimum(bench).allocs
-        min_bytes = minimum(bench).memory
-        median_time_ns = median(bench).time
-
-        println("\n=== derivative_modelrow!() Allocations (AD backend) ===")
-        println("  Variables: $continuous_vars")
-        println("  Allocations: $min_allocs")
-        println("  Memory: $min_bytes bytes")
-        println("  Median time: $(median_time_ns) ns")
-        println("  NOTE: Uses 53-column NamedTuple; cached columns keep allocations at zero")
-
+        min_allocs, min_bytes = derivative_allocs(de, J, 1)
         @test min_allocs == 0
         @test min_bytes == 0
     end
 
     @testset "derivative_modelrow!() - FD backend" begin
-        # Build derivative evaluator for finite differences backend
         de = derivativeevaluator(:fd, compiled, data_cols, continuous_vars)
-
-        # Pre-allocate Jacobian buffer
         J = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
-
-        # Warmup
-        test_derivative(de, J, 1)
-
-        # Measure allocations
-        bench = @benchmark $test_derivative($de, $J, 1) samples=1000 evals=1
-
-        min_allocs = minimum(bench).allocs
-        min_bytes = minimum(bench).memory
-        median_time_ns = median(bench).time
-
-        println("\n=== derivative_modelrow!() Allocations (FD backend) ===")
-        println("  Variables: $continuous_vars")
-        println("  Allocations: $min_allocs")
-        println("  Memory: $min_bytes bytes")
-        println("  Median time: $(median_time_ns) ns")
-
+        min_allocs, min_bytes = derivative_allocs(de, J, 1)
         @test min_allocs == 0
         @test min_bytes == 0
     end
@@ -188,21 +156,8 @@ n_test = 500_000
     @testset "Batch evaluation scaling test" begin
         # Test that allocations remain zero across multiple rows
         output = Vector{Float64}(undef, length(compiled))
-
-        # Warmup
-        batch_modelrow(compiled, data_cols, 10, output)
-
-        # Test with different batch sizes
         for batch_size in [100, 1000, n_test]
-            bench = @benchmark $batch_modelrow($compiled, $data_cols, $batch_size, $output) samples=10 evals=1
-
-            min_allocs = minimum(bench).allocs
-            allocs_per_row = min_allocs / batch_size
-
-            println("\n=== Batch modelrow() n=$batch_size ===")
-            println("  Total allocations: $min_allocs")
-            println("  Allocations/row: $(round(allocs_per_row, digits=6))")
-
+            allocs_per_row = batch_modelrow_allocs(compiled, data_cols, batch_size, output) / batch_size
             @test allocs_per_row <= 0.0
         end
     end
@@ -210,22 +165,10 @@ n_test = 500_000
     @testset "Batch derivative scaling test - AD" begin
         de = derivativeevaluator(:ad, compiled, data_cols, continuous_vars)
         J = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
-
-        # Warmup
-        batch_derivatives(de, J, 10)
-
         for batch_size in [100, 1000, n_test]
-            bench = @benchmark $batch_derivatives($de, $J, $batch_size) samples=10 evals=1
-
-            min_allocs = minimum(bench).allocs
-            allocs_per_row = min_allocs / batch_size
-
-            println("\n=== Batch derivative_modelrow!() AD n=$batch_size ===")
-            println("  Total allocations: $min_allocs")
-            println("  Allocations/row: $(round(allocs_per_row, digits=6)) (target: 0)")
-
+            min_allocs = batch_derivatives_allocs(de, J, batch_size)
             @test min_allocs == 0
-            @test allocs_per_row == 0.0
+            @test min_allocs / batch_size == 0.0
         end
     end
 
@@ -233,42 +176,10 @@ n_test = 500_000
         # Test that derivative allocations remain zero across multiple rows
         de = derivativeevaluator(:fd, compiled, data_cols, continuous_vars)
         J = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
-
-        # Warmup
-        batch_derivatives(de, J, 10)
-
-        # Test with different batch sizes
         for batch_size in [100, 1000, n_test]
-            bench = @benchmark $batch_derivatives($de, $J, $batch_size) samples=10 evals=1
-
-            min_allocs = minimum(bench).allocs
-            allocs_per_row = min_allocs / batch_size
-
-            println("\n=== Batch derivative_modelrow!() FD n=$batch_size ===")
-            println("  Total allocations: $min_allocs")
-            println("  Allocations/row: $(round(allocs_per_row, digits=6))")
-
+            allocs_per_row = batch_derivatives_allocs(de, J, batch_size) / batch_size
             @test allocs_per_row <= 0.0
         end
-    end
-
-    @testset "NamedTuple size regression guard - AD backend" begin
-        println("\n=== NamedTuple Size Impact on AD Allocations ===")
-
-        de = derivativeevaluator(:ad, compiled, data_cols, continuous_vars)
-        J = Matrix{Float64}(undef, length(compiled), length(continuous_vars))
-
-        bench = @benchmark $test_derivative($de, $J, 1) samples=1000 evals=1
-
-        min_allocs = minimum(bench).allocs
-        min_bytes = minimum(bench).memory
-
-        println("  Allocations: $min_allocs")
-        println("  Memory: $min_bytes bytes")
-        println("  Dataset columns: $(length(keys(data_cols)))")
-
-        @test min_allocs == 0
-        @test min_bytes == 0
     end
 end
 

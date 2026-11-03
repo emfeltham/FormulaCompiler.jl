@@ -7,7 +7,6 @@ using DataFrames
 using Random
 using Distributions
 using CategoricalArrays
-import CSV
 
 function generate_synthetic_dataset(n_rows::Int = 620_000; seed::Int = 08540)
     Random.seed!(seed)
@@ -137,22 +136,6 @@ function generate_synthetic_dataset(n_rows::Int = 620_000; seed::Int = 08540)
     if !isempty(finite_dists_a)
         replace!(df.dists_a_inv, Inf => maximum(finite_dists_a))
     end
-
-    return df
-end
-
-# Function to save the synthetic dataset
-function save_synthetic_dataset(filename::String = "test/synthetic_large_data.csv"; n_rows::Int = 620_000)
-    println("Generating synthetic dataset with $n_rows rows...")
-    df = generate_synthetic_dataset(n_rows)
-
-    println("Saving to $filename...")
-    CSV.write(filename, df)
-
-    println("Dataset saved successfully!")
-    println("Dimensions: $(size(df))")
-    println("First few rows:")
-    println(first(df, 3))
 
     return df
 end

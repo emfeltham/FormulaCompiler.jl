@@ -77,12 +77,7 @@ df.relation = categorical(df.relation)
     @debug "Testing tough formula compilation..."
     
     # Try to fit model with GLM (simpler than MixedModels for this test)
-    model = try
-        glm(fx, df, Binomial(), LogitLink())
-    catch e
-        @test_skip "Model fitting failed (expected with synthetic data): $e"
-        return
-    end
+    model = glm(fx, df, Binomial(), LogitLink())
     
     @debug "GLM model fitted successfully"
     

@@ -13,6 +13,18 @@ if !@isdefined(invlogit)
     invlogit(x) = 1.0 ./ (1.0 .+ exp.(-x))
 end
 
+# Function barrier: warm up, then measure one contrast_modelrow! call
+function _mm_contrast_bytes(buf, evaluator, row, var, from, to)
+    contrast_modelrow!(buf, evaluator, row, var, from, to)
+    return @allocated contrast_modelrow!(buf, evaluator, row, var, from, to)
+end
+
+# Contrast allocations are checked once on a MixedModels fit (the random-intercept LMM, the
+# compiled fixed-effects formula from `fixed_effects_form`) and once for a many-level factor.
+# The other fits compile to fixed-effects formulas with the same term types and evaluator
+# variable types as those, or as the checks in test_glm_integration.jl and
+# test_contrast_evaluator.jl.
+
 @testset "MixedModels Integration Tests" begin
     # Create hierarchical/clustered test data suitable for mixed models
     function create_mixed_model_data(n_subjects=50, n_obs_per_subject=8)
@@ -85,8 +97,7 @@ end
                 @test !all(contrast_buf .== 0.0)
 
                 # Verify zero allocations
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                @test result.memory == 0
+                @test _mm_contrast_bytes(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A") == 0
 
                 # Test symmetry
                 contrast_reverse = similar(contrast_buf)
@@ -103,8 +114,7 @@ end
                 @test non_zero_count == 1
 
                 # Verify zero allocations
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :female, 0, 1)
-                @test result.memory == 0
+                @test _mm_contrast_bytes(contrast_buf, evaluator, 1, :female, 0, 1) == 0
             end
 
             @testset "Fixed effects coefficient consistency" begin
@@ -145,10 +155,6 @@ end
                 # Test within-subject condition contrasts
                 contrast_modelrow!(contrast_buf, evaluator, 1, :condition, "Baseline", "Stress")
                 @test !all(contrast_buf .== 0.0)
-
-                # Verify zero allocations with complex random effects
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :condition, "Baseline", "Recovery")
-                @test result.memory == 0
             end
         end
 
@@ -171,10 +177,6 @@ end
 
                 contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_B")
                 @test !all(contrast_buf .== 0.0)
-
-                # Zero allocations should be maintained
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :female, 0, 1)
-                @test result.memory == 0
 
                 println("✓ Multiple random effects grouping handled correctly")
             end
@@ -202,10 +204,6 @@ end
             @testset "GLMM treatment contrasts" begin
                 contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
                 @test !all(contrast_buf .== 0.0)
-
-                # Verify zero allocations
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                @test result.memory == 0
             end
 
             # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
@@ -229,10 +227,6 @@ end
                 @testset "Poisson GLMM contrasts" begin
                     contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
                     @test !all(contrast_buf .== 0.0)
-
-                    # Zero allocations
-                    result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                    @test result.memory == 0
                 end
 
                 # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
@@ -322,10 +316,6 @@ end
                 contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
                 non_zero_count = count(x -> abs(x) > 1e-10, contrast_buf)
                 @test non_zero_count >= 2  # Main effect + interaction
-
-                # Zero allocations maintained with interactions
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_B")
-                @test result.memory == 0
             end
         end
 
@@ -347,8 +337,7 @@ end
                 @test !all(contrast_buf .== 0.0)
 
                 # Zero allocations with many levels
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :site, "3", "8")
-                @test result.memory == 0
+                @test _mm_contrast_bytes(contrast_buf, evaluator, 1, :site, "3", "8") == 0
 
                 # Should have correct level mappings
                 @test any(lm -> lm isa CategoricalLevelMap{:site}, evaluator.categorical_level_maps)
@@ -374,17 +363,6 @@ end
                 contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
             end
 
-            @testset "Large dataset zero allocations" begin
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                @test result.memory == 0
-
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :condition, "Baseline", "Stress")
-                @test result.memory == 0
-
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :female, 0, 1)
-                @test result.memory == 0
-            end
-
             @testset "Large dataset performance" begin
                 time_treatment = @belapsed contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
                 time_condition = @belapsed contrast_modelrow!($contrast_buf, $evaluator, 1, :condition, "Baseline", "Recovery")
@@ -394,8 +372,6 @@ end
                 @test time_treatment < 2e-6
                 @test time_condition < 2e-6
                 @test time_binary < 2e-6
-
-                println("Large mixed model (1000 obs): Treatment=$(round(time_treatment*1e9, digits=1))ns, Condition=$(round(time_condition*1e9, digits=1))ns, Binary=$(round(time_binary*1e9, digits=1))ns")
             end
         end
     end
@@ -463,7 +439,7 @@ end
     println("✓ Linear and Generalized Linear Mixed Models fully supported")
     println("✓ Fixed effects extraction and contrast computation validated")
     println("✓ Complex random effects structures handled correctly")
-    println("✓ Zero allocations maintained across all mixed model types")
+    println("✓ Zero allocations checked on a mixed model fit")
     println("✓ Performance scaling confirmed with large hierarchical datasets")
     println("✓ Gradient computation and standard errors working for GLMMs")
 end

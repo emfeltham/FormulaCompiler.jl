@@ -22,11 +22,6 @@ Random.seed!(06515)
         @test cf_vec[5] == 5.0     # Original value
         @test length(cf_vec) == 5
 
-        # Test memory efficiency (much smaller than copying entire array)
-        regular_size = sizeof(copy(base_vec))
-        cf_size = sizeof(cf_vec)
-        @test cf_size < regular_size  # Should be smaller
-
         # Test iteration
         expected = [1.0, 2.0, 99.0, 4.0, 5.0]
         for (i, val) in enumerate(cf_vec)
@@ -261,10 +256,12 @@ Random.seed!(06515)
             for i in 1:10
         ]
 
-        # Calculate memory usage
-        original_size = sizeof(large_data.x)
-        cf_overhead = sum(sizeof(cf) for cf in cf_vectors)
-        naive_copy_size = original_size * length(cf_vectors)
+        # Bytes allocated to build them (sizeof gives the constant struct size, not the
+        # memory used; the vectors wrap the data rather than copying it)
+        build_cfs(x) = [FormulaCompiler.NumericCounterfactualVector{Float64}(x, i, Float64(i)) for i in 1:10]
+        build_cfs(large_data.x)
+        cf_overhead = @allocated build_cfs(large_data.x)
+        naive_copy_size = sizeof(large_data.x) * length(cf_vectors)
 
         savings = (naive_copy_size - cf_overhead) / naive_copy_size
         @test savings > 0.90  # Should save >90% of memory

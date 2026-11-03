@@ -4,6 +4,12 @@
 using DataFrames, GLM, FormulaCompiler, Tables, CategoricalArrays, BenchmarkTools
 using Test, Random
 
+# Bytes allocated by one warm contrast_modelrow! call (function barrier, so no global access is counted)
+function contrast_allocs(buf, evaluator, row, var, from, to)
+    contrast_modelrow!(buf, evaluator, row, var, from, to)
+    return @allocated contrast_modelrow!(buf, evaluator, row, var, from, to)
+end
+
 @testset "Large Dataset Performance" begin
     # Set seed for reproducible tests
     Random.seed!(12345)
@@ -70,79 +76,12 @@ using Test, Random
         @info "ContrastEvaluator construction time: $(round(construction_time, digits=3))s"
         @test construction_time < 2.0  # Should construct within 2 seconds
 
-        # Test evaluation performance across dataset
-        @info "Testing evaluation performance..."
+        # Zero allocations on random rows of the large dataset
         contrast_buf = Vector{Float64}(undef, length(compiled))
-
-        # Sample random rows for testing (don't test all 100K)
-        test_rows = rand(1:n, 100)
-
-        eval_times = Float64[]
-        for row in test_rows
-            time = @belapsed contrast_modelrow!($contrast_buf, $evaluator, $row,
-                                             :treatment, "Control", "Treatment_A")
-            push!(eval_times, time)
+        for row in rand(1:n, 20)
+            @test contrast_allocs(contrast_buf, evaluator, row, :treatment, "Control", "Treatment_A") == 0
+            @test contrast_allocs(contrast_buf, evaluator, row, :region, "North", "South") == 0
         end
-
-        mean_time = mean(eval_times)
-        max_time = maximum(eval_times)
-        @info "Mean evaluation time: $(round(mean_time * 1e9, digits=1))ns"
-        @info "Max evaluation time: $(round(max_time * 1e9, digits=1))ns"
-
-        # Performance thresholds
-        @test mean_time < 3e-6  # Mean under 3 microseconds (relaxed for CI runners)
-        @test max_time < 10e-6  # Max under 10 microseconds (relaxed for CI runners)
-
-        # Test allocation performance (should be zero or minimal)
-        @info "Testing allocation performance..."
-        # Warm up first to avoid compilation allocations
-        contrast_modelrow!(contrast_buf, evaluator, 1, :region, "North", "South")
-
-        # Run multiple times to check consistency
-        allocation_results = Int[]
-        for i in 1:5
-            result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1,
-                                                 :region, "North", "South")
-            push!(allocation_results, result.memory)
-        end
-
-        min_alloc = minimum(allocation_results)
-        max_alloc = maximum(allocation_results)
-        mean_alloc = sum(allocation_results) / length(allocation_results)
-
-        @info "Allocation results: min=$(min_alloc), max=$(max_alloc), mean=$(mean_alloc)"
-
-        # Check if we consistently get zero allocations
-        if all(a == 0 for a in allocation_results)
-            @test true  # Perfect zero allocations
-            @info "✓ Perfect zero allocations confirmed"
-        elseif max_alloc <= 64 && min_alloc == 0
-            @test true  # Mostly zero with occasional small allocations (measurement noise)
-            @info "✓ Zero allocations with minimal noise ($(max_alloc) bytes max)"
-        else
-            @test false  # Significant allocation issue
-            @info "✗ Significant allocations detected"
-        end
-
-        # Test memory usage scaling
-        @info "Testing memory usage scaling..."
-        evaluator_size = sizeof(evaluator)
-        @info "ContrastEvaluator memory usage: $(evaluator_size) bytes"
-        @test evaluator_size < 1_000_000  # Should be under 1MB regardless of dataset size
-
-        # Test correctness on random samples
-        @info "Testing correctness on random samples..."
-        correct_count = 0
-        for _ in 1:10
-            row = rand(1:n)
-            contrast_modelrow!(contrast_buf, evaluator, row, :treatment, "Control", "Treatment_A")
-            # Basic sanity checks
-            @test !all(contrast_buf .== 0.0)  # Should have some non-zero elements
-            @test all(isfinite.(contrast_buf))  # All finite values
-            correct_count += 1
-        end
-        @test correct_count == 10
-        @info "✓ All correctness tests passed"
     end
 
     @testset "50+ categorical levels performance" begin
@@ -185,15 +124,7 @@ using Test, Random
         to_level = levels[end]
 
         @info "Testing contrast between $(from_level) and $(to_level)..."
-        # Warm up first
-        contrast_modelrow!(contrast_buf, evaluator, 1, :high_cardinality, from_level, to_level)
-        result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1,
-                                             :high_cardinality, $from_level, $to_level)
-
-        @test result.memory == 0
-        mean_time_ns = result.times |> median
-        @info "High-cardinality contrast time: $(round(mean_time_ns, digits=1))ns"
-        @test mean_time_ns < 5e-6 * 1e9  # Under 5 microseconds (relaxed for CI runners)
+        @test contrast_allocs(contrast_buf, evaluator, 1, :high_cardinality, from_level, to_level) == 0
 
         # Test that performance doesn't degrade with many levels
         @info "Testing performance scaling with categorical levels..."
@@ -263,46 +194,16 @@ using Test, Random
         evaluator = contrastevaluator(compiled, data, all_vars)
         contrast_buf = Vector{Float64}(undef, length(compiled))
 
-        # Test performance with each variable type
-        @info "Testing performance across variable types..."
-        for var in all_vars[1:min(6, end)]  # Test first 6 to keep reasonable
+        # Zero allocations for every variable of the evaluator
+        for var in all_vars
             if var in cat_cols
                 levels = unique(df[!, var])
-                from, to = levels[1], levels[min(2, end)]
+                from, to = levels[1], levels[2]
             else  # Binary
                 from, to = false, true
             end
-
-            # Warm up first
-            contrast_modelrow!(contrast_buf, evaluator, 1, var, from, to)
-            result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1,
-                                                 $var, $from, $to)
-            @test result.memory == 0
-
-            time_ns = median(result.times)
-            @info "Variable $(var): $(round(time_ns, digits=1))ns"
-            @test time_ns < 3e-6 * 1e9  # Under 3 microseconds
+            @test contrast_allocs(contrast_buf, evaluator, 1, var, from, to) == 0
         end
-
-        # Test batch performance
-        @info "Testing batch performance..."
-        batch_times = Float64[]
-        test_rows = rand(1:n, 50)
-
-        for row in test_rows
-            time = @belapsed contrast_modelrow!($contrast_buf, $evaluator, $row,
-                                             :cat1, "A", "B")
-            push!(batch_times, time)
-        end
-
-        mean_batch_time = mean(batch_times)
-        @info "Mean batch time: $(round(mean_batch_time * 1e9, digits=1))ns"
-        @test mean_batch_time < 2e-6  # Under 2 microseconds per evaluation
-
-        # Memory scaling test
-        evaluator_memory = sizeof(evaluator)
-        @info "ContrastEvaluator memory with $(length(all_vars)) vars: $(evaluator_memory) bytes"
-        @test evaluator_memory < 2_000_000  # Should be under 2MB even with many variables
     end
 
     @testset "Memory scaling validation" begin
@@ -325,9 +226,10 @@ using Test, Random
             model = lm(@formula(y ~ x + cat + bin), df)
             data = Tables.columntable(df)
             compiled = compile_formula(model, data)
-            evaluator = contrastevaluator(compiled, data, [:cat, :bin])
-
-            push!(memory_usages, sizeof(evaluator))
+            contrastevaluator(compiled, data, [:cat, :bin])   # warmup
+            # Bytes allocated to build the evaluator (sizeof would give the constant struct size;
+            # the evaluator references the data rather than copying it)
+            push!(memory_usages, @allocated contrastevaluator(compiled, data, [:cat, :bin]))
         end
 
         @info "Memory usage by dataset size:"

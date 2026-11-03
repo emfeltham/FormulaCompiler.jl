@@ -60,6 +60,7 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
     
     # External package integration
     include("test_standardized_predictors.jl") # StandardizedPredictors.jl integration
+    include("test_centered_scaled_predictors.jl") # Center() and Scale() (CenteredTerm, ScaledTerm)
     include("test_glm_integration.jl") # GLM integration testing
     include("test_mixedmodels_integration.jl") # MixedModels integration testing
     include("test_mixedmodels_extension.jl") # MixedModels as a weak dependency (extension; FC without MixedModels)

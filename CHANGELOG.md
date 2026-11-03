@@ -41,6 +41,26 @@ Tests in `test/test_public_api.jl`.
   at its lowest allowed version): CategoricalArrays `"1.0.1"` (was `"0.10, 1"`; MixedModels
   grouping fails upstream on 1.0.0) and StatsModels `"0.7.9"` (was `"0.7"`; models with a
   CategoricalArrays 1.x column fail upstream below 0.7.5, MixedModels grouping below 0.7.9).
+- Test suite: checks that could not fail now test something. `sizeof` of evaluators and
+  counterfactual vectors (the constant struct size) is replaced by the bytes allocated to build
+  them; a NegativeBinomial `catch` that turned every error into a skip, and a `@test_skip` on a
+  failed fit in `test_tough_formula.jl`, are removed; `@test true`/tautological counters are
+  dropped. `test/test_centered_scaled_predictors.jl` (`Center()`, `Scale()`), which no runner
+  included, is now in `runtests.jl`. Deleted, as never run and without assertions:
+  `test/docs_examples_extracted.jl`, `test/profiling/` and unused helpers in `test/support/`.
+- Test suite runtime: `test_large_dataset_performance.jl` drops its ~150 per-row `@belapsed`
+  loops and loose microsecond bounds (3.5 minutes); allocation checks are `@allocated` behind a
+  function barrier and now cover every variable of the 12-variable evaluator. The level-count
+  timing ratio and the constant evaluator construction memory stay.
+  `test_formulacompiler_primitives_allocations.jl` checks zero allocations per row on 5,000 rows
+  instead of 500,000.
+- Test consolidation: compiled-row and contrast-evaluator allocation checks are kept once per
+  formula shape. Copies that repeat `test_allocations.jl` or `test_contrast_evaluator.jl` are
+  removed: the per-family GLM copies (the compiled formula depends only on the right-hand side)
+  and all but one MixedModels copy (fixed-effects extraction is its own path). Also removed: the
+  socio4 formula in `test_ad_alloc_formula_variants.jl` and a duplicated NamedTuple guard. The
+  five override benchmarks in `test_zero_allocation_overrides.jl` are now one loop. Allocation
+  checks use a warmup plus `@allocated … == 0` behind a function barrier.
 
 ### Fixed
 

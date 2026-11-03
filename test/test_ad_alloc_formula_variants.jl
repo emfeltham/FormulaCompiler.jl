@@ -10,7 +10,6 @@
 # Or standalone: julia --project=. test/test_ad_alloc_formula_variants.jl
 
 using Test
-using BenchmarkTools
 using GLM
 using DataFrames
 using Tables
@@ -19,6 +18,14 @@ using FormulaCompiler
 # Load data generator (only when running standalone)
 if !@isdefined(generate_synthetic_dataset)
     include("support/generate_large_synthetic_data.jl")
+end
+
+# Function barrier: warm up, then measure one derivative_modelrow! call
+function _variant_derivative_allocs(J, de, row)
+    derivative_modelrow!(J, de, row)
+    allocs = @allocations derivative_modelrow!(J, de, row)
+    bytes = @allocated derivative_modelrow!(J, de, row)
+    return allocs, bytes
 end
 
 @testset "AD Allocation Formula Variants" begin
@@ -42,18 +49,9 @@ end
         de_ad = derivativeevaluator(:ad, compiled, data_cols, vars_to_test)
         J = Matrix{Float64}(undef, length(compiled), length(vars_to_test))
 
-        # Warmup
-        derivative_modelrow!(J, de_ad, 1)
-
-        # Benchmark
-        b = @benchmark derivative_modelrow!($J, $de_ad, 1) samples=400
-
-        min_allocs = minimum(b).allocs
-        min_bytes = minimum(b).memory
-
-        @debug "Allocation results" min_allocs min_bytes expect_zero
-
-        return min_allocs, min_bytes
+        allocs, bytes = _variant_derivative_allocs(J, de_ad, 1)
+        @debug "Allocation results" allocs bytes expect_zero
+        return allocs, bytes
     end
 
     @testset "Continuous Variables Only" begin
@@ -132,35 +130,8 @@ end
         @test bytes == 0
     end
 
-    @testset "Full Complex Formula (No Boolean Predicate)" begin
-        allocs, bytes = test_formula_allocations(
-            @formula(response ~
-                socio4 +
-                (1 + socio4) & (dists_p_inv + are_related_dists_a_inv) +
-                !socio4 & dists_a_inv +
-                (schoolyears_p + wealth_d1_4_p + man_p + age_p + religion_c_p +
-                same_building + population +
-                hhi_religion + hhi_indigenous +
-                coffee_cultivation + market +
-                relation) & (1 + socio4 + are_related_dists_a_inv) +
-                (
-                    degree_a_mean + degree_h +
-                    age_a_mean + age_h * age_h_nb_1_socio +
-                    schoolyears_a_mean + schoolyears_h * schoolyears_h_nb_1_socio +
-                    man_x * man_x_mixed_nb_1 +
-                    wealth_d1_4_a_mean + wealth_d1_4_h * wealth_d1_4_h_nb_1_socio +
-                    isindigenous_x * isindigenous_homop_nb_1 +
-                    religion_c_x * religion_homop_nb_1
-                ) & (1 + socio4 + are_related_dists_a_inv) +
-                religion_c_x & hhi_religion +
-                isindigenous_x & hhi_indigenous
-            ),
-            [:age_h, :dists_p_inv, :are_related_dists_a_inv, :schoolyears_h],
-            true
-        )
-        @test allocs == 0
-        @test bytes == 0
-    end
+    # Full complex formula without the boolean predicate: AD zero allocation is checked in
+    # test_formulacompiler_primitives_allocations.jl (same formula, variables and backend; single row and batch)
 
     @testset "Full Complex Formula (With Boolean Predicate)" begin
         allocs, bytes = test_formula_allocations(

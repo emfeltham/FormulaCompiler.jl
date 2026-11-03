@@ -12,6 +12,12 @@ if !@isdefined(invlogit)
     invlogit(x) = 1.0 ./ (1.0 .+ exp.(-x))
 end
 
+# Function barrier: warm up, then measure one contrast_modelrow! call
+function _glm_contrast_bytes(buf, evaluator, row, var, from, to)
+    contrast_modelrow!(buf, evaluator, row, var, from, to)
+    return @allocated contrast_modelrow!(buf, evaluator, row, var, from, to)
+end
+
 @testset "GLM Integration Tests" begin
     # Create comprehensive test data suitable for all GLM families
     function create_glm_test_data(n=500)
@@ -63,8 +69,7 @@ end
                 @test !all(contrast_buf .== 0.0)
 
                 # Verify zero allocations
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                @test result.memory == 0
+                @test _glm_contrast_bytes(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A") == 0
 
                 # Test symmetry
                 contrast_reverse = similar(contrast_buf)
@@ -81,8 +86,7 @@ end
                 @test non_zero_count == 1
 
                 # Verify zero allocations
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :female, 0, 1)
-                @test result.memory == 0
+                @test _glm_contrast_bytes(contrast_buf, evaluator, 1, :female, 0, 1) == 0
             end
 
             @testset "Mathematical consistency" begin
@@ -117,8 +121,7 @@ end
                 @test non_zero_count >= 1  # At least some effect
 
                 # Verify zero allocations with interactions
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_B")
-                @test result.memory == 0
+                @test _glm_contrast_bytes(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_B") == 0
             end
 
             @testset "Binary interaction effects" begin
@@ -128,8 +131,7 @@ end
                 @test non_zero_count >= 1  # At least some effect
 
                 # Zero allocations
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :married, false, true)
-                @test result.memory == 0
+                @test _glm_contrast_bytes(contrast_buf, evaluator, 1, :married, false, true) == 0
             end
         end
     end
@@ -146,9 +148,8 @@ end
                 contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
                 @test !all(contrast_buf .== 0.0)
 
-                # Verify zero allocations
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                @test result.memory == 0
+                # Allocations: same compiled formula shape and evaluator as the linear model above
+                # (the family does not enter the compiled formula)
 
                 # Test contrast symmetry
                 contrast_reverse = similar(contrast_buf)
@@ -163,10 +164,6 @@ end
                 # Should affect exactly one coefficient
                 non_zero_count = count(x -> abs(x) > 1e-10, contrast_buf)
                 @test non_zero_count == 1
-
-                # Verify zero allocations
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :female, 0, 1)
-                @test result.memory == 0
             end
 
             # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
@@ -189,8 +186,7 @@ end
                 @test !all(contrast_buf .== 0.0)
 
                 # Verify zero allocations with complex interactions
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :region, "East", "West")
-                @test result.memory == 0
+                @test _glm_contrast_bytes(contrast_buf, evaluator, 1, :region, "East", "West") == 0
             end
         end
     end
@@ -206,10 +202,6 @@ end
             @testset "Poisson treatment contrasts" begin
                 contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
                 @test !all(contrast_buf .== 0.0)
-
-                # Verify zero allocations
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                @test result.memory == 0
             end
 
             # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
@@ -230,41 +222,25 @@ end
             @testset "Contrasts with offset" begin
                 contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
                 @test !all(contrast_buf .== 0.0)
-
-                # Should work correctly with offset (offset doesn't affect contrasts)
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                @test result.memory == 0
+                # Allocations: the offset is not part of the compiled formula; see the linear model above
             end
         end
     end
 
     @testset "Negative Binomial Model Integration" begin
-        # Note: Negative Binomial requires GLM.jl version that supports it
         @testset "Basic Negative Binomial Models" begin
-            try
-                model = glm(@formula(y_nb ~ x1 + x2 + treatment + female), df, NegativeBinomial(), LogLink())
-                compiled = compile_formula(model, data)
-                evaluator = contrastevaluator(compiled, data, [:treatment, :female])
+            model = glm(@formula(y_nb ~ x1 + x2 + treatment + female), df, NegativeBinomial(), LogLink())
+            compiled = compile_formula(model, data)
+            evaluator = contrastevaluator(compiled, data, [:treatment, :female])
 
-                contrast_buf = Vector{Float64}(undef, length(compiled))
+            contrast_buf = Vector{Float64}(undef, length(compiled))
 
-                @testset "Negative binomial contrasts" begin
-                    contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
-                    @test !all(contrast_buf .== 0.0)
-
-                    # Verify zero allocations
-                    result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                    @test result.memory == 0
-                end
-
-                # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
-
-                println("✓ Negative Binomial models supported and working")
-
-            catch MethodError
-                println("⚠ Negative Binomial models not supported in this GLM.jl version - skipping")
-                @test_skip "Negative Binomial support depends on GLM.jl version"
+            @testset "Negative binomial contrasts" begin
+                contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
+                @test !all(contrast_buf .== 0.0)
             end
+
+            # Inference tests (gradient/SE) migrated to Margins.jl (2025-10-09)
         end
     end
 
@@ -307,7 +283,8 @@ end
     end
 
     @testset "Performance Validation Across Models" begin
-        # Test that ContrastEvaluator maintains zero allocations across all model types
+        # Allocations for this formula shape and evaluator are checked under "Basic Linear Models";
+        # the family does not enter the compiled formula
 
         models_to_test = [
             ("Linear", lm(@formula(y_normal ~ x1 + treatment + female), df)),
@@ -327,22 +304,12 @@ end
                     contrast_modelrow!(contrast_buf, evaluator, 1, :female, 0, 1)
                 end
 
-                # Test zero allocations for treatment contrast
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                @test result.memory == 0
-
-                # Test zero allocations for binary contrast
-                result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :female, 0, 1)
-                @test result.memory == 0
-
                 # Performance should be reasonable (under 2 microseconds)
                 time_treatment = @belapsed contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
                 time_binary = @belapsed contrast_modelrow!($contrast_buf, $evaluator, 1, :female, 0, 1)
 
                 @test time_treatment < 2e-6
                 @test time_binary < 2e-6
-
-                println("$name: Treatment=$(round(time_treatment*1e9, digits=1))ns, Binary=$(round(time_binary*1e9, digits=1))ns")
             end
         end
     end
@@ -381,21 +348,17 @@ end
             contrast_buf = Vector{Float64}(undef, length(compiled))
 
             # Should still maintain zero allocations with large dataset
-            contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
-            result = @benchmark contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-            @test result.memory == 0
+            @test _glm_contrast_bytes(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A") == 0
 
             # Performance should still be reasonable
             time_large = @belapsed contrast_modelrow!($contrast_buf, $evaluator, 1, :region, "North", "South")
             @test time_large < 5e-6  # Under 5 microseconds
-
-            println("Large dataset (2000 rows): $(round(time_large*1e9, digits=1))ns")
         end
     end
 
     println("GLM Integration Tests completed successfully!")
     println("Linear, Logistic, and Poisson models fully supported")
     println("All link functions working correctly with gradient computation")
-    println("Zero allocations maintained across all GLM families")
+    println("Zero allocations checked for each compiled formula shape")
     println("Mathematical consistency validated across model types")
 end
