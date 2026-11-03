@@ -6,7 +6,7 @@ High-performance, zero-allocation statistical formula evaluation for Julia.
 ## Overview
 
 FormulaCompiler transforms Julia statistical models into specialized, type-stable evaluators 
-that achieve zero-allocation performance (~50ns per row) through compile-time specialization 
+that achieve zero-allocation performance (about 10 ns per row for a small model) through compile-time specialization 
 and position mapping.
 
 ## Key Features
@@ -34,7 +34,7 @@ compiled = compile_formula(model, data)
 
 # Zero-allocation evaluation  
 output = Vector{Float64}(undef, length(compiled))
-compiled(output, data, row_idx)  # ~50ns, 0 allocations
+compiled(output, data, row_idx)  # 0 allocations
 ```
 
 ## Example Usage

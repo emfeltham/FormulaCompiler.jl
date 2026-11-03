@@ -50,6 +50,9 @@ makedocs(
         "Mathematical Foundation" => "mathematical_foundation.md",
         "Architecture" => "architecture.md",
         "Metaprogramming" => "metaprogramming.md",
+        "Internals" => [
+            "Contrast Mechanism" => "internals/contrast_mechanism.md",
+        ],
         "API Reference" => "api.md",
         "Examples" => "examples.md",
     ],

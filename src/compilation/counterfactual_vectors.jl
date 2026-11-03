@@ -121,12 +121,13 @@ NumericCounterfactualVector(base::Vector{T}, row::Int, replacement) where {T<:Re
     (i == v.row ? v.replacement : convert(T, v.base[i]))
 
 """
-    CategoricalCounterfactualVector{T,R} <: CounterfactualVector{CategoricalValue{T,R}}
+    CategoricalCounterfactualVector{T,R} <: CounterfactualVector{R}
 
 Type-stable counterfactual vector for categorical variables.
 
-Provides efficient single-row substitution for CategoricalArray data while
-preserving all categorical metadata (levels, ordering, reference type).
+Substitutes one row of a CategoricalArray. Elements are the pool's reference codes (type `R`),
+not `CategoricalValue`s, so indexing does not allocate; levels are resolved against the pool of
+`base`.
 
 # Type Parameters
 - `T`: Level type (String, Symbol, Int, etc.)
@@ -135,19 +136,18 @@ preserving all categorical metadata (levels, ordering, reference type).
 # Fields
 - `base::CategoricalArray{T,1,R}`: Original categorical data
 - `row::Int`: Row index to override (1-based)
-- `replacement::CategoricalValue{T,R}`: Categorical value to substitute
+- `replacement::R`: reference code of the substituted level (the constructor also accepts a
+  `CategoricalValue{T,R}` and stores its code)
 
 # Example
 ```julia
 using CategoricalArrays
 data = categorical(["A", "B", "A", "B"])
-level_B = CategoricalValue("B", data[1].pool)
+level_B = data[2]  # the CategoricalValue "B"
 cf_vec = CategoricalCounterfactualVector{String,UInt32}(data, 1, level_B)
 
-cf_vec[1]  # → CategoricalValue("B") (counterfactual)
-cf_vec[2]  # → CategoricalValue("B") (original)
-cf_vec[3]  # → CategoricalValue("A") (original)
-cf_vec[4]  # → CategoricalValue("B") (original)
+cf_vec[1]  # → 0x00000002, the code of "B" (counterfactual)
+cf_vec[3]  # → 0x00000001, the code of "A" (original)
 ```
 """
 mutable struct CategoricalCounterfactualVector{T,R} <: CounterfactualVector{R}

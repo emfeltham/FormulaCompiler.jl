@@ -28,23 +28,27 @@ This document summarizes project-wide testing practices and patterns. It is inte
 
 ## Allocation and Performance Testing
 
-### BenchmarkTools, not `@allocated`
+### `@allocated` behind a function barrier
 
-- Use `BenchmarkTools.@benchmark` with interpolation to measure steady-state memory and time:
+- Measure allocations in a small top-level function that warms up the call and then measures
+  it, so neither compilation nor global-variable access is counted:
 
   ```julia
-  b = @benchmark $compiled($buffer, $data, $row) samples=300 evals=1
-  @test minimum(b.memory) == 0
+  function modelrow_allocs(compiled, buffer, data, row)
+      compiled(buffer, data, row)                       # warmup
+      return @allocated compiled(buffer, data, row)
+  end
+  @test modelrow_allocs(compiled, buffer, data, 1) == 0
   ```
 
-- Always warm up before measuring (one or more calls) to exclude compilation/transient allocations from the measurement.
-- Interpolate all variables (`$compiled`, `$buffer`, `$data`, `$row`) to avoid closure allocations in the benchmark itself.
-- For looped patterns, benchmark the loop body directly or create a small helper function to avoid measurement artifacts.
+- Check once that such a helper reports bytes > 0 for a call that does allocate; a helper that
+  measures the wrong thing passes every time.
+- Use BenchmarkTools (`@benchmark`, `@belapsed`) only for timing checks, with generous headroom.
 
 ### Targets
 
 - Core evaluator paths (`compiled(output, data, row)` and `modelrow!`) must allocate 0 bytes after warm‑up.
-- FD derivatives: 0 bytes after warm‑up. AD derivatives: small bounded allocations (≤ ~512 bytes) from ForwardDiff.
+- FD and AD derivatives (`derivative_modelrow!`): 0 bytes after warm‑up.
 - Categorical mixtures: zero allocations on steady‑state evaluation.
 
 ### Bounds checks and `@inbounds`
@@ -93,7 +97,7 @@ When adding or updating tests for categorical handling, include:
 
 ## Anti‑Patterns to Avoid
 
-- Measuring allocations with `@allocated` in hot paths (use BenchmarkTools instead).
+- Measuring allocations at top level or inside a closure (`@benchmark $f` measures the closure object, not the call); use a function barrier.
 - Printing in tests (use `@test`/`@testset`; `@debug` for optional info).
 - Nondeterministic tests (unseeded randomness, time‑dependent behavior).
 - Overly permissive allocation thresholds that can mask regressions.

@@ -38,7 +38,6 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
 
     # Derivatives (primitives only - statistical interface migrated to Margins.jl)
     # MIGRATED: test_links.jl → Margins/test/primitives/test_links.jl
-    # SPLIT: test_derivative_allocations.jl → test_derivative_primitive_allocations.jl (FormulaCompiler) + test_marginal_effects_allocations.jl (Margins)
     include("test_derivative_primitive_allocations.jl") # PRIMARY: derivative_modelrow! allocation tests (primitives only)
     include("test_contrast_evaluator.jl") # Zero-allocation contrast evaluator correctness and performance
     # DELETED: test_documentation_examples.jl → Caused circular dependency with Margins (2025-10-09)
@@ -54,7 +53,7 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
     include("test_compiled_cache.jl") # Bounded/clearable compiled-formula cache (LRU, release, concurrency)
 
     # Regression tests
-    # MIGRATED: test_derivatives_log_profile_regression.jl → Margins/test/primitives/test_derivatives_log_profile_regression.jl
+    include("test_fd_jacobian_column.jl") # fd_jacobian_column! (incl. log(x) row-1 regression), FD at extreme scales
     # Edge-case regression and stability tests
     include("test_derivatives_domain_edge_cases.jl")
     include("test_link_derivatives.jl") # Link dμ/dη, d²μ/dη² vs BigFloat references (stability, Power/NegBin links)

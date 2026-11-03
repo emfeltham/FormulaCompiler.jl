@@ -391,13 +391,13 @@ O(p) \text{ with compile-time } O(\text{complexity}(\text{formula}))
 | Backend | Speed | Memory | Accuracy | Recommendation |
 |---------|-------|--------|----------|----------------|
 | `:ad` (Automatic Differentiation) | Faster | 0 bytes | Machine precision | **Strongly preferred - always use this** |
-| `:fd` (Finite Differences) | Slower (~22% slower) | 0 bytes | ≈1e-8 | Legacy support only |
+| `:fd` (Finite Differences) | Slower (about 2x) | 0 bytes | ≈1e-8 | Legacy support only |
 
 !!! warning "Use Automatic Differentiation"
     **Always use `:ad` backend** (`derivativeevaluator(:ad, ...)` or `backend=:ad`).
 
     Advantages of `:ad`:
-    - **Faster**: ~22% faster than finite differences
+    - **Faster**: about twice as fast as finite differences (35 vs 70 ns for two variables; see the README)
     - **More accurate**: Machine precision vs ~1e-8 for FD
     - **Zero allocations**: Same as FD
 

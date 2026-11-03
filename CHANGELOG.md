@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.5.0] - YYYY-MM-DD
+## [1.5.0] - 2026-11-03
 
 ### Added
 
@@ -69,6 +69,17 @@ Tests in `test/test_public_api.jl`.
   `test_mixture_evaluation.jl`, its "Boolean Mixture Support" block (which never ran mixture
   evaluation; its unique checks moved), and the per-family timing loop in
   `test_glm_integration.jl`, now one timing check.
+- New `test/test_fd_jacobian_column.jl`: `fd_jacobian_column!` equals the Jacobian's column, the
+  `log(x)` row-1 regression, and FD against AD at extreme variable scales. These moved from
+  Margins, where they tested only FormulaCompiler functions. A block of `test_mixture_evaluation.jl`
+  that repeated checks on more rows without measuring memory is removed.
+- Test docs:
+  - `test/README.md` is rewritten from `runtests.jl`. It listed files, debugging utilities and
+    APIs (`marginal_effects_eta!`, `build_derivative_evaluator`) that are gone.
+  - `test/TESTING.md`, which repeated it, and `test/tests.sh`, whose targets no longer exist,
+    are deleted.
+  - `TEST_PRINCIPLES.md` now describes measuring allocations with `@allocated` behind a
+    function barrier, as the suite does.
 
 ### Fixed
 

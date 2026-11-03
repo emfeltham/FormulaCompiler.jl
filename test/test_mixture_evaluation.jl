@@ -280,33 +280,4 @@ _mixdata(idx, w) = (group = [FormulaCompiler.CategoricalMixture(["L$i" for i in 
             end
         end
     end
-
-    @testset "Memory Usage and Scalability" begin
-        # Test memory characteristics for large datasets
-
-        @testset "Large Dataset Memory Usage" begin
-            # Test that mixture operations scale O(1) with data size
-            mixture = mix("Large" => 0.8, "Small" => 0.2)
-
-            # Small dataset
-            small_data = (
-                x = randn(100),
-                group = fill(mixture, 100)
-            )
-
-            # Large dataset
-            large_data = (
-                x = randn(10000),
-                group = fill(mixture, 10000)
-            )
-
-            # Memory usage for validation should be similar (O(1) in dataset size)
-            @test_nowarn validate_mixture_consistency!(small_data)
-            @test_nowarn validate_mixture_consistency!(large_data)
-
-            # Both should be detected as mixture columns with same efficiency
-            @test is_mixture_column(small_data.group)
-            @test is_mixture_column(large_data.group)
-        end
-    end
 end
