@@ -31,7 +31,7 @@ Pkg.add("FormulaCompiler")
 ## Basic Usage
 
 ```julia
-using FormulaCompiler, GLM, DataFrames, Tables
+using FormulaCompiler, GLM, DataFrames, Tables, CategoricalArrays
 
 # Fit model
 df = DataFrame(
@@ -105,6 +105,8 @@ evaluator(row_vec, 1)          # In-place evaluation
 
 FormulaCompiler implements a type-stable counterfactual vector system that enables variable substitution with O(1) memory overhead, avoiding data duplication. This is particularly useful for policy analysis and treatment effect evaluation.
 
+The examples in this section assume a model whose data has a Bool column `treatment`, a Float64 column `dose` and a String column `region`. The counterfactual functions are not exported.
+
 ### Basic Counterfactual Evaluation
 
 ```julia
@@ -112,12 +114,12 @@ data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 
 # Build counterfactual data structure
-data_cf, cf_vecs = build_counterfactual_data(data, [:treatment], 1)
+data_cf, cf_vecs = FormulaCompiler.build_counterfactual_data(data, [:treatment], 1)
 treatment_cf = cf_vecs[1]
 
 # Evaluate with counterfactual values
 row_vec = Vector{Float64}(undef, length(compiled))
-update_counterfactual_replacement!(treatment_cf, true)
+FormulaCompiler.update_counterfactual_replacement!(treatment_cf, true)
 compiled(row_vec, data_cf, 1)
 ```
 
@@ -130,7 +132,7 @@ dose_values = [50.0, 100.0, 150.0]
 region_values = ["North", "South"]
 
 # Create counterfactual data structure
-data_cf, cf_vecs = build_counterfactual_data(data, [:treatment, :dose, :region], 1)
+data_cf, cf_vecs = FormulaCompiler.build_counterfactual_data(data, [:treatment, :dose, :region], 1)
 treatment_cf, dose_cf, region_cf = cf_vecs
 
 # Evaluate all combinations (2×3×2 = 12 scenarios)
@@ -141,9 +143,9 @@ scenario_idx = 1
 for treatment in treatment_values
     for dose in dose_values
         for region in region_values
-            update_counterfactual_replacement!(treatment_cf, treatment)
-            update_counterfactual_replacement!(dose_cf, dose)
-            update_counterfactual_replacement!(region_cf, region)
+            FormulaCompiler.update_counterfactual_replacement!(treatment_cf, treatment)
+            FormulaCompiler.update_counterfactual_replacement!(dose_cf, dose)
+            FormulaCompiler.update_counterfactual_replacement!(region_cf, region)
 
             compiled(row_vec, data_cf, 1)
             results[scenario_idx, :] .= row_vec
@@ -155,20 +157,24 @@ end
 
 ### Memory Efficiency
 
-The counterfactual vector system uses O(1) memory regardless of dataset size:
+A counterfactual vector wraps a column instead of copying it, so its memory does not depend on the number of rows:
 
 ```julia
-# Traditional approach: full column copy
-traditional = copy(data.x)
+x = randn(1_000_000)
+
+# Traditional approach: full column copy (8.0 MB for 1,000,000 Float64 values)
+traditional = copy(x)
 traditional[500_000] = 42.0
 
-# CounterfactualVector approach: ~32 bytes overhead
-cf_vec = counterfactualvector(data.x, 500_000)
-update_counterfactual_replacement!(cf_vec, 42.0)
+# CounterfactualVector approach: the wrapper allocates 32 bytes
+cf_vec = FormulaCompiler.counterfactualvector(x, 500_000)
+FormulaCompiler.update_counterfactual_replacement!(cf_vec, 42.0)
 
 # Identical interface, minimal memory usage
 @assert traditional[500_000] == cf_vec[500_000]
 ```
+
+(Measured with `@allocated` on an Apple M4 Pro, Julia 1.13.3.)
 
 ## Ecosystem Integration
 
@@ -214,26 +220,23 @@ compiled = compile_formula(model, Tables.columntable(df))
 FormulaCompiler supports categorical mixtures—weighted combinations of categorical levels—for efficient profile-based marginal effects computation:
 
 ```julia
-using FormulaCompiler, Margins
-
-# Create mixture specification
+# Mixture of the levels of `group` in the model from Basic Usage
 reference_grid = DataFrame(
     x = [1.0, 2.0, 3.0],
-    group = mix("Treatment" => 0.6, "Control" => 0.4)
+    z = [1.0, 1.0, 1.0],
+    group = fill(mix("A" => 0.6, "B" => 0.4), 3)
 )
 
 # Compile and evaluate
-compiled = compile_formula(model, Tables.columntable(reference_grid))
-output = Vector{Float64}(undef, length(compiled))
-compiled(output, Tables.columntable(reference_grid), 1)
+grid_data = Tables.columntable(reference_grid)
+compiled_grid = compile_formula(model, grid_data)
+output = Vector{Float64}(undef, length(compiled_grid))
+compiled_grid(output, grid_data, 1)  # group:B = 0.4, group:C = 0.0
 
-# Multiple mixture variables
-grid = DataFrame(
-    age = [30, 40, 50],
-    treatment = mix("Control" => 0.3, "Drug_A" => 0.4, "Drug_B" => 0.3),
-    dose = mix("Low" => 0.25, "Medium" => 0.5, "High" => 0.25)
-)
-compiled = compile_formula(model, Tables.columntable(grid))
+# Several mixture columns work the same way, e.g. for a model with
+# categorical `treatment` and `dose`:
+#   treatment = fill(mix("Control" => 0.3, "Drug_A" => 0.4, "Drug_B" => 0.3), n)
+#   dose = fill(mix("Low" => 0.25, "Medium" => 0.5, "High" => 0.25), n)
 ```
 
 Mixture evaluation is allocation-free. The mixture's levels and weights are read from the data at evaluation time, so a compiled formula can be reused with different mixtures (a new mixture does not trigger recompilation).
@@ -256,12 +259,12 @@ derivative_modelrow!(J, de, 1)  # Row 1
 
 ### Backend Selection
 
-While automatic differentiation is the strongly preferred default option, two backends are available:
+Two backends are available; automatic differentiation is the recommended default:
 
-- `:ad` (automatic differentiation via ForwardDiff.jl): Recommended for standard formulas. Provides machine-precision accuracy and approximately 20% faster performance than finite differences.
-- `:fd` (finite differences): Recommended for formulas containing boolean predicates. Guarantees zero allocations for all formula types.
+- `:ad` (automatic differentiation via ForwardDiff.jl): exact derivatives up to floating-point rounding.
+- `:fd` (finite differences): central differences with an automatically chosen step; an alternative backend, for example to cross-check AD results.
 
-Both backends achieve zero-allocation performance through pre-allocated buffers and in-place operations.
+For the Basic Usage model with `vars = [:x, :z]`, `derivative_modelrow!` took a median of about 35 ns with `:ad` and about 70 ns with `:fd` (BenchmarkTools, Apple M4 Pro, Julia 1.13.3). Both backends allocated 0 bytes after warmup, here and for formulas with boolean predicates (`(x > 0)`, `!(x > 0)`, `(z >= w)`). Both use pre-allocated buffers and in-place operations.
 
 ### Supported Link Functions
 
@@ -311,7 +314,7 @@ compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
 
 # Evaluate many times (zero allocations)
-for i in 1:n_rows
+for i in 1:nrow(df)
     compiled(row_vec, data, i)
 end
 ```
@@ -351,31 +354,30 @@ results = [modelrow(model, data, i) for i in 1:1000]
 
 ### Evaluation Performance
 
-Typical performance for formula evaluation after compilation:
+Single-row evaluation after compilation, compared with building the model matrix:
 
 ```julia
-using BenchmarkTools
+using BenchmarkTools, StatsModels
 
-# Traditional approach
-@benchmark modelmatrix(model)[1, :]  # Constructs entire matrix
+# Traditional approach: build the full model matrix from the data, take one row
+@benchmark modelmatrix(formula($model), $df)[1, :]
 
 # FormulaCompiler approach
 data = Tables.columntable(df)
 compiled = compile_formula(model, data)
 row_vec = Vector{Float64}(undef, length(compiled))
-@benchmark compiled(row_vec, data, 1)  # Zero allocations
+@benchmark $compiled($row_vec, $data, 1)
 ```
 
-FormulaCompiler typically achieves a significant speedup compared to full model matrix construction for single-row evaluation, with zero allocations after compilation.
+For the Basic Usage model (1,000 rows, 7 columns), on an Apple M4 Pro with Julia 1.13.3, the compiled row took a median of about 10 ns and allocated 0 bytes (also checked with `@allocated` after a warmup call). Building the model matrix took about 31 μs and allocated about 270 KB. (`modelmatrix(model)` itself returns the matrix stored in the fitted model, so it does not measure construction, and it cannot evaluate new or counterfactual data.)
 
 ### Derivative Performance
 
-Both derivative backends achieve zero-allocation performance:
+Both derivative backends allocate nothing after warmup. For the Basic Usage model with two variables, `derivative_modelrow!` took a median of about 35 ns (`:ad`) and 70 ns (`:fd`) per row in the setting above. Allocation-free evaluation is checked in the test suite.
 
-- Automatic differentiation (`:ad`): approximately 50-60ns per row for standard formulas
-- Finite differences (`:fd`): approximately 65-85ns per row for standard formulas
+### Marginal Effects
 
-All operations use pre-allocated buffers, validated through comprehensive allocation tests.
+In the benchmark of the accompanying paper, which compares [Margins.jl](https://github.com/emfeltham/Margins.jl) (built on FormulaCompiler) with R's marginaleffects on matched estimands, the geometric means of the ratio of R to Julia run time were 42x at 5,000 rows, 19x at 50,000 rows and 17x at 500,000 rows (see the Citation section).
 
 ## Architecture
 

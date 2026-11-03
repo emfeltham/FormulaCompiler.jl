@@ -20,8 +20,8 @@ This document explains the internal architecture and mechanism of categorical co
 Categorical contrasts compute **counterfactual discrete differences**: comparing the same observation under different categorical levels.
 
 ```julia
-# For a specific individual/observation at row i
-Δ = X(row=i, treatment="Drug") - X(row=i, treatment="Control")
+# For a specific individual/observation at row i (notation, not code)
+Δ = X(row=i, treatment="Drug_A") - X(row=i, treatment="Control")
 ```
 
 This answers: "What would be the treatment effect for this specific individual, holding all other characteristics constant?"
@@ -37,7 +37,7 @@ For simple cases, you can modify data directly and compute differences:
 ```julia
 # Evaluate with different categorical levels
 data_control = merge(data, (treatment = fill("Control", n_rows),))
-data_drug = merge(data, (treatment = fill("Drug", n_rows),))
+data_drug = merge(data, (treatment = fill("Drug_A", n_rows),))
 
 X_control = modelrow(compiled, data_control, row)
 X_drug = modelrow(compiled, data_drug, row)
@@ -54,7 +54,7 @@ For performance-critical batch operations, use the zero-allocation system:
 ```julia
 evaluator = contrastevaluator(compiled, data, [:treatment])
 Δ = Vector{Float64}(undef, length(compiled))
-contrast_modelrow!(Δ, evaluator, row, :treatment, "Control", "Drug")
+contrast_modelrow!(Δ, evaluator, row, :treatment, "Control", "Drug_A")
 ```
 
 **Pros**: Zero allocations, optimized for batch processing
@@ -92,7 +92,7 @@ For exploratory analysis, one-off contrasts, or when performance isn't critical,
 ### Basic Pattern
 
 ```julia
-using FormulaCompiler, GLM, DataFrames, Tables
+using FormulaCompiler, GLM, DataFrames, Tables, LinearAlgebra
 
 # Fit model and compile
 df = DataFrame(
@@ -137,13 +137,13 @@ println("Treatment effect: $effect ± $se")
    - Creates a new NamedTuple with all columns from `data`
    - Replaces the `:treatment` column with a vector of all `"Control"` values
    - **Crucially**: Keeps all other covariates (x, age, etc.) at their original values for each row
-   - **Memory**: Allocates new vector for treatment column (~100 bytes for 100 rows)
+   - **Memory**: Allocates a new treatment column (one pointer per row: about 0.9 KB for 100 rows)
 
 2. **`modelrow(compiled, data_control, row)`**
    - Evaluates the compiled formula for row 1 using `data_control`
    - Returns the model matrix row X **for the same individual** (row 1) as if they had `treatment="Control"`
    - **All other characteristics** (x, age, etc.) remain as observed for row 1
-   - **Memory**: Allocates new output vector (~80 bytes for typical model)
+   - **Memory**: Allocates a new output vector (112 bytes for the six-column model above)
 
 3. **`X_drug .- X_control`**
    - Element-wise subtraction: the discrete effect vector
@@ -157,8 +157,9 @@ println("Treatment effect: $effect ± $se")
 The counterfactual approach isolates the treatment effect by holding all other variables constant:
 
 ```julia
-# Example: Effect for a 45-year-old with specific characteristics
-row = 15  # Person with: age=45, x=2.3, education="College"
+# Example: effect for one specific person
+# (suppose row 15 has age=45, x=2.3, education="College" in a richer model)
+row = 15
 
 # Counterfactual contrast: Same person, different treatment
 X_if_control = modelrow(compiled, data_control, 15)  # This person AS IF Control
@@ -175,8 +176,8 @@ effect = dot(β, Δ_counterfactual)
 **Contrast with cross-sectional comparison** (wrong approach):
 ```julia
 # Find someone in Control and someone in Drug
-row_control = findfirst(data.treatment .== "Control")  # Person A: age=45, x=2.3
-row_drug = findfirst(data.treatment .== "Drug")        # Person B: age=60, x=-1.5
+row_control = findfirst(==("Control"), data.treatment)  # Person A: age=45, x=2.3
+row_drug = findfirst(==("Drug_A"), data.treatment)      # Person B: age=60, x=-1.5
 
 X_person_control = modelrow(compiled, data, row_control)
 X_person_drug = modelrow(compiled, data, row_drug)
@@ -312,15 +313,14 @@ end
 
 ### Memory Cost Analysis
 
-For a dataset with 1000 rows and a typical model:
+For a dataset with 1000 rows and the six-column model above:
 
 **Per contrast computed:**
-- New treatment vector: ~8KB (1000 × Float64)
-- Model row output: ~80 bytes (typical)
-- Intermediate allocations: ~100 bytes
-- **Total per contrast**: ~8.2KB
+- New treatment column: about 8 KB (`fill("Control", 1000)` allocates 8,256 bytes: one pointer per row)
+- Model row output: 112 bytes per `modelrow` call
+- **Total per contrast**: about 8 KB per counterfactual column, plus the output vectors
 
-**For 1000 contrasts**: ~8.2MB allocated
+**For 1000 contrasts** that each build new columns: on the order of 10 MB allocated
 
 Compare to `ContrastEvaluator`: **0 bytes** per contrast after setup.
 
@@ -329,16 +329,11 @@ Compare to `ContrastEvaluator`: **0 bytes** per contrast after setup.
 This approach works naturally with DataFrames manipulation:
 
 ```julia
-using DataFrames, Chain
+using DataFrames
 
 # Create counterfactual datasets using DataFrames operations
-df_control = @chain df begin
-    transform(:treatment => (_ -> "Control") => :treatment)
-end
-
-df_drug = @chain df begin
-    transform(:treatment => (_ -> "Drug_A") => :treatment)
-end
+df_control = transform(df, :treatment => (_ -> "Control") => :treatment)
+df_drug = transform(df, :treatment => (_ -> "Drug_A") => :treatment)
 
 # Convert to columntables and evaluate
 data_control = Tables.columntable(df_control)
@@ -351,59 +346,56 @@ X_drug = modelrow(compiled, data_drug, row)
 
 ### Complete Example: Logistic Regression with Uncertainty
 
-For GLM models with link functions, compute both linear and response scale effects:
+For GLM models with link functions, compute both linear and response scale effects (new names, so the running example above is kept):
 
 ```julia
-using GLM, DataFrames, Tables
+using FormulaCompiler, GLM, DataFrames, Tables, LinearAlgebra
 
 # Fit logistic regression
-df = DataFrame(
+df_logit = DataFrame(
     outcome = rand([0, 1], 100),
     age = rand(18:80, 100),
     treatment = rand(["Control", "Drug"], 100)
 )
-model = glm(@formula(outcome ~ age * treatment), df, Binomial(), LogitLink())
-data = Tables.columntable(df)
-compiled = compile_formula(model, data)
+model_logit = glm(@formula(outcome ~ age * treatment), df_logit, Binomial(), LogitLink())
+data_logit = Tables.columntable(df_logit)
+compiled_logit = compile_formula(model_logit, data_logit)
 
 # Counterfactual data
-n_rows = length(data.outcome)
-data_control = merge(data, (treatment = fill("Control", n_rows),))
-data_drug = merge(data, (treatment = fill("Drug", n_rows),))
+n_logit = length(data_logit.outcome)
+data_logit_control = merge(data_logit, (treatment = fill("Control", n_logit),))
+data_logit_drug = merge(data_logit, (treatment = fill("Drug", n_logit),))
 
 # Analyze specific individual
 row = 1
-β = coef(model)
-vcov_matrix = vcov(model)
+β_logit = coef(model_logit)
+V_logit = vcov(model_logit)
 link = LogitLink()
 
 # Evaluate model rows
-X_control = modelrow(compiled, data_control, row)
-X_drug = modelrow(compiled, data_drug, row)
-Δ = X_drug .- X_control
+X0 = modelrow(compiled_logit, data_logit_control, row)
+X1 = modelrow(compiled_logit, data_logit_drug, row)
+ΔX = X1 .- X0
 
 # Linear scale (log-odds) with uncertainty
-effect_eta = dot(β, Δ)
-∇β_eta = Δ
-se_eta = sqrt(dot(∇β_eta, vcov_matrix, ∇β_eta))
+effect_eta = dot(β_logit, ΔX)
+se_eta = sqrt(dot(ΔX, V_logit, ΔX))
 println("Log-odds effect: $effect_eta ± $se_eta")
 
 # Response scale (probability) with uncertainty
-η_control = dot(β, X_control)
-η_drug = dot(β, X_drug)
-μ_control = GLM.linkinv(link, η_control)  # Probability if Control
-μ_drug = GLM.linkinv(link, η_drug)        # Probability if Drug
-effect_mu = μ_drug - μ_control
+η0 = dot(β_logit, X0)
+η1 = dot(β_logit, X1)
+μ0 = GLM.linkinv(link, η0)  # Probability if Control
+μ1 = GLM.linkinv(link, η1)  # Probability if Drug
+effect_mu = μ1 - μ0
 
 # Gradient for response scale (chain rule)
-g_prime_control = GLM.mueta(link, η_control)
-g_prime_drug = GLM.mueta(link, η_drug)
-∇β_mu = g_prime_drug .* X_drug .- g_prime_control .* X_control
-se_mu = sqrt(dot(∇β_mu, vcov_matrix, ∇β_mu))
+∇β_mu = GLM.mueta(link, η1) .* X1 .- GLM.mueta(link, η0) .* X0
+se_mu = sqrt(dot(∇β_mu, V_logit, ∇β_mu))
 
 println("Probability effect: $effect_mu ± $se_mu")
-println("  P(outcome=1|Control) = $μ_control")
-println("  P(outcome=1|Drug) = $μ_drug")
+println("  P(outcome=1|Control) = $μ0")
+println("  P(outcome=1|Drug) = $μ1")
 ```
 
 ### Alternative: Using Dictionaries
@@ -440,76 +432,83 @@ se = sqrt(dot(Δ, vcov(model), Δ))
 |--------|----------------|-------------------|
 | **Ease of use** | Very simple | Requires setup |
 | **Code clarity** | Clear intent | More abstraction |
-| **Memory per contrast** | ~8KB | 0 bytes |
-| **Best for** | 1-10 contrasts | 100+ contrasts |
-| **Setup cost** | None | ~50μs + ~50KB |
+| **Memory per contrast** | about 8 KB (1000 rows) | 0 bytes |
+| **Best for** | A few contrasts | Many contrasts |
+| **Setup cost** | None | One-time construction (about 6 μs and 5 KB in the benchmark below) |
 | **Learning curve** | Minimal | Moderate |
 
 **Recommendation**: Start with the simple approach for exploration. Switch to `ContrastEvaluator` when:
-- You need to compute 100+ contrasts
+- You need to compute many contrasts
 - Performance/memory is critical
 - Building production pipelines
 
 ---
 
+
 ## CounterfactualVector Mechanism
 
-The `ContrastEvaluator` achieves the same counterfactual comparison as the simple approach, but with zero allocations. It uses `CounterfactualVector`s to efficiently substitute values for a single row without copying data.
+The `ContrastEvaluator` achieves the same counterfactual comparison as the simple approach, but with zero allocations. It uses `CounterfactualVector`s to substitute a value for a single row without copying data.
 
 **Key insight**: Like the simple approach, this compares the **same row** under different categorical levels. The only difference is performance optimization, not the analytical concept.
+
+The examples in this section use a `CategoricalArray` column. These types are internal: apart from `CategoricalCounterfactualVector`, they are not exported, and user code normally reaches them only through `contrastevaluator`.
 
 ### Core Concept
 
 A `CounterfactualVector` wraps an original data column and **intercepts access to a specific row**, returning a replacement value instead of the original:
 
 ```julia
-# Original data column
-data.treatment = ["Control", "Drug_A", "Drug_B", "Control", ...]
+using FormulaCompiler, CategoricalArrays
 
-# Create CounterfactualVector
-cf_vec = CategoricalCounterfactualVector(data.treatment, row=1, replacement="Drug_A")
+treatment = categorical(["Control", "Drug_A", "Drug_B", "Control"])
 
-# Behavior:
-cf_vec[1]  # → "Drug_A" (counterfactual - substituted value)
-cf_vec[2]  # → "Drug_A" (original value)
-cf_vec[3]  # → "Drug_B" (original value)
-cf_vec[4]  # → "Control" (original value)
+# Wrap the column; row 1 is replaced by the level of treatment[2] ("Drug_A")
+cf_vec = CategoricalCounterfactualVector(treatment, 1, treatment[2])
+
+# A categorical counterfactual returns reference codes into the column's pool
+# (levels "Control", "Drug_A", "Drug_B" have codes 1, 2, 3):
+cf_vec[1]  # → 0x00000002 ("Drug_A", counterfactual)
+cf_vec[2]  # → 0x00000002 ("Drug_A", original)
+cf_vec[3]  # → 0x00000003 ("Drug_B", original)
+cf_vec[4]  # → 0x00000001 ("Control", original)
 ```
+
+Returning the integer reference code rather than a `CategoricalValue` keeps reads allocation-free; the compiled formula resolves the code against the column's pool when it looks up the contrast-matrix row.
 
 ### Implementation
 
-All `CounterfactualVector` types implement this interface:
+All `CounterfactualVector` types share this interface (excerpt from `src/compilation/counterfactual_vectors.jl`):
 
 ```julia
 abstract type CounterfactualVector{T} <: AbstractVector{T} end
 
 # Generic getindex implementation
-@inline Base.getindex(v::CounterfactualVector, i::Int) =
+@inline Base.@propagate_inbounds Base.getindex(v::CounterfactualVector, i::Int) =
     (i == v.row ? v.replacement : v.base[i])
 ```
 
-**Key insight**: This is just a conditional branch—no array copying, no allocations.
+**Key insight**: This is just a conditional branch: no array copying, no allocations.
 
 ### Typed Variants
 
-Different data types have specialized implementations:
+Different data types have specialized implementations (excerpt):
 
 ```julia
-# For numeric variables (Float64, Int64, etc.); the column is stored as B and read as T
+# Numeric variables; the column is stored as B and read as T
 mutable struct NumericCounterfactualVector{T<:Real, B<:Real} <: CounterfactualVector{T}
     base::Vector{B}           # Original data
     row::Int                  # Row index to override
     replacement::T            # Replacement value
 end
 
-# For categorical variables
-mutable struct CategoricalCounterfactualVector{T,R} <: CounterfactualVector{CategoricalValue{T,R}}
+# Categorical variables: the replacement is a reference code of type R (e.g. UInt32)
+mutable struct CategoricalCounterfactualVector{T,R} <: CounterfactualVector{R}
     base::CategoricalArray{T,1,R}
     row::Int
-    replacement::CategoricalValue{T,R}
+    replacement::R
 end
 
-# For boolean variables
+# Boolean variables
 mutable struct BoolCounterfactualVector <: CounterfactualVector{Bool}
     base::Vector{Bool}
     row::Int
@@ -517,20 +516,23 @@ mutable struct BoolCounterfactualVector <: CounterfactualVector{Bool}
 end
 ```
 
+Other columns (for example a `Vector{String}` holding categorical levels) use `TypedCounterfactualVector{T,V}`, and mixture columns use `CategoricalMixtureCounterfactualVector{T}`.
+
 **Type stability**: Each variant has concrete types, enabling compiler optimizations.
 
 ### Mutable Updates
 
-The vectors are **mutable** so fields can be updated without allocations:
+The vectors are **mutable**, so fields can be updated without allocations:
 
 ```julia
 # Update which row to override
-cf_vec.row = 5
+FormulaCompiler.update_counterfactual_row!(cf_vec, 3)
 
-# Update the replacement value
-cf_vec.replacement = "Drug_B"
+# Update the replacement value (a CategoricalValue is converted to its reference code)
+FormulaCompiler.update_counterfactual_replacement!(cf_vec, treatment[1])  # "Control"
 
-# No allocations - just field assignments
+cf_vec[3]  # → 0x00000001 ("Control", counterfactual)
+cf_vec[1]  # → 0x00000002 (original again)
 ```
 
 This enables reusing the same `CounterfactualVector` for multiple contrasts.
@@ -541,7 +543,7 @@ This enables reusing the same `CounterfactualVector` for multiple contrasts.
 
 ### Construction Process
 
-When you create a `ContrastEvaluator`, it builds the complete counterfactual infrastructure:
+When you create a `ContrastEvaluator`, it builds the complete counterfactual infrastructure (here for data and a model with `treatment`, `education` and `female` columns):
 
 ```julia
 evaluator = contrastevaluator(compiled, data, [:treatment, :education, :female])
@@ -549,7 +551,7 @@ evaluator = contrastevaluator(compiled, data, [:treatment, :education, :female])
 
 #### Step 1: Build Internal Counterfactual Structure
 
-The `ContrastEvaluator` internally creates `CounterfactualVector` wrappers for specified variables:
+The `ContrastEvaluator` internally creates `CounterfactualVector` wrappers for the specified variables:
 
 ```julia
 # Internal implementation creates:
@@ -557,14 +559,14 @@ The `ContrastEvaluator` internally creates `CounterfactualVector` wrappers for s
 # - A `NamedTuple` that merges original data with `CounterfactualVector` wrappers
 ```
 
-**Example structure**:
+**Example structure** (schematic):
 ```julia
 # Original data
 data = (
     x = [1.0, 2.0, 3.0, ...],
     outcome = [0.5, 1.2, 0.8, ...],
-    treatment = ["Control", "Drug_A", "Drug_B", ...],
-    education = ["HS", "College", "HS", ...],
+    treatment = categorical(["Control", "Drug_A", "Drug_B", ...]),
+    education = categorical(["HS", "College", "HS", ...]),
     female = [0, 1, 1, 0, ...]
 )
 
@@ -574,57 +576,46 @@ data_counterfactual = (
     outcome = data.outcome,                        # Original (not in vars)
     treatment = counterfactuals[1],                # CategoricalCounterfactualVector
     education = counterfactuals[2],                # CategoricalCounterfactualVector
-    female = counterfactuals[3]                    # NumericCounterfactualVector{Float64}
+    female = counterfactuals[3]                    # NumericCounterfactualVector{Int64}
 )
 ```
 
-**Key insight**: Variables not in `vars` use original columns; variables in `vars` are wrapped in `CounterfactualVector`s. If a categorical column's pool lacks a level the fitted model knows (e.g. a subset that dropped the reference level), the evaluator wraps an internal copy with the missing levels appended; the caller's data is not modified.
+**Key insight**: Variables not in `vars` use original columns; variables in `vars` are wrapped in `CounterfactualVector`s. The wrappers start with `row = 0`, so they shadow no row until a contrast is computed. If a categorical column's pool lacks a level the fitted model knows (e.g. a subset that dropped the reference level), the evaluator wraps an internal copy with the missing levels appended; the caller's data is not modified.
 
 #### Step 2: Pre-compute Categorical Level Mappings
 
-```julia
-# Lines 106-122 in contrast_evaluator.jl
-categorical_level_maps = Dict{Symbol, Dict{String, CategoricalValue}}()
+For each `CategoricalCounterfactualVector`, `contrastevaluator` records every level of the column's pool with its reference code, as a `CategoricalLevelMap` whose type carries the variable name and a tuple of `(level, code)` pairs (excerpt from `contrastevaluator` in `src/compilation/contrast_evaluator.jl`):
 
+```julia
 for (i, var) in enumerate(vars)
     cf_vec = counterfactuals[i]
     if cf_vec isa CategoricalCounterfactualVector
-        # Build String → CategoricalValue mapping
-        level_map = Dict{String, CategoricalValue}()
-        base_array = cf_vec.base
-
-        for level_str in levels(base_array)
-            # Find a CategoricalValue instance for this level
-            matching_idx = findfirst(x -> string(x) == level_str, base_array)
-            if matching_idx !== nothing
-                level_map[level_str] = base_array[matching_idx]
-            end
-        end
-
-        categorical_level_maps[var] = level_map
+        levs = levels(cf_vec.base)
+        R = typeof(cf_vec).parameters[2]           # reference type (UInt8, UInt32, ...)
+        level_pairs = Tuple((level, R(ref_idx)) for (ref_idx, level) in enumerate(levs))
+        push!(level_map_structs, CategoricalLevelMap{var, typeof(level_pairs)}(level_pairs))
     end
 end
+categorical_level_maps = Tuple(level_map_structs)
 ```
 
-**Purpose**: Pre-computing these mappings avoids allocations during contrast evaluation. Converting strings like `"Control"` to `CategoricalValue` objects normally allocates, but looking up in a pre-built `Dict` does not.
+**Purpose**: Converting a string such as `"Control"` to a `CategoricalValue` allocates, and copying a `CategoricalValue` allocates too. The level maps store plain reference codes, which are bits types, and the lookup (`_find_categorical_level`) is a generated function that unrolls the search over the tuple, so resolving a level does not allocate.
 
-**Example**:
+**Example** (for a pool with levels `"Control"`, `"Drug_A"`, `"Drug_B"` and `UInt32` codes; the stored levels are the values `levels` returns, shown here as strings, and compare equal to them):
 ```julia
-categorical_level_maps[:treatment] = Dict(
-    "Control" => CategoricalValue("Control", pool),
-    "Drug_A" => CategoricalValue("Drug_A", pool),
-    "Drug_B" => CategoricalValue("Drug_B", pool)
-)
+CategoricalLevelMap{:treatment, ...}((("Control", 0x00000001),
+                                      ("Drug_A", 0x00000002),
+                                      ("Drug_B", 0x00000003)))
 ```
 
 #### Step 3: Allocate Buffers
 
 ```julia
-# Lines 143-157 in contrast_evaluator.jl
+# End of contrastevaluator (excerpt)
 ContrastEvaluator(
     compiled,
-    vars,
-    var_map,                                     # variable → counterfactual index
+    vars_tuple,                                  # Tuple(vars)
+    var_map,                                     # NamedTuple: variable → counterfactual index
     data_counterfactual,
     counterfactuals,
     Vector{Float64}(undef, length(compiled)),    # y_from_buf
@@ -646,74 +637,71 @@ ContrastEvaluator(
 ### Overview
 
 Computing a contrast involves:
-1. Update counterfactual to "from" level → evaluate → store result
-2. Update counterfactual to "to" level → evaluate → store result
-3. Compute difference
+1. Reset all counterfactuals, set the variable to the "from" level, evaluate, store the result
+2. Reset, set the variable to the "to" level, evaluate, store the result
+3. Compute the difference
 
-Let's trace through an example step-by-step.
+Let's trace through an example step by step. The trace assumes `treatment` is a `CategoricalArray`. For a `Vector{String}` column, as in the simple-approach examples above, the wrapper is a `TypedCounterfactualVector{String}`, the replacement is the string itself, and no level map is involved.
 
 ### Example Call
 
 ```julia
-contrast_modelrow!(Δ, evaluator, row=1, :treatment, "Control", "Drug")
+contrast_modelrow!(Δ, evaluator, 1, :treatment, "Control", "Drug_A")
 ```
 
-This computes: `Δ = X(treatment="Drug") - X(treatment="Control")` for row 1.
+This computes `Δ = X(treatment="Drug_A") - X(treatment="Control")` for row 1. Each endpoint is computed by `level_modelrow!`:
+
+```julia
+# contrast_modelrow! (src/compilation/contrast_evaluator.jl)
+level_modelrow!(evaluator.y_from_buf, evaluator, row, var, from)
+level_modelrow!(evaluator.y_to_buf, evaluator, row, var, to)
+Δ .= evaluator.y_to_buf .- evaluator.y_from_buf
+
+# level_modelrow!
+reset_all_counterfactuals!(evaluator.counterfactuals)       # every wrapper back to row = 0
+update_counterfactual_for_var!(evaluator, var, row, level)
+evaluator.compiled(out, evaluator.data_counterfactual, row)
+reset_all_counterfactuals!(evaluator.counterfactuals)
+```
+
+Resetting before and after each endpoint makes every contrast independent of earlier calls.
 
 ### Step 1: Update Counterfactual to "from" Level
 
 ```julia
-# Line 213 in contrast_evaluator.jl
-update_counterfactual_for_var!(
-    evaluator.counterfactuals,           # Tuple of CounterfactualVectors
-    evaluator.vars,                      # [:treatment, :education, :female]
-    :treatment,                          # Variable to modify
-    row,                                 # Row index = 1
-    "Control",                           # Baseline level
-    evaluator.categorical_level_maps     # Pre-computed mappings
-)
+update_counterfactual_for_var!(evaluator, :treatment, 1, "Control")
 ```
 
-**What `update_counterfactual_for_var!` does** (lines 385-400 in typed_overrides.jl):
+`update_counterfactual_for_var!` is generated per evaluator type: the lookup of `:treatment` is unrolled into a chain of `if var === ...` branches with literal tuple indices, so the counterfactual vector has a concrete type. For that vector it does:
 
 ```julia
-# 1. Find the CounterfactualVector for :treatment
-cf_vec = get_counterfactual_for_var(counterfactuals, vars, :treatment)
-# → Returns counterfactuals[1] (CategoricalCounterfactualVector for :treatment)
+# 1. Point the CounterfactualVector for :treatment at the row
+update_counterfactual_row!(cf_vec, 1)                     # cf_vec.row = 1
 
-# 2. Update which row it's overriding
-update_counterfactual_row!(cf_vec, row)
-# → Sets cf_vec.row = 1
+# 2. Resolve the level to a reference code with the pre-computed level map (no allocation)
+code = _find_categorical_level(evaluator.categorical_level_maps, :treatment, "Control")
 
-# 3. Use pre-computed mapping to get CategoricalValue (zero allocations!)
-level_map = categorical_level_maps[:treatment]
-replacement_str = string("Control")  # → "Control"
-cat_val = level_map[replacement_str]  # Dict lookup - no allocation!
-# → Gets CategoricalValue("Control") from pre-built map
-
-# 4. Update the replacement value (mutable field assignment)
-update_counterfactual_replacement!(cf_vec, cat_val)
-# → Sets cf_vec.replacement = CategoricalValue("Control")
+# 3. Store it (mutable field assignment)
+update_counterfactual_replacement!(cf_vec, code)          # cf_vec.replacement = code
 ```
 
 **Result**: The `CounterfactualVector` for `:treatment` now behaves as:
 ```julia
-data_counterfactual.treatment[1]  # → "Control" (counterfactual)
-data_counterfactual.treatment[2]  # → "Drug_A" (original)
-data_counterfactual.treatment[3]  # → "Drug_B" (original)
+data_counterfactual.treatment[1]  # → code of "Control" (counterfactual)
+data_counterfactual.treatment[2]  # → original code
+data_counterfactual.treatment[3]  # → original code
 # ... all other rows return original values
 ```
 
 ### Step 2: Evaluate Formula with "from" Level
 
 ```julia
-# Line 214 in contrast_evaluator.jl
 evaluator.compiled(evaluator.y_from_buf, evaluator.data_counterfactual, row)
 ```
 
 **What happens**:
 1. The compiled formula evaluates row 1 using `data_counterfactual`
-2. When it accesses `data_counterfactual.treatment[1]`, it gets `"Control"` (the counterfactual)
+2. When it reads `data_counterfactual.treatment[1]`, it gets the code of `"Control"` (the counterfactual)
 3. All other variables use their original values (no substitution)
 4. Result: `y_from_buf` contains the model matrix row X₀ with `treatment="Control"`
 
@@ -727,80 +715,71 @@ Counterfactual row 1:   treatment="Control", education="HS", x=1.5
 
 ### Step 3: Update Counterfactual to "to" Level
 
+After a reset, the same call is made with the comparison level:
+
 ```julia
-# Line 216 in contrast_evaluator.jl
-update_counterfactual_for_var!(
-    evaluator.counterfactuals,
-    evaluator.vars,
-    :treatment,
-    row,
-    "Drug",  # Now set to comparison level
-    evaluator.categorical_level_maps
-)
+update_counterfactual_for_var!(evaluator, :treatment, 1, "Drug_A")
 ```
 
 **Same process as Step 1**, but now:
 ```julia
-cf_vec.row = 1                                    # Same row
-cf_vec.replacement = CategoricalValue("Drug")     # Different level
+cf_vec.row == 1                        # Same row
+cf_vec.replacement == code("Drug_A")   # Different level
 ```
 
-**Result**: The same `CounterfactualVector` now returns `"Drug"` for row 1.
+**Result**: The same `CounterfactualVector` now returns the code of `"Drug_A"` for row 1.
 
 ### Step 4: Evaluate Formula with "to" Level
 
 ```julia
-# Line 217 in contrast_evaluator.jl
 evaluator.compiled(evaluator.y_to_buf, evaluator.data_counterfactual, row)
 ```
 
-**Result**: `y_to_buf` contains the model matrix row X₁ with `treatment="Drug"`
+**Result**: `y_to_buf` contains the model matrix row X₁ with `treatment="Drug_A"`
 
 ### Step 5: Compute Discrete Effect
 
 ```julia
-# Line 219 in contrast_evaluator.jl
 Δ .= evaluator.y_to_buf .- evaluator.y_from_buf
 ```
 
 **Result**: `Δ = X₁ - X₀` (the discrete effect vector)
 
-This is the **contrast vector** showing how each coefficient contributes to the treatment effect.
+This is the **contrast vector** showing how each coefficient contributes to the treatment effect. After the call, `contrast_endpoints(evaluator)` returns `(y_from_buf, y_to_buf)`, i.e. X₀ and X₁.
 
 ### Complete Flow Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ 1. Update CounterfactualVector: treatment[1] → "Control"       │
-│    - Mutable field assignment: cf_vec.replacement = "Control"   │
-│    - Uses pre-computed categorical mapping (0 allocations)      │
+│ 1. Reset; update CounterfactualVector: treatment[1] → "Control" │
+│    - Mutable field assignment: cf_vec.replacement = code        │
+│    - Uses pre-computed level map (0 allocations)                │
 └───────────────────────┬─────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │ 2. Evaluate formula with data_counterfactual                    │
-│    - compiled(y_from_buf, data_counterfactual, row=1)          │
-│    - Formula accesses data_counterfactual.treatment[1]          │
+│    - compiled(y_from_buf, data_counterfactual, row=1)           │
+│    - Formula reads data_counterfactual.treatment[1]             │
 │    - CounterfactualVector returns "Control" (not original)      │
-│    - Result: y_from_buf = X₀ (model row with Control)          │
+│    - Result: y_from_buf = X₀ (model row with Control)           │
 └───────────────────────┬─────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ 3. Update CounterfactualVector: treatment[1] → "Drug"          │
-│    - Mutable field assignment: cf_vec.replacement = "Drug"      │
-│    - Same vector, just update replacement field (0 allocations) │
+│ 3. Reset; update CounterfactualVector: treatment[1] → "Drug_A"  │
+│    - Same vector, new replacement field (0 allocations)         │
 └───────────────────────┬─────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │ 4. Evaluate formula with data_counterfactual (again)            │
-│    - compiled(y_to_buf, data_counterfactual, row=1)            │
-│    - CounterfactualVector now returns "Drug"                    │
-│    - Result: y_to_buf = X₁ (model row with Drug)               │
+│    - compiled(y_to_buf, data_counterfactual, row=1)             │
+│    - CounterfactualVector now returns "Drug_A"                  │
+│    - Result: y_to_buf = X₁ (model row with Drug_A)              │
 └───────────────────────┬─────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │ 5. Compute difference                                           │
-│    - Δ .= y_to_buf .- y_from_buf                               │
-│    - Result: Δ = X₁ - X₀ (discrete effect)                     │
+│    - Δ .= y_to_buf .- y_from_buf                                │
+│    - Result: Δ = X₁ - X₀ (discrete effect)                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -813,8 +792,12 @@ This is the **contrast vector** showing how each coefficient contributes to the 
 Parameter gradients enable **uncertainty quantification** via the delta method:
 
 ```julia
+β = coef(model)
+vcov_matrix = vcov(model)
+∇β = Vector{Float64}(undef, length(compiled))
+
 # Compute gradient ∇β where ∇β[i] = ∂(discrete_effect)/∂β[i]
-contrast_gradient!(∇β, evaluator, row, :treatment, "Control", "Drug", β)
+contrast_gradient!(∇β, evaluator, row, :treatment, "Control", "Drug_A", β)
 
 # Delta method standard error
 se = sqrt(∇β' * vcov_matrix * ∇β)
@@ -824,74 +807,81 @@ se = sqrt(∇β' * vcov_matrix * ∇β)
 
 For discrete effects on the linear predictor scale η = Xβ:
 
-```julia
+```
 discrete_effect = η₁ - η₀ = (X₁'β) - (X₀'β) = (X₁ - X₀)'β
 ```
 
 The gradient is simply:
-```julia
+```
 ∇β = ΔX = X₁ - X₀
 ```
 
-**Implementation** (lines 786-796 in contrast_evaluator.jl):
+**Implementation** (`_contrast_gradient_linear_scale!` in `src/compilation/contrast_evaluator.jl`, condensed):
 ```julia
-# Update to "from" level and evaluate
-update_counterfactual_for_var!(evaluator.counterfactuals, evaluator.vars, var, row, from, ...)
+# Reset, update to "from" level and evaluate
+reset_all_counterfactuals!(evaluator.counterfactuals)
+update_counterfactual_for_var!(evaluator, var, row, from)
 evaluator.compiled(evaluator.xrow_from_buf, evaluator.data_counterfactual, row)
 # → xrow_from_buf = X₀
 
-# Update to "to" level and evaluate
-update_counterfactual_for_var!(evaluator.counterfactuals, evaluator.vars, var, row, to, ...)
+# Reset, update to "to" level and evaluate
+reset_all_counterfactuals!(evaluator.counterfactuals)
+update_counterfactual_for_var!(evaluator, var, row, to)
 evaluator.compiled(evaluator.xrow_to_buf, evaluator.data_counterfactual, row)
 # → xrow_to_buf = X₁
 
 # Gradient is the contrast vector
-∇β .= xrow_to_buf .- xrow_from_buf  # ∇β = X₁ - X₀
+∇β .= evaluator.xrow_to_buf .- evaluator.xrow_from_buf  # ∇β = X₁ - X₀
+reset_all_counterfactuals!(evaluator.counterfactuals)
 ```
 
 ### Response Scale Gradients
 
 For discrete effects on the response scale μ = g⁻¹(η):
 
-```julia
+```
 discrete_effect = μ₁ - μ₀ = g⁻¹(η₁) - g⁻¹(η₀)
 ```
 
 By the chain rule:
-```julia
+```
 ∇β = g'(η₁) × X₁ - g'(η₀) × X₀
 ```
 
-Where `g'(η) = dμ/dη` is the link function derivative.
+Where `g'(η) = dμ/dη` is the derivative of the inverse link.
 
-**Implementation** (lines 825-842 in contrast_evaluator.jl):
+**Implementation** (`_contrast_gradient_response_scale!`, condensed):
 ```julia
 # Compute X₀ and η₀ = X₀'β
-update_counterfactual_for_var!(...)
+update_counterfactual_for_var!(evaluator, var, row, from)
 evaluator.compiled(evaluator.xrow_from_buf, evaluator.data_counterfactual, row)
 η₀ = dot(β, evaluator.xrow_from_buf)
 
 # Compute X₁ and η₁ = X₁'β
-update_counterfactual_for_var!(...)
+update_counterfactual_for_var!(evaluator, var, row, to)
 evaluator.compiled(evaluator.xrow_to_buf, evaluator.data_counterfactual, row)
 η₁ = dot(β, evaluator.xrow_to_buf)
 
-# Compute link function derivatives
+# Inverse-link derivatives
 g_prime_η₀ = _dmu_deta(link, η₀)  # dμ/dη at η₀
 g_prime_η₁ = _dmu_deta(link, η₁)  # dμ/dη at η₁
 
 # Apply chain rule
-∇β .= g_prime_η₁ .* xrow_to_buf .- g_prime_η₀ .* xrow_from_buf
+∇β .= g_prime_η₁ .* evaluator.xrow_to_buf .- g_prime_η₀ .* evaluator.xrow_from_buf
 ```
+
+The resets around each evaluation are as in the linear case.
 
 ### Supported Link Functions
 
-All GLM link functions are supported:
+`_dmu_deta` has analytic methods for:
 - `IdentityLink`: g'(η) = 1
 - `LogLink`: g'(η) = exp(η)
 - `LogitLink`: g'(η) = exp(η) / (1 + exp(η))²
 - `ProbitLink`: g'(η) = φ(η) (standard normal PDF)
-- `CloglogLink`, `CauchitLink`, `InverseLink`, `SqrtLink`, etc.
+- `CloglogLink`, `CauchitLink`, `InverseLink`, `SqrtLink`, `InverseSquareLink`, `PowerLink`, `NegativeBinomialLink`
+
+Any other `GLM.Link` falls back to forward-mode automatic differentiation of `GLM.linkinv` (see `link_derivatives`).
 
 ---
 
@@ -905,69 +895,71 @@ All GLM link functions are supported:
    - Buffers: `y_from_buf`, `y_to_buf`, `xrow_from_buf`, `xrow_to_buf`, `gradient_buffer`
 
 2. **Mutable CounterfactualVectors**
-   - Update fields in-place: `cf_vec.row = new_row`, `cf_vec.replacement = new_value`
+   - Fields updated in place (`row`, `replacement`)
    - No array copying or temporary allocations
    - Type-stable concrete types enable compiler optimizations
 
 3. **Pre-computed categorical mappings**
-   - String → CategoricalValue lookups cached at construction
-   - Dictionary lookups don't allocate (just pointer access)
-   - Avoids repeated level searches in CategoricalArray
+   - Level → reference code pairs stored in tuples at construction
+   - Lookups are unrolled at compile time and return bits values
+   - Avoids level searches in the `CategoricalArray` at evaluation time
 
 4. **Type specialization**
    - All CounterfactualVector types are concrete (not abstract)
    - Compiled formula is fully type-specialized
-   - No runtime dispatch on hot paths
+   - Variable lookup in the evaluator is unrolled per evaluator type, so there is no runtime dispatch on hot paths
 
 ### Memory Efficiency Comparison
 
 **Traditional approach** (allocates O(n) memory):
 ```julia
+using StatsModels
+
 # Copy entire dataset and modify
 data_control = deepcopy(data)
-data_control.treatment .= "Control"  # Allocate new column!
-X₀ = modelmatrix(formula, DataFrame(data_control))
+data_control.treatment .= "Control"  # Copied column overwritten
+X₀ = modelmatrix(formula(model), DataFrame(data_control))
 
 data_drug = deepcopy(data)
-data_drug.treatment .= "Drug"  # Another allocation!
-X₁ = modelmatrix(formula, DataFrame(data_drug))
+data_drug.treatment .= "Drug_A"
+X₁ = modelmatrix(formula(model), DataFrame(data_drug))
 
 Δ = X₁[row, :] - X₀[row, :]
 ```
 
-**Memory used**: ~2n + O(model_matrix_size)
+**Memory used**: two copies of the data plus two full model matrices
 
-**CounterfactualVector approach** (O(1) memory):
+**CounterfactualVector approach** (no per-contrast memory):
 ```julia
 # Create evaluator once (one-time cost)
 evaluator = contrastevaluator(compiled, data, [:treatment])
 Δ = Vector{Float64}(undef, length(compiled))
 
 # Compute contrast (zero allocations)
-contrast_modelrow!(Δ, evaluator, row, :treatment, "Control", "Drug")
+contrast_modelrow!(Δ, evaluator, row, :treatment, "Control", "Drug_A")
 ```
 
-**Memory used**: ~32 bytes (for mutable field updates)
-
-**Savings**: >99.999% memory reduction for large datasets
+**Memory used**: 0 bytes per contrast after construction. Construction allocates the wrappers, level maps and buffers once; it does not copy the data columns (except a categorical column whose pool lacks some of the model's levels, as noted above).
 
 ### Timing Benchmarks
 
-From test suite (`test/test_contrast_evaluator.jl`):
+Measured with BenchmarkTools on an Apple M4 Pro (Julia 1.13.3), for `y ~ x * treatment` fitted with `lm` on 100 rows, `treatment` a three-level `CategoricalArray`:
 
 ```julia
 # Construction (one-time cost)
-@benchmark contrastevaluator($compiled, $data, [:treatment, :education])
-# Typical: ~10-50μs, <50KB allocated
+@benchmark contrastevaluator($compiled, $data, [:treatment])
+# median about 6 μs, 5.2 KB allocated
 
 # Contrast computation (repeated operations)
-@benchmark contrast_modelrow!($Δ, $evaluator, 1, :treatment, "Control", "Drug")
-# Typical: ~50-200ns, 0 bytes allocated
+@benchmark contrast_modelrow!($Δ, $evaluator, 1, :treatment, "Control", "Drug_A")
+# median 40-50 ns, 0 bytes allocated
 
-# Gradient computation
-@benchmark contrast_gradient!($∇β, $evaluator, 1, :treatment, "Control", "Drug", $β)
-# Typical: ~100-300ns, 0 bytes allocated
+# Gradient computation (linear scale; with LogitLink() 60-70 ns)
+@benchmark contrast_gradient!($∇β, $evaluator, 1, :treatment, "Control", "Drug_A", $β)
+# median 40-50 ns, 0 bytes allocated
 ```
+
+The ranges cover repeated runs. Absolute times depend on the machine and the formula.
 
 ### Batch Processing
 
@@ -978,8 +970,8 @@ evaluator = contrastevaluator(compiled, data, [:treatment])
 Δ = Vector{Float64}(undef, length(compiled))
 
 # Zero allocations for all iterations
-for row in 1:1000
-    contrast_modelrow!(Δ, evaluator, row, :treatment, "Control", "Drug")
+for row in 1:100
+    contrast_modelrow!(Δ, evaluator, row, :treatment, "Control", "Drug_A")
     # Process Δ...
 end
 ```
@@ -992,54 +984,56 @@ end
 
 ### Multiple Variables
 
-The same evaluator can process different variables:
+The same evaluator can process different variables (here for a model that also has a `region` factor with levels `"North"` and `"South"`):
 
 ```julia
-evaluator = contrastevaluator(compiled, data, [:treatment, :region, :education])
+evaluator = contrastevaluator(compiled, data, [:treatment, :region])
 Δ_treatment = Vector{Float64}(undef, length(compiled))
 Δ_region = Vector{Float64}(undef, length(compiled))
 
 # Different variables, same evaluator, same buffers
-contrast_modelrow!(Δ_treatment, evaluator, 1, :treatment, "Control", "Drug")
+contrast_modelrow!(Δ_treatment, evaluator, 1, :treatment, "Control", "Drug_A")
 contrast_modelrow!(Δ_region, evaluator, 1, :region, "North", "South")
 ```
 
-**Memory**: O(1) regardless of number of variables or contrasts.
+**Memory**: no allocation per contrast, whatever the number of variables or contrasts.
 
 ### Integration with Compiled Formula
 
-The compiled formula is **completely unaware** that it's using CounterfactualVectors:
+The compiled formula is **unaware** that it is reading CounterfactualVectors (schematic):
 
 ```julia
 # Inside the compiled formula evaluation
 function (compiled::UnifiedCompiled)(output, data, row)
-    # Access column (might be CounterfactualVector)
+    # Read the column (may be a CounterfactualVector)
     treatment_val = data.treatment[row]  # Dispatches to getindex
 
-    # CounterfactualVector returns replacement value if row matches
-    # Otherwise returns original value
-    # Formula sees no difference!
+    # The CounterfactualVector returns the replacement if row matches,
+    # otherwise the original value; the formula sees no difference
 end
 ```
 
-**Transparency**: The `AbstractVector` interface makes CounterfactualVectors indistinguishable from regular vectors to the formula compiler.
+**Transparency**: The `AbstractVector` interface makes CounterfactualVectors look like regular vectors to the compiled formula. The one special case is the categorical wrapper, whose elements are reference codes: the contrast operation resolves them against the wrapped column's pool.
 
 ### Type Stability Validation
 
-All CounterfactualVector types maintain concrete element types:
+All CounterfactualVector types have concrete element types:
 
 ```julia
 # Numeric: Float64 in, Float64 out
-cf_numeric::NumericCounterfactualVector{Float64}
-eltype(cf_numeric) === Float64  # ✓
+cf_numeric = FormulaCompiler.counterfactualvector([1.0, 2.0, 3.0], 1)
+typeof(cf_numeric)  # NumericCounterfactualVector{Float64, Float64}
+eltype(cf_numeric)  # Float64
 
-# Categorical: CategoricalValue in, CategoricalValue out
-cf_cat::CategoricalCounterfactualVector{String, UInt32}
-eltype(cf_cat) === CategoricalValue{String, UInt32}  # ✓
+# Categorical: reference codes out
+cf_cat = FormulaCompiler.counterfactualvector(categorical(["A", "B", "A"]), 1)
+typeof(cf_cat)      # CategoricalCounterfactualVector{String, UInt32}
+eltype(cf_cat)      # UInt32
 
 # Boolean: Bool in, Bool out
-cf_bool::BoolCounterfactualVector
-eltype(cf_bool) === Bool  # ✓
+cf_bool = FormulaCompiler.counterfactualvector([true, false], 1)
+typeof(cf_bool)     # BoolCounterfactualVector
+eltype(cf_bool)     # Bool
 ```
 
 **Result**: No type instabilities, no runtime dispatch, full compiler optimization.
@@ -1060,4 +1054,4 @@ The categorical contrast system achieves zero-allocation performance through:
 Construct evaluator → Update counterfactual → Evaluate → Update counterfactual → Evaluate → Difference
 ```
 
-All with **zero allocations** after the one-time construction cost, enabling efficient batch processing of thousands of contrasts without memory overhead.
+All with **zero allocations** after the one-time construction cost, so many contrasts can be computed without per-contrast memory.

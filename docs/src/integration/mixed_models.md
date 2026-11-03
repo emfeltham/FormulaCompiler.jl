@@ -24,15 +24,18 @@ df = DataFrame(
     y = randn(1000),
     x = randn(1000),
     treatment = rand(Bool, 1000),
+    age = rand(18:80, 1000),
     group = rand(1:10, 1000),
     cluster = rand(1:50, 1000)
 )
+data = Tables.columntable(df)
 
 # Fit mixed model
 mixed_model = fit(MixedModel, @formula(y ~ x + treatment + (1|group) + (1+x|cluster)), df)
 
 # FormulaCompiler automatically extracts fixed effects: y ~ x + treatment
-compiled = compile_formula(mixed_model, Tables.columntable(df))
+compiled = compile_formula(mixed_model, data)
+length(compiled)  # 3: intercept, x, treatment
 ```
 
 ## Fixed Effects Extraction
@@ -43,9 +46,9 @@ compiled = compile_formula(mixed_model, Tables.columntable(df))
 # Mixed model with various random effects structures
 mixed_model = fit(MixedModel, @formula(y ~ x * treatment + age + (1|group) + (x|cluster)), df)
 
-# Fixed effects formula: y ~ x * treatment + age
+# Fixed effects formula (a FormulaTerm with the schema applied)
 fixed_formula = fixed_effects_form(mixed_model)
-println("Fixed effects: ", fixed_formula)
+println("Fixed effects: ", fixed_formula)  # y ~ 1 + x + treatment + age + x & treatment
 
 # Compile fixed effects only
 compiled = compile_formula(mixed_model, data)
@@ -54,10 +57,15 @@ compiled = compile_formula(mixed_model, data)
 ### Manual Fixed Effects
 
 ```julia
-# If you need more control, extract manually
-fixed_form = mixed_model.formula.rhs.terms[1]  # Gets fixed effects terms
+using GLM
+
+# The fixed-effects part of a MixedModels formula is the first element of its rhs tuple
+fixed_form = mixed_model.formula.rhs[1]  # MatrixTerm of the fixed-effects terms
 manual_model = lm(FormulaTerm(mixed_model.formula.lhs, fixed_form), df)
 compiled_manual = compile_formula(manual_model, data)
+
+# Equivalent, via the exported hook
+manual_model = lm(fixed_effects_form(mixed_model), df)
 ```
 
 ## Use Cases
@@ -65,39 +73,37 @@ compiled_manual = compile_formula(manual_model, data)
 ### Population-Level Predictions
 
 ```julia
-function population_predictions(mixed_model, data, scenarios)
-    # Compile fixed effects
-    compiled = compile_formula(mixed_model, data)
-    row_vec = Vector{Float64}(undef, length(compiled))
-    
+using LinearAlgebra
+
+function population_predictions(mixed_model, scenarios)
     results = Dict{String, Vector{Float64}}()
-    
-    for (scenario_name, scenario) in scenarios
-        n_obs = Tables.rowcount(scenario.data)
+
+    for (scenario_name, scenario_data) in scenarios
+        # Compile fixed effects (compile_formula caches by model and column types)
+        compiled = compile_formula(mixed_model, scenario_data)
+        row_vec = Vector{Float64}(undef, length(compiled))
+        n_obs = Tables.rowcount(scenario_data)
         predictions = Vector{Float64}(undef, n_obs)
-        
+
         for i in 1:n_obs
-            compiled(row_vec, scenario.data, i)
+            compiled(row_vec, scenario_data, i)
             # This gives the fixed effects linear predictor
             predictions[i] = dot(fixef(mixed_model), row_vec)
         end
-        
+
         results[scenario_name] = predictions
     end
-    
+
     return results
 end
 
 # Example usage with data modification
 n_rows = length(data.treatment)
-
-# Baseline scenario
 data_control = merge(data, (treatment = fill(false, n_rows),))  # No treatment
-baseline_predictions = population_predictions_single(mixed_model, data_control, "baseline")
+data_treated = merge(data, (treatment = fill(true, n_rows),))   # Treatment
 
-# Treatment scenario
-data_treated = merge(data, (treatment = fill(true, n_rows),))  # Treatment
-treatment_predictions = population_predictions_single(mixed_model, data_treated, "treatment")
+predictions = population_predictions(mixed_model,
+    ["baseline" => data_control, "treatment" => data_treated])
 ```
 
 ### Marginal Effects for Fixed Effects
@@ -111,7 +117,7 @@ function marginal_effects_mixed(mixed_model, data, variable)
     delta = 0.01
     original_values = data[variable]
     perturbed_values = original_values .+ delta
-    perturbed_data = (; data..., variable => perturbed_values)
+    perturbed_data = merge(data, NamedTuple{(variable,)}((perturbed_values,)))
     
     row_vec_orig = Vector{Float64}(undef, length(compiled))
     row_vec_pert = Vector{Float64}(undef, length(compiled))
@@ -131,6 +137,9 @@ function marginal_effects_mixed(mixed_model, data, variable)
     
     return marginal_effects
 end
+
+# With y ~ x * treatment + age: β_x + β_{x & treatment} × treatment in each row
+me_x = marginal_effects_mixed(mixed_model, data, :x)
 ```
 
 ## Performance Comparison
@@ -142,12 +151,10 @@ using BenchmarkTools
 
 # Setup mixed model
 mixed_model = fit(MixedModel, @formula(y ~ x + treatment + (1|group)), df)
-data = Tables.columntable(df)
 
-# Traditional approach: extract full model matrix
+# Row of the fixed-effects matrix stored in the fitted model
 function traditional_mixed_row(model, row_idx)
-    # Get fixed effects design matrix
-    X = modelmatrix(model)  # Fixed-effects design matrix
+    X = modelmatrix(model)  # Fixed-effects design matrix (stored, not rebuilt)
     return X[row_idx, :]
 end
 
@@ -167,6 +174,8 @@ println("Traditional mixed model row extraction:")
 println("FormulaCompiler mixed model row extraction:")
 @benchmark fc_mixed_row($compiled, $data, $row_vec, 1)
 ```
+
+`modelmatrix` returns the matrix stored in the fitted model, so the first benchmark measures a row copy (it allocates the returned row). The compiled formula evaluates the row from the data without allocating, and also works for data the model was not fitted on, such as counterfactual scenarios.
 
 ## Advanced Examples
 
@@ -207,7 +216,7 @@ function bootstrap_fixed_effects(mixed_model, data, n_bootstrap=1000)
 end
 
 # Usage
-boot_coefs = bootstrap_fixed_effects(mixed_model, data, 1000)
+boot_coefs = bootstrap_fixed_effects(mixed_model, data, 200)
 
 # Confidence intervals
 using Statistics
@@ -220,6 +229,8 @@ conf_intervals = [
 ### Policy Scenario Analysis
 
 ```julia
+using Statistics
+
 function analyze_policy_scenarios(mixed_model, base_data)
     compiled = compile_formula(mixed_model, base_data)
     fixed_coefs = fixef(mixed_model)
@@ -232,6 +243,7 @@ function analyze_policy_scenarios(mixed_model, base_data)
         ("universal_treatment", true, nothing, nothing), # Treatment, original x and support
         ("targeted_treatment", true, quantile(base_data.x, 0.75), nothing), # Treatment + top 25% x
         ("enhanced_policy", true, mean(base_data.x), 1.0)  # Treatment + mean x + support
+        # (additional_support is not in this model's formula, so it does not change predictions)
     ]
 
     results = Dict{String, NamedTuple}()
@@ -323,6 +335,8 @@ function validate_mixed_model_integration(mixed_model, data)
     println("✓ FormulaCompiler matches MixedModels.jl fixed effects matrix")
     return true
 end
+
+validate_mixed_model_integration(mixed_model, data)
 ```
 
 ## Best Practices
@@ -348,11 +362,12 @@ end
 mixed_model = fit(MixedModel, @formula(y ~ x + (1|group)), df)
 compiled = compile_formula(mixed_model, data)  # Do this once
 
-# Then evaluate many times
+# Then evaluate many times; scenarios must have the same column types as `data`
+scenarios = [merge(data, (x = fill(v, length(data.x)),)) for v in (-1.0, 0.0, 1.0)]
 row_vec = Vector{Float64}(undef, length(compiled))
-for scenario in many_scenarios
-    for individual in many_individuals
-        compiled(row_vec, scenario.data, individual)
+for scenario_data in scenarios
+    for individual in 1:100
+        compiled(row_vec, scenario_data, individual)
         # Process fixed effects prediction...
     end
 end
@@ -362,15 +377,15 @@ end
 
 ```julia
 # Mixed models can be large - use data modification for memory efficiency
-large_mixed_model = fit(MixedModel, complex_formula, large_df)
-base_data = Tables.columntable(large_df)
+base_data = Tables.columntable(df)
 
-# Instead of creating many copies of large_df
-# Use merge() to override just the variables of interest
-n_rows = length(base_data.key_variable)
-modified_data = merge(base_data, (key_variable = fill(new_value, n_rows),))
+# Instead of creating many copies of df,
+# use merge() to replace just the variable of interest (one new column)
+n_rows = length(base_data.x)
+modified_data = merge(base_data, (x = fill(0.5, n_rows),))
 
-# Evaluate with minimal memory overhead
-compiled = compile_formula(large_mixed_model, base_data)
-# ... use compiled with modified_data
+# Evaluate
+compiled = compile_formula(mixed_model, base_data)
+row_vec = Vector{Float64}(undef, length(compiled))
+compiled(row_vec, modified_data, 1)
 ```
