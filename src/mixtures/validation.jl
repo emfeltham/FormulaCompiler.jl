@@ -32,7 +32,7 @@ mixture specifications are compatible with the actual data.
 """
 function validate_mixture_against_data(mixture::CategoricalMixture, col, var::Symbol)
     # Get actual levels from data
-    actual_levels = if isdefined(Main, :CategoricalArrays) && isdefined(CategoricalArrays, :CategoricalArray) && (col isa CategoricalArrays.CategoricalArray)
+    actual_levels = if (col isa CategoricalArrays.CategoricalArray)
         string.(CategoricalArrays.levels(col))
     elseif eltype(col) <: Bool
         string.([false, true])
@@ -88,7 +88,7 @@ function create_balanced_mixture(col)
     end
     
     # Get unique levels
-    if isdefined(Main, :CategoricalArrays) && isdefined(CategoricalArrays, :CategoricalArray) && (col isa CategoricalArrays.CategoricalArray)
+    if (col isa CategoricalArrays.CategoricalArray)
         levels = string.(CategoricalArrays.levels(col))
     else
         levels = sort(unique(string.(col)))
@@ -135,7 +135,7 @@ This function is used internally by FormulaCompiler's scenario system to convert
 mixture specifications into values that can be used with the existing override system.
 """
 function mixture_to_scenario_value(mixture::CategoricalMixture, original_col)
-    if isdefined(Main, :CategoricalArrays) && isdefined(CategoricalArrays, :CategoricalArray) && (original_col isa CategoricalArrays.CategoricalArray)
+    if (original_col isa CategoricalArrays.CategoricalArray)
         # Get level mapping
         actual_levels = string.(CategoricalArrays.levels(original_col))
         level_indices = Dict(level => i for (i, level) in enumerate(actual_levels))
@@ -173,5 +173,6 @@ end
 
 # Method for MixtureWithLevels wrapper
 function mixture_to_scenario_value(mixture_with_levels::MixtureWithLevels, original_col)
-    return mixture_to_scenario_value(mixture_with_levels.mixture, original_col)
+    # getfield: the `mixture` property returns the wrapper itself (types.jl)
+    return mixture_to_scenario_value(getfield(mixture_with_levels, :mixture), original_col)
 end

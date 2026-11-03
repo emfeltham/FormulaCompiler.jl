@@ -33,6 +33,7 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
 
     # Categorical mixtures
     include("test_mixture_evaluation.jl") # Comprehensive mixture evaluation primitives
+    include("test_mixture_api.jl") # mix, validate_mixture_against_data, mixture_to_scenario_value
     include("test_mixture_modelrows.jl") # Modelrow correctness with mixtures
 
     # Derivatives (primitives only - statistical interface migrated to Margins.jl)

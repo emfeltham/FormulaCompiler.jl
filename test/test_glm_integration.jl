@@ -282,36 +282,26 @@ end
         # Link function inference tests migrated to Margins.jl (2025-10-09)
     end
 
-    @testset "Performance Validation Across Models" begin
-        # Allocations for this formula shape and evaluator are checked under "Basic Linear Models";
-        # the family does not enter the compiled formula
+    @testset "Contrast timing" begin
+        # One model is enough: the compiled formula and evaluator depend only on the right-hand
+        # side, not the GLM family. Allocations for this shape are checked under "Basic Linear
+        # Models". The bound (2 us) leaves wide headroom over the ~tens of ns per call.
+        model = lm(@formula(y_normal ~ x1 + treatment + female), df)
+        compiled = compile_formula(model, data)
+        evaluator = contrastevaluator(compiled, data, [:treatment, :female])
+        contrast_buf = Vector{Float64}(undef, length(compiled))
 
-        models_to_test = [
-            ("Linear", lm(@formula(y_normal ~ x1 + treatment + female), df)),
-            ("Logistic", glm(@formula(y_binary ~ x1 + treatment + female), df, Binomial(), LogitLink())),
-            ("Poisson", glm(@formula(y_count ~ x1 + treatment + female), df, Poisson(), LogLink())),
-        ]
-
-        for (name, model) in models_to_test
-            @testset "$name Model Performance" begin
-                compiled = compile_formula(model, data)
-                evaluator = contrastevaluator(compiled, data, [:treatment, :female])
-                contrast_buf = Vector{Float64}(undef, length(compiled))
-
-                # Warmup
-                for _ in 1:5
-                    contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
-                    contrast_modelrow!(contrast_buf, evaluator, 1, :female, 0, 1)
-                end
-
-                # Performance should be reasonable (under 2 microseconds)
-                time_treatment = @belapsed contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
-                time_binary = @belapsed contrast_modelrow!($contrast_buf, $evaluator, 1, :female, 0, 1)
-
-                @test time_treatment < 2e-6
-                @test time_binary < 2e-6
-            end
+        # Warmup
+        for _ in 1:5
+            contrast_modelrow!(contrast_buf, evaluator, 1, :treatment, "Control", "Treatment_A")
+            contrast_modelrow!(contrast_buf, evaluator, 1, :female, 0, 1)
         end
+
+        time_treatment = @belapsed contrast_modelrow!($contrast_buf, $evaluator, 1, :treatment, "Control", "Treatment_A")
+        time_binary = @belapsed contrast_modelrow!($contrast_buf, $evaluator, 1, :female, 0, 1)
+
+        @test time_treatment < 2e-6
+        @test time_binary < 2e-6
     end
 
     @testset "Edge Cases and Error Handling" begin

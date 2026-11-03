@@ -61,9 +61,25 @@ Tests in `test/test_public_api.jl`.
   socio4 formula in `test_ad_alloc_formula_variants.jl` and a duplicated NamedTuple guard. The
   five override benchmarks in `test_zero_allocation_overrides.jl` are now one loop. Allocation
   checks use a warmup plus `@allocated … == 0` behind a function barrier.
+- New `test/test_mixture_api.jl`: `mix`/`CategoricalMixture` construction, errors and display,
+  `validate_mixture_against_data` and `mixture_to_scenario_value`, all exact. These tests
+  moved from Margins, which only imports these functions. Removed: `_get_baseline_level`
+  checks (an alias of `baseline_level`, which `test_public_api.jl` checks exactly),
+  `!=`-only categorical checks, an `@elapsed` ratio and a duplicate allocation block in
+  `test_mixture_evaluation.jl`, its "Boolean Mixture Support" block (which never ran mixture
+  evaluation; its unique checks moved), and the per-family timing loop in
+  `test_glm_integration.jl`, now one timing check.
 
 ### Fixed
 
+- `mixture_to_scenario_value(::MixtureWithLevels, col)` recursed until the stack overflowed: the
+  wrapper's `mixture` property returns the wrapper itself, so the method called itself. It now
+  delegates to the wrapped mixture.
+- `validate_mixture_against_data` and `mixture_to_scenario_value` treated a CategoricalArray
+  column as categorical only when `CategoricalArrays` was loaded in `Main`
+  (`isdefined(Main, :CategoricalArrays)`). Otherwise the column fell back to its sorted unique
+  values instead of its levels, so the result depended on the caller's imports. Tests:
+  `test/test_mixture_api.jl`, including a subprocess without CategoricalArrays in `Main`.
 - Categorical mixtures are read from the data at evaluation time, not baked into the compiled
   formula. `MixtureContrastOp` embedded the compile-time mixture's levels and weights in its
   type parameters, while the `get_or_compile_formula` cache key records only that a column is

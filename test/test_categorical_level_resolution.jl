@@ -271,4 +271,34 @@ end
         contrast_modelrow!(buf2, ce2, 3, :g, "a", "b")
         @test (@allocated contrast_modelrow!(buf2, ce2, 3, :g, "a", "b")) == 0
     end
+
+    # Model fitted on a pool with an unused (zero-count) leading level, a non-alphabetical
+    # order and a custom base. StatsModels builds the contrasts over the observed levels only,
+    # so using the pool ref code as the contrast row shifted every level by one (Margins.jl
+    # issue). Moved from test_categorical_correctness.jl.
+    @testset "Unused pool level + reordering + custom base at fit time" begin
+        Random.seed!(934)
+        n = 3000
+        cat_vals = repeat(["A", "B", "C", "D", "E", "F"], inner = n ÷ 6)
+        tp = Dict("A"=>0.5, "B"=>0.65, "C"=>0.5, "D"=>0.45, "E"=>0.5, "F"=>0.55)
+        y = [rand() < tp[c] ? 1 : 0 for c in cat_vals]
+        c = categorical(cat_vals)
+        levels!(c, ["Unused", "A", "C", "F", "E", "D", "B"])
+        dfu = DataFrame(cat = c, y = y)
+        mu = glm(@formula(y ~ cat), dfu, Binomial(), LogitLink(),
+                 contrasts = Dict(:cat => DummyCoding(base = "C")))
+        @test length(levels(dfu.cat)) == 7
+        @test length(coef(mu)) == 6                        # 6 observed levels -> 5 dummies
+        du = Tables.columntable(dfu)
+        cu = compile_formula(mu, du)
+        X = modelmatrix(mu)
+        out = zeros(length(cu))
+        err = 0.0
+        for i in 1:n
+            cu(out, du, i)
+            err = max(err, maximum(abs.(out .- X[i, :])))
+        end
+        @test err < 1e-12
+        @test max_row_error(cu, mu, du) < 1e-12
+    end
 end
