@@ -37,6 +37,10 @@ Tests in `test/test_public_api.jl`.
   compiled, data[, vars])`) and the evaluators they return are unchanged. Code that used the
   name as a type (`de isa derivativeevaluator`, `::derivativeevaluator`) must use
   `AbstractDerivativeEvaluator`; neither FormulaCompiler nor Margins did.
+- Compat lower bounds raised to versions the test suite passes at (Julia 1.10, every dependency
+  at its lowest allowed version): CategoricalArrays `"1.0.1"` (was `"0.10, 1"`; MixedModels
+  grouping fails upstream on 1.0.0) and StatsModels `"0.7.9"` (was `"0.7"`; models with a
+  CategoricalArrays 1.x column fail upstream below 0.7.5, MixedModels grouping below 0.7.9).
 
 ### Fixed
 
