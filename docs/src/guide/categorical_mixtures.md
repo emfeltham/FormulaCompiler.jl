@@ -2,11 +2,11 @@
 
 ## Overview
 
-FormulaCompiler.jl supports **categorical mixtures** - weighted combinations of categorical levels for profile-based marginal effects computation. Fractional values like `mix("A" => 0.3, "B" => 0.7)` are compiled into zero-allocation evaluators using type-specialized contrast operations. For boolean variables, use simple numeric probabilities (e.g., `treated = 0.7` for 70% treatment rate).
+FormulaCompiler.jl supports **categorical mixtures** - weighted combinations of categorical levels for profile-based marginal effects computation. Fractional values like `mix("A" => 0.3, "B" => 0.7)` are evaluated by zero-allocation contrast operations that read each row's mixture from the data. For boolean variables, use simple numeric probabilities (e.g., `treated = 0.7` for 70% treatment rate).
 
 **Implementation characteristics:**
 - Allocation behavior: 0 bytes allocated during execution (verified in test suite)
-- Compile-time specialization: Mixture weights embedded in type parameters
+- No mixture in the compiled object: levels and weights are read from the data at evaluation time, so one compiled formula serves any mixture
 - Statistical integration: Compatible with marginal effects packages (Margins.jl)
 - Memory complexity: O(1) memory usage independent of data size
 
@@ -276,19 +276,22 @@ Mixtures work with all interaction patterns:
 
 ## Implementation Details
 
-### Type Specialization
+### Mixture Operation
 
-Mixture specifications are embedded in type parameters for maximum performance:
+A mixture column compiles to a `MixtureContrastOp` that holds only the column name, the
+output positions, the model's contrast matrix and its levels. The mixture itself is read from
+the data on every row:
 
 ```julia
-# Each unique mixture gets its own compiled method
-MixtureContrastOp{
-    :group,                    # Column name
-    (1, 2),                   # Output positions
-    (1, 2),                   # Level indices  
-    (0.3, 0.7)               # Weights (embedded in type!)
-}
+MixtureContrastOp{:group, (1, 2)}(contrast_matrix, LevelIndex(model_levels))
 ```
+
+Nothing about the compile-time mixture is kept, so a compiled formula (including one cached
+by `get_or_compile_formula`) gives the right row for any other mixture: other weights, other
+levels, or a different mixture in each row. Before 1.5.0 the levels and weights were embedded
+in the operation's type, and a cached formula silently reused the first mixture it was
+compiled with. Mixture levels are resolved to contrast-matrix rows once per distinct levels
+vector and memoised, so evaluation does not allocate.
 
 ### Contrast Matrix Computation
 
@@ -305,9 +308,9 @@ Mixtures are evaluated as weighted combinations of contrast matrices:
 
 ### Memory Layout
 
-The implementation uses compile-time specialization for optimal memory usage:
+Memory usage:
 
-- **Compile time**: Mixture specs embedded in types (~0 runtime memory)
+- **Compile time**: no mixture-specific state (the operation stores the model's contrast matrix and levels)
 - **Execution time**: Only scratch vector allocation (~8 bytes per term)
 - **Data storage**: No mixture expansion in actual data (O(1) vs O(n))
 
@@ -378,9 +381,9 @@ output = Vector{Float64}(undef, length(compiled))
 If you're currently using the override system for categorical mixtures:
 
 ```julia
-# Pattern 1: Direct Mixture Data (Recommended - Compile-time Specialization)
+# Pattern 1: Direct Mixture Data (Recommended)
 mix_data = DataFrame(x = [1.0, 2.0], group = [mix("A" => 0.3, "B" => 0.7), mix("A" => 0.3, "B" => 0.7)])
-compiled = compile_formula(model, Tables.columntable(mix_data))  # → MixtureContrastOp (fastest)
+compiled = compile_formula(model, Tables.columntable(mix_data))  # → MixtureContrastOp
 
 # Pattern 2: Manual Data Modification (Flexible for dynamic scenarios)
 base_data = DataFrame(x = [1.0, 2.0], group = ["A", "A"])
@@ -403,7 +406,7 @@ end
 | Approach | Compilation | Memory Usage | Allocations | Relative Speed |
 |----------|-------------|--------------|-------------|----------------|
 | Override system | Per-scenario | O(scenarios) | 0 bytes | Baseline |
-| Compile-time mixtures | Once | O(1) | 0 bytes | ~3-4x faster |
+| Mixture columns | Once | O(1) | 0 bytes | ~3-4x faster |
 
 **Note**: Both achieve zero allocations. Absolute timing varies by system; relative speedup is consistent.
 
@@ -411,20 +414,17 @@ end
 
 ### Current Limitations
 
-1. **Consistent specifications**: All rows must have identical mixture specifications
-2. **Compile-time binding**: Cannot change mixture weights at runtime  
-3. **Duck typing dependency**: Mixture objects must have `levels`, `weights`, and `original_levels` properties
+1. **Consistent specifications**: in an untyped column (e.g. `Vector{Any}`) all rows must hold the same mixture; a `Vector{<:CategoricalMixture}` column may hold a different mixture in each row
+2. **Duck typing dependency**: Mixture objects must have `levels`, `weights`, and `original_levels` properties
 
 ### Design Trade-offs
 
-- Compile-time vs Runtime: Compile-time binding provides zero-allocation performance; mixture weights cannot be changed at runtime
-- **Memory vs Speed**: Type specialization uses more compilation time/memory for faster execution
+- **Runtime mixtures**: levels and weights are read from the data on every row (no recompilation for a new mixture); level-to-row resolution is memoised per levels vector, keeping evaluation allocation-free
 - **Consistency requirement**: Simplifies implementation but limits some use cases
 
 ### Future Enhancements
 
 Potential areas for future development:
-- Runtime mixture resolution for varying specifications
 - Optimized binary mixture methods
 - Integration with more statistical packages
 - Support for hierarchical mixture specifications

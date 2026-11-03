@@ -323,53 +323,69 @@ ContrastOp{Column, OutPositions}(contrast_matrix::AbstractMatrix, index::LevelIn
     ContrastOp{Column, OutPositions, K}(Matrix{Float64}(contrast_matrix), index)
 
 """
-    MixtureContrastOp{Column, OutPositions, LevelIndices, Weights} <: AbstractOp
+    MixtureRowMap
 
-**Categorical Mixture Contrast Operation**: Applies pre-computed weighted contrast combinations
-for categorical mixture specifications.
+Immutable snapshot mapping the levels of one categorical mixture to contrast-matrix rows:
+`rows[j]` is the model level row of `levels[j]`. `levels` is a private copy of the mixture's
+levels vector (same concrete type), so a later mixture matches only if its levels are
+element-wise `===` to the ones the map was built from; an edited or different mixture
+rebuilds the map. The weights are never stored: they are read from the data on every row.
+"""
+mutable struct MixtureRowMap
+    const levels::Any
+    const rows::Vector{Int}
+end
+
+"""
+    MixtureRowCache
+
+Mutable holder for the most recent [`MixtureRowMap`](@ref), published atomically for the
+same reason as [`PoolRowCache`](@ref): compiled operations may be shared by concurrent
+evaluations.
+"""
+mutable struct MixtureRowCache
+    @atomic map::MixtureRowMap
+end
+
+MixtureRowCache() = MixtureRowCache(MixtureRowMap(_NoPool(), Int[]))
+
+"""
+    MixtureContrastOp{Column, OutPositions, K} <: AbstractOp
+
+**Categorical Mixture Contrast Operation**: fills the contrast columns of a categorical
+variable with the weighted combination of contrast-matrix rows given by the mixture in the
+data (`CategoricalMixture` cells).
 
 ## Position Mapping Role
-- **Input**: Mixture specification (levels and weights embedded in type)
-- **Output**: Multiple consecutive scratch positions (one per contrast)  
-- **Matrix Storage**: Contrast matrix for the categorical levels
-- **Specialization**: Level indices and weights embedded as type parameters
+- **Input**: the mixture `getproperty(data, Column)[row_idx]`, read at evaluation time
+- **Output**: Multiple consecutive scratch positions (one per contrast)
+- **Matrix Storage**: Contrast matrix, rows in model level order (as for `ContrastOp`)
 
-## Type Parameter Embedding
-All mixture specifications are embedded at compile time for maximum performance:
-- **LevelIndices**: Tuple of indices into contrast matrix rows
-- **Weights**: Tuple of mixture weights (corresponding to levels)
-- **OutPositions**: Tuple of scratch positions to fill
+## No data in the compiled object
+The mixture's levels and weights are read from the data on every row; nothing about the
+mixture the formula was compiled with is kept. A compiled object (for example one cached by
+`get_or_compile_formula`) is therefore correct for any mixture with known model levels:
+other weights, other or reordered levels, or a different mixture in each row. Mixture levels
+are resolved to matrix rows with a [`LevelIndex`](@ref) over the model's levels; the
+resolved rows are memoised for the last levels vector seen ([`MixtureRowCache`](@ref)), so a
+column of identical mixtures resolves its levels once and evaluates without allocating.
 
-## Examples
+## Example
 ```julia
-# Binary mixture: 30% "A", 70% "B" with positions [4, 5]
-MixtureContrastOp{
-    :group,           # Column name
-    (4, 5),          # Output positions  
-    (1, 2),          # Level indices (A=1, B=2 in contrast matrix)
-    (0.3, 0.7)       # Mixture weights
-}(contrast_matrix)
-
-# Execution computes weighted combination:
-# scratch[4] = 0.3 * contrast_matrix[1, 1] + 0.7 * contrast_matrix[2, 1]
-# scratch[5] = 0.3 * contrast_matrix[1, 2] + 0.7 * contrast_matrix[2, 2]
+# 30% "A", 70% "B" at positions (4, 5):
+# scratch[4] = 0.3 * contrast_matrix[row("A"), 1] + 0.7 * contrast_matrix[row("B"), 1]
+# scratch[5] = 0.3 * contrast_matrix[row("A"), 2] + 0.7 * contrast_matrix[row("B"), 2]
+MixtureContrastOp{:group, (4, 5)}(contrast_matrix, LevelIndex(["A", "B", "C"]))
 ```
-
-## Performance Benefits  
-- **Zero-allocation execution**: All computations unrolled at compile time
-- **Type specialization**: Each mixture specification gets its own compiled method
-- **Memory efficiency**: No runtime storage of mixture specifications
-- **Cache friendly**: Pre-computed weighted contrasts avoid repeated calculations
-
-## Compile-Time Optimization
-The type parameter embedding enables aggressive compiler optimization:
-- Loop unrolling for small mixtures
-- Constant folding for weights
-- Inlined matrix access patterns
 """
-struct MixtureContrastOp{Column, OutPositions, LevelIndices, Weights} <: AbstractOp
-    contrast_matrix::Matrix{Float64}  # Pre-computed contrast matrix for categorical levels
+struct MixtureContrastOp{Column, OutPositions, K} <: AbstractOp
+    contrast_matrix::Matrix{Float64}  # Contrast matrix, rows in model level order
+    index::LevelIndex{K}              # mixture level → contrast-matrix row
+    cache::MixtureRowCache            # last levels vector seen → rows
 end
+
+MixtureContrastOp{Column, OutPositions}(contrast_matrix::AbstractMatrix, index::LevelIndex{K}) where {Column, OutPositions, K} =
+    MixtureContrastOp{Column, OutPositions, K}(Matrix{Float64}(contrast_matrix), index, MixtureRowCache())
 
 """
     CategoricalLevelMap{Var, LevelTuple}

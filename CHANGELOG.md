@@ -40,6 +40,27 @@ Tests in `test/test_public_api.jl`.
 
 ### Fixed
 
+- Categorical mixtures are read from the data at evaluation time, not baked into the compiled
+  formula. `MixtureContrastOp` embedded the compile-time mixture's levels and weights in its
+  type parameters, while the `get_or_compile_formula` cache key records only that a column is
+  a mixture (`:mixture`). A second evaluation on the same model with another mixture (other
+  weights, other levels) hit the cache and silently returned the model row of the FIRST
+  mixture; only `clear_compiled_cache!()` or a new model object gave the right answer. In
+  Margins this made `profile_margins` on `means_grid(data)` followed by
+  `means_grid(data; weights = :w)` (or two grids with different mixtures, even within one
+  call) report the first grid's category shares. The operation now holds only the model's
+  contrast matrix and levels and computes each row's weighted contrast row from that row's
+  mixture; level-to-row resolution is memoised per levels vector (checked element-wise, so an
+  edited mixture is re-resolved), and evaluation still allocates nothing. A new mixture also
+  no longer creates a new operation type, so it no longer triggers method compilation. Fixed
+  by the same change: a `Vector{<:CategoricalMixture}` column with a different mixture in
+  each row evaluates each row's mixture (it failed with "should not reach a standard
+  ContrastOp"); an untyped (`Vector{Any}`) column of mixtures and one of plain levels no
+  longer share a cache key (the second silently returned the mixture's row); and
+  `contrast_modelrow!` between two mixtures on a mixture column no longer returns zero.
+  `MixtureContrastOp` (internal) is now `MixtureContrastOp{Column, OutPositions, K}`.
+  Tests in `test/test_compiled_cache.jl` (fail on the old code) and
+  `test/test_mixture_evaluation.jl`.
 - A formula that calls an unsupported function now fails in `compile_formula` with an
   `ArgumentError` that names the term and lists the supported functions. Before, a function
   without an operation (`exp2`, `cbrt`, `max`, any user-defined function) raised a bare

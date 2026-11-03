@@ -542,66 +542,77 @@ _mixture_level_row(idx::LevelIndex{Nothing}, level_name) =
     error("mixture level $(repr(level_name)) cannot be resolved: ContrastOp has no level information")
 
 """
-    execute_op(::MixtureContrastOp{Col, Positions, LevelIndices, Weights}, scratch, data, row_idx)
+    execute_op(op::MixtureContrastOp{Col, Positions}, scratch, data, row_idx)
 
-**Categorical Mixture Execution with Position Mapping**: Implements zero-allocation 
-execution for categorical mixture specifications using compile-time type embedding.
+Fill `Positions` with the weighted combination of contrast-matrix rows given by the mixture
+in `getproperty(data, Col)[row_idx]`:
 
-## Position Mapping for Mixtures
+    scratch[pos_c] = Σ_j weights[j] * contrast_matrix[row(levels[j]), c]
 
-The mixture execution demonstrates advanced position mapping where:
-- **Positions**: Output scratch positions (compile-time tuple)
-- **LevelIndices**: Contrast matrix row indices (compile-time tuple)
-- **Weights**: Mixture weights (compile-time tuple)
-
-## Execution Algorithm
-
-```julia
-# For binary mixture: 30% "A", 70% "B" with positions [4, 5]
-MixtureContrastOp{:group, (4, 5), (1, 2), (0.3, 0.7)}
-
-# Execution computes weighted combination:
-# scratch[4] = 0.3 * contrast_matrix[1, 1] + 0.7 * contrast_matrix[2, 1]
-# scratch[5] = 0.3 * contrast_matrix[1, 2] + 0.7 * contrast_matrix[2, 2]
-```
-
-## Zero-Allocation Implementation
-
-All computations unrolled at compile time:
-- **Loop unrolling**: Each (level_idx, weight) pair becomes separate computation
-- **Type specialization**: Separate method for each mixture specification
-- **Constant folding**: Weights become compile-time constants
-- **Direct indexing**: All positions and indices known at compile time
-
-## Performance Benefits
-
-- **No runtime mixture resolution**: All specifications embedded in type
-- **No dynamic dispatch**: Each mixture gets specialized execution method
-- **Cache friendly**: Sequential scratch position access
-- **Compiler optimization**: Full pipeline optimization possible
+The levels and weights are read from the data on every call (the compiled operation keeps
+no mixture), so a cached compiled formula is correct for whatever mixture the data holds.
+Zero allocations once the level map for the mixture's levels is built (once per distinct
+levels vector; see [`MixtureRowCache`](@ref)).
 """
 @inline function execute_op(
-    op::MixtureContrastOp{Col, Positions, LevelIndices, Weights}, 
-    scratch, 
-    data, 
+    op::MixtureContrastOp{Col, Positions},
+    scratch,
+    data,
     row_idx
-) where {Col, Positions, LevelIndices, Weights}
-    # Zero out positions first
+) where {Col, Positions}
+    mixture = getproperty(data, Col)[row_idx]
+    weights = mixture.weights
+    rows = _mixture_rows(op, mixture.levels)
+    length(rows) == length(weights) || _throw_mixture_shape(Col, mixture)
+
     for pos in Positions
         scratch[pos] = 0.0
     end
-    
-    # Compute weighted combination (fully unrolled at compile time)
-    # This loop gets unrolled by the compiler since LevelIndices and Weights are compile-time tuples
-    for (level_idx, weight) in zip(LevelIndices, Weights)
+    @inbounds for j in eachindex(rows)
+        r = rows[j]
+        w = weights[j]
         for (contrast_col, pos) in enumerate(Positions)
-            scratch[pos] += weight * op.contrast_matrix[level_idx, contrast_col]
+            scratch[pos] += w * op.contrast_matrix[r, contrast_col]
         end
     end
+    return nothing
 end
 
-# Note: The general method above handles all cases efficiently, including binary mixtures.
-# Julia's compiler will optimize the tuple iteration for small, compile-time tuples.
+@noinline _throw_mixture_shape(col, mixture) =
+    throw(ArgumentError("mixture in column $col has $(length(mixture.levels)) levels but " *
+                        "$(length(mixture.weights)) weights"))
+
+"""
+    _mixture_rows(op::MixtureContrastOp, levels) -> Vector{Int}
+
+Contrast-matrix rows of the mixture levels `levels`. Reuses the cached map when `levels` is
+element-wise `===` to the levels it was built from (no hashing, no allocation), and rebuilds
+it otherwise, so a mixture whose levels were edited, reordered or replaced is never resolved
+with a stale map.
+"""
+@inline function _mixture_rows(op::MixtureContrastOp, levels::AbstractVector)
+    m = @atomic :acquire op.cache.map
+    cached = m.levels
+    if cached isa typeof(levels) && _same_levels(cached::typeof(levels), levels)
+        return m.rows
+    end
+    return _rebuild_mixture_map!(op, levels).rows
+end
+
+@inline function _same_levels(a::AbstractVector, b::AbstractVector)
+    length(a) == length(b) || return false
+    for (x, y) in zip(a, b)
+        x === y || return false
+    end
+    return true
+end
+
+@noinline function _rebuild_mixture_map!(op::MixtureContrastOp, levels::AbstractVector)
+    rows = Int[_mixture_level_row(op.index, l) for l in levels]
+    m = MixtureRowMap(copy(levels), rows)
+    @atomic :release op.cache.map = m
+    return m
+end
 
 # Copy from scratch to output (CopyOp doesn't need output as separate arg)
 @inline function execute_op(::CopyOp{InPos, OutIdx}, scratch, data, row_idx) where {InPos, OutIdx}

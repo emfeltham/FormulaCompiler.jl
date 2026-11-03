@@ -74,6 +74,16 @@ function is_mixture_column(col)
 end
 
 """
+    _compiles_as_mixture(col) -> Bool
+
+Whether a categorical column compiles to a `MixtureContrastOp`: its element type is
+`CategoricalMixture`, or (for untyped columns) every cell is the same mixture. The compiled
+formula cache keys columns with this same predicate (`_column_type_category`), so a cached
+operation always matches how the column would compile.
+"""
+_compiles_as_mixture(col) = col isa AbstractVector{<:CategoricalMixture} || is_mixture_column(col)
+
+"""
     extract_mixture_spec(mixture_obj)
 
 Extract the levels and weights from a mixture object.

@@ -530,7 +530,7 @@ function decompose_term!(ctx::CompilationContext, term::CategoricalTerm, data_ex
     # Check if this categorical column contains mixtures
     col_data = get_column_data(term, data_example)
     
-    if is_mixture_column(col_data)
+    if _compiles_as_mixture(col_data)
         return decompose_mixture_term(ctx, term, col_data)
     else
         return decompose_standard_categorical(ctx, term, col_data)
@@ -577,51 +577,31 @@ function _prime_level_index!(index::LevelIndex, col::CategoricalArrays.Categoric
 end
 
 # Mixture decomposition logic
+#
+# Nothing about the mixture in the compile-time data is kept in the operation: the levels
+# and weights are read from the data at evaluation time (`execute_op(::MixtureContrastOp)`).
+# Compiled formulas are cached by `(model, column names, column categories)`, so baking the
+# compile-time mixture into the operation (as type parameters, as before 1.5.0) made a cached
+# formula return the first mixture's result for every later mixture.
 function decompose_mixture_term(ctx::CompilationContext, term::CategoricalTerm, mixture_col)
-    # Extract mixture specification from first row (all rows should have same mixture)
-    mixture_spec = extract_mixture_spec(mixture_col[1])
-    
-    # Get contrast matrix for the categorical levels
-    contrast_matrix = build_contrast_matrix_for_mixture(mixture_spec.levels, term)
-    n_contrasts = size(contrast_matrix, 2)
-    
-    # Allocate positions for contrast columns
-    positions = allocate_positions!(ctx, n_contrasts)
-    
-    # Encode mixture spec in type parameters for specialization
-    # Map each mixture level to its index in the contrast matrix
-    contrasts = term.contrasts
-    level_indices = tuple((findfirst(==(l), contrasts.levels) for l in mixture_spec.levels)...)
-    weights = tuple(mixture_spec.weights...)
-    
-    # Create mixture contrast operation with type-embedded mixture specification
-    operation = MixtureContrastOp{
-        term.sym,
-        tuple(positions...),
-        level_indices,
-        weights
-    }(contrast_matrix)
-    
-    push!(ctx.operations, operation)
-    
-    ctx.position_map[term] = positions
-    return positions
-end
-
-# Helper to build contrast matrix for mixture levels
-function build_contrast_matrix_for_mixture(levels, term::CategoricalTerm)
-    # Use the existing contrast matrix from the term
     contrasts = term.contrasts
     contrast_matrix = Matrix{Float64}(contrasts.matrix)
-    
-    # Validate that all mixture levels exist in the contrast matrix
-    # (This assumes the contrast matrix was built with all possible levels)
-    n_levels = size(contrast_matrix, 1)
-    if length(levels) > n_levels
-        error("Mixture contains more levels ($(length(levels))) than contrast matrix ($(n_levels))")
-    end
-    
-    return contrast_matrix
+    n_contrasts = size(contrast_matrix, 2)
+
+    # Allocate positions for contrast columns
+    positions = allocate_positions!(ctx, n_contrasts)
+
+    operation = MixtureContrastOp{term.sym, tuple(positions...)}(contrast_matrix,
+                                                                LevelIndex(contrasts.levels))
+
+    # Resolve the compile-time mixture's levels now: unknown levels fail at compilation, and
+    # the first evaluation on this data does not need to build the level map.
+    isempty(mixture_col) || _mixture_rows(operation, mixture_col[1].levels)
+
+    push!(ctx.operations, operation)
+
+    ctx.position_map[term] = positions
+    return positions
 end
 
 # Handle constant terms

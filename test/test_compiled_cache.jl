@@ -78,6 +78,58 @@ _hit_allocations(m, d) = (get_or_compile_formula(m, d); @allocated get_or_compil
             @test modelrow(m, d3, 7) == modelmatrix(m)[7, :]
         end
 
+        @testset "mixtures are read from the data, not baked into the cached object" begin
+            # Before the fix the compiled MixtureContrastOp embedded the compile-time mixture's
+            # levels and weights in its type, while the key only records that the column is a
+            # mixture: a second grid with another mixture got the first grid's model row.
+            clear_compiled_cache!()
+            m, _ = _cache_test_model(rng)
+            # y ~ x * g with g ∈ {a, b, c} (DummyCoding, base a): [1, x, b, c, x*b, x*c]
+            hand(x, s) = (sb = get(s, "b", 0.0); sc = get(s, "c", 0.0); [1, x, sb, sc, x * sb, x * sc])
+            grid(x, mx) = (y = [0.0], x = [x], g = [mx])
+            mixA = FormulaCompiler.mix("a" => 0.5, "b" => 0.25, "c" => 0.25)
+            mixW = FormulaCompiler.mix("a" => 0.1, "b" => 0.1, "c" => 0.8)       # other weights
+            mixL = FormulaCompiler.mix("c" => 0.6, "b" => 0.4)                     # other levels/order
+            cA = get_or_compile_formula(m, grid(0.7, mixA))
+            @test modelrow(m, grid(0.7, mixA), 1) ≈ hand(0.7, Dict("a" => 0.5, "b" => 0.25, "c" => 0.25))
+            # same key (the model and the column categories match) ...
+            @test get_or_compile_formula(m, grid(0.7, mixW)) === cA
+            @test get_or_compile_formula(m, grid(0.7, mixL)) === cA
+            # ... and each evaluates its own mixture
+            @test modelrow(m, grid(0.7, mixW), 1) ≈ hand(0.7, Dict("a" => 0.1, "b" => 0.1, "c" => 0.8))
+            @test modelrow(m, grid(-1.3, mixL), 1) ≈ hand(-1.3, Dict("c" => 0.6, "b" => 0.4))
+            @test modelrow(m, grid(0.7, mixA), 1) ≈ hand(0.7, Dict("a" => 0.5, "b" => 0.25, "c" => 0.25))
+            # a plain level after a mixture (a different key)
+            @test modelrow(m, (y = [0.0], x = [0.7], g = categorical(["c"])), 1) ≈ hand(0.7, Dict("c" => 1.0))
+            # untyped columns: a mixture, then a plain level, in the same `Vector{Any}` column type
+            @test modelrow(m, (y = [0.0], x = [0.7], g = Any[mixW]), 1) ≈ hand(0.7, Dict("a" => 0.1, "b" => 0.1, "c" => 0.8))
+            @test modelrow(m, (y = [0.0], x = [0.7], g = Any["b"]), 1) ≈ hand(0.7, Dict("b" => 1.0))
+            # a different mixture in each row of one column
+            d2 = (y = [0.0, 0.0], x = [0.7, 0.7], g = [mixA, mixL])
+            @test modelrow(m, d2, 2) ≈ hand(0.7, Dict("c" => 0.6, "b" => 0.4))
+            # a mixture edited in place is not resolved with the old level map
+            mixE = FormulaCompiler.mix("a" => 0.5, "b" => 0.5)
+            out = zeros(length(cA))
+            cA(out, grid(0.7, mixE), 1)
+            @test out ≈ hand(0.7, Dict("b" => 0.5))
+            mixE.levels[2] = "c"; mixE.weights .= (0.25, 0.75)
+            cA(out, grid(0.7, mixE), 1)
+            @test out ≈ hand(0.7, Dict("c" => 0.75))
+            # zero allocations on a column of one repeated mixture
+            dfill = (y = zeros(20), x = fill(0.7, 20), g = fill(mixW, 20))
+            c = FormulaCompiler.with_private_scratch(get_or_compile_formula(m, dfill))
+            c(out, dfill, 1)
+            @test (@allocated c(out, dfill, 7)) == 0
+            @test out ≈ hand(0.7, Dict("a" => 0.1, "b" => 0.1, "c" => 0.8))
+            # a contrast between two mixtures on a mixture column
+            dmix = (y = zeros(3), x = fill(0.7, 3), g = fill(mixA, 3))
+            ev = contrastevaluator(compile_formula(m, dmix), dmix, [:g])
+            Δ = zeros(length(cA))
+            contrast_modelrow!(Δ, ev, 1, :g, mixA, mixW)
+            @test Δ ≈ hand(0.7, Dict("a" => 0.1, "b" => 0.1, "c" => 0.8)) .-
+                     hand(0.7, Dict("a" => 0.5, "b" => 0.25, "c" => 0.25))
+        end
+
         @testset "LRU eviction" begin
             clear_compiled_cache!()
             set_compiled_cache_capacity!(3)

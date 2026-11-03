@@ -147,6 +147,11 @@ function _column_type_category(col)
     # (Int, Float64, Float32, etc. all behave the same)
     col isa AbstractVector{<:Real} && return :numeric
 
+    # Untyped columns (e.g. `Vector{Any}`) whose cells are all one mixture compile to
+    # MixtureContrastOp, like typed mixture columns (`_compiles_as_mixture`), so they must
+    # not share a key with an untyped column of plain levels.
+    is_mixture_column(col) && return :mixture
+
     # Unknown/custom types - use concrete type to be safe
     # (may have type-specific compilation behavior we don't know about)
     return typeof(col)
@@ -163,10 +168,16 @@ Creates cache key based on:
 2. Column names (formula structure)
 3. Semantic type categories (compilation behavior)
 
-Categorical pools and level orders are deliberately not part of the key: a compiled
-`ContrastOp` resolves values against the model's own contrast levels at run time (see
-`LevelIndex`), so one compiled object is correct for any data with these columns,
-including subsets, reordered or rebuilt pools, and reference grids.
+Nothing else about the data is part of the key, because nothing else is baked into the
+compiled object; every data value is read at evaluation time:
+- Categorical pools and level orders: a compiled `ContrastOp` resolves values against the
+  model's own contrast levels at run time (see `LevelIndex`).
+- Categorical mixtures: a `MixtureContrastOp` reads each row's mixture (levels and weights)
+  from the data (see `MixtureContrastOp`). Before 1.5.0 the compile-time mixture was embedded
+  in the operation's type, so a cached formula silently reused the first mixture's weights
+  and levels for every later mixture.
+So one compiled object is correct for any data with these columns, including subsets,
+reordered or rebuilt pools, reference grids, and other mixtures.
 
 # Cache Size and Memory
 The cache is bounded: it keeps at most [`compiled_cache_capacity()`](@ref) entries (default

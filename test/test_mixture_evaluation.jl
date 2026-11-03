@@ -9,6 +9,13 @@ using DataFrames, Tables
 using StatsModels, GLM, CategoricalArrays
 using LinearAlgebra  # For I(n) identity matrix
 
+# A MixtureContrastOp over model levels "L1", "L2", ... (contrast-matrix row i = "Li"), and
+# data holding the mixture of those levels with the given row indices and weights. The
+# operation reads the mixture from the data at evaluation time.
+_mixop(col, positions, M) = MixtureContrastOp{col, positions}(M,
+    FormulaCompiler.LevelIndex(["L$i" for i in 1:size(M, 1)]))
+_mixdata(idx, w) = (group = [FormulaCompiler.CategoricalMixture(["L$i" for i in idx], collect(Float64, w))],)
+
 @testset "Categorical Mixtures - Evaluation Primitives" begin
 
     @testset "Basic Mixture Compilation" begin
@@ -105,15 +112,10 @@ using LinearAlgebra  # For I(n) identity matrix
                 0.0 0.0     # Level 3: "C" (reference)
             ]
 
-            mixture_op = MixtureContrastOp{
-                :group,
-                (1, 2),
-                (1, 2, 3),
-                (0.2, 0.3, 0.5)
-            }(contrast_matrix)
+            mixture_op = _mixop(:group, (1, 2), contrast_matrix)
 
             scratch = Vector{Float64}(undef, 5)
-            data = (group = ["test"],)  # Not used by mixture ops
+            data = _mixdata((1, 2, 3), (0.2, 0.3, 0.5))
 
             # Warm up
             for _ in 1:10
@@ -135,18 +137,13 @@ using LinearAlgebra  # For I(n) identity matrix
             standard_op = ContrastOp{:group, (1, 2)}(contrast_matrix)
 
             # Mixture op with same dimensions
-            mixture_op = MixtureContrastOp{
-                :group,
-                (1, 2),
-                (1, 2),
-                (0.5, 0.5)
-            }(contrast_matrix)
+            mixture_op = _mixop(:group, (1, 2), contrast_matrix)
 
             scratch = Vector{Float64}(undef, 3)
 
             # Warm up both
             standard_data = (group = [categorical(["A", "B", "C"])[1]],)  # CategoricalValue
-            mixture_data = (group = ["test"],)  # Not used
+            mixture_data = _mixdata((1, 2), (0.5, 0.5))
 
             for _ in 1:10
                 execute_op(standard_op, scratch, standard_data, 1)
@@ -173,15 +170,10 @@ using LinearAlgebra  # For I(n) identity matrix
                 0.0 1.0     # Level B
             ]
 
-            mixture_op = MixtureContrastOp{
-                :group,
-                (1, 2),
-                (1, 2),
-                (0.4, 0.6)
-            }(contrast_matrix)
+            mixture_op = _mixop(:group, (1, 2), contrast_matrix)
 
             scratch = Vector{Float64}(undef, 3)
-            data = (group = ["test"],)
+            data = _mixdata((1, 2), (0.4, 0.6))
 
             execute_op(mixture_op, scratch, data, 1)
 
@@ -198,15 +190,10 @@ using LinearAlgebra  # For I(n) identity matrix
                 0.0 0.0     # Level C (reference)
             ]
 
-            mixture_op = MixtureContrastOp{
-                :group,
-                (1, 2),
-                (1, 2, 3),
-                (0.2, 0.3, 0.5)
-            }(contrast_matrix)
+            mixture_op = _mixop(:group, (1, 2), contrast_matrix)
 
             scratch = Vector{Float64}(undef, 3)
-            data = (group = ["test"],)
+            data = _mixdata((1, 2, 3), (0.2, 0.3, 0.5))
 
             execute_op(mixture_op, scratch, data, 1)
 
@@ -223,15 +210,10 @@ using LinearAlgebra  # For I(n) identity matrix
                 -1.0 -1.0     # Level C
             ]
 
-            mixture_op = MixtureContrastOp{
-                :group,
-                (1, 2),
-                (1, 2, 3),
-                (0.25, 0.25, 0.5)
-            }(effects_matrix)
+            mixture_op = _mixop(:group, (1, 2), effects_matrix)
 
             scratch = Vector{Float64}(undef, 3)
-            data = (group = ["test"],)
+            data = _mixdata((1, 2, 3), (0.25, 0.25, 0.5))
 
             execute_op(mixture_op, scratch, data, 1)
 
@@ -251,15 +233,10 @@ using LinearAlgebra  # For I(n) identity matrix
                  0.0  2.0     # Level 3
             ]
 
-            mixture_op = MixtureContrastOp{
-                :group,
-                (1, 2),
-                (1, 2, 3),
-                (0.3, 0.3, 0.4)
-            }(helmert_matrix)
+            mixture_op = _mixop(:group, (1, 2), helmert_matrix)
 
             scratch = Vector{Float64}(undef, 3)
-            data = (group = ["test"],)
+            data = _mixdata((1, 2, 3), (0.3, 0.3, 0.4))
 
             execute_op(mixture_op, scratch, data, 1)
 
@@ -279,15 +256,10 @@ using LinearAlgebra  # For I(n) identity matrix
             # Degenerate case: 100% one level
             contrast_matrix = [1.0; 0.0; -1.0]  # Single contrast column
 
-            single_op = MixtureContrastOp{
-                :group,
-                (1,),
-                (2,),
-                (1.0,)
-            }(reshape(contrast_matrix, 3, 1))
+            single_op = _mixop(:group, (1,), reshape(contrast_matrix, 3, 1))
 
             scratch = Vector{Float64}(undef, 2)
-            data = (group = ["test"],)
+            data = _mixdata((2,), (1.0,))
 
             execute_op(single_op, scratch, data, 1)
 
@@ -299,15 +271,10 @@ using LinearAlgebra  # For I(n) identity matrix
             # Test with very small and large (but valid) weights
             contrast_matrix = [1.0 0.0; 0.0 1.0]
 
-            extreme_op = MixtureContrastOp{
-                :group,
-                (1, 2),
-                (1, 2),
-                (0.001, 0.999)
-            }(contrast_matrix)
+            extreme_op = _mixop(:group, (1, 2), contrast_matrix)
 
             scratch = Vector{Float64}(undef, 3)
-            data = (group = ["test"],)
+            data = _mixdata((1, 2), (0.001, 0.999))
 
             execute_op(extreme_op, scratch, data, 1)
 
@@ -325,15 +292,10 @@ using LinearAlgebra  # For I(n) identity matrix
             weights = tuple(fill(1.0/n_levels, n_levels)...)
             level_indices = tuple(1:n_levels...)
 
-            many_level_op = MixtureContrastOp{
-                :group,
-                (1, 2, 3, 4),
-                level_indices,
-                weights
-            }(contrast_matrix)
+            many_level_op = _mixop(:group, (1, 2, 3, 4), contrast_matrix)
 
             scratch = Vector{Float64}(undef, 5)
-            data = (group = ["test"],)
+            data = _mixdata(level_indices, weights)
 
             execute_op(many_level_op, scratch, data, 1)
 
@@ -377,15 +339,10 @@ using LinearAlgebra  # For I(n) identity matrix
             # Test that mixture operation performance is independent of data size
             contrast_matrix = [1.0 0.0; 0.0 1.0; -0.5 -0.5]
 
-            mixture_op = MixtureContrastOp{
-                :group,
-                (1, 2),
-                (1, 2, 3),
-                (0.4, 0.3, 0.3)
-            }(contrast_matrix)
+            mixture_op = _mixop(:group, (1, 2), contrast_matrix)
 
             scratch = Vector{Float64}(undef, 3)
-            data = (group = ["test"],)
+            data = _mixdata((1, 2, 3), (0.4, 0.3, 0.3))
 
             # Warm up to ensure compilation is done
             for _ in 1:10
