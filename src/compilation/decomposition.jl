@@ -706,12 +706,8 @@ function decompose_term!(ctx::CompilationContext, term::ScaledTerm, data_example
     return std_pos
 end
 
-# Handle random-effects terms from MixedModels (RandomEffectsTerm, ZeroCorr, ...)
-function decompose_term!(ctx::CompilationContext, term::MixedModels.AbstractReTerm, data_example)
-    # Skip random effects for now - we only compile fixed effects
-    # Random effects are handled separately by MixedModels
-    return Int[]
-end
+# Random-effects terms from MixedModels (RandomEffectsTerm, ZeroCorr, ...) are skipped by a
+# `decompose_term!` method defined in the MixedModels package extension.
 
 # Fallback for other term types
 function decompose_term!(ctx::CompilationContext, term, data_example)

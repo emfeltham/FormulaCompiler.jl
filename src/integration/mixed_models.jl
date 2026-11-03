@@ -1,61 +1,46 @@
 ###############################################################################
-# fixed_helpers.jl
-#
 # fixed_effects_form(model)  – return *only* the fixed part of the formula
 #
-# These functions are agnostic to whether `model` came from GLM.jl or
-# MixedModels.jl; they always reuse the exact same contrasts / dummy coding /
-# intercept handling that the fitted model stored in its schema.
-# Dispatch on model type so GLM/OLS do nothing, MixedModels get stripped.
+# The generic function and the methods for models without random effects live here.
+# The MixedModels methods (LinearMixedModel, GeneralizedLinearMixedModel, which drop
+# every `MixedModels.AbstractReTerm`) are added by the package extension
+# `ext/MixedModelsExt.jl` when MixedModels is loaded. Other packages may add methods
+# (Margins does for FixedEffectModels).
 ###############################################################################
 
-# also need these to manipulate the formula
-const RET = MixedModels.AbstractReTerm   # RandomEffectsTerm, ZeroCorr (zerocorr(...)), ...
-const FT  = StatsModels.FunctionTerm{typeof(|)}
-const CT  = StatsModels.ConstantTerm
+"""
+    fixed_effects_form(model) -> FormulaTerm
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 1) GLM/OLS methods: identity
-# ─────────────────────────────────────────────────────────────────────────────
+Return the schema-applied formula of the fixed-effects part of `model`. `compile_formula`
+compiles this formula.
+
+For models without random effects (GLM `lm`/`glm` fits, `TableRegressionModel`s and, by
+default, any other StatsModels model) this is `StatsModels.formula(model)`. For
+`MixedModels.LinearMixedModel` and `GeneralizedLinearMixedModel` (methods defined in the
+MixedModels package extension) every random-effects term `( … | … )`, including
+`zerocorr(...)` terms, is removed.
+
+# Model-class hook
+
+This is the public extension point for model types whose `StatsModels.formula` is not the
+formula of the model matrix ``X`` (for example, one that also carries absorbed fixed effects
+or other terms with no column in ``X``). A package supporting such a model type adds a method:
+
+```julia
+import FormulaCompiler
+FormulaCompiler.fixed_effects_form(m::MyModel) = my_fixed_part(m)  # schema-applied FormulaTerm
+```
+
+The returned formula's right-hand side must produce exactly the columns of `coef(model)`,
+in order. Margins does this for `FixedEffectModels.FixedEffectModel`.
+"""
+function fixed_effects_form end
+
+fixed_effects_form(model) = StatsModels.formula(model)
 
 fixed_effects_form(model::StatsModels.TableRegressionModel) = formula(model)
 
-"""
-    fixed_effects_form(model::LinearModel)
-    fixed_effects_form(model::GeneralizedLinearModel)
-
-For plain OLS (`lm`) or GLM (`glm`) fits, there are no random-effects terms, 
-so we just return the original formula unchanged.
-"""
 fixed_effects_form(model::Union{LinearModel, GeneralizedLinearModel}) = formula(model)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 2) MixedModels methods: strip out `(…|…)`
-# ─────────────────────────────────────────────────────────────────────────────
-
-"""
-    fixed_effects_form(model::LinearMixedModel)
-    fixed_effects_form(model::GeneralizedLinearMixedModel)
-
-Remove any random-effects terms `( … | … )` from the RHS and return the
-pure fixed-effects formula.
-"""
-function fixed_effects_form(model::Union{LinearMixedModel,
-                                          GeneralizedLinearMixedModel})
-    full = formula(model)      # e.g. y ~ x + z + x&z + (1|g)
-    rhs  = full.rhs            # vector of top‐level terms
-
-    # drop every random-effects term (RandomEffectsTerm, ZeroCorr from `zerocorr(...)`, any
-    # other AbstractReTerm) and the unapplied FunctionTerm for `|`
-    fe = filter(t -> !(t isa RET) && !(t isa FT), rhs)
-
-    # if nothing was removed, just hand back the original
-    fe === rhs && return full
-
-    # otherwise rebuild: if you stripped *all* terms, leave only the intercept
-    new_rhs = isempty(fe) ? CT() : reduce(+, fe)
-    return full.lhs ~ new_rhs
-end
 
 ###############################################################################
 # 8. EXTRACTION UTILITIES

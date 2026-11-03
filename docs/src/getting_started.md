@@ -249,7 +249,7 @@ model = lm(@formula(y ~ x + category), df)  # Now works correctly
 **Solutions**:
 1. Use direct data modification with `merge()` instead of creating full data copies
 2. Reuse compiled formulas rather than recompiling
-3. Clear model cache if accumulating many different compilations: `clear_model_cache!()`
+3. The compiled-formula cache keeps at most `compiled_cache_capacity()` models alive (default 16); release them with `clear_compiled_cache!()` or lower the bound with `set_compiled_cache_capacity!(n)`
 
 ### Performance Validation
 

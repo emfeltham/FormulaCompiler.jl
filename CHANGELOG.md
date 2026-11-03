@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.5.0] - October 2026
 
+### Added
+
+Public, documented API for what Margins.jl needs, so that Margins uses no FormulaCompiler
+internals (it used to read evaluator fields, construct `UnifiedCompiled` from its type
+parameters and extend an internal function). All additions; nothing was removed or renamed.
+Tests in `test/test_public_api.jl`.
+
+- `fixed_effects_form(model)` is exported and documented as the model-class hook: a package
+  adds a method for a model type whose `StatsModels.formula` is not the formula of its model
+  matrix (Margins does so for `FixedEffectModels.FixedEffectModel`).
+- `with_private_scratch(compiled)`: a copy of a compiled formula with its own scratch buffer
+  and shared operations, for concurrent evaluation of one cached compiled object.
+- `AbstractDerivativeEvaluator` (exported), `derivative_variables(de)` (the variables, in
+  Jacobian column order) and `derivative_backend(de)` (`:ad` or `:fd`). The concrete
+  evaluator types and their fields remain internal.
+- `contrast_endpoints(evaluator)`: the model rows X(from) and X(to) of the last
+  `contrast_modelrow!` call, which response-scale contrasts need.
+- `baseline_level(model, var)`: the baseline level of a categorical variable, from the
+  model's contrasts (respects `DummyCoding(base = ...)`). It was the internal
+  `_get_baseline_level`, which is kept for Margins 2.x.
+- `extract_variable_names(compiled)` (already exported) is now in the API docs.
+
 ### Fixed
 
 - AD derivatives with more than 12 variables (ForwardDiff chunk mode) threw a `MethodError`
@@ -80,6 +102,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   internal copy of such columns with the missing model levels appended; the caller's data is
   not modified or replaced, and columns that already cover the model's levels are used as is.
 
+- The compiled-formula cache behind `get_or_compile_formula` (also used by `modelrow` and
+  `modelrow!(row, model, data, i)`) was an unbounded `Dict` that kept every model (with its
+  data and model matrix) alive for the session; a 40-replicate bootstrap at n = 50,000
+  retained hundreds of MB, and Margins' `clear_engine_cache!` could not clear it. It is now
+  a least-recently-used cache of at most 16 entries by default (see Added). Release on
+  garbage collection (`WeakKeyDict`, finalizers) is not possible because GLM and StatsModels
+  model types are immutable structs, so the bound is what limits retention. The key keeps
+  its meaning (model identity, column names, semantic column types; categorical pools
+  excluded, per the level resolution above) but stores the names and types instead of their
+  hash, so distinct keys cannot collide. All cache access is lock-protected, so concurrent
+  calls cannot corrupt it; compilation runs outside the lock. Compiled objects and evaluators
+  themselves remain not thread-safe. A cache hit is now allocation-free and faster (0 bytes
+  and about 60 ns, from 400 bytes and about 440 ns). Tests in `test/test_compiled_cache.jl`
+  (hits, LRU eviction, capacity changes and `0`, release of models after clearing and
+  eviction, pool-independent keys, allocation-free hits, concurrent access with clears).
+
+- Concurrent evaluations sharing one compiled formula's operations (each with its own scratch
+  buffer, as Margins uses them) could read the categorical level cache torn: the `LevelIndex`
+  pool-row map, a two-field struct stored inline in a mutable field, was published by a
+  non-atomic store. A reader could see a new pool with an old row table, which returned
+  **wrong model rows without error** or raised a `BoundsError`. `PoolRowMap` is now a heap
+  object with `const` fields, published through an `@atomic` field (`:release` store,
+  `:acquire` load). The test `test/test_threaded_level_cache.jl` (4 threads, datasets with
+  different pools) failed 4 of 5 runs before the fix and passes 5 of 5 after.
+
 ### Added
 
 - `categorical_levels(compiled)` and `categorical_variables(compiled)`: the variables the fitted
@@ -93,12 +140,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `derivative_modelrow!(J, x, de, row)`: also writes the model row Xᵢ into `x`. With the AD
   backend Xᵢ is read from the dual numbers already computed, saving a formula evaluation for
   callers that need both (e.g. response-scale marginal effects and their delta-method gradients).
+- `level_modelrow!(out, evaluator, row, var, level)`: one endpoint of `contrast_modelrow!`, the
+  model row with `var` set to `level`. Callers evaluating several contrasts from the same level
+  can compute X(from) once; `contrast_modelrow!` is now built on it (results unchanged).
 - `validate_mixture_weights` and `validate_mixture_levels` are now public (the
   `CategoricalMixture` constructor uses them). Errors name the offending weights or duplicate
   levels.
 
+- `clear_compiled_cache!()`, `set_compiled_cache_capacity!(n)` (`0` disables caching) and
+  `compiled_cache_capacity()` (exported) manage the compiled-formula cache.
+- `FormulaCompiler.fixed_effects_form(model)` has a generic method returning
+  `StatsModels.formula(model)`, and `compile_formula` now obtains the formula through
+  `fixed_effects_form`, so packages can support new model types by adding a method (as
+  Margins does for FixedEffectModels).
+
 ### Changed
 
+- Julia compat is now `"1.10"` (any 1.x from 1.10; was `"1.10, 1.11, 1.12"`, which excluded 1.13).
+- ForwardDiff compat is now `"1"` (was `"0.10, 1.0"`). ForwardDiff 0.10 was never tested;
+  1.x is tested at 1.3.2 (before the 1.4.5 internal renames) and at the latest release.
 - Performance: the AD backend no longer copies every differentiated column into a full-length
   array of dual numbers. `NumericCounterfactualVector` gains a storage type parameter
   (`NumericCounterfactualVector{T,B}`) and stores the original column as Float64, converting on
@@ -112,6 +172,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ContrastOp` gains a third type parameter (its `LevelIndex` of model levels).
   `typeof(op).parameters[1]` (the column) and `op isa ContrastOp` are unaffected. The internal
   `extract_level_code` is removed.
+
+- **MixedModels is now a weak dependency.** Its support (`fixed_effects_form` for
+  `LinearMixedModel`/`GeneralizedLinearMixedModel`, and skipping random-effects terms,
+  including `zerocorr` and nested terms) moved to the package extension
+  `ext/MixedModelsExt.jl`, which Julia loads automatically once MixedModels and
+  FormulaCompiler are both loaded, in either order. FormulaCompiler no longer loads
+  MixedModels: `using FormulaCompiler` takes about 0.75 s instead of 2.45 s (Julia 1.12,
+  Apple Silicon, warm precompile cache); with MixedModels loaded as well the total is
+  unchanged (about 2.3 s). Code that relied on `using FormulaCompiler` to make
+  `FormulaCompiler.MixedModels` or `FormulaCompiler.LinearMixedModel` available must load
+  MixedModels itself. `modelrow!(row, model, data, i)` and `modelrow_batch!` with a model
+  now accept any `StatsModels.RegressionModel` instead of a fixed list of GLM/MixedModels
+  types. Tests in `test/test_mixedmodels_extension.jl` (a fresh process loads
+  FormulaCompiler without MixedModels and compiles, differentiates and contrasts a GLM; with
+  MixedModels loaded, LMM/GLMM rows, AD/FD Jacobians and contrasts are checked against `m.X`).
+- The unexported `clear_model_cache!()` is now an alias of `clear_compiled_cache!()` and no
+  longer prints; `cache_info()` returns `(entries, capacity)` and no longer prints.
+- **The AD path uses only public ForwardDiff API.** FormulaCompiler no longer uses
+  `ForwardDiff.JacobianConfig` (its `duals`/`seeds` fields and type-parameter layout), the
+  three-argument `ForwardDiff.partials(T, d, i)`, or `ForwardDiff.pickchunksize`. It keeps
+  its own seeds tuple and dual input buffer (`FCJacobianConfig`) and its own chunk-size
+  rule (`_ad_chunksize`, the same rule with the same threshold of 12, so a
+  `default_chunk_threshold` preference set for ForwardDiff no longer affects FC). Jacobians
+  are bitwise identical to the previous implementation and to `ForwardDiff.jacobian` with
+  the same chunk size and tag, and remain allocation-free. The ForwardDiff API
+  FormulaCompiler now relies on is: `ForwardDiff.Dual{T,V,N}(value, partials)`,
+  `ForwardDiff.Partials{N,V}(tuple)`, `ForwardDiff.Tag{F,V}` (as the tag type of FC's duals,
+  so ForwardDiff's tag ordering applies in nested differentiation), `ForwardDiff.value`,
+  `ForwardDiff.partials(d)`, `ForwardDiff.partials(d, i)`, and `ForwardDiff.derivative`
+  (link-function fallback). Tests in `test/test_ad_chunk_mode.jl` (chunk-size rule against
+  ForwardDiff's for 0–200 variables, seeds, bitwise equality with `ForwardDiff.jacobian` for
+  1–37 variables, type stability, allocations, nested ForwardDiff use).
 
 ### Documentation
 

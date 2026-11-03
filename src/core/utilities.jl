@@ -175,29 +175,31 @@ function validate_mixture_column!(col_name, col_data)
 end
 
 """
-    _get_baseline_level(model, var) -> baseline_level
+    baseline_level(model, var::Symbol) -> level
 
-Extract baseline level from model's contrast coding (statistically principled).
+The baseline (reference) level of the categorical variable `var` in the fitted `model`: the
+level of its main-effect contrasts that has no coefficient. It is decided by the model's
+contrast coding, not by the data, so it respects `DummyCoding(base = ...)`,
+`EffectsCoding(base = ...)` and custom level orders (`DummyCoding(levels = [...])`). The level
+is returned as stored in the contrasts (for example a `String` for a string or
+`CategoricalArray{String}` column).
 
-This function implements the design decision to use the model's actual contrast
-coding rather than making assumptions from the data.
+This is not in general `categorical_levels(compiled)[var][1]`: those levels are in the order
+of the contrast matrix rows, and `DummyCoding(base = "B")` keeps "A" first.
 
-# Arguments
-- `model`: Fitted statistical model
-- `var::Symbol`: Categorical variable name
-
-# Returns
-- Baseline level used in the model's contrast coding
+Works for GLM and MixedModels fits (the fixed-effects part).
 
 # Throws
-- `ArgumentError`: If baseline level cannot be determined
+- `ArgumentError` if `var` has no main-effect categorical term (for example a variable
+  that appears only in interactions), or if no single level lacks a coefficient (for example
+  `FullDummyCoding`).
 
-# Examples
 ```julia
-baseline = _get_baseline_level(model, :region)  # Returns "North" if that's the baseline
+m = lm(@formula(y ~ x + region), df; contrasts = Dict(:region => DummyCoding(base = "South")))
+baseline_level(m, :region)   # "South"
 ```
 """
-function _get_baseline_level(model, var::Symbol)
+function baseline_level(model, var::Symbol)
     # Use FormulaCompiler's proven approach: extract baseline from processed schema
     # Works for both GLM.jl and MixedModels.jl via unified StatsModels.jl pipeline
 
@@ -228,6 +230,9 @@ function _get_baseline_level(model, var::Symbol)
     throw(ArgumentError("Could not find categorical variable $var in model formula terms. " *
                       "Ensure the variable is categorical and present in the model."))
 end
+
+# Former internal name, kept because registered Margins 2.x imports and extends it.
+_get_baseline_level(model, var::Symbol) = baseline_level(model, var)
 
 # =============================================================================
 # REMOVED (2025-10-07): Mixture creation utilities migrated to Margins.jl v2.0

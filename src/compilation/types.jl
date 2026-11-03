@@ -216,19 +216,24 @@ Immutable snapshot mapping the ref codes of one `CategoricalPool` to contrast-ma
 model level. Pools can only grow by appending levels, so the table stays valid for every
 ref code it covers; a ref code beyond `length(rows)` triggers a rebuild.
 """
-struct PoolRowMap
-    pool::Any
-    rows::Vector{Int}
+mutable struct PoolRowMap
+    const pool::Any
+    const rows::Vector{Int}
 end
 
 """
     PoolRowCache
 
-Mutable holder for the most recent [`PoolRowMap`](@ref). A rebuilt map is published with a
-single field store, so a reader never sees a partially built table.
+Mutable holder for the most recent [`PoolRowMap`](@ref). Compiled formulas, and so their
+`LevelIndex` caches, may be shared by concurrent evaluations (e.g. Margins gives each task
+its own scratch buffer but shares the operations). `PoolRowMap` is therefore a heap object
+with `const` fields, and the field holding it is atomic: a rebuilt map is fully constructed
+before it is published with a `:release` store, and readers load it with `:acquire`, so a
+reader always sees one consistent (pool, rows) pair. An inline two-field struct would be
+written non-atomically and could be read torn (new pool with old rows).
 """
 mutable struct PoolRowCache
-    map::PoolRowMap
+    @atomic map::PoolRowMap
 end
 
 """
@@ -528,6 +533,34 @@ end
 
 # Get the output size of the compiled formula
 Base.length(::UnifiedCompiled{T, OpsTuple, ScratchSize, OutputSize}) where {T, OpsTuple, ScratchSize, OutputSize} = OutputSize
+
+"""
+    with_private_scratch(compiled::UnifiedCompiled) -> UnifiedCompiled
+
+A compiled formula that evaluates exactly like `compiled` but has its own scratch buffer.
+The operations are shared, not copied.
+
+Evaluating a compiled formula writes into its scratch buffer, so one compiled object must not
+be evaluated by two tasks at once. A cached object from [`get_or_compile_formula`](@ref) may
+be shared by many callers. Give each task its own copy with `with_private_scratch` and keep
+the compilation. The shared operations are safe to use concurrently: their only mutable
+state is the categorical level cache, which is published atomically.
+
+Costs one allocation, the scratch vector. The result has the same type as `compiled`.
+
+```julia
+shared = get_or_compile_formula(model, data)
+Threads.@threads for chunk in chunks
+    c = with_private_scratch(shared)        # per task
+    out = Vector{Float64}(undef, length(c))
+    for i in chunk
+        c(out, data, i)
+    end
+end
+```
+"""
+with_private_scratch(c::UnifiedCompiled{T, OpsTuple, S, O}) where {T, OpsTuple, S, O} =
+    UnifiedCompiled{T, OpsTuple, S, O}(c.ops)
 
 """
     CompilationContext

@@ -12,12 +12,14 @@ of the basic `contrast_modelrow!` function for batch contrast operations.
 Uses typed counterfactual vectors for type-stable, zero-allocation performance.
 
 # Fields
+The fields are internal. Use `length(evaluator)` and [`contrast_endpoints`](@ref) (the model
+rows X(from) and X(to) of the last [`contrast_modelrow!`](@ref) call).
+
 - `compiled`: Base compiled formula evaluator
 - `vars`: Variables available for contrast computation
 - `data_counterfactual`: Counterfactual data structure for variable substitution
 - `counterfactuals`: Tuple of typed CounterfactualVector{T} subtypes for each variable
-- `y_from_buf`: Pre-allocated buffer for "from" level evaluation
-- `y_to_buf`: Pre-allocated buffer for "to" level evaluation
+- `y_from_buf`, `y_to_buf`: the buffers returned by `contrast_endpoints`
 - `row`: Current row being processed
 
 # Performance
@@ -63,6 +65,27 @@ mutable struct ContrastEvaluator{T, Ops, S, O, NTMerged, CounterfactualTuple, Ca
 end
 
 Base.length(ce::ContrastEvaluator) = length(ce.compiled)
+
+"""
+    contrast_endpoints(evaluator::ContrastEvaluator) -> (x_from, x_to)
+
+The two model rows of the last [`contrast_modelrow!`](@ref)`(Δ, evaluator, row, var, from,
+to)` call: `x_from` = X(var = from) and `x_to` = X(var = to), each of length
+`length(evaluator)`, with `Δ == x_to .- x_from`. Response-scale contrasts need them, for
+g⁻¹(x_to'β) − g⁻¹(x_from'β) and its gradient.
+
+Both are the evaluator's own buffers. No copy is made, and the next `contrast_modelrow!`
+call overwrites them. FormulaCompiler writes them only in `contrast_modelrow!`, so callers
+may also use them as scratch between calls, for example as the output of
+[`level_modelrow!`](@ref).
+
+```julia
+contrast_modelrow!(Δ, evaluator, row, :treatment, "Control", "Drug")
+x₀, x₁ = contrast_endpoints(evaluator)
+Δμ = GLM.linkinv(link, dot(x₁, β)) - GLM.linkinv(link, dot(x₀, β))   # response-scale contrast
+```
+"""
+contrast_endpoints(ce::ContrastEvaluator) = (ce.y_from_buf, ce.y_to_buf)
 
 """
     categorical_levels(compiled::UnifiedCompiled) -> Dict{Symbol, Vector}
@@ -267,12 +290,40 @@ end
 end
 
 """
+    level_modelrow!(out, evaluator, row, var, level) -> out
+
+The model row at `row` with `var` set to `level` and every other variable at its
+observed value, written to `out` (length `length(evaluator.compiled)`). This is one
+endpoint of [`contrast_modelrow!`](@ref), evaluated the same way (all counterfactuals are
+reset before and after), so `level_modelrow!(x₁, …, to) .- level_modelrow!(x₀, …, from)`
+equals `contrast_modelrow!(Δ, …, from, to)` exactly.
+
+Zero allocations. Useful when several contrasts share an endpoint: evaluate X(from) once
+and reuse it for each `to`.
+"""
+@inline function level_modelrow!(
+    out::AbstractVector{Float64},
+    evaluator::ContrastEvaluator,
+    row::Int,
+    var::Symbol,
+    level
+)
+    # Reset ALL counterfactuals first so earlier calls cannot leak into this evaluation
+    reset_all_counterfactuals!(evaluator.counterfactuals)
+    update_counterfactual_for_var!(evaluator, var, row, level)
+    evaluator.compiled(out, evaluator.data_counterfactual, row)
+    reset_all_counterfactuals!(evaluator.counterfactuals)
+    return out
+end
+
+"""
     contrast_modelrow!(Δ, evaluator, row, var, from, to) -> Δ
 
 Compute discrete contrast using pre-allocated ContrastEvaluator (zero allocations).
 
 Evaluates `Δ = X(var=to) - X(var=from)` using the evaluator's pre-allocated buffers
-and pre-computed categorical mappings for optimal performance.
+and pre-computed categorical mappings for optimal performance. On return,
+[`contrast_endpoints`](@ref)`(evaluator)` holds X(var=from) and X(var=to).
 
 # Arguments
 - `Δ::AbstractVector{Float64}`: Output contrast vector (modified in-place)
@@ -309,31 +360,12 @@ function contrast_modelrow!(
     var::Symbol,
     from, to
 )
-    # Hot path: assume inputs are valid (validation moved to construction time)
-    # For debug/safety, validation can be enabled with @boundscheck
-
-    # CRITICAL: Reset ALL counterfactuals to inactive state (row=0) before evaluation
-    # This ensures each contrast is independent and prevents state bleeding between calls
-    # Bug fix: Without this, previous contrast_modelrow! calls contaminate subsequent ones
-    reset_all_counterfactuals!(evaluator.counterfactuals)
-
-    # Evaluate with "from" value
-    update_counterfactual_for_var!(evaluator, var, row, from)
-    evaluator.compiled(evaluator.y_from_buf, evaluator.data_counterfactual, row)
-
-    # Reset again before "to" evaluation
-    reset_all_counterfactuals!(evaluator.counterfactuals)
-
-    # Evaluate with "to" value
-    update_counterfactual_for_var!(evaluator, var, row, to)
-    evaluator.compiled(evaluator.y_to_buf, evaluator.data_counterfactual, row)
-
-    # Compute contrast
+    # Hot path: assume inputs are valid (validation moved to construction time).
+    # Each endpoint resets all counterfactuals before and after, so contrasts are
+    # independent of earlier calls.
+    level_modelrow!(evaluator.y_from_buf, evaluator, row, var, from)
+    level_modelrow!(evaluator.y_to_buf, evaluator, row, var, to)
     Δ .= evaluator.y_to_buf .- evaluator.y_from_buf
-
-    # Clean up: Reset counterfactuals to inactive state after use
-    reset_all_counterfactuals!(evaluator.counterfactuals)
-
     return Δ
 end
 

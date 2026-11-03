@@ -8,18 +8,10 @@ include("decomposition.jl")
 # Import mixture validation functions
 using ..FormulaCompiler: validate_mixture_consistency!
 
-# Helper to extract fixed effects formula
-function get_fixed_effects_formula(model)
-    # For MixedModels, extract only fixed effects
-    if isdefined(MixedModels, :LinearMixedModel) && isa(model, MixedModels.LinearMixedModel)
-        return fixed_effects_form(model)
-    elseif isdefined(MixedModels, :GeneralizedLinearMixedModel) && isa(model, MixedModels.GeneralizedLinearMixedModel)
-        return fixed_effects_form(model)
-    else
-        # For GLM and other models, use the full formula
-        return StatsModels.formula(model)
-    end
-end
+# Helper to extract the fixed-effects formula. For MixedModels models the method of
+# `fixed_effects_form` comes from the MixedModels package extension; every other model
+# uses `StatsModels.formula(model)` unless a package defines its own method.
+get_fixed_effects_formula(model) = fixed_effects_form(model)
 
 # The fixed_effects_form function is imported at the module level
 

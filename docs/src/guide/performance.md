@@ -275,7 +275,9 @@ call overwrites, so two threads or tasks calling the same object at once silentl
 wrong rows. Build one evaluator per task or thread: call `compile_formula` (and
 `derivativeevaluator` / `contrastevaluator`) inside each task, together with that task's
 output buffers. Do not share objects returned by `get_or_compile_formula` or used by
-`modelrow` across threads either; they come from a process-wide cache. See
+`modelrow` across threads either; they come from a process-wide cache. (The cache itself is
+lock-protected, so concurrent `get_or_compile_formula` calls do not corrupt it; the objects it
+returns are still not thread-safe.) See
 [Population Analysis](population_analysis.md#Parallel-Processing) for a threaded example.
 
 ### Parallel Processing

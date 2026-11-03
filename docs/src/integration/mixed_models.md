@@ -2,6 +2,10 @@
 
 FormulaCompiler.jl integrates with MixedModels.jl by automatically extracting fixed effects from mixed-effects models, enabling zero-allocation evaluation of the fixed-effects portion.
 
+MixedModels is a weak dependency: the support lives in a package extension that Julia loads
+automatically once both packages are loaded (`using MixedModels, FormulaCompiler`, in either
+order). FormulaCompiler itself does not load MixedModels.
+
 ## Overview
 
 Mixed models contain both fixed and random effects. FormulaCompiler.jl focuses on the fixed effects portion, which is often needed for:

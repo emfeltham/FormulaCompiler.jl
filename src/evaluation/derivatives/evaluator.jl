@@ -194,8 +194,7 @@ function derivativeevaluator_ad(
     OT = UB.parameters[4]
     NTBaseType = typeof(data)
 
-    chunk_len = ForwardDiff.pickchunksize(nvars)
-    chunk = ForwardDiff.Chunk{chunk_len}()
+    chunk_len = _ad_chunksize(nvars)
     DualT = ForwardDiff.Dual{FC_AD_TAG, Float64, chunk_len}
 
     data_counterfactual, counterfactuals = build_counterfactual_data(data, vars, 1, DualT)
@@ -229,7 +228,7 @@ function derivativeevaluator_ad(
     input_vec = Vector{Float64}(undef, nvars)
     var_columns = ntuple(i -> convert(Vector{Float64}, getproperty(data, vars[i])), nvars)
     g = DerivClosure(core)
-    cfg = ForwardDiff.JacobianConfig(g, input_vec, chunk, FC_AD_TAG())
+    cfg = FCJacobianConfig(FC_AD_TAG, Float64, Val(chunk_len), nvars)
     ctx = JacobianContext(g, cfg, input_vec, var_columns)
 
     return ADEvaluator(core, ctx)

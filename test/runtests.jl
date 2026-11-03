@@ -47,6 +47,9 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
     include("test_formulacompiler_primitives_allocations.jl") # Batch scaling + NamedTuple regression guards
     include("test_ad_chunk_mode.jl") # AD Jacobians with > 12 variables (ForwardDiff chunk mode)
     include("test_api_contracts.jl") # exported names defined; output-buffer size checked
+    include("test_public_api.jl") # public API used by Margins (accessors, hooks, private scratch)
+    include("test_threaded_level_cache.jl") # LevelIndex pool cache under concurrent evaluation
+    include("test_compiled_cache.jl") # Bounded/clearable compiled-formula cache (LRU, release, concurrency)
 
     # Regression tests
     # MIGRATED: test_derivatives_log_profile_regression.jl → Margins/test/primitives/test_derivatives_log_profile_regression.jl
@@ -58,6 +61,7 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
     include("test_standardized_predictors.jl") # StandardizedPredictors.jl integration
     include("test_glm_integration.jl") # GLM integration testing
     include("test_mixedmodels_integration.jl") # MixedModels integration testing
+    include("test_mixedmodels_extension.jl") # MixedModels as a weak dependency (extension; FC without MixedModels)
 
     # Performance testing
     include("test_large_dataset_performance.jl") # Large dataset performance validation

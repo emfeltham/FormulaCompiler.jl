@@ -13,7 +13,7 @@ and position mapping.
 
 - **Zero allocations**: Evaluates model matrices without any runtime allocations
 - **Universal compatibility**: Works with any StatsModels.jl formula
-- **Ecosystem integration**: Supports GLM.jl, MixedModels.jl, StandardizedPredictors.jl
+- **Ecosystem integration**: Supports GLM.jl, MixedModels.jl (via a package extension), StandardizedPredictors.jl
 - **CounterfactualVector system**: Type-stable single-row perturbations for counterfactuals
 - **Type specialization**: All operations resolved at compile time
 
@@ -88,8 +88,8 @@ using ForwardDiff
 using Base.Iterators: product # -> compute_kronecker_pattern
 
 # External package integration
-import MixedModels
-using MixedModels: LinearMixedModel, GeneralizedLinearMixedModel, RandomEffectsTerm
+# MixedModels support lives in the package extension `ext/MixedModelsExt.jl`, loaded
+# automatically when MixedModels is loaded alongside FormulaCompiler.
 using StandardizedPredictors: ZScoredTerm, CenteredTerm, ScaledTerm
 
 ################################# Core System #################################
@@ -97,6 +97,7 @@ using StandardizedPredictors: ZScoredTerm, CenteredTerm, ScaledTerm
 # Core utilities and types
 include("core/utilities.jl")
 export not
+export baseline_level
 
 # Mixture system
 include("mixtures/types.jl")
@@ -110,8 +111,9 @@ export validate_mixture_weights, validate_mixture_levels
 
 ################################# Integration #################################
 
-# External package integration
+# External package integration (generic `fixed_effects_form`; MixedModels methods in the extension)
 include("integration/mixed_models.jl")
+export fixed_effects_form  # model-class hook: packages add methods for their model types
 
 ################################# Compilation #################################
 
@@ -119,6 +121,7 @@ include("integration/mixed_models.jl")
 include("compilation/compilation.jl")
 include("compilation/counterfactual_vectors.jl")
 export compile_formula, get_or_compile_formula
+export with_private_scratch
 export CategoricalCounterfactualVector  # Needed by Margins.continuous_variables
 
 include("utilities.jl")
@@ -134,21 +137,23 @@ export continuous_variables
 # High-level evaluation interface
 include("evaluation/modelrow.jl")
 export ModelRowEvaluator, modelrow!, modelrow
+export clear_compiled_cache!, set_compiled_cache_capacity!, compiled_cache_capacity
 
 ################################ Derivatives ################################
 
 # ForwardDiff-based derivative evaluation (zero-alloc after warmup)
 include("evaluation/derivatives.jl")
 export derivativeevaluator, derivativeevaluator_fd, derivativeevaluator_ad
+export AbstractDerivativeEvaluator, derivative_variables, derivative_backend
 export derivative_modelrow!, derivative_modelrow
-export contrast_modelrow!
+export contrast_modelrow!, level_modelrow!
 export _dmu_deta, _d2mu_deta2  # Link function derivatives (computational primitives)
 export link_derivatives
 # REMOVED (2025-10-07): marginal_effects_eta!, marginal_effects_mu!, continuous_variables, delta_method_se migrated to Margins.jl v2.0
 
 # Zero-allocation contrast evaluator for categorical and binary variables
 include("compilation/contrast_evaluator.jl")
-export ContrastEvaluator, contrastevaluator, CategoricalLevelMap
+export ContrastEvaluator, contrastevaluator, CategoricalLevelMap, contrast_endpoints
 export categorical_levels, categorical_variables
 export contrast_gradient!, contrast_gradient
 export supported_link_functions

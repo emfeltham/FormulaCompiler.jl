@@ -1,11 +1,76 @@
 # types.jl - Separate concrete derivative evaluator types
 
 """
-Abstract base type for all derivative evaluators
+    AbstractDerivativeEvaluator
+
+Supertype of the evaluators built by [`derivativeevaluator`](@ref) (`:ad` and `:fd`
+backends). Use it in signatures and field types that accept either backend. The public
+interface of an evaluator `de` is:
+
+- `length(de)`: the number of model-matrix columns;
+- [`derivative_variables`](@ref)`(de)`: the variables it differentiates with respect to;
+- [`derivative_backend`](@ref)`(de)`: `:ad` or `:fd`;
+- [`derivative_modelrow!`](@ref) and [`derivative_modelrow`](@ref).
+
+The concrete types and their fields are internal.
 """
 abstract type AbstractDerivativeEvaluator end
 
+# Tag type for FC's dual numbers. It is a `ForwardDiff.Tag`, so ForwardDiff's tag ordering
+# (`≺`, used when duals with different tags meet in nested differentiation) is defined for it.
 const FC_AD_TAG = ForwardDiff.Tag{Tuple{Val{:fc_ad}}, Float64}
+
+# Chunk-size threshold: ForwardDiff's default (`DEFAULT_CHUNK_THRESHOLD = 12`). FC uses its
+# own constant so the chunk size, and therefore the Jacobians, do not depend on ForwardDiff
+# internals or on a `default_chunk_threshold` preference set for ForwardDiff.
+const FC_AD_CHUNK_THRESHOLD = 12
+
+"""
+    _ad_chunksize(nvars, threshold = FC_AD_CHUNK_THRESHOLD) -> Int
+
+Number of partials carried by each dual number for `nvars` input variables. Reproduces
+ForwardDiff's chunk-size rule (as of ForwardDiff 0.10–1.4): `nvars` itself when
+`nvars ≤ threshold` (vector mode, one pass); otherwise the smallest number of passes,
+`ceil(nvars / threshold)`, with the variables spread evenly over them
+(`ceil(nvars / npasses)` per pass).
+"""
+function _ad_chunksize(nvars::Integer, threshold::Integer = FC_AD_CHUNK_THRESHOLD)
+    nvars <= threshold && return Int(nvars)
+    nchunks = cld(nvars, threshold)
+    return cld(nvars, nchunks)
+end
+
+"""
+    _ad_seeds(Partials{N,V}) -> NTuple{N, Partials{N,V}}
+
+The `N` unit seeds `e₁, …, e_N` (one in position `i`, zero elsewhere).
+"""
+@generated function _ad_seeds(::Type{ForwardDiff.Partials{N,V}}) where {N,V}
+    seeds = [:(ForwardDiff.Partials{$N,V}(($([i == j ? :(one(V)) : :(zero(V)) for j in 1:N]...),)))
+             for i in 1:N]
+    return Expr(:tuple, seeds...)
+end
+
+"""
+    FCJacobianConfig{T,V,N}
+
+FC-owned work buffers for forward-mode Jacobians, replacing `ForwardDiff.JacobianConfig`
+(whose fields and type parameters are not public API).
+
+- `duals`: input buffer of `Dual{T,V,N}`, one per variable, reseeded for every chunk
+- `seeds`: the `N` unit partials used to seed one chunk
+
+Built only from `ForwardDiff.Dual` and `ForwardDiff.Partials`.
+"""
+struct FCJacobianConfig{T,V,N}
+    duals::Vector{ForwardDiff.Dual{T,V,N}}
+    seeds::NTuple{N,ForwardDiff.Partials{N,V}}
+end
+
+function FCJacobianConfig(::Type{T}, ::Type{V}, ::Val{N}, nvars::Int) where {T,V,N}
+    duals = Vector{ForwardDiff.Dual{T,V,N}}(undef, nvars)
+    return FCJacobianConfig{T,V,N}(duals, _ad_seeds(ForwardDiff.Partials{N,V}))
+end
 
 """
 Callable closure for ForwardDiff that writes into a reusable buffer
@@ -27,11 +92,11 @@ Breaks circular type dependency by isolating closure/config from main evaluator.
 
 # Type Parameters
 - `G`: Concrete DerivClosure type
-- `JC`: Concrete JacobianConfig type
+- `JC`: Concrete `FCJacobianConfig` type
 
 # Fields
-- `g`: Callable closure for ForwardDiff.jacobian!
-- `cfg`: Cached JacobianConfig for zero-allocation AD
+- `g`: Callable closure evaluated on dual numbers by `fc_jacobian!`
+- `cfg`: `FCJacobianConfig` (dual input buffer and seeds) for zero-allocation AD
 - `input_vec`: Preallocated input buffer for row values
 """
 struct JacobianContext{G, JC, VC}
@@ -174,14 +239,34 @@ const derivativeevaluator = Union{FDEvaluator, ADEvaluator}
 
 Base.length(de::AbstractDerivativeEvaluator) = length(de.compiled_base)
 
+"""
+    derivative_variables(de::AbstractDerivativeEvaluator) -> Vector{Symbol}
+
+The variables `de` differentiates with respect to, in the order of the Jacobian's columns:
+column `j` of `derivative_modelrow!(J, de, row)` is ∂X/∂`derivative_variables(de)[j]`.
+
+Returns the evaluator's own vector, without copying. Do not modify it.
+"""
+derivative_variables(de::AbstractDerivativeEvaluator) = de.vars
+
+"""
+    derivative_backend(de::AbstractDerivativeEvaluator) -> Symbol
+
+`:ad` (automatic differentiation) or `:fd` (finite differences): the `backend` argument of
+the [`derivativeevaluator`](@ref) call that built `de`. Pass it to `derivativeevaluator` to
+build another evaluator with the same backend.
+"""
+derivative_backend(::ADEvaluator) = :ad
+derivative_backend(::FDEvaluator) = :fd
+
 # Note: For scenario compatibility with derivative evaluators, use the standalone
 # derivative functions (e.g., derivative_modelrow_fd!) which accept arbitrary data
 # rather than the cached evaluator versions that depend on specific base_data
 
 # Closure implementation for ADEvaluator (defined after type definitions to avoid forward reference)
 # Legacy closure - returns Vector{Dual} (allocating)
-# In-place closure for ForwardDiff.jacobian! (zero-allocation)
-# Note: ForwardDiff.jacobian! expects f!(y, x) where it controls the types of y and x
+# In-place closure evaluated by fc_jacobian! (zero-allocation)
+# Note: fc_jacobian! passes x as a vector of FC-tagged duals; y must be dual-typed too
 # It will pass in Dual-typed x and expect Dual-typed y to be written
 function (g::DerivClosure{<:ADEvaluatorCore})(y::AbstractVector, x::AbstractVector)
     de = g.de_ref[]

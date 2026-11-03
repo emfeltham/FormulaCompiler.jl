@@ -7,6 +7,20 @@ API reference for FormulaCompiler.jl functions and types.
 ```@docs
 compile_formula
 get_or_compile_formula
+with_private_scratch
+extract_variable_names
+fixed_effects_form
+```
+
+### Compiled-Formula Cache
+
+`get_or_compile_formula` (and `modelrow`, `modelrow!(row, model, data, i)`) keep compiled
+formulas in a bounded least-recently-used cache. Each entry holds its fitted model.
+
+```@docs
+clear_compiled_cache!
+set_compiled_cache_capacity!
+compiled_cache_capacity
 ```
 
 ## Model Row Evaluation
@@ -43,6 +57,16 @@ derivativeevaluator_fd
 derivativeevaluator_ad
 ```
 
+### Evaluator Interface
+
+The concrete evaluator types and their fields are internal; use these instead.
+
+```@docs
+AbstractDerivativeEvaluator
+derivative_variables
+derivative_backend
+```
+
 ### Jacobian Computation
 
 ```@docs
@@ -73,6 +97,11 @@ ContrastEvaluator
 contrastevaluator
 CategoricalLevelMap
 contrast_modelrow!
+level_modelrow!
+contrast_endpoints
+categorical_levels
+categorical_variables
+baseline_level
 contrast_gradient!
 contrast_gradient
 ```

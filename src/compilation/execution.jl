@@ -420,7 +420,7 @@ end
         rows[r] = _lookup_level(idx, lev isa CategoricalValue ? CategoricalArrays.unwrap(lev) : lev)
     end
     m = PoolRowMap(pool, rows)
-    idx.cache.map = m
+    @atomic :release idx.cache.map = m
     return m
 end
 
@@ -438,7 +438,7 @@ Allocation-free unless `pool` differs from the last pool seen.
 """
 @inline function pool_ref_row(idx::LevelIndex, pool, ref::Integer)
     ref == 0 && _throw_missing_level(idx)
-    m = idx.cache.map
+    m = @atomic :acquire idx.cache.map
     # Pools only grow by appending levels, so a table built for this pool stays valid for
     # every ref code it covers; a larger ref code means levels were added since. Only `===`
     # and a length check on the hot path: `pool` may be abstractly typed here (e.g. the

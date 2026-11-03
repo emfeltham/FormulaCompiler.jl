@@ -5,10 +5,99 @@
 # CACHE FOR COMPILED FORMULAS
 ###############################################################################
 
+# Bounded, least-recently-used cache of compiled formulas used by `get_or_compile_formula`
+# (and through it `modelrow`, `modelrow!(…, model, …)` and Margins).
+#
+# Key: (model, column names, semantic column types); see `get_or_compile_formula`. The key
+# holds the model strongly: GLM and StatsModels model types are immutable structs, which
+# cannot be weak keys (`WeakKeyDict`) or carry finalizers, so release on garbage collection
+# is not possible in general. Instead the number of entries is bounded: when it exceeds
+# `compiled_cache_capacity()` the least recently used entries are dropped, so at most that
+# many models are kept alive by the cache. `clear_compiled_cache!()` empties it.
+#
+# Every access to the Dict and the clock happens under `_COMPILED_CACHE_LOCK`, so concurrent
+# calls cannot corrupt it. Compilation itself runs outside the lock.
+
+mutable struct _CompiledCacheEntry
+    compiled::Any
+    last_used::UInt64
+end
+
+const COMPILED_MODEL_CACHE = Dict{Any, _CompiledCacheEntry}()
+const _COMPILED_CACHE_LOCK = ReentrantLock()
+const _DEFAULT_COMPILED_CACHE_CAPACITY = 16
+const _COMPILED_CACHE_CAPACITY = Ref(_DEFAULT_COMPILED_CACHE_CAPACITY)
+const _COMPILED_CACHE_TICK = Ref{UInt64}(0)
+
 """
-Cache for compiled formulas using model+data structure as key.
+    compiled_cache_capacity() -> Int
+
+Maximum number of compiled formulas kept by [`get_or_compile_formula`](@ref) (default 16).
+See [`set_compiled_cache_capacity!`](@ref).
 """
-const COMPILED_MODEL_CACHE = Dict{Any, Any}()
+compiled_cache_capacity() = _COMPILED_CACHE_CAPACITY[]
+
+"""
+    set_compiled_cache_capacity!(n::Integer) -> Int
+
+Set the maximum number of entries in the compiled-formula cache used by
+[`get_or_compile_formula`](@ref) (and by `modelrow`, `modelrow!(row, model, data, i)`),
+evicting least-recently-used entries if the cache is now over capacity. Returns the
+previous capacity. `n = 0` disables caching: every call compiles afresh and nothing is
+retained.
+
+Each entry keeps its fitted model alive (and with it the model's data and model matrix),
+so a large capacity combined with many large models (e.g. a bootstrap) retains memory until
+the entries are evicted or [`clear_compiled_cache!`](@ref) is called.
+"""
+function set_compiled_cache_capacity!(n::Integer)
+    n >= 0 || throw(ArgumentError("compiled cache capacity must be ≥ 0, got $n"))
+    lock(_COMPILED_CACHE_LOCK)
+    try
+        old = _COMPILED_CACHE_CAPACITY[]
+        _COMPILED_CACHE_CAPACITY[] = Int(n)
+        _evict_compiled_over_capacity!()
+        return old
+    finally
+        unlock(_COMPILED_CACHE_LOCK)
+    end
+end
+
+"""
+    clear_compiled_cache!() -> nothing
+
+Empty the compiled-formula cache used by [`get_or_compile_formula`](@ref), releasing the
+fitted models (and their data) it references. Compiled objects already handed out remain
+valid. The cache is bounded ([`set_compiled_cache_capacity!`](@ref)), so this is only needed
+to release memory sooner, e.g. between bootstrap replicates or after a large analysis.
+Safe to call while other tasks use the cache.
+"""
+function clear_compiled_cache!()
+    lock(_COMPILED_CACHE_LOCK)
+    try
+        empty!(COMPILED_MODEL_CACHE)
+    finally
+        unlock(_COMPILED_CACHE_LOCK)
+    end
+    return nothing
+end
+
+# Caller holds _COMPILED_CACHE_LOCK. O(entries) scan per eviction; the cache is small.
+function _evict_compiled_over_capacity!()
+    cap = _COMPILED_CACHE_CAPACITY[]
+    while length(COMPILED_MODEL_CACHE) > cap
+        victim = nothing
+        oldest = typemax(UInt64)
+        for (k, e) in COMPILED_MODEL_CACHE
+            if e.last_used < oldest
+                oldest = e.last_used
+                victim = k
+            end
+        end
+        delete!(COMPILED_MODEL_CACHE, victim)
+    end
+    return nothing
+end
 
 """
     _column_type_category(col) -> Symbol or Type
@@ -79,8 +168,18 @@ Categorical pools and level orders are deliberately not part of the key: a compi
 `LevelIndex`), so one compiled object is correct for any data with these columns,
 including subsets, reordered or rebuilt pools, and reference grids.
 
-The cached object is shared process-wide and is not thread-safe; for threaded work call
-`compile_formula` once per task.
+# Cache Size and Memory
+The cache is bounded: it keeps at most [`compiled_cache_capacity()`](@ref) entries (default
+16) and drops the least recently used entry beyond that. Each entry holds a reference to
+its fitted model, so up to that many models (with their data) stay alive until evicted.
+Change the bound with [`set_compiled_cache_capacity!`](@ref) (`0` disables caching) and
+release everything with [`clear_compiled_cache!`](@ref).
+
+# Thread Safety
+The cache itself is protected by a lock, so concurrent `get_or_compile_formula` calls are
+safe. The compiled object it returns is shared process-wide and is **not** thread-safe (it
+owns a scratch buffer): do not evaluate it from several tasks at once; for threaded work
+call `compile_formula` once per task.
 
 # Type Category Benefits
 - Better cache hits: Vector{Int} and Vector{Float64} share cache entry
@@ -100,15 +199,42 @@ data4 = (edu = mix("HS" => 0.5, "C" => 0.5), ...)  # :mixture - Cache MISS ✓
 """
 function get_or_compile_formula(model, data)
     # Semantic type signature based on compilation behavior
-    type_sig = Tuple(_column_type_category(v) for (k, v) in pairs(data))
+    type_sig = map(_column_type_category, values(data))
 
-    # Comprehensive cache key: model + column names + semantic types
-    cache_key = (model, hash((keys(data), type_sig)))
+    # Cache key: model + column names + semantic types (the full values, not a hash, so
+    # distinct keys can never collide)
+    cache_key = (model, keys(data), type_sig)
 
-    # Get from cache or compile and store
-    return get!(COMPILED_MODEL_CACHE, cache_key) do
-        compile_formula(model, data)
+    lock(_COMPILED_CACHE_LOCK)
+    try
+        entry = get(COMPILED_MODEL_CACHE, cache_key, nothing)
+        if entry !== nothing
+            entry.last_used = (_COMPILED_CACHE_TICK[] += 1)
+            return entry.compiled
+        end
+    finally
+        unlock(_COMPILED_CACHE_LOCK)
     end
+
+    # Miss: compile outside the lock so a slow compilation does not block other callers
+    compiled = compile_formula(model, data)
+
+    lock(_COMPILED_CACHE_LOCK)
+    try
+        _COMPILED_CACHE_CAPACITY[] == 0 && return compiled
+        entry = get(COMPILED_MODEL_CACHE, cache_key, nothing)
+        tick = (_COMPILED_CACHE_TICK[] += 1)
+        if entry !== nothing
+            # Another task compiled the same key meanwhile; share its object
+            entry.last_used = tick
+            return entry.compiled
+        end
+        COMPILED_MODEL_CACHE[cache_key] = _CompiledCacheEntry(compiled, tick)
+        _evict_compiled_over_capacity!()
+    finally
+        unlock(_COMPILED_CACHE_LOCK)
+    end
+    return compiled
 end
 
 ###############################################################################
@@ -210,7 +336,7 @@ modelrow!(row_vec, model, data, 1)
 """
 function modelrow!(
     row_vec::AbstractVector{Float64}, 
-    model::Union{LinearModel, GeneralizedLinearModel, LinearMixedModel, GeneralizedLinearMixedModel, StatsModels.TableRegressionModel}, 
+    model::StatsModels.RegressionModel, 
     data, 
     row_idx::Int; 
     cache::Bool=true
@@ -386,7 +512,7 @@ Convenient batch evaluation.
 """
 function modelrow_batch!(
     matrix::AbstractMatrix{Float64}, 
-    model::Union{LinearModel, GeneralizedLinearModel, LinearMixedModel, GeneralizedLinearMixedModel, StatsModels.TableRegressionModel}, 
+    model::StatsModels.RegressionModel, 
     data, 
     row_indices::AbstractVector{Int}; 
     cache::Bool=true
@@ -420,53 +546,41 @@ end
 # CACHE MANAGEMENT
 ###############################################################################
 
+# Deprecated names kept for compatibility (never exported).
+
 """
     clear_model_cache!()
 
-Clear the compiled model cache.
+Deprecated alias for [`clear_compiled_cache!`](@ref).
 """
-function clear_model_cache!()
-    empty!(COMPILED_MODEL_CACHE)
-    println("Compiled model cache cleared.")
-end
+clear_model_cache!() = clear_compiled_cache!()
 
 """
-    cache_size()
+    cache_size() -> Int
 
-Get the current size of the model cache.
+Current number of entries in the compiled-formula cache.
 """
 function cache_size()
-    return length(COMPILED_MODEL_CACHE)
+    lock(_COMPILED_CACHE_LOCK)
+    try
+        return length(COMPILED_MODEL_CACHE)
+    finally
+        unlock(_COMPILED_CACHE_LOCK)
+    end
 end
 
 """
-    cache_info()
+    cache_info() -> NamedTuple
 
-Get detailed information about the cache contents.
+Entries and capacity of the compiled-formula cache: `(entries = …, capacity = …)`.
 """
 function cache_info()
-    println("Model Cache Information")
-    println("=" ^ 40)
-    println("Total entries: $(length(COMPILED_MODEL_CACHE))")
-    
-    # Analyze cache keys
-    has_overrides = 0
-    no_overrides = 0
-    
-    for (key, _) in COMPILED_MODEL_CACHE
-        if length(key) == 3  # Has override info
-            has_overrides += 1
-        else
-            no_overrides += 1
-        end
+    lock(_COMPILED_CACHE_LOCK)
+    try
+        return (entries = length(COMPILED_MODEL_CACHE), capacity = _COMPILED_CACHE_CAPACITY[])
+    finally
+        unlock(_COMPILED_CACHE_LOCK)
     end
-    
-    println("Entries without overrides: $no_overrides")
-    println("Entries with overrides: $has_overrides")
-    
-    return (total=length(COMPILED_MODEL_CACHE), 
-            with_overrides=has_overrides, 
-            without_overrides=no_overrides)
 end
 
 ###############################################################################

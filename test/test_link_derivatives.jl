@@ -96,10 +96,12 @@ GLM.linkinv(::CubeLink, η::Real) = η^3
     @test _d2mu_deta2(CubeLink(), 2.0) ≈ 12.0
 
     # Scalar helpers stay allocation-free
+    # (measured inside a function: on Julia 1.10, @allocated at testset scope counts boxing)
     f(L, η) = _dmu_deta(L, η) + _d2mu_deta2(L, η)
+    alloc_f(L, η) = @allocated f(L, η)
     for L in (LogitLink(), CloglogLink(), PowerLink(0.5), NegativeBinomialLink(2.0))
         η = L isa NegativeBinomialLink ? -0.5 : 0.5
-        f(L, η)
-        @test (@allocated f(L, η)) == 0
+        f(L, η); alloc_f(L, η)
+        @test alloc_f(L, η) == 0
     end
 end

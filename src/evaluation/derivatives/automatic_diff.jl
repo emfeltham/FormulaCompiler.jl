@@ -11,37 +11,39 @@
 # achieving zero allocations regardless of bounds-checking mode.
 
 """
-    _extract_jacobian_direct!(T, J, ydual, N)
+    _extract_jacobian_direct!(J, ydual, N)
 
 Extract Jacobian partials from dual output vector into matrix J.
 Zero-allocation replacement for ForwardDiff.extract_jacobian! that avoids reshape.
+`ydual` is a `Vector{Dual{FC_AD_TAG,Float64,N}}`, so every element carries FC's tag and the
+public two-argument `ForwardDiff.partials(d, i)` suffices.
 """
-@inline function _extract_jacobian_direct!(::Type{T}, J::Matrix{Float64},
-                                           ydual::AbstractVector, N::Int) where {T}
+@inline function _extract_jacobian_direct!(J::Matrix{Float64},
+                                           ydual::AbstractVector{<:ForwardDiff.Dual}, N::Int)
     M = length(ydual)
     @inbounds for j in 1:M
         d = ydual[j]
         for i in 1:N
-            J[j, i] = ForwardDiff.partials(T, d, i)
+            J[j, i] = ForwardDiff.partials(d, i)
         end
     end
     return J
 end
 
 """
-    _extract_jacobian_chunk_direct!(T, J, ydual, offset, chunksize)
+    _extract_jacobian_chunk_direct!(J, ydual, offset, chunksize)
 
 Extract Jacobian partials for a single chunk into columns offset+1:offset+chunksize.
 Zero-allocation replacement for ForwardDiff.extract_jacobian_chunk!.
 """
-@inline function _extract_jacobian_chunk_direct!(::Type{T}, J::Matrix{Float64},
-                                                  ydual::AbstractVector,
-                                                  offset::Int, chunksize::Int) where {T}
+@inline function _extract_jacobian_chunk_direct!(J::Matrix{Float64},
+                                                  ydual::AbstractVector{<:ForwardDiff.Dual},
+                                                  offset::Int, chunksize::Int)
     M = length(ydual)
     @inbounds for j in 1:M
         d = ydual[j]
         for i in 1:chunksize
-            J[j, offset + i] = ForwardDiff.partials(T, d, i)
+            J[j, offset + i] = ForwardDiff.partials(d, i)
         end
     end
     return J
@@ -88,16 +90,18 @@ Write `x[index+k-1]` with partials `seeds[k]` into `xdual` for `k in 1:count`.
 end
 
 """
-    fc_jacobian!(J, g, x, cfg)
+    fc_jacobian!(J, g, x, cfg::FCJacobianConfig)
 
-Custom Jacobian computation that evaluates `g` on dual numbers seeded from
-`cfg` and extracts the partials with direct loop indexing.
+Forward-mode Jacobian: seeds `cfg.duals` from `x` and `cfg.seeds` (all variables at once in
+vector mode, `N` at a time in chunk mode), evaluates `g` on them and extracts the partials
+with direct loop indexing.
 
-Achieves zero allocations even under --check-bounds=yes by avoiding the
-reshape() call in ForwardDiff.extract_jacobian!.
+Uses only public ForwardDiff API (`Dual`, `Partials` constructors, `partials(d, i)`), and
+reproduces the seeding and pass order of `ForwardDiff.jacobian!` with a `JacobianConfig`, so
+the results are identical. Allocates nothing, even under --check-bounds=yes.
 """
 function fc_jacobian!(J::Matrix{Float64}, g::F, x::Vector{Float64},
-                      cfg::ForwardDiff.JacobianConfig{T,V,N}) where {F,T,V,N}
+                      cfg::FCJacobianConfig{T,V,N}) where {F,T,V,N}
     xlen = length(x)
     xdual = cfg.duals
     seeds = cfg.seeds
@@ -106,7 +110,7 @@ function fc_jacobian!(J::Matrix{Float64}, g::F, x::Vector{Float64},
         # Vector mode: single pass evaluates all partials at once
         _seed_chunk!(xdual, x, 1, seeds, N)
         ydual = g(xdual)
-        _extract_jacobian_direct!(T, J, ydual, N)
+        _extract_jacobian_direct!(J, ydual, N)
     else
         # Chunk mode: multiple passes, N variables at a time
         _seed_values!(xdual, x, 1, xlen)
@@ -119,7 +123,7 @@ function fc_jacobian!(J::Matrix{Float64}, g::F, x::Vector{Float64},
         # First chunk
         _seed_chunk!(xdual, x, 1, seeds, N)
         ydual = g(xdual)
-        _extract_jacobian_chunk_direct!(T, J, ydual, 0, N)
+        _extract_jacobian_chunk_direct!(J, ydual, 0, N)
         _seed_values!(xdual, x, 1, N)
 
         # Middle chunks
@@ -127,14 +131,14 @@ function fc_jacobian!(J::Matrix{Float64}, g::F, x::Vector{Float64},
             i = (c - 1) * N + 1
             _seed_chunk!(xdual, x, i, seeds, N)
             ydual = g(xdual)
-            _extract_jacobian_chunk_direct!(T, J, ydual, i - 1, N)
+            _extract_jacobian_chunk_direct!(J, ydual, i - 1, N)
             _seed_values!(xdual, x, i, N)
         end
 
         # Final chunk
         _seed_chunk!(xdual, x, lastchunkindex, seeds, lastchunksize)
         ydual = g(xdual)
-        _extract_jacobian_chunk_direct!(T, J, ydual, lastchunkindex - 1, lastchunksize)
+        _extract_jacobian_chunk_direct!(J, ydual, lastchunkindex - 1, lastchunksize)
     end
 
     return J
@@ -194,7 +198,7 @@ function derivative_modelrow!(J::AbstractMatrix{Float64}, de::ADEvaluator, row::
         input_vec[i] = Float64(columns[i][row])
     end
 
-    # Custom Jacobian: uses ForwardDiff seeding/duals but avoids reshape allocation
+    # FC-owned Jacobian: FC's seeds and dual buffer, public ForwardDiff API only
     fc_jacobian!(J, ctx.g, input_vec, ctx.cfg)
 
     return J
