@@ -168,17 +168,11 @@ f(a + b\varepsilon) = f(a) + bf'(a)\varepsilon
 
 A fundamental challenge in statistical automatic differentiation is the type conversion bottleneck between statistical data (typically `Float64`) and dual numbers required for AD computation. Traditional approaches convert `Float64` to `Dual` on every data access, creating allocation overhead that scales with formula complexity.
 
-FormulaCompiler implements a **pre-conversion strategy** that minimizes runtime allocations:
+FormulaCompiler builds the dual-typed view of the data once, when the evaluator is constructed, so that nothing is converted or allocated per evaluation:
 
-**Phase 1: Construction-Time Pre-Conversion**
+**Phase 1: Construction-Time Setup**
 
-During evaluator construction, all relevant data columns are pre-converted from `Float64` to the target dual type:
-
-```math
-\text{data}_{\text{Float64}} \xrightarrow{\text{construction}} \text{data}_{\text{Dual}} \quad \text{(amortized cost)}
-```
-
-For $k$ differentiation variables, data is converted to `Dual{Tag,Float64,k}` carrying the original value plus space for $k$ partial derivatives.
+During evaluator construction, each differentiated variable gets a counterfactual vector whose element type is the dual type `Dual{Tag,Float64,k}` (for $k$ differentiation variables: the value plus $k$ partial derivatives). The column itself stays stored as `Float64` (a non-`Float64` numeric column is converted to `Float64` once) and is converted to the dual type on read; only the active row holds a seeded dual value. No full-length dual copy of the data is made.
 
 **Phase 2: Type-Homogeneous Evaluation**
 
@@ -208,9 +202,9 @@ This achieves the mathematical correctness of ForwardDiff with custom zero-alloc
 The pre-conversion strategy transforms the memory allocation pattern:
 
 - **Traditional AD**: $O(\text{accesses} \times \text{conversions})$ runtime allocations
-- **Low-allocation AD**: $O(\text{data size})$ construction cost; runtime allocations are typically small and environment‑dependent
+- **FormulaCompiler AD**: construction cost independent of the formula's data accesses (at most one `Float64` copy of a non-`Float64` differentiated column); zero runtime allocations per Jacobian
 
-For typical statistical formulas accessing data 10–20 times per evaluation, this approach removes repeated conversion costs and reduces runtime allocations to small, bounded overheads while providing practical speedups.
+For typical statistical formulas accessing data 10–20 times per evaluation, this approach removes repeated conversion costs and makes each Jacobian evaluation allocation-free (asserted in the test suite).
 
 ### Finite Differences
 
@@ -350,7 +344,7 @@ Common link functions and their derivatives:
 | Cloglog | $\log(-\log(1-\mu))$ | $\mu = 1 - e^{-e^{\eta}}$ | $e^{\eta - e^{\eta}}$ | $e^{\eta - e^{\eta}}(1 - e^{\eta})$ |
 | Cauchit | $\tan(\pi(\mu - 1/2))$ | $\mu = \tfrac{1}{2} + \tfrac{1}{\pi} \arctan(\eta)$ | $\tfrac{1}{\pi} \cdot \tfrac{1}{1+\eta^2}$ | $-\tfrac{2\eta}{\pi} \cdot \tfrac{1}{(1+\eta^2)^2}$ |
 | Inverse | $\mu^{-1}$ | $\mu = \eta^{-1}$ | $-\eta^{-2}$ | $2\eta^{-3}$ |
-| Sqrt | $2\sqrt{\mu}$ | $\mu = (\tfrac{\eta}{2})^2$ | $\tfrac{\eta}{2}$ | $\tfrac{1}{2}$ |
+| Sqrt | $\sqrt{\mu}$ | $\mu = \eta^2$ | $2\eta$ | $2$ |
 | InverseSquare | $\mu^{-2}$ | $\mu = \eta^{-1/2}$ | $-\tfrac{1}{2} \eta^{-3/2}$ | $\tfrac{3}{4} \eta^{-5/2}$ |
 
 Notes:
@@ -384,7 +378,7 @@ O(p) \text{ with compile-time } O(\text{complexity}(\text{formula}))
 
 - **Traditional**: $O(np)$ for full model matrix
 - **FormulaCompiler**: $O(p)$ per row evaluation
-- **Scenarios**: $O(1)$ via `CounterfactualVector` regardless of $n$
+- **Scenarios**: $O(1)$ additional memory per changed variable via `CounterfactualVector` (the original column is wrapped, not copied)
 
 ### Derivative Efficiency
 

@@ -10,7 +10,7 @@ FormulaCompiler enables counterfactual analysis through three straightforward ap
 2. **Batch contrast evaluation** - Use `contrastevaluator()` for categorical contrasts (100+ comparisons)
 3. **Population analysis** - Use simple loops over rows for aggregated effects
 
-All approaches maintain zero-allocation performance and scale efficiently with dataset size.
+In all three, row evaluation allocates nothing and its per-row cost does not depend on dataset size. Building a scenario with `merge` and `fill` allocates one full-length column per changed variable (once per scenario, not per row); the contrast evaluator changes a value without copying the column.
 
 ## Approach 1: Direct Data Modification
 

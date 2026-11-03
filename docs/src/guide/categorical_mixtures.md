@@ -83,19 +83,17 @@ compiled(output, Tables.columntable(df), 1)  # treated effect = 0.7
 FormulaCompiler provides several utilities for creating mixture data:
 
 ```julia
-# Create mixture column for reference grids
-mixture_spec = mix("A" => 0.3, "B" => 0.7)  # Your mixture constructor
-column = FormulaCompiler.create_mixture_column(mixture_spec, 1000)  # 1000 identical rows
+# Mixture column for a reference grid: one mixture repeated
+mixture_spec = mix("A" => 0.3, "B" => 0.7)
+column = fill(mixture_spec, 1000)  # 1000 identical rows
 
-# Create balanced (equal weight) mixtures
-balanced_dict = create_balanced_mixture(["A", "B", "C"])
-# Returns: Dict("A" => 0.333..., "B" => 0.333..., "C" => 0.333...)
-balanced_mixture = mix(balanced_dict...)
+# Balanced (equal weight) mixture over a column's levels (unexported)
+balanced_mixture = FormulaCompiler.create_balanced_mixture(["A", "B", "C", "A"])
+# mix("A" => 0.333..., "B" => 0.333..., "C" => 0.333...); a Bool column gives 0.5
 
-# Expand base data with mixture specifications
+# Add a mixture column to base data
 base_data = (x = [1.0, 2.0], y = [0.1, 0.2])
-mixtures = Dict(:group => mix("A" => 0.5, "B" => 0.5))
-expanded = FormulaCompiler.expand_mixture_grid(base_data, mixtures)
+expanded = merge(base_data, (group = fill(mix("A" => 0.5, "B" => 0.5), 2),))
 ```
 
 ### Reference Grid Creation
@@ -110,11 +108,11 @@ reference_grid = DataFrame(
     categorical_mix = fill(mix("A" => 0.5, "B" => 0.5), 3)
 )
 
-# Method 2: Using helper functions  
+# Method 2: Adding a mixture column to an existing grid
 base_grid = DataFrame(x = [1.0, 2.0, 3.0])
-mixture_grid = FormulaCompiler.expand_mixture_grid(
-    Tables.columntable(base_grid), 
-    Dict(:treatment => mix("Control" => 0.3, "Treated" => 0.7))
+mixture_grid = merge(
+    Tables.columntable(base_grid),
+    (treatment = fill(mix("Control" => 0.3, "Treated" => 0.7), 3),)
 )
 ```
 
@@ -122,19 +120,17 @@ mixture_grid = FormulaCompiler.expand_mixture_grid(
 
 ### Automatic Validation
 
-FormulaCompiler automatically validates mixture data during compilation:
+Mixtures are validated when they are constructed and when a formula is compiled:
 
 ```julia
-# ✓ Valid - consistent mixtures
+# ✓ Valid - the same mixture in every row
 valid_data = (x = [1, 2], group = [mix("A"=>0.3, "B"=>0.7), mix("A"=>0.3, "B"=>0.7)])
 
-# ✗ Invalid - inconsistent mixtures
-invalid_data = (x = [1, 2], group = [mix("A"=>0.3, "B"=>0.7), mix("A"=>0.5, "B"=>0.5)])
-compile_formula(model, invalid_data)  # Throws ArgumentError
+# ✓ Valid - a Vector{<:CategoricalMixture} column may hold a different mixture in each row
+per_row = (x = [1, 2], group = [mix("A"=>0.3, "B"=>0.7), mix("A"=>0.5, "B"=>0.5)])
 
-# ✗ Invalid - weights don't sum to 1.0  
-bad_weights = (x = [1, 2], group = [mix("A"=>0.3, "B"=>0.6), mix("A"=>0.3, "B"=>0.6)])
-compile_formula(model, bad_weights)  # Throws ArgumentError
+# ✗ Invalid - weights don't sum to 1.0
+mix("A"=>0.3, "B"=>0.6)  # Throws ArgumentError
 ```
 
 ### Manual Validation
@@ -156,7 +152,7 @@ FormulaCompiler.validate_mixture_levels(["A", "A", "B"])    # ✗ Duplicates
 
 ### Compilation Time
 - **Mixture detection**: ~1μs per column
-- **Type specialization**: ~10μs per unique mixture specification
+- **No per-mixture specialization**: a new mixture does not create a new operation type or trigger recompilation
 - **Overall overhead**: <20% increase for mixture-containing formulas
 
 ### Execution Performance
@@ -334,7 +330,7 @@ Memory usage:
 
 ### Debugging Tips
 
-1. **Check mixture consistency**: All rows must have identical mixture specifications
+1. **Check mixture consistency**: In an untyped (e.g. `Vector{Any}`) column all rows must hold the same mixture; a `Vector{<:CategoricalMixture}` column may vary by row
 2. **Validate weights**: Must be non-negative and sum to 1.0 (within 1e-10 tolerance)
 3. **Verify levels**: Must be unique strings/symbols
 4. **Test detection**: Use `is_mixture_column(column)` to verify detection

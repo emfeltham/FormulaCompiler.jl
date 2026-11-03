@@ -47,9 +47,9 @@ de = derivativeevaluator(:fd, compiled, data, [:x, :age])
 
 # Compute population marginal effects
 n_rows = length(df.y)
-J = Matrix{Float64}(undef, length(compiled), length(de.vars))  # Jacobian buffer
-temp_buffer = Vector{Float64}(undef, length(de.vars))
-ame_results = zeros(length(de.vars))
+J = Matrix{Float64}(undef, length(compiled), length(derivative_variables(de)))  # Jacobian buffer
+temp_buffer = Vector{Float64}(undef, length(derivative_variables(de)))
+ame_results = zeros(length(derivative_variables(de)))
 
 for row in 1:n_rows
     # Compute marginal effects ∂η/∂x for this individual
@@ -64,7 +64,7 @@ end
 ame_results ./= n_rows
 
 println("Population Average Marginal Effects:")
-for (i, var) in enumerate(de.vars)
+for (i, var) in enumerate(derivative_variables(de))
     println("  $var: $(ame_results[i])")
 end
 ```
@@ -79,7 +79,7 @@ weights = rand(0.5:0.1:2.0, n_rows)  # Example weights
 total_weight = sum(weights)
 
 # Weighted population marginal effects
-weighted_ame = zeros(length(de.vars))
+weighted_ame = zeros(length(derivative_variables(de)))
 
 for row in 1:n_rows
     derivative_modelrow!(J, de, row)
@@ -93,7 +93,7 @@ end
 weighted_ame ./= total_weight
 
 println("Weighted Population AME:")
-for (i, var) in enumerate(de.vars)
+for (i, var) in enumerate(derivative_variables(de))
     println("  $var: $(weighted_ame[i])")
 end
 ```
@@ -107,7 +107,7 @@ Evaluate "what if all individuals had a specific value for a variable":
 ```julia
 # Scenario: What if everyone had income = 50,000?
 scenario_var = :income
-scenario_value = log(50000)  # Model uses log(income)
+scenario_value = 50000.0  # The formula applies log(income) itself
 
 # Create counterfactual data with modified variable
 cf_data = merge(data, (income = fill(scenario_value, n_rows),))
@@ -147,7 +147,7 @@ Policy analysis with multiple variables changed simultaneously:
 ```julia
 # Policy scenario: Universal basic income + education investment
 policy_vars = [:income, :education_years]
-policy_values = [log(30000), 16.0]  # $30k income, 16 years education
+policy_values = [30000.0, 16.0]  # $30k income (the formula applies log), 16 years education
 
 # Create counterfactual data with multiple modified variables
 cf_data = merge(data, (
@@ -183,9 +183,9 @@ Systematic policy comparison:
 # Define scenarios to compare
 scenarios = [
     (name="Baseline", vars=Symbol[], values=Float64[]),
-    (name="Income +20%", vars=[:income], values=[log(1.2)]),  # Relative increase
+    (name="Income +20%", vars=[:income], values=[1.2]),  # Relative increase
     (name="Education +2yr", vars=[:education_years], values=[2.0]),  # Absolute increase
-    (name="Combined", vars=[:income, :education_years], values=[log(1.2), 2.0])
+    (name="Combined", vars=[:income, :education_years], values=[1.2, 2.0])
 ]
 
 scenario_results = Dict{String, Vector{Float64}}()
@@ -206,8 +206,8 @@ for scenario in scenarios
 
         for (i, (var, value)) in enumerate(zip(scenario.vars, scenario.values))
             if var == :income  # Relative change
-                # Add log(1.2) to each individual's log(income)
-                modified_cols[var] = getproperty(data, var) .+ value
+                # Multiply each individual's income by 1.2
+                modified_cols[var] = getproperty(data, var) .* value
             else  # Absolute change
                 # Add fixed value to each individual's value
                 modified_cols[var] = getproperty(data, var) .+ value
@@ -245,7 +245,7 @@ For large datasets, reuse buffers to minimize allocations:
 ```julia
 # Pre-allocate all buffers
 n_rows = length(df.y)
-n_vars = length(de.vars)
+n_vars = length(derivative_variables(de))
 J = Matrix{Float64}(undef, length(compiled), n_vars)
 temp_buffer = Vector{Float64}(undef, n_vars)
 output_buffer = Vector{Float64}(undef, length(compiled))
@@ -267,9 +267,8 @@ ame_results = ame_accumulator ./ n_rows
 For very large datasets, process in batches:
 
 ```julia
-function compute_population_ame_batched(de, β, batch_size=1000)
-    n_rows = length(getproperty(de.base_data, first(de.vars)))
-    n_vars = length(de.vars)
+function compute_population_ame_batched(de, β, n_rows, batch_size=1000)
+    n_vars = length(derivative_variables(de))
 
     ame_accumulator = zeros(n_vars)
     J = Matrix{Float64}(undef, length(β), n_vars)
@@ -294,7 +293,7 @@ function compute_population_ame_batched(de, β, batch_size=1000)
 end
 
 # Usage
-ame_results = compute_population_ame_batched(de, β, 5000)
+ame_results = compute_population_ame_batched(de, β, n_rows, 5000)
 ```
 
 ### Parallel Processing
@@ -350,8 +349,8 @@ Building an evaluator costs far more than evaluating a row, so use a few large c
 
 ### Memory Efficiency
 
-- **O(1) memory usage**: Independent of dataset size
-- **No data copying**: CounterfactualVector provides transparent value substitution
+- **No per-row allocation**: Row evaluation and derivatives allocate nothing; per-row cost does not depend on dataset size
+- **Scenario columns**: `merge` with `fill` allocates one full-length column per changed variable per scenario; the counterfactual vectors inside derivative and contrast evaluators substitute a value without copying the column
 - **Buffer reuse**: Same temporary arrays used across all rows
 
 ### Performance Characteristics
@@ -383,7 +382,7 @@ compiled_scenario = compile_formula(model, scenario.data)
 population_effect = compute_population_effect(compiled_scenario, ...)
 
 # CURRENT: Simple data modification + loops
-cf_data = merge(data, (income = fill(log(50000), n_rows),))
+cf_data = merge(data, (income = fill(50000.0, n_rows),))
 
 effects = Vector{Float64}(undef, n_rows)
 for row in 1:n_rows
@@ -397,7 +396,7 @@ The row-wise approach is:
 - **Faster**: Simple loops with minimal overhead
 - Extensible aggregation: Supports custom aggregation functions beyond simple averaging
 - **More transparent**: Can examine individual-level results
-- **Memory efficient**: O(1) usage vs O(n) for data copying approaches
+- **Memory efficient**: no per-row allocation; the only O(n) allocation is the scenario column built with `fill`
 
 ## Summary
 

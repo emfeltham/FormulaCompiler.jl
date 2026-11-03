@@ -104,7 +104,7 @@ wages.Male = wages.Sex .== "male"
 data = Tables.columntable(wages)
 
 # Wage determination model with gender interaction
-model = lm(@formula(log(Wage) ~ Educ * Male + Exper + I(Exper^2)), wages)
+model = lm(@formula(log(Wage) ~ Educ * Male + Exper + Exper^2), wages)
 compiled = compile_formula(model, data)
 ```
 
@@ -621,9 +621,9 @@ println("  Mean predicted wage: \$$(round(best_wage, digits=2))")
 All examples demonstrate FormulaCompiler.jl's key performance characteristics:
 
 - **Zero-allocation core evaluation**: `compiled(output, data, row)` calls allocate zero bytes
-- **Memory-efficient scenarios**: Override system uses constant memory regardless of data size
+- **Scenarios**: The examples above use `merge` with `fill`, which allocates one full column per changed variable; the counterfactual-vector system (see [Scenario Analysis](guide/scenarios.md)) changes a value without copying the column
 - **Backend selection**: Choose between automatic differentiation (`:ad`, higher accuracy) and finite differences (`:fd`, explicit control) using `derivativeevaluator(:ad/:fd, ...)`
-- **Scalable patterns**: Performance remains constant regardless of dataset size
+- **Scalable patterns**: Per-row evaluation cost does not depend on dataset size
 
 For detailed performance optimization techniques, see the [Performance Guide](guide/performance.md).
 

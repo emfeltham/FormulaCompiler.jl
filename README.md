@@ -21,11 +21,11 @@ Key characteristics include:
 
 ## Installation
 
-The package is registered, and the current version is available via
+The package is registered in the General registry:
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/emfeltham/FormulaCompiler.jl")
+Pkg.add("FormulaCompiler")
 ```
 
 ## Basic Usage
@@ -225,7 +225,7 @@ reference_grid = DataFrame(
 # Compile and evaluate
 compiled = compile_formula(model, Tables.columntable(reference_grid))
 output = Vector{Float64}(undef, length(compiled))
-compiled(output, reference_grid, 1)
+compiled(output, Tables.columntable(reference_grid), 1)
 
 # Multiple mixture variables
 grid = DataFrame(
@@ -236,7 +236,7 @@ grid = DataFrame(
 compiled = compile_formula(model, Tables.columntable(grid))
 ```
 
-Mixture evaluation maintains zero-allocation performance through compile-time specialization. Each mixture specification generates a specialized evaluation method.
+Mixture evaluation is allocation-free. The mixture's levels and weights are read from the data at evaluation time, so a compiled formula can be reused with different mixtures (a new mixture does not trigger recompilation).
 
 ## Derivatives
 
@@ -276,6 +276,10 @@ The following GLM link functions are supported for marginal effects on the mean 
 - Inverse
 - Sqrt
 - InverseSquare
+- Power
+- NegativeBinomial
+
+Any other `GLM.Link` falls back to forward-mode automatic differentiation of `GLM.linkinv`.
 
 ## Supported Formula Features
 
@@ -379,7 +383,7 @@ The package uses a compilation pipeline based on position mapping:
 
 - Position mapping: Formula terms are mapped to fixed scratch and output positions during compilation, with all position information encoded in type parameters.
 - Type specialization: Each unique formula generates a specialized evaluation method with concrete types throughout.
-- Adaptive dispatch: Small formulas (≤25 operations) use recursive dispatch; larger formulas use generated functions to respect Julia's compilation limits.
+- Adaptive dispatch: Small formulas (≤10 operations) use recursive dispatch; larger formulas use generated functions to respect Julia's compilation limits.
 - Zero-allocation execution: All memory layouts are determined at compile time, enabling allocation-free runtime evaluation.
 
 ## Use Cases
@@ -427,8 +431,6 @@ MIT License. See [LICENSE](LICENSE) for details.
   primaryclass = {stat},
   publisher = {arXiv},
   doi = {10.48550/arXiv.2601.07065},
-  urldate = {2026-01-13},
-  abstract = {Marginal effects analysis is fundamental to interpreting statistical models, yet existing implementations face computational constraints that limit analysis at scale. We introduce two Julia packages that address this gap. Margins.jl provides a clean two-function API organizing analysis around a 2-by-2 framework: evaluation context (population vs profile) by analytical target (effects vs predictions). The package supports interaction analysis through second differences, elasticity measures, categorical mixtures for representative profiles, and robust standard errors. FormulaCompiler.jl provides the computational foundation, transforming statistical formulas into zero-allocation, type-specialized evaluators that enable O(p) per-row computation independent of dataset size. Together, these packages achieve 622x average speedup and 460x memory reduction compared to R's marginaleffects package, with successful computation of average marginal effects and delta-method standard errors on 500,000 observations where R fails due to memory exhaustion, providing the first comprehensive and efficient marginal effects implementation for Julia's statistical ecosystem.},
   archiveprefix = {arXiv},
   keywords = {Statistics - Computation},
 }

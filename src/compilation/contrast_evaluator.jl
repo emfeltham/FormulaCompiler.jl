@@ -872,11 +872,11 @@ end
 """
     supported_link_functions() -> Vector{String}
 
-Return list of GLM link functions with implemented _dmu_deta methods.
+Return a list of commonly used GLM link functions with analytic `_dmu_deta` methods.
 
-Note: Link function support is now determined by Julia's method dispatch.
-Any link function with a _dmu_deta method will work automatically.
-This function provides a convenience list of commonly tested functions.
+The list is not exhaustive: `PowerLink` and `NegativeBinomialLink` also have analytic
+derivatives, and any other `GLM.Link` falls back to forward-mode automatic differentiation
+of `GLM.linkinv` (see [`link_derivatives`](@ref)).
 
 # Example
 ```julia

@@ -211,22 +211,19 @@ compiled(output, data_partial, 1)  # Evaluate partial treatment scenario
 
 ### Categorical Variables
 
-**Required**: FormulaCompiler only supports categorical variables created with `CategoricalArrays.jl`. Raw string variables are not supported.
+Categorical variables can be `CategoricalArrays.jl` columns, plain `String` columns, or integer/Bool columns that the model treats as categorical through `contrasts`. Values are resolved against the fitted model's levels (not the evaluation data's pool), so data with a reordered or smaller pool evaluates correctly; a missing value or a value that is not a level of the fitted model throws an `ArgumentError`. Evaluation is allocation-free for both `CategoricalArray` and `String` columns.
 
 ```julia
 using CategoricalArrays
 
-# Required: Convert string columns to categorical
 df.group = categorical(df.group)
 @formula(y ~ x + group)  # Automatic contrast coding
 
-# Not supported: Raw string variables
-df.category = ["A", "B", "C"]  # String vector
-@formula(y ~ x + category)     # Will cause compilation errors
+df.category = rand(["A", "B", "C"], nrow(df))  # String vector
+@formula(y ~ x + category)  # Also works
 
-# Correct approach
-df.category = categorical(["A", "B", "C"])
-@formula(y ~ x + category)     # Works correctly
+# Integer codes treated as categorical by the model
+# lm(@formula(y ~ x + k), df; contrasts = Dict(:k => DummyCoding()))
 ```
 
 ### Interactions
@@ -243,7 +240,7 @@ df.category = categorical(["A", "B", "C"])
 
 ### Complex Formulas
 ```julia
-@formula(y ~ x * group + log(z) * treatment + sqrt(abs(w)) + (x > mean(x)))
+@formula(y ~ x * group + log(z) * treatment + sqrt(abs(w)) + (x > 0))
 ```
 
 ## Error Handling

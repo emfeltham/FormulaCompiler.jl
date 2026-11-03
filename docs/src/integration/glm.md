@@ -154,7 +154,7 @@ compiled_contrasts = compile_formula(model_contrasts, Tables.columntable(df_cont
 # Weighted regression
 ws = rand(0.5:0.1:2.0, 1000)
 weighted_model = lm(
-    @formula(y ~ x1 + x2), df; weights=ws
+    @formula(y ~ x1 + x2), df; wts=ws
 )
 
 # GLM with offset
@@ -165,13 +165,15 @@ df_offset = DataFrame(
 )
 
 offset_model = glm(
-    @formula(y ~ x + offset(offset_var)), 
-    df_offset, 
-    Poisson(), 
-    LogLink()
+    @formula(y ~ x),
+    df_offset,
+    Poisson(),
+    LogLink();
+    offset = df_offset.offset_var
 )
 
-# FormulaCompiler handles both
+# FormulaCompiler handles both. The compiled row is the model-matrix row; weights and
+# offsets are not part of it (add the offset to x'β yourself for the linear predictor).
 compiled_weighted = compile_formula(weighted_model, Tables.columntable(df))
 compiled_offset = compile_formula(offset_model, Tables.columntable(df_offset))
 ```
@@ -448,7 +450,7 @@ compare_memory_usage(model, data)
 
 1. **Type instability**: Ensure all variables have consistent types
 2. **Missing values**: Handle `missing` values before compilation
-3. **Categorical levels**: Ensure categorical variables have the same levels in test data
+3. **Categorical levels**: Test data may have a different or smaller pool, but every value must be a level the model was fitted with (other values and `missing` throw an `ArgumentError`)
 4. **Formula complexity**: Very complex formulas may have longer compilation times
 
 ### Debugging Tools

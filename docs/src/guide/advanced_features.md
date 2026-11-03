@@ -473,7 +473,7 @@ derivative_modelrow!(J, de_fd, 1)
 
 ### Architecture and Optimization
 
-The derivative system achieves near-zero allocations through:
+The derivative system achieves zero allocations through:
 
 - **Preallocated buffers**: Jacobian matrices, gradient vectors, and temporary arrays stored in `derivativeevaluator`
 - **Typed closures**: Compile-time specialization eliminates runtime dispatch
@@ -488,7 +488,7 @@ using BenchmarkTools
 # Build evaluators once (one-time cost)
 de_ad = derivativeevaluator(:ad, compiled, data, [:x, :z])  # Zero allocations, higher accuracy (preferred)
 de_fd = derivativeevaluator(:fd, compiled, data, [:x, :z])  # Zero allocations, explicit step control (alternative)
-J = Matrix{Float64}(undef, length(compiled), length(de_ad.vars))
+J = Matrix{Float64}(undef, length(compiled), length(derivative_variables(de_ad)))
 
 # Benchmark derivatives
 @benchmark derivative_modelrow!($J, $de_ad, 25)  # AD (faster)
@@ -497,7 +497,7 @@ J = Matrix{Float64}(undef, length(compiled), length(de_ad.vars))
 # Benchmark marginal effects on η (Jacobian + J'β)
 using LinearAlgebra: mul!
 β = coef(model)
-g = Vector{Float64}(undef, length(de_ad.vars))
+g = Vector{Float64}(undef, length(derivative_variables(de_ad)))
 @benchmark (derivative_modelrow!($J, $de_ad, 25); mul!($g, $J', $β))  # AD (faster, more accurate)
 @benchmark (derivative_modelrow!($J, $de_fd, 25); mul!($g, $J', $β))  # FD
 ```
@@ -517,20 +517,20 @@ FormulaCompiler.jl handles complex nested functions:
 Sophisticated boolean expressions:
 
 ```julia
-@formula(y ~ (x > 0) * (z < mean(z)) + (group == "A") * log(w))
+@formula(y ~ (x > 0) * (z < 1.5) + (x <= z) * log(w))
 ```
 
 ### Custom Functions
 
-Define custom functions for use in formulas:
+A formula can call only the functions listed under [Supported Functions](@ref); `compile_formula` rejects any other function, including a user-defined one, with an `ArgumentError`. Compute a custom transform as a data column and use that column in the formula:
 
 ```julia
-# Define custom function
 custom_transform(x) = x > 0 ? log(1 + x) : -log(1 - x)
-
-# Use in formula (requires function to be defined in scope)
-@formula(y ~ custom_transform(x) + group)
+df.x_t = custom_transform.(df.x)
+@formula(y ~ x_t + group)
 ```
+
+Note that a precomputed column is held fixed when you change `x` in a counterfactual or derivative.
 
 ### Categorical Mixtures
 

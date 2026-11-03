@@ -147,7 +147,7 @@ data = Tables.columntable(df)
 # Traditional approach: extract full model matrix
 function traditional_mixed_row(model, row_idx)
     # Get fixed effects design matrix
-    X = modelmatrix(model.optsum.lm)  # Linear model component
+    X = modelmatrix(model)  # Fixed-effects design matrix
     return X[row_idx, :]
 end
 
@@ -305,7 +305,7 @@ function validate_mixed_model_integration(mixed_model, data)
     compiled = compile_formula(mixed_model, data)
     
     # Extract fixed effects design matrix from MixedModels.jl
-    mm_fixed = modelmatrix(mixed_model.optsum.lm)
+    mm_fixed = modelmatrix(mixed_model)
     
     # Compare with FormulaCompiler
     row_vec = Vector{Float64}(undef, length(compiled))

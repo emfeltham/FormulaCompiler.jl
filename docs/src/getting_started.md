@@ -4,11 +4,11 @@ This guide will walk you through the basics of using FormulaCompiler.jl for effi
 
 ## Installation
 
-FormulaCompiler.jl is currently available from GitHub:
+FormulaCompiler.jl is registered in the General registry:
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/emfeltham/FormulaCompiler.jl")
+Pkg.add("FormulaCompiler")
 ```
 
 Once installed, you can load the package:
@@ -51,7 +51,7 @@ df = DataFrame(
 model = lm(@formula(y ~ x * group + log(z) + treatment), df)
 ```
 
-> **Important**: FormulaCompiler requires all categorical variables to use `CategoricalArrays.jl`. String variables in models are not supported. Always convert string columns to categorical format using `categorical(column)` before model fitting.
+> **Note**: Categorical variables may be `CategoricalArrays.jl` columns, plain `String` columns, or integer/Bool columns declared categorical through `contrasts`. Values are resolved against the fitted model's levels, so evaluation data with a different pool or a subset of the levels works; a value that is not a level of the fitted model (or a missing value) is an `ArgumentError`.
 
 ### Step 2: Compile the Formula
 
@@ -208,19 +208,12 @@ Compare this to the traditional approach:
 
 #### Data Format Issues
 
-**Problem**: String variables in models
+**Problem**: A categorical value that is not a level of the fitted model
 ```julia
-# Error: FormulaCompiler does not support raw string variables
-df.category = ["A", "B", "C", "A", "B"]  # String vector
-model = lm(@formula(y ~ x + category), df)  # Will cause issues
+# ArgumentError: the evaluation data holds a level the model never saw (or a missing value)
 ```
 
-**Solution**: Convert all categorical data to `CategoricalArrays.jl` format before model fitting:
-```julia
-# Required: Convert strings to categorical
-df.category = categorical(df.category)
-model = lm(@formula(y ~ x + category), df)  # Now works correctly
-```
+**Solution**: Evaluate only levels the model was fitted with (`String` and `CategoricalArrays.jl` columns both work); remove or recode unseen levels and missing values first.
 
 **Problem**: Categorical contrasts or unexpected behavior
 ```julia

@@ -49,7 +49,7 @@ Primitive operations form an acyclic execution plan:
 - `ConstantOp{Value, OutPos}`: literal → scratch[OutPos]
 - `UnaryOp{Func, InPos, OutPos}`: f(scratch[InPos]) → scratch[OutPos]
 - `BinaryOp{Func, In1, In2, OutPos}`: f(scratch[In1], scratch[In2]) → scratch[OutPos]
-- `ContrastOp{Column, OutPositions}`: categorical expansion → scratch[each(OutPositions)]
+- `ContrastOp{Column, OutPositions, K}`: categorical expansion (values resolved against the fitted model's levels) → scratch[each(OutPositions)]
 - `CopyOp{InPos, OutIdx}`: scratch[InPos] → output[OutIdx]
 
 All operation ordering respects dependencies to ensure each input is ready when used.
@@ -74,13 +74,13 @@ For complex formulas (>10 operations) and derivative computation, the system use
 **Unified Row-Wise Architecture**: Population analysis = individual analysis + averaging
 
 - `CounterfactualVector` hierarchy: Type-stable single-row perturbations for all data types
-  - `NumericCounterfactualVector{T}`: Numeric variables with automatic type conversion
+  - `NumericCounterfactualVector{T,B}`: Numeric variables (column stored as `B`, read as `T`)
   - `BoolCounterfactualVector`: Boolean variables
   - `CategoricalCounterfactualVector{T,R}`: Categorical variables with contrast support
   - `CategoricalMixtureCounterfactualVector{T}`: Categorical mixtures for profile effects
   - `TypedCounterfactualVector{T,V}`: Generic fallback for other types
 
-- **Memory Efficiency**: O(1) memory usage vs O(n) for data copying approaches
+- **Memory Efficiency**: A counterfactual vector wraps the original column and holds one replacement value, so a counterfactual does not copy the data (a numeric column that is not `Float64` is converted once, when the evaluator is built)
 - **Performance**: Simple loops achieve 10-100x speedup over data copying
 - **Type Stability**: Concrete types throughout, no `Any` types on hot paths
 
@@ -128,9 +128,9 @@ Figure generation
 - **API simplified**: Clean exports focused on row-wise operations only
 
 **Performance Characteristics**:
-- **Zero allocations**: 0 bytes for core evaluation, derivatives, and marginal effects
+- **Zero allocations**: 0 bytes for core evaluation, derivatives, and contrasts
 - **Fast per-row**: Timings vary by system, but typically <100ns per row
-- **Memory efficient**: O(1) memory for counterfactual analysis vs O(n) for data copying
+- **Memory efficient**: Per-row evaluation allocates nothing and its cost does not depend on the number of rows; counterfactual values are overlays on the original columns rather than data copies
 
 ## Future Directions
 

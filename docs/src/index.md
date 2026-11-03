@@ -6,18 +6,18 @@ FormulaCompiler implements a type-stable counterfactual vector system providing 
 
 - Memory efficiency: Per-row evaluation with zero allocations
 - Computational performance: Improvements over traditional `modelmatrix()` approaches for single-row evaluations  
-- Comprehensive compatibility: Supports all valid StatsModels.jl formulas, including complex interactions and mathematical functions
-- Categorical mixtures: Compile-time support for weighted categorical specifications for marginal effects
+- Comprehensive compatibility: Supports StatsModels.jl formulas, including complex interactions and the mathematical functions listed under [Supported Functions](@ref)
+- Categorical mixtures: Weighted categorical specifications for marginal effects, read from the data at evaluation time
 - Scenario analysis: Memory-efficient variable override system for counterfactual analysis
 - Unified architecture: Single compilation pipeline accommodates diverse formula structures
 - Ecosystem integration: Compatible with GLM.jl, MixedModels.jl, and StandardizedPredictors.jl
-- Dual-backend derivatives: Memory-efficient finite differences and ForwardDiff automatic differentiation options (ForwarDiff is the strongly preferred default option)
+- Dual-backend derivatives: Memory-efficient finite differences and ForwardDiff automatic differentiation options (ForwardDiff is the strongly preferred default option)
 
 ## Installation
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/emfeltham/FormulaCompiler.jl")
+Pkg.add("FormulaCompiler")
 ```
 
 ## Quick Start
@@ -140,8 +140,6 @@ mul!(g, J', beta)  # g[j] = ∂η/∂vars[j]
   primaryclass = {stat},
   publisher = {arXiv},
   doi = {10.48550/arXiv.2601.07065},
-  urldate = {2026-01-13},
-  abstract = {Marginal effects analysis is fundamental to interpreting statistical models, yet existing implementations face computational constraints that limit analysis at scale. We introduce two Julia packages that address this gap. Margins.jl provides a clean two-function API organizing analysis around a 2-by-2 framework: evaluation context (population vs profile) by analytical target (effects vs predictions). The package supports interaction analysis through second differences, elasticity measures, categorical mixtures for representative profiles, and robust standard errors. FormulaCompiler.jl provides the computational foundation, transforming statistical formulas into zero-allocation, type-specialized evaluators that enable O(p) per-row computation independent of dataset size. Together, these packages achieve 622x average speedup and 460x memory reduction compared to R's marginaleffects package, with successful computation of average marginal effects and delta-method standard errors on 500,000 observations where R fails due to memory exhaustion, providing the first comprehensive and efficient marginal effects implementation for Julia's statistical ecosystem.},
   archiveprefix = {arXiv},
   keywords = {Statistics - Computation},
 }

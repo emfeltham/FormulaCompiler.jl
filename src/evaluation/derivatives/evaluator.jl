@@ -35,7 +35,7 @@ differentiation and finite differences with backend selection for optimal perfor
 
 # Performance Characteristics
 - **Construction**: One-time cost proportional to number of variables
-- **AD backend**: Small allocations per call (ForwardDiff internals)
+- **AD backend**: Zero bytes allocated per call
 - **FD backend**: Zero bytes allocated (finite differences)
 - **Specialization**: Type-stable evaluation with concrete closures and configurations
 - **Validation**: Tested across diverse formula types and variable combinations

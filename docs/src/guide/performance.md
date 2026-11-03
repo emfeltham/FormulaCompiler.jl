@@ -11,9 +11,9 @@ FormulaCompiler.jl achieves zero-allocation performance through:
 2. **Type stability**: Ensure all operations are type-predictable
 3. **Memory reuse**: Pre-allocate and reuse output vectors
 4. **Efficient data structures**: Use column tables for optimal access patterns
-5. **Low-allocation automatic differentiation**: Preallocation and specialization minimize AD memory overhead
+5. **Zero-allocation automatic differentiation**: Preallocation and specialization remove AD memory overhead
 
-**Automatic Differentiation**: FormulaCompiler.jl provides ForwardDiff-based derivatives with small, bounded allocations per call, and a finite-difference backend with zero allocations. Choose the backend per workload and accuracy needs.
+**Automatic Differentiation**: FormulaCompiler.jl provides ForwardDiff-based derivatives and a finite-difference backend; both allocate nothing per Jacobian. `:ad` is the preferred default.
 
 For a detailed understanding of how compile-time specialization is implemented, including the use of metaprogramming for complex formulas and derivative computation, see [Metaprogramming](../metaprogramming.md).
 
@@ -40,7 +40,7 @@ end
 
 # Bad: Compile every time
 for i in 1:1000
-    result = modelrow(model, data, i % nrow(data) + 1)  # Compiles and allocates
+    result = modelrow(model, data, i % nrow(data) + 1)  # Cache lookup and a new vector every call
 end
 ```
 
@@ -312,7 +312,7 @@ end
 ```julia
 # DON'T: Recompile in loops
 for i in 1:1000
-    result = modelrow(model, data, i)  # Recompiles every time!
+    result = modelrow(model, data, i)  # Cache lookup and allocation every time!
 end
 
 # DON'T: Pass DataFrames directly to compiled evaluators in tight loops

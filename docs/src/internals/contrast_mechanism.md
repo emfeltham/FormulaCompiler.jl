@@ -495,9 +495,9 @@ abstract type CounterfactualVector{T} <: AbstractVector{T} end
 Different data types have specialized implementations:
 
 ```julia
-# For numeric variables (Float64, Int64, etc.)
-mutable struct NumericCounterfactualVector{T<:Real} <: CounterfactualVector{T}
-    base::Vector{T}           # Original data
+# For numeric variables (Float64, Int64, etc.); the column is stored as B and read as T
+mutable struct NumericCounterfactualVector{T<:Real, B<:Real} <: CounterfactualVector{T}
+    base::Vector{B}           # Original data
     row::Int                  # Row index to override
     replacement::T            # Replacement value
 end
@@ -578,7 +578,7 @@ data_counterfactual = (
 )
 ```
 
-**Key insight**: Variables not in `vars` use original columns; variables in `vars` are wrapped in `CounterfactualVector`s.
+**Key insight**: Variables not in `vars` use original columns; variables in `vars` are wrapped in `CounterfactualVector`s. If a categorical column's pool lacks a level the fitted model knows (e.g. a subset that dropped the reference level), the evaluator wraps an internal copy with the missing levels appended; the caller's data is not modified.
 
 #### Step 2: Pre-compute Categorical Level Mappings
 
@@ -617,44 +617,19 @@ categorical_level_maps[:treatment] = Dict(
 )
 ```
 
-#### Step 3: Detect Binary Variables
-
-```julia
-# Lines 124-141 in contrast_evaluator.jl
-binary_vars = Set{Symbol}()
-binary_coef_indices = Dict{Symbol, Int}()
-
-for (i, var) in enumerate(vars)
-    cf_vec = counterfactuals[i]
-    col = getproperty(data, var)
-
-    if _is_truly_binary_variable(cf_vec, col)
-        binary_vars = union(binary_vars, [var])
-        # Find coefficient index for fast path optimization
-        coef_idx = _find_binary_coefficient_index(compiled, var)
-        if coef_idx !== nothing
-            binary_coef_indices[var] = coef_idx
-        end
-    end
-end
-```
-
-**Purpose**: Binary variables (0/1, true/false) have a fast path—the contrast is simply ±1 at the coefficient position, skipping full model evaluation.
-
-#### Step 4: Allocate Buffers
+#### Step 3: Allocate Buffers
 
 ```julia
 # Lines 143-157 in contrast_evaluator.jl
 ContrastEvaluator(
     compiled,
     vars,
+    var_map,                                     # variable → counterfactual index
     data_counterfactual,
     counterfactuals,
     Vector{Float64}(undef, length(compiled)),    # y_from_buf
     Vector{Float64}(undef, length(compiled)),    # y_to_buf
     categorical_level_maps,
-    binary_vars,
-    binary_coef_indices,
     Vector{Float64}(undef, length(compiled)),    # gradient_buffer
     Vector{Float64}(undef, length(compiled)),    # xrow_from_buf
     Vector{Float64}(undef, length(compiled)),    # xrow_to_buf
@@ -1014,30 +989,6 @@ end
 ---
 
 ## Advanced Topics
-
-### Binary Variable Fast Path
-
-Binary variables (0/1, true/false) have optimized computation that skips formula evaluation:
-
-```julia
-# For binary variables, the contrast is simply ±1 at the coefficient position
-function _contrast_modelrow_binary_fast_path!(Δ, evaluator, var, from, to)
-    coef_idx = evaluator.binary_coef_indices[var]
-
-    # Zero out all coefficients
-    @inbounds for i in eachindex(Δ)
-        Δ[i] = 0.0
-    end
-
-    # Set single non-zero element
-    contrast_direction = _binary_contrast_direction(from, to)  # ±1.0
-    @inbounds Δ[coef_idx] = contrast_direction
-
-    return Δ
-end
-```
-
-**Speedup**: ~10x faster than general path for binary variables.
 
 ### Multiple Variables
 

@@ -33,7 +33,7 @@ Setup
 Conventions
 - Use `@benchmark` with concrete arguments; avoid globals
 - Record: `minimum(time)`, `median(time)`, `minimum(memory)`
-- Target allocations: FD paths 0 bytes; AD paths ≤512 bytes (ForwardDiff overhead)
+- Target allocations: 0 bytes for both FD and AD paths (asserted in the test suite)
 - Present ranges, not single points; note environment details
 
 Benchmarks
@@ -62,7 +62,7 @@ Benchmarks
 - AD Jacobian: `J = similar(rand(length(compiled), 2)); @benchmark derivative_modelrow!($J, $de_ad, 25)`
 - FD Jacobian: `@benchmark derivative_modelrow!($J, $de_fd, 25)`
 - FD single-column: `col = similar(rand(length(compiled))); @benchmark fd_jacobian_column!($col, $de_fd, 1, 1)`
-- Targets: AD ≤512 bytes; FD 0 bytes
+- Targets: 0 bytes for both backends
 
 5) Marginal Effects on η (Jacobian + matrix-vector product)
 - `using LinearAlgebra: mul!`
@@ -73,16 +73,16 @@ Benchmarks
 - Targets: 0 bytes after warmup (both backends)
 - Averaged effects and delta-method standard errors are provided by Margins.jl (`population_margins`, `profile_margins`) and are benchmarked there
 
-7) MixedModels Fixed Effects
+6) MixedModels Fixed Effects
 - Fit a small LMM/GLMM; compile with fixed-effects extraction
 - Benchmark compiled row evaluation as in (1)
 - Target: Same guarantees (0 bytes; similar timing)
 
-8) Scaling and Complexity
+7) Scaling and Complexity
 - Simple vs complex formulas; small vs larger `OutputSize`
 - Report time growth and allocation behavior (should remain 0 for core paths)
 
-9) Size Invariance (Per-Row)
+8) Size Invariance (Per-Row)
 - Use `scale_n` to run the same per-row evaluation on increasing data sizes (e.g., 10k, 100k, 1M)
 - Expectation: per-row latency and allocations remain effectively constant (0 B) as `n` increases
 
