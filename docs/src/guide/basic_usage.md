@@ -132,7 +132,7 @@ compiled(row_vec, data, 1)        # Zero allocations after warmup
 
 ## Supported Formula Features
 
-FormulaCompiler.jl handles all standard StatsModels.jl formula syntax:
+FormulaCompiler.jl handles standard StatsModels.jl formula syntax, with the functions listed under [Supported Functions](@ref):
 
 ### Basic Terms
 ```julia
@@ -143,8 +143,28 @@ FormulaCompiler.jl handles all standard StatsModels.jl formula syntax:
 @formula(y ~ log(x) + sqrt(z) + x^2)
 
 # Boolean conditions
-@formula(y ~ (x > 0) + (z < mean(z)))
+@formula(y ~ (x > 0) + (z < 1.5) + (x <= z))
 ```
+
+### Supported Functions
+
+A formula may call only these functions:
+
+| Kind | Functions |
+|------|-----------|
+| One argument | `exp`, `log`, `log1p`, `sqrt`, `abs`, `sin`, `cos`, `inv` |
+| Arithmetic | `+`, `-` (also unary), `*`, `/`, `^` (any power, e.g. `x^2`, `z^0.5`) |
+| Comparisons | `<`, `<=`, `>`, `>=`, `==`, `!=` (against a constant or another term) |
+| Negation | `!` |
+
+They can be nested (`log(abs(x))`) and used in interactions (`x * log(z)`).
+StandardizedPredictors.jl terms (`ZScore`, `Center`, `Scale`) are also supported.
+
+Any other function, a user-defined function included (`exp2`, `cbrt`, `max`, `myfun(z)`), is
+rejected by `compile_formula` with an `ArgumentError`. The error names the term and lists
+the functions above. So is a supported function called with an unsupported number of
+arguments (`log(2, z)`). Compute such a transform as a data column and use that column in
+the formula. The same applies to polynomial or spline bases.
 
 ### Boolean Variables
 

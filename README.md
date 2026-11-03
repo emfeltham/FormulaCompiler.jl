@@ -279,15 +279,17 @@ The following GLM link functions are supported for marginal effects on the mean 
 
 ## Supported Formula Features
 
-The package supports the complete StatsModels.jl formula language:
+The package supports the StatsModels.jl formula language, with the functions listed below:
 
 - Basic terms: `x`, `log(z)`, `x^2`, `(x > 0)`
 - Boolean variables: treated as continuous (false → 0.0, true → 1.0)
 - Categorical variables: all contrast types, ordered and unordered
 - Categorical mixtures: weighted combinations (e.g., `mix("A" => 0.6, "B" => 0.4)`)
 - Interactions: two-way and multi-way (`x * group`, `x * y * z`)
-- Mathematical functions: `log`, `exp`, `sqrt`, `sin`, `cos`, `abs`, `^`
-- Boolean predicates: `(x > 0)`, `(z >= mean(z))`
+- Mathematical functions: `exp`, `log`, `log1p`, `sqrt`, `abs`, `sin`, `cos`, `inv`, and
+  `+`, `-`, `*`, `/`, `^`. Any other function in a formula (including a user-defined one) is
+  rejected by `compile_formula` with an error listing these; precompute it as a data column
+- Boolean predicates: `(x > 0)`, `(z >= w)`, `!(x > 0)`
 - Complex formulas: `x * log(z) * group + sqrt(abs(y))`
 - Standardized predictors: ZScore, Center, Scale, and custom transformations
 - Mixed models: automatic fixed-effects extraction

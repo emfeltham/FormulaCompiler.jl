@@ -369,7 +369,12 @@ function contrast_modelrow!(
     return Δ
 end
 
-# Convenience method for single contrast computation
+"""
+    contrast_modelrow(evaluator::ContrastEvaluator, row, var, from, to) -> Vector{Float64}
+
+Allocating form of [`contrast_modelrow!`](@ref): returns a new vector X(to) − X(from) for one
+row, the change in the model row when `var` moves from level `from` to level `to`.
+"""
 function contrast_modelrow(
     evaluator::ContrastEvaluator,
     row::Int,

@@ -234,8 +234,9 @@ Base.length(core::ADEvaluatorCore) = length(core.compiled_base)
 @inline set_row!(core::ADEvaluatorCore, row::Int) = (core.row = row)
 @inline current_row(core::ADEvaluatorCore) = core.row
 
-# Union type for method dispatch compatibility
-const derivativeevaluator = Union{FDEvaluator, ADEvaluator}
+# `derivativeevaluator` is a plain function (evaluator.jl). Before 1.5 it was declared as
+# `const derivativeevaluator = Union{FDEvaluator, ADEvaluator}` with constructor methods, so the
+# exported name was a type; dispatch on `AbstractDerivativeEvaluator` instead.
 
 Base.length(de::AbstractDerivativeEvaluator) = length(de.compiled_base)
 

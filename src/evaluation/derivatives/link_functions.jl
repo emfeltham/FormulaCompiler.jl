@@ -4,9 +4,7 @@
 @inline _σ(x) = inv(1 + exp(-x))
 const _INV_SQRT_2PI = 0.3989422804014327  # 1 / sqrt(2π)
 
-"""
-Link function derivative implementations: dμ/dη for various GLM link functions
-"""
+# dμ/dη for the GLM link functions (documented below, after the generic fallback)
 
 @inline function _dmu_deta(link::GLM.IdentityLink, η::Real)
     return 1.0
@@ -76,9 +74,7 @@ if isdefined(GLM, :InverseSquareLink)
     end
 end
 
-"""
-Second derivatives of link functions: d²μ/dη² for variance calculations
-"""
+# d²μ/dη² for the GLM link functions (documented below, after the generic fallback)
 
 @inline function _d2mu_deta2(link::GLM.IdentityLink, η::Real)
     return 0.0  # Linear function has zero second derivative
@@ -166,6 +162,25 @@ end
 
 @inline _d2mu_deta2(link::GLM.Link, η::Real) =
     ForwardDiff.derivative(e -> ForwardDiff.derivative(t -> GLM.linkinv(link, t), e), η)
+
+"""
+    _dmu_deta(link::GLM.Link, η::Real) -> Real
+
+dμ/dη: the first derivative of the inverse link `GLM.linkinv(link, ⋅)` at the linear
+predictor η. Analytic for the standard GLM links (including `NegativeBinomialLink`, for
+which `GLM.mueta` does not return dμ/dη); forward-mode AD of `GLM.linkinv` for any other
+`GLM.Link`. See [`link_derivatives`](@ref) for μ and both derivatives in one call.
+"""
+_dmu_deta
+
+"""
+    _d2mu_deta2(link::GLM.Link, η::Real) -> Real
+
+d²μ/dη²: the second derivative of the inverse link at η, used in the delta-method gradients
+of response-scale marginal effects. Analytic for the standard GLM links, forward-mode AD of
+`GLM.linkinv` otherwise. See [`link_derivatives`](@ref).
+"""
+_d2mu_deta2
 
 """
     link_derivatives(link::GLM.Link, η::Real) -> (μ, dμ/dη, d²μ/dη²)

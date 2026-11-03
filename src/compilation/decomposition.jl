@@ -327,6 +327,48 @@ function decompose_term!(ctx::CompilationContext, term::Term, data_example)
     end
 end
 
+# Functions a formula may call. Anything else is rejected when the formula is compiled,
+# because the operations have no evaluation method for it (it used to compile and then fail
+# with a `MethodError` at the first evaluation, or with a bare "Unknown function").
+const _UNARY_FUNCTIONS = (:exp, :log, :log1p, :sqrt, :abs, :sin, :cos, :inv)
+const _SUPPORTED_FUNCTIONS_TEXT =
+    "exp, log, log1p, sqrt, abs, sin, cos, inv (one argument); " *
+    "+, -, *, /, ^ (arithmetic, and unary -); " *
+    "<, <=, >, >=, ==, != (comparisons); ! (negation)"
+
+# `log(2, z)` rather than `:(log(2, z))`
+_term_string(term::FunctionTerm) = string(term.exorig)
+
+function _unsupported_function_error(term, f)
+    fname = f isa Function ? nameof(f) : f
+    return ArgumentError(
+        "The formula term `$(_term_string(term))` calls `$fname`, which FormulaCompiler " *
+        "does not support. " * _SUPPORTED_FUNCTIONS_HINT)
+end
+
+const _SUPPORTED_FUNCTIONS_HINT =
+    "Supported functions: $_SUPPORTED_FUNCTIONS_TEXT. Compute the transformed variable as a " *
+    "data column and use that column in the formula instead."
+
+# Argument counts the operations can evaluate: unary functions and `!` take one; `+` and
+# `*` two or more (a chain of binary operations); `-` one or two; `/`, `^` and the
+# comparisons two.
+function _check_function_arity(term, func_sym::Symbol, nargs::Int)
+    ok = if func_sym in _UNARY_FUNCTIONS || func_sym === :!
+        nargs == 1
+    elseif func_sym === :+ || func_sym === :*
+        nargs >= 2
+    elseif func_sym === :-
+        nargs == 1 || nargs == 2
+    else
+        nargs == 2
+    end
+    ok && return nothing
+    throw(ArgumentError(
+        "The formula term `$(_term_string(term))` calls `$func_sym` with $nargs " *
+        "argument(s), which FormulaCompiler does not support. " * _SUPPORTED_FUNCTIONS_HINT))
+end
+
 # Handle function terms
 function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_example)
     # Check cache
@@ -379,10 +421,11 @@ function decompose_term!(ctx::CompilationContext, term::FunctionTerm, data_examp
         if func_name isa typeof(^)
             func_sym = :^
         else
-            error("Unknown function: $func_name")
+            throw(_unsupported_function_error(term, func_name))
         end
     end
-    
+    _check_function_arity(term, func_sym, length(term.args))
+
     # Recursively decompose arguments
     arg_positions = Int[]
     for arg in term.args

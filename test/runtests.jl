@@ -48,6 +48,7 @@ include(joinpath(@__DIR__, "support", "generate_large_synthetic_data.jl"))
     include("test_ad_chunk_mode.jl") # AD Jacobians with > 12 variables (ForwardDiff chunk mode)
     include("test_api_contracts.jl") # exported names defined; output-buffer size checked
     include("test_public_api.jl") # public API used by Margins (accessors, hooks, private scratch)
+    include("test_unsupported_functions.jl") # unsupported formula functions fail at compile time
     include("test_threaded_level_cache.jl") # LevelIndex pool cache under concurrent evaluation
     include("test_compiled_cache.jl") # Bounded/clearable compiled-formula cache (LRU, release, concurrency)
 

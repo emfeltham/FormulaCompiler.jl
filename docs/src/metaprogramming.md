@@ -1,7 +1,5 @@
 # Metaprogramming in FormulaCompiler.jl
 
-**NOT UP TO CURRENT SPEC**
-
 ## Overview
 
 FormulaCompiler.jl uses targeted metaprogramming to achieve zero-allocation evaluation for statistical formulas of arbitrary complexity. This document explains when, why, and how metaprogramming is employed to bypass Julia's inherent limitations while maintaining type stability and performance.
@@ -65,82 +63,41 @@ The `@generated` function forces complete unrolling:
 end
 ```
 
-**Result**: Zero allocations for formulas with 100+ terms, identical performance to small formulas.
+**Result**: Zero allocations for formulas with 100+ terms. Operation tuples longer than `RECURSION_LIMIT` (10) take the generated path; shorter ones recurse, which compiles faster.
 
-### 2. Zero-Allocation Finite Differences
+### 2. Counterfactual Variable Lookup
 
-**Problem**: Computing derivatives via finite differences requires loops over variables, creating allocation pressure and dispatch overhead.
+**Problem**: Derivative and contrast evaluators keep one counterfactual vector per variable in a heterogeneous tuple. Looking a variable up by name in that tuple, or resetting every entry, with a runtime loop dispatches dynamically on each element and allocates.
 
-**Location**: `src/evaluation/derivatives/finite_diff.jl`
+**Location**: `src/compilation/counterfactual_vectors.jl` (also `get_cf_for_var` and `update_counterfactual_for_var!` in `src/compilation/contrast_evaluator.jl`)
 
-**Solution**: Complete loop unrolling at compile time using type-level variable count.
+**Solution**: Unroll the search over the tuple at compile time, one branch per element.
 
 ```julia
-@generated function _derivative_modelrow_fd_auto!(
-    J::AbstractMatrix{Float64},
-    de::derivativeevaluator{T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC},
-    row::Int,
-) where {T, Ops, S, O, NTBase, NTMerged, NV, ColsT, G, JC, GS, GC}
-    N = NV  # Extract number of variables from type parameter
-    stmts = Expr[]
-    
-    # Initialize buffers
-    push!(stmts, :(yplus = de.y_plus))
-    push!(stmts, :(yminus = de.yminus)) 
-    push!(stmts, :(xbase = de.xbase))
-    push!(stmts, :(nterms = length(de)))
-    
-    # Unroll variable extraction loop
-    for j in 1:N
-        push!(stmts, :(@inbounds xbase[$j] = de.fd_columns[$j][row]))
-    end
-    
-    # Unroll override setup loop
+@generated function get_counterfactual_for_var(counterfactuals::C, vars::V, var::Symbol) where {C<:Tuple, V<:Tuple}
+    N = length(V.parameters)
+    checks = Expr(:block)
+
     for i in 1:N
-        push!(stmts, :(@inbounds de.overrides[$i].row = row))
-    end
-    
-    # Unroll main finite difference computation
-    for j in 1:N
-        push!(stmts, :(x = xbase[$j]))
-        
-        # Reset all overrides to base values
-        for k in 1:N
-            push!(stmts, :(@inbounds de.overrides[$k].replacement = xbase[$k]))
-        end
-        
-        # Compute step size
-        push!(stmts, :(h = cbrt(eps(Float64)) * max(abs(x), 1.0)))
-        
-        # Forward perturbation
-        push!(stmts, :(@inbounds de.overrides[$j].replacement = x + h))
-        push!(stmts, :(de.compiled_dual(yplus, de.data_over_dual, row)))
-        
-        # Backward perturbation  
-        push!(stmts, :(@inbounds de.overrides[$j].replacement = x - h))
-        push!(stmts, :(de.compiled_dual(yminus, de.data_over_dual, row)))
-        
-        # Central difference computation
-        push!(stmts, :(inv_2h = 1.0 / (2.0 * h)))
-        push!(stmts, quote
-            @fastmath for i in 1:nterms
-                @inbounds J[i, $j] = (yplus[i] - yminus[i]) * inv_2h
+        push!(checks.args, quote
+            if var === vars[$i]
+                return counterfactuals[$i]
             end
         end)
     end
-    
+
+    push!(checks.args, :(error("Variable ", var, " not found in counterfactual vars")))
+
     return quote
-        $(stmts...)
-        nothing
+        Base.@_inline_meta
+        @inbounds $checks
     end
 end
 ```
 
-**Key Benefits**:
-- **Zero allocations**: No dynamic arrays or temporary storage
-- **No dispatch overhead**: All variable access patterns embedded at compile time  
-- **Optimal step sizing**: Mathematical step size computed once per variable
-- **Type stability**: All array accesses use compile-time indices
+`reset_all_counterfactuals!` unrolls the same way for tuples longer than four (shorter ones have hand-written methods).
+
+**Finite differences need no metaprogramming.** `derivative_modelrow!(J, de::FDEvaluator, row)` (`src/evaluation/derivatives/finite_diff.jl`) is a plain loop over the variables: for each variable it sets that variable's `NumericCounterfactualVector` replacement to x ± h (h = cbrt(eps) · max(1, |x|)), evaluates the compiled formula on the counterfactual data, and writes the central difference into column j of J. It allocates nothing because `FDEvaluator` is concretely typed and every buffer is preallocated; no generated code is involved.
 
 ### 3. Output Buffer Management
 
@@ -148,23 +105,19 @@ end
 
 **Location**: `src/compilation/execution.jl`
 
-**Solution**: Generate copy operations with fixed indices.
+**Solution**: The same hybrid as execution: recursion over the operation tuple for up to `RECURSION_LIMIT` operations (`copy_outputs_recursive!`), and an unrolled `@generated` copy for longer tuples, each operation copying its own output position (`copy_single_output!`).
 
 ```julia
 @generated function copy_outputs_generated!(
-    ops::Tuple{Vararg{Any,N}}, 
-    output::AbstractVector{T}, 
+    ops::Tuple{Vararg{Any,N}},
+    output::AbstractVector{T},
     scratch::AbstractVector{T}
 ) where {N, T}
     exprs = Expr[]
     for i in 1:N
-        # Extract output position from operation type
-        if hasfield(typeof(ops.parameters[i]), :output_pos)
-            pos = ops.parameters[i].output_pos
-            push!(exprs, :(@inbounds output[$pos] = scratch[$pos]))
-        end
+        push!(exprs, :(copy_single_output!(ops[$i], output, scratch)))
     end
-    
+
     return quote
         $(exprs...)
         nothing

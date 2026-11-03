@@ -85,6 +85,10 @@ FormulaCompiler.fixed_effects_form(m::_HookModel) = StatsModels.formula(m.inner)
             @test size(J) == (length(de), length(derivative_variables(de)))
             de_x = derivativeevaluator(backend, compiled, data, [:x])
             @test J[:, 2] ≈ derivative_modelrow(de_x, 3)[:, 1]
+            # derivativeevaluator is a function, not a type (it was a Union type before 1.5)
+            @test derivativeevaluator isa Function
+            @test !(derivativeevaluator isa Type)
+            @test de isa AbstractDerivativeEvaluator
             # The backend round-trips through derivativeevaluator
             @test derivative_backend(derivativeevaluator(derivative_backend(de), compiled, data,
                                                          derivative_variables(de))) === backend

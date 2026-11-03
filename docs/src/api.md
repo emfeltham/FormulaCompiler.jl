@@ -85,6 +85,7 @@ continuous_variables
 Computational primitives for GLM link function derivatives (used by Margins.jl for computing marginal effects on the mean response).
 
 ```@docs
+link_derivatives
 _dmu_deta
 _d2mu_deta2
 supported_link_functions
@@ -97,6 +98,7 @@ ContrastEvaluator
 contrastevaluator
 CategoricalLevelMap
 contrast_modelrow!
+contrast_modelrow
 level_modelrow!
 contrast_endpoints
 categorical_levels

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.5.0] - October 2026
+## [1.5.0] - YYYY-MM-DD
 
 ### Added
 
@@ -29,7 +29,24 @@ Tests in `test/test_public_api.jl`.
   `_get_baseline_level`, which is kept for Margins 2.x.
 - `extract_variable_names(compiled)` (already exported) is now in the API docs.
 
+### Changed
+
+- `derivativeevaluator` is a plain function. It was declared as
+  `const derivativeevaluator = Union{FDEvaluator, ADEvaluator}` with constructor methods, so the
+  exported constructor was a `Union` type. The call signatures (`derivativeevaluator(backend,
+  compiled, data[, vars])`) and the evaluators they return are unchanged. Code that used the
+  name as a type (`de isa derivativeevaluator`, `::derivativeevaluator`) must use
+  `AbstractDerivativeEvaluator`; neither FormulaCompiler nor Margins did.
+
 ### Fixed
+
+- A formula that calls an unsupported function now fails in `compile_formula` with an
+  `ArgumentError` that names the term and lists the supported functions. Before, a function
+  without an operation (`exp2`, `cbrt`, `max`, any user-defined function) raised a bare
+  `error("Unknown function: f")`, and a supported function with an unsupported argument
+  count (`log(2, z)`) compiled and then threw a `MethodError` at the first evaluation. The
+  supported functions are now listed in the user guide ("Supported Functions") and README.
+  Tests in `test/test_unsupported_functions.jl`.
 
 - AD derivatives with more than 12 variables (ForwardDiff chunk mode) threw a `MethodError`
   under ForwardDiff ≥ 1.4.5, which the `"0.10, 1.0"` compat bound allows. `fc_jacobian!`
@@ -216,6 +233,16 @@ Tests in `test/test_public_api.jl`.
   `delta_method_se`, which were removed from FormulaCompiler in 1.0 and are not exported by
   Margins.jl. They now use `derivative_modelrow!` with `mul!(g, J', β)` (η scale), `GLM.mueta`
   (μ scale) and `sqrt(dot(∇β, Σ, ∇β))`, or point to Margins.jl's public API.
+- Docstrings that did not attach: `derivativeevaluator` (a comment line between the docstring
+  and the function, so `?derivativeevaluator` and the API page showed nothing and the docs
+  build failed on its `@ref`), and the exported `_dmu_deta`/`_d2mu_deta2` (detached string
+  literals). The exported `contrast_modelrow` (allocating form of `contrast_modelrow!`) has a
+  docstring and is on the API page.
+- The Metaprogramming page described a `@generated` finite-difference Jacobian
+  (`_derivative_modelrow_fd_auto!`, with stale type parameters) that no longer exists, and a
+  copy-output example that did not match the source. It now shows the generated functions that
+  exist (operation execution, output copying, counterfactual lookup) and says that finite
+  differences are a plain loop.
 
 ## [1.4.2] - July 2026
 

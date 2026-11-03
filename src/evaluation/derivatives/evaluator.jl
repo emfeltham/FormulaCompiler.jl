@@ -104,7 +104,6 @@ de = derivativeevaluator(compiled, data, [:x, :group])
 
 See also: [`derivative_modelrow!`](@ref), [`continuous_variables`](@ref)
 """
-# Main constructor with positional backend argument
 function derivativeevaluator(
     backend::Symbol, compiled, data, vars::Vector{Symbol}
 )
